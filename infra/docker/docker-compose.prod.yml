@@ -142,13 +142,9 @@ services:
     container_name: gmd-caddy
     ports:
       - '80:80'
-      - '443:443'
     environment:
-      CADDY_DOMAIN: ${CADDY_DOMAIN}
       CADDY_ACME_EMAIL: ${CADDY_ACME_EMAIL}
       CADDY_BASIC_AUTH_HASH: ${CADDY_BASIC_AUTH_HASH}
-      GLITCHTIP_DOMAIN: ${GLITCHTIP_DOMAIN}
-      KUMA_DOMAIN: ${KUMA_DOMAIN}
     volumes:
       - ../caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - /opt/gmd/data/caddy/data:/data

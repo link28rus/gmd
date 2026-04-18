@@ -1,12 +1,10 @@
 {
-	email {$CADDY_ACME_EMAIL}
 	admin off
-	# Для теста LE rate-limit:
-	# acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+	auto_https off
 }
 
-# --- Основной кабинет + API ---
-{$CADDY_DOMAIN} {
+# --- Основной кабинет + API (HTTP-режим, TLS терминирует внешний nginx) ---
+:80 {
 	encode zstd gzip
 
 	handle_path /api/* {
@@ -18,7 +16,6 @@
 	}
 
 	header {
-		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "SAMEORIGIN"
 		Referrer-Policy "strict-origin-when-cross-origin"
@@ -26,7 +23,6 @@
 		-Server
 	}
 
-	# Healthcheck без прокси (для internal liveness, вне subdomain-auth)
 	respond /healthz "OK" 200
 
 	log {
