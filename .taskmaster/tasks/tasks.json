@@ -120,13 +120,224 @@
         "priority": "high",
         "subtasks": [],
         "updatedAt": "2026-04-18T04:20:33.844Z"
+      },
+      {
+        "id": "11",
+        "title": "Phase 0.3 Task 1: Расширить раздел sda2 до 80GB",
+        "description": "Установить cloud-guest-utils, выполнить growpart /dev/sda 2 и resize2fs /dev/sda2 на 192.168.1.23.",
+        "details": "Plan: docs/superpowers/plans/2026-04-18-gmd-phase0.3-server-deploy.md (Task 1).",
+        "testStrategy": "df -hT / → /dev/sda2 ~79G",
+        "status": "done",
+        "dependencies": ["10"],
+        "priority": "high",
+        "subtasks": [],
+        "updatedAt": "2026-04-18T05:14:04.358Z"
+      },
+      {
+        "id": "12",
+        "title": "Phase 0.3 Task 2: Bootstrap (hostname, TZ, swap, apt upgrade)",
+        "description": "Скрипт infra/server-setup/00-bootstrap.sh: hostname gmd-prod, TZ Europe/Moscow, swap 4G, unattended-upgrades, apt full-upgrade.",
+        "details": "Plan Task 2. Идемпотентный скрипт, коммитится в репо.",
+        "testStrategy": "hostnamectl → gmd-prod; swapon --show → /swapfile 4G; timedatectl → Europe/Moscow",
+        "status": "in-progress",
+        "dependencies": ["11"],
+        "priority": "high",
+        "subtasks": [],
+        "updatedAt": "2026-04-18T05:14:04.374Z"
+      },
+      {
+        "id": "13",
+        "title": "Phase 0.3 Task 3: Удалить fk-norm и volleyball-attendance",
+        "description": "Stop/disable/remove systemd-юниты fk-norm.service и volleyball-attendance.service + /opt/fk-norm и /opt/volleyball-attendance. Предварительно сделать tar-дамп в /tmp/gmd-cleanup-backup/.",
+        "details": "Plan Task 3. Деструктив — держать бэкап до завершения Task 14.",
+        "testStrategy": "ss -tlnp | grep -E ':3000|:5000' → ports free",
+        "status": "pending",
+        "dependencies": ["12"],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": "14",
+        "title": "Phase 0.3 Task 4: Удалить native PostgreSQL 16 и nodejs",
+        "description": "pg_dumpall в бэкап, systemctl stop/disable postgresql, apt purge postgresql-16*/nodejs/libnode*, rm -rf /var/lib/postgresql.",
+        "details": "Plan Task 4. Контейнерный Postgres в Task 10.",
+        "testStrategy": "ss -tlnp | grep :5432 → пусто; which node → пусто",
+        "status": "pending",
+        "dependencies": ["13"],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": "15",
+        "title": "Phase 0.3 Task 5: Сгенерировать SSH-ключ и выложить в authorized_keys",
+        "description": "ssh-keygen ed25519 (если нет), положить pubkey в /root/.ssh/authorized_keys, добавить alias gmd-prod в ~/.ssh/config.",
+        "details": "Plan Task 5. Обязательно верифицировать вход по ключу ДО Task 6 (иначе отрежет доступ).",
+        "testStrategy": "ssh -o PasswordAuthentication=no gmd-prod 'echo ok' → ok",
+        "status": "pending",
+        "dependencies": ["14"],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": "16",
+        "title": "Phase 0.3 Task 6: SSH hardening (PasswordAuth off, PermitRootLogin prohibit-password)",
+        "description": "Скрипт 10-harden-ssh.sh: /etc/ssh/sshd_config.d/99-gmd-hardening.conf + фикс 50-cloud-init.conf + sshd -t + restart.",
+        "details": "Plan Task 6. После этого шага вход по паролю невозможен.",
+        "testStrategy": "Попытка sshpass-логина падает с Permission denied; ssh по ключу работает",
+        "status": "pending",
+        "dependencies": ["15"],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": "17",
+        "title": "Phase 0.3 Task 7: UFW + fail2ban",
+        "description": "Скрипт 20-firewall.sh: apt install ufw fail2ban, UFW default deny in / allow 22,80,443, fail2ban jail sshd (maxretry=3, bantime=1h).",
+        "details": "Plan Task 7.",
+        "testStrategy": "ufw status → active; fail2ban-client status sshd → jail active",
+        "status": "pending",
+        "dependencies": ["16"],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": "18",
+        "title": "Phase 0.3 Task 8: Установить Docker CE + compose-plugin",
+        "description": "Скрипт 30-install-docker.sh: официальный docker.com repo, docker-ce + cli + containerd + buildx + compose-plugin, /etc/docker/daemon.json с log-rotation и overlay2.",
+        "details": "Plan Task 8.",
+        "testStrategy": "docker version → 27+; docker compose version → v2+; docker run --rm hello-world → Hello from Docker",
+        "status": "pending",
+        "dependencies": ["17"],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": "19",
+        "title": "Phase 0.3 Task 9: Prod-структура /opt/gmd + .env.prod.example",
+        "description": "Создать infra/docker/.env.prod.example (шаблон), на сервере mkdir /opt/gmd/{docker,caddy,data,backups,logs}, сгенерировать секреты (openssl rand), положить .env.prod 600 на сервер.",
+        "details": "Plan Task 9. Секреты в memory-compiler save_secret.",
+        "testStrategy": "ls /opt/gmd/.env.prod → 600; структура /opt/gmd существует",
+        "status": "pending",
+        "dependencies": ["18"],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": "20",
+        "title": "Phase 0.3 Task 10: Custom Postgres image с pg_cron + retention.sql",
+        "description": "Dockerfile на базе postgis/postgis:16-3.4 + apt install postgresql-16-cron. init.sql с CREATE EXTENSION postgis/pg_cron. 20-retention.sql — cron.schedule для locations (с защитой от отсутствующей таблицы).",
+        "details": "Plan Task 10. Реальная регистрация pg_cron job выполнится после Prisma-миграции Phase 1 (там появится таблица locations).",
+        "testStrategy": "docker build + smoke run → SELECT extname FROM pg_extension содержит postgis и pg_cron",
+        "status": "pending",
+        "dependencies": ["19"],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": "21",
+        "title": "Phase 0.3 Task 11: docker-compose.prod.yml + Dockerfiles backend/web",
+        "description": "apps/backend/Dockerfile и apps/web/Dockerfile (multi-stage, node:22-alpine + pnpm 9.12.0). infra/docker/docker-compose.prod.yml: postgres, redis, minio, backend, web, caddy с healthchecks и bind-mount в /opt/gmd/data/*.",
+        "details": "Plan Task 11. Наружу торчат только caddy:80/443. Для Next.js standalone-режим.",
+        "testStrategy": "docker compose config валиден; build backend/web проходит локально",
+        "status": "pending",
+        "dependencies": ["20"],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": "22",
+        "title": "Phase 0.3 Task 12: Caddyfile с TLS + basic-auth для subdomains",
+        "description": "infra/caddy/Caddyfile: gmd.link28rus.ru (API+web), errors.gmd.link28rus.ru (GlitchTip), status.gmd.link28rus.ru (Uptime Kuma) под basic_auth. HSTS/X-Frame-Options/Referrer-Policy headers.",
+        "details": "Plan Task 12. Валидация caddy validate.",
+        "testStrategy": "docker run caddy validate → Valid configuration",
+        "status": "pending",
+        "dependencies": ["21"],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": "23",
+        "title": "Phase 0.3 Task 13: Deploy-скрипт infra/deploy/deploy.sh + runbook",
+        "description": "rsync infra/docker + caddy + apps/backend + apps/web + packages + root manifests. ssh docker compose build + up -d + prisma migrate deploy. infra/deploy/README.md с troubleshooting.",
+        "details": "Plan Task 13. Идемпотентный, без реестра (build на сервере).",
+        "testStrategy": "bash -n deploy.sh → syntax OK",
+        "status": "pending",
+        "dependencies": ["22"],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": "24",
+        "title": "Phase 0.3 Task 14: Первый deploy базового стека + TLS checkpoint",
+        "description": "DNS checkpoint (dig gmd.link28rus.ru → 85.15.75.126), bash infra/deploy/deploy.sh, проверка healthy 6 сервисов, curl /healthz + /api/readyz.",
+        "details": "Plan Task 14. Блокирует DNS и проброс 80/443 — за пользователем.",
+        "testStrategy": "curl -I https://gmd.link28rus.ru/healthz → HTTP/2 200; readyz {db:up,redis:up}",
+        "status": "pending",
+        "dependencies": ["23"],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": "25",
+        "title": "Phase 0.3 Task 15: Бэкапы PG — systemd timers + restore-verify",
+        "description": "pg-backup.sh (pg_dump -Fc | zstd -19, retention 14 daily + 12 monthly), pg-restore-verify.sh (еженедельно throwaway-контейнер). systemd units + timer 03:15/04:00.",
+        "details": "Plan Task 15. 40-backups-install.sh монтирует всё на сервер.",
+        "testStrategy": "systemctl list-timers pg-*; /opt/gmd/backups/postgres/*.dump.zst создан",
+        "status": "pending",
+        "dependencies": ["24"],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": "26",
+        "title": "Phase 0.3 Task 16: GlitchTip self-hosted + Sentry SDK в backend/web",
+        "description": "docker-compose: glitchtip-pg/redis/web/worker/migrate. createsuperuser. DSN → .env.prod. @sentry/node в backend (SentryModule+SentryExceptionFilter), @sentry/nextjs wizard в web.",
+        "details": "Plan Task 16.",
+        "testStrategy": "https://errors.gmd.link28rus.ru/ доступен под basic-auth; тестовая ошибка появляется в UI",
+        "status": "pending",
+        "dependencies": ["24"],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": "27",
+        "title": "Phase 0.3 Task 17: Uptime Kuma + первые мониторы",
+        "description": "docker-compose: louislam/uptime-kuma:1 с volume /opt/gmd/data/uptime-kuma. Настроить мониторы /readyz, /healthz, TCP:443.",
+        "details": "Plan Task 17.",
+        "testStrategy": "https://status.gmd.link28rus.ru/ доступен; 3 monitor = UP",
+        "status": "pending",
+        "dependencies": ["26"],
+        "priority": "medium",
+        "subtasks": []
+      },
+      {
+        "id": "28",
+        "title": "Phase 0.3 Task 18: Runbooks + CHANGELOG v0.3.0 + тег",
+        "description": "docs/deploy.md, docs/backup-restore.md, docs/server-hardening.md. CHANGELOG — запись v0.3.0 в стиле NiksDesk. CLAUDE.md — раздел Prod-деплой. git tag -a v0.3.0.",
+        "details": "Plan Task 18.",
+        "testStrategy": "git tag --list v0.3.0 → присутствует; CHANGELOG содержит v0.3.0 запись",
+        "status": "pending",
+        "dependencies": ["25", "27"],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": "29",
+        "title": "Phase 0.3 Task 19: Финальная приёмка + memory-compiler finish_task",
+        "description": "Полный чеклист: TLS 3 домена, docker compose ps all healthy, sshpass-логин FAIL, nmap 85.15.75.126 (только 22/80/443), pg-backup & restore-verify прошли, pg_cron job виден (или TODO зафиксирован). finish_task в memory-compiler.",
+        "details": "Plan Task 19.",
+        "testStrategy": "Все 7 проверок Task 19 Step 1-6 зелёные",
+        "status": "pending",
+        "dependencies": ["28"],
+        "priority": "high",
+        "subtasks": []
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-04-18T04:20:33.845Z",
-      "taskCount": 10,
-      "completedCount": 10,
+      "lastModified": "2026-04-18T05:14:04.374Z",
+      "taskCount": 29,
+      "completedCount": 11,
       "tags": ["master"]
     }
   }
