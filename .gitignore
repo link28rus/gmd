@@ -70,3 +70,5 @@ apps/backend/prisma/migrations/dev.db*
 
 # Memory compiler local overrides
 memory/local/
+.playwright-mcp/
+phase1.1-web-*.png
