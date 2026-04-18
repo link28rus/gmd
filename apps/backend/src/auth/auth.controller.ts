@@ -52,6 +52,7 @@ export class AuthController {
   }
 
   @Post('verify-otp')
+  @HttpCode(HttpStatus.OK)
   @Throttle({ default: { ttl: 600_000, limit: 10 } })
   @UsePipes(new ZodValidationPipe(VerifyOtpSchema))
   async verifyOtp(@Body() dto: VerifyOtpDto, @Req() req: Request): Promise<unknown> {
@@ -66,6 +67,7 @@ export class AuthController {
   }
 
   @Post('refresh')
+  @HttpCode(HttpStatus.OK)
   @Throttle({ default: { ttl: 60_000, limit: 30 } })
   @UsePipes(new ZodValidationPipe(RefreshSchema))
   async refresh(@Body() dto: RefreshDto, @Req() req: Request): Promise<unknown> {
