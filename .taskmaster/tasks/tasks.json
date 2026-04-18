@@ -331,10 +331,11 @@
         "description": "docs/deploy.md, docs/backup-restore.md, docs/server-hardening.md. CHANGELOG — запись v0.3.0 в стиле NiksDesk. CLAUDE.md — раздел Prod-деплой. git tag -a v0.3.0.",
         "details": "Plan Task 18.",
         "testStrategy": "git tag --list v0.3.0 → присутствует; CHANGELOG содержит v0.3.0 запись",
-        "status": "pending",
+        "status": "done",
         "dependencies": ["25", "27"],
         "priority": "high",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-04-18T12:23:26.701Z"
       },
       {
         "id": "29",
@@ -342,17 +343,18 @@
         "description": "Полный чеклист: TLS 3 домена, docker compose ps all healthy, sshpass-логин FAIL, nmap 85.15.75.126 (только 22/80/443), pg-backup & restore-verify прошли, pg_cron job виден (или TODO зафиксирован). finish_task в memory-compiler.",
         "details": "Plan Task 19.",
         "testStrategy": "Все 7 проверок Task 19 Step 1-6 зелёные",
-        "status": "pending",
+        "status": "done",
         "dependencies": ["28"],
         "priority": "high",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-04-18T12:23:26.705Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-04-18T12:20:07.688Z",
+      "lastModified": "2026-04-18T12:23:26.706Z",
       "taskCount": 29,
-      "completedCount": 25,
+      "completedCount": 27,
       "tags": ["master"]
     }
   }
