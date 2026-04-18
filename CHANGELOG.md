@@ -16,6 +16,27 @@
 
 ---
 
+## v0.4.1 — 2026-04-19
+
+### Новые возможности
+
+- **Web-кабинет: вход по email + OTP** — страницы `/login` и `/cabinet` позволяют родителю войти в систему через браузер; двухстадийная форма (email → 6-значный код → кабинет), silent refresh при F5
+- **Защищённый refresh-token в httpOnly cookie** — refresh-token недоступен JavaScript (защита от XSS), access-token в памяти клиента (Zustand)
+- **Next.js API-routes как прокси** — клиент не знает адреса backend, нет CORS; все auth-запросы идут через `/api/auth/*`
+
+### Улучшения
+
+- Лендинг `/` — кнопка «Войти» ведёт на `/login`
+- `next.config.ts` — `output: 'standalone'` активируется только по `NEXT_STANDALONE=true` (Windows-dev падал на symlinks без admin)
+
+### Изменения
+
+- chore(web): добавлены зависимости `zustand` и `server-only`
+- chore(web): `BACKEND_URL` env-переменная для серверной стороны Next.js
+- chore(web): `tsconfig` paths `@/* → ./*`
+
+---
+
 ## v0.4.0 — 2026-04-18
 
 ### Новые возможности
