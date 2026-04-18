@@ -19,7 +19,13 @@ export class UsersService {
       device: { id: string; deviceName: string | null } | null;
     }>;
   }> {
-    const [user, memberships, family, children] = await Promise.all([
+    type ChildRow = {
+      id: string;
+      name: string;
+      dateOfBirth: Date | null;
+      device: { id: string; deviceName: string | null } | null;
+    };
+    const [user, memberships, family, childrenRaw] = await Promise.all([
       this.prisma.user.findUnique({ where: { id: userId } }),
       this.prisma.membership.findMany({
         where: { userId },
@@ -34,6 +40,7 @@ export class UsersService {
         orderBy: { createdAt: 'asc' },
       }),
     ]);
+    const children = childrenRaw as ChildRow[];
     if (!user || user.deletedAt || !family) {
       throw new NotFoundException({ code: 'not_found', message: 'User or family not found' });
     }
@@ -41,7 +48,7 @@ export class UsersService {
       user: { id: user.id, email: user.email, name: user.name, locale: user.locale },
       family: { id: family.id, name: family.name },
       memberships,
-      children: children.map((c) => ({
+      children: children.map((c: ChildRow) => ({
         id: c.id,
         name: c.name,
         dateOfBirth: c.dateOfBirth,

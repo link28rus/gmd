@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, Inject, Injectable } from '@nestjs/common';
 import { createHash, randomBytes } from 'node:crypto';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { normalizeInviteCode } from '../invites/lib/code-generator';
 
@@ -32,7 +33,7 @@ export class ChildDeviceService {
   async claim(rawCode: string, meta: ClaimMeta): Promise<ClaimResult> {
     const code = normalizeInviteCode(rawCode);
 
-    return this.prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const lockRows = (await tx.$queryRawUnsafe(
         `SELECT id FROM invites WHERE code = $1 AND "consumedAt" IS NULL AND "expiresAt" > NOW() FOR UPDATE`,
         code,

@@ -25,12 +25,54 @@ export class ChildrenService {
     });
   }
 
-  async listChildren(familyId: string) {
-    return this.prisma.child.findMany({
+  async listChildren(familyId: string): Promise<
+    Array<{
+      id: string;
+      name: string;
+      dateOfBirth: Date | null;
+      device: {
+        id: string;
+        deviceName: string | null;
+        osVersion: string | null;
+        appVersion: string | null;
+        lastSeenAt: Date | null;
+        revokedAt: Date | null;
+      } | null;
+    }>
+  > {
+    type Row = {
+      id: string;
+      name: string;
+      dateOfBirth: Date | null;
+      device: {
+        id: string;
+        deviceName: string | null;
+        osVersion: string | null;
+        appVersion: string | null;
+        lastSeenAt: Date | null;
+        revokedAt: Date | null;
+      } | null;
+    };
+    const rows = (await this.prisma.child.findMany({
       where: { familyId, deletedAt: null },
       orderBy: { createdAt: 'asc' },
       include: { device: true },
-    });
+    })) as Row[];
+    return rows.map((c: Row) => ({
+      id: c.id,
+      name: c.name,
+      dateOfBirth: c.dateOfBirth,
+      device: c.device
+        ? {
+            id: c.device.id,
+            deviceName: c.device.deviceName,
+            osVersion: c.device.osVersion,
+            appVersion: c.device.appVersion,
+            lastSeenAt: c.device.lastSeenAt,
+            revokedAt: c.device.revokedAt,
+          }
+        : null,
+    }));
   }
 
   async getChildInFamily(familyId: string, childId: string) {

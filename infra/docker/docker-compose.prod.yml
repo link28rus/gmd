@@ -98,10 +98,25 @@ services:
       NODE_ENV: production
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
-      JWT_SECRET: ${JWT_SECRET}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      JWT_PRIVATE_KEY_PATH: /run/secrets/jwt-private.pem
+      JWT_PUBLIC_KEY_PATH: /run/secrets/jwt-public.pem
+      ACCESS_TOKEN_TTL_SECONDS: ${ACCESS_TOKEN_TTL_SECONDS:-900}
+      REFRESH_TOKEN_TTL_SECONDS: ${REFRESH_TOKEN_TTL_SECONDS:-2592000}
+      OTP_TTL_SECONDS: ${OTP_TTL_SECONDS:-600}
+      OTP_MAX_ATTEMPTS: ${OTP_MAX_ATTEMPTS:-3}
+      PRIVACY_POLICY_VERSION: ${PRIVACY_POLICY_VERSION:-1.0}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-GMD <no-reply@gmd.link28rus.ru>}
+      INVITE_TTL_SECONDS: ${INVITE_TTL_SECONDS:-600}
+      CLAIM_LANDING_BASE_URL: ${CLAIM_LANDING_BASE_URL:-https://gmd.link28rus.ru}
       SENTRY_DSN: ${SENTRY_DSN_BACKEND}
       PORT: '3001'
+    volumes:
+      - /opt/gmd/secrets/jwt-private.pem:/run/secrets/jwt-private.pem:ro
+      - /opt/gmd/secrets/jwt-public.pem:/run/secrets/jwt-public.pem:ro
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
