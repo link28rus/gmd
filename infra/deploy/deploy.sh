@@ -45,8 +45,8 @@ ssh "${SERVER}" "cd ${REMOTE_DOCKER} && \
 
 say "4) Ждём healthy (polling, timeout 5 мин)"
 ssh "${SERVER}" "cd ${REMOTE_DOCKER} && for i in \$(seq 1 60); do
-  unhealthy=\$(docker compose -f docker-compose.prod.yml ps --format '{{.Service}} {{.Health}}' | awk '\$2!=\"healthy\" && \$2!=\"\" {print \$1}' | wc -l)
-  starting=\$(docker compose -f docker-compose.prod.yml ps --format '{{.Service}} {{.Health}}' | awk '\$2==\"starting\" {print \$1}' | wc -l)
+  unhealthy=\$(docker compose --env-file ${REMOTE_DIR}/.env.prod -f docker-compose.prod.yml ps --format '{{.Service}} {{.Health}}' | awk '\$2!=\"healthy\" && \$2!=\"\" {print \$1}' | wc -l)
+  starting=\$(docker compose --env-file ${REMOTE_DIR}/.env.prod -f docker-compose.prod.yml ps --format '{{.Service}} {{.Health}}' | awk '\$2==\"starting\" {print \$1}' | wc -l)
   if [ \"\$unhealthy\" = \"0\" ] && [ \"\$starting\" = \"0\" ]; then
     echo 'All services healthy'
     break
@@ -54,13 +54,13 @@ ssh "${SERVER}" "cd ${REMOTE_DOCKER} && for i in \$(seq 1 60); do
   echo \"[\${i}/60] waiting…\"
   sleep 5
 done
-docker compose -f docker-compose.prod.yml ps"
+docker compose --env-file ${REMOTE_DIR}/.env.prod -f docker-compose.prod.yml ps"
 
 say "5) Prisma migrate deploy (ок если миграций ещё нет)"
+# Вызываем через прямой путь к index.js: .bin/prisma — bash-shim с нерабочим на Node шебангом.
 ssh "${SERVER}" "cd ${REMOTE_DOCKER} && \
   docker compose --env-file ${REMOTE_DIR}/.env.prod -f docker-compose.prod.yml exec -T backend \
-    node apps/backend/node_modules/.bin/prisma migrate deploy --schema apps/backend/prisma/schema.prisma" \
-  || echo "(migrate skipped — normal for Phase 0.3; production migrations появятся в Phase 1)"
+    node apps/backend/node_modules/prisma/build/index.js migrate deploy --schema apps/backend/prisma/schema.prisma" \
+  || echo "(migrate skipped — нормально для Phase 0.3; prod-миграции появятся в Phase 1)"
 
-CADDY_DOMAIN=$(ssh "${SERVER}" "grep ^CADDY_DOMAIN ${REMOTE_DIR}/.env.prod | cut -d= -f2")
-say "Done. Проверь https://${CADDY_DOMAIN}/healthz"
+say "Done. Проверь: curl http://192.168.1.23/api/readyz"
