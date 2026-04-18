@@ -12,15 +12,22 @@
 ## [Unreleased]
 
 ### Новые возможности
-- _здесь копятся фичи, попадающие в следующий релиз_
+- _здесь копятся фичи следующего релиза_
 
-### Улучшения
+---
 
-### Исправления
+## v0.1.0 — 2026-04-18
 
 ### Изменения
-- **Дизайн MVP** — утверждён scope и стек, см. [docs/superpowers/specs/2026-04-18-gmd-mvp-design.md](docs/superpowers/specs/2026-04-18-gmd-mvp-design.md)
-- **CLAUDE.md** — зафиксированы конвенции, скилы, субагенты, процесс
+- **Монорепо-скелет** — pnpm workspaces + Turborepo для JS/TS, Melos для Flutter
+- **Backend** — NestJS 11 skeleton с `/healthz`, Prisma 5 (заглушечная модель User)
+- **Web** — Next.js 15 skeleton с landing-заглушкой и `/api/healthz`
+- **Mobile** — Flutter-приложения `mobile-parent` (Android+iOS) и `mobile-child` (Android); Dart-пакеты `gmd_parent`, `gmd_child`, `gmd_shared`
+- **Пакеты** — `@gmd/shared-types`, `@gmd/ui` (заглушки)
+- **Тулинг** — ESLint 9 flat config, Prettier 3, Husky 9 + lint-staged, commitlint (Conventional Commits)
+- **fix(ui): `--no-error-on-unmatched-pattern`** — lint-скрипт пакета `@gmd/ui` не падает, если `src/**/*.tsx` пока пуст
+- **Дизайн MVP** — см. [spec](docs/superpowers/specs/2026-04-18-gmd-mvp-design.md)
+- **CLAUDE.md** — конвенции, скилы, субагенты, процесс
 
 ---
 

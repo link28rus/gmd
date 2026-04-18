@@ -10,7 +10,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "lint": "eslint \"src/**/*.ts\" \"src/**/*.tsx\""
+    "lint": "eslint --no-error-on-unmatched-pattern \"src/**/*.ts\" \"src/**/*.tsx\""
   },
   "devDependencies": {
     "@types/react": "^19.0.0",
