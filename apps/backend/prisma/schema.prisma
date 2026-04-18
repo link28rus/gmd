@@ -8,12 +8,87 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Заглушка — реальные модели появятся в Phase 1 (Backend core)
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                           String    @id @default(cuid())
+  email                        String    @unique
+  emailVerifiedAt              DateTime?
+  name                         String?
+  locale                       String    @default("ru")
+  acceptedPrivacyPolicyVersion String?
+  createdAt                    DateTime  @default(now())
+  updatedAt                    DateTime  @updatedAt
+  deletedAt                    DateTime?
 
+  memberships   Membership[]
+  refreshTokens RefreshToken[]
+  otpCodes      OtpCode[]
+
+  @@index([email])
   @@map("users")
+}
+
+model Family {
+  id        String    @id @default(cuid())
+  name      String    @default("Моя семья")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  memberships Membership[]
+
+  @@map("families")
+}
+
+enum MembershipRole {
+  owner
+  parent
+}
+
+model Membership {
+  id        String         @id @default(cuid())
+  userId    String
+  familyId  String
+  role      MembershipRole
+  createdAt DateTime       @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, familyId])
+  @@index([familyId])
+  @@map("memberships")
+}
+
+model OtpCode {
+  id         String    @id @default(cuid())
+  userId     String?
+  email      String
+  codeHash   String
+  purpose    String    @default("login")
+  expiresAt  DateTime
+  consumedAt DateTime?
+  attempts   Int       @default(0)
+  createdAt  DateTime  @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([email, createdAt])
+  @@map("otp_codes")
+}
+
+model RefreshToken {
+  id          String    @id @default(cuid())
+  userId      String
+  tokenHash   String    @unique
+  userAgent   String?
+  ipAddress   String?
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  rotatedToId String?
+  createdAt   DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@map("refresh_tokens")
 }
