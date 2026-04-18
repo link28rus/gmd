@@ -35,6 +35,8 @@ model Family {
   deletedAt DateTime?
 
   memberships Membership[]
+  children    Child[]
+  invites     Invite[]
 
   @@map("families")
 }
@@ -91,4 +93,57 @@ model RefreshToken {
 
   @@index([userId, revokedAt])
   @@map("refresh_tokens")
+}
+
+model Child {
+  id          String    @id @default(cuid())
+  familyId    String
+  name        String
+  dateOfBirth DateTime?
+  avatarKey   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  family  Family       @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  device  ChildDevice?
+  invites Invite[]
+
+  @@index([familyId])
+  @@index([familyId, deletedAt])
+  @@map("children")
+}
+
+model Invite {
+  id         String    @id @default(cuid())
+  familyId   String
+  childId    String
+  code       String    @unique
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdBy  String
+  createdAt  DateTime  @default(now())
+
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  child  Child  @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@index([familyId, consumedAt])
+  @@index([childId, consumedAt])
+  @@map("invites")
+}
+
+model ChildDevice {
+  id         String    @id @default(cuid())
+  childId    String    @unique
+  tokenHash  String    @unique
+  deviceName String?
+  osVersion  String?
+  appVersion String?
+  lastSeenAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  child Child @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@map("child_devices")
 }
