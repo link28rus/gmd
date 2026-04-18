@@ -1,0 +1,15 @@
+node_modules/
+.pnpm-store/
+dist/
+build/
+.next/
+.turbo/
+coverage/
+**/generated/
+**/*.generated.*
+pnpm-lock.yaml
+package-lock.json
+apps/mobile-parent/
+apps/mobile-child/
+packages/shared-dart/
+CHANGELOG.md
