@@ -12,4 +12,5 @@ const config: Config = {
   },
 };
 
-export default createJestConfig(config);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export default createJestConfig(config) as any;
