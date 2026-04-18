@@ -16,6 +16,27 @@
 
 ---
 
+## v0.2.0 — 2026-04-18
+
+### Новые возможности
+- **Docker dev-стек** — `pnpm stack:up` поднимает PostgreSQL 16 + PostGIS, Redis 7, MinIO, Adminer одной командой
+- **Prisma-миграции работают** — первая миграция применена к живой БД, таблица `users` создана
+- **Readiness-проба** — новый эндпоинт `GET /readyz` возвращает `{status, db, redis}` и реально пингует БД и Redis
+- **PrismaService + RedisService** — NestJS-модули с lifecycle-хуками (`OnModuleInit` / `OnModuleDestroy`)
+- **Bucket `gmd-uploads`** — создаётся автоматически one-shot `minio-setup` контейнером при старте стека
+
+### Улучшения
+- **Скрипты стека** — `stack:up/down/logs/ps/reset` в root `package.json`
+- **Документация** — CLAUDE.md и README описывают dev-команды, порты и сценарий конфликтов портов
+
+### Изменения
+- chore(infra): docker-compose.prod.yml скелет с TODO (наполняется в Phase 0.3)
+- chore(backend): `.env.example` обновлён (REDIS_URL + корректный пароль Postgres)
+- fix(infra): minio переведён на `minio/minio` (bitnami/minio удалён с Docker Hub)
+- fix(backend): `@Inject()` в HealthController, чтобы ESLint `consistent-type-imports` не превращал DI-провайдеры в `import type` и не ломал DI в рантайме
+
+---
+
 ## v0.1.0 — 2026-04-18
 
 ### Изменения
