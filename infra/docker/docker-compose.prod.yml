@@ -1,0 +1,25 @@
+# Production docker-compose for GMD — СКЕЛЕТ, наполняется в Phase 0.3
+#
+# Отличия от dev:
+# - Caddy reverse proxy с TLS (Let's Encrypt) для gmd.link28rus.ru
+# - postgres без пробрасывания порта наружу (доступ только из compose-сети)
+# - redis без пробрасывания порта
+# - minio за Caddy на s3.gmd.link28rus.ru
+# - GlitchTip (self-hosted Sentry API-совместимый)
+# - Uptime Kuma на status.gmd.link28rus.ru
+# - Grafana + Loki + Prometheus для метрик и логов
+# - Ежедневный backup-сервис (pg_dump + age + загрузка в Yandex Object Storage)
+# - Backend и Web контейнеры (сейчас runs out of compose)
+#
+# TODO (Phase 0.3):
+# - [ ] Caddy
+# - [ ] GlitchTip
+# - [ ] Uptime Kuma
+# - [ ] Backup-cron
+# - [ ] Backend production image
+# - [ ] Web production image
+# - [ ] Grafana/Loki/Prometheus
+
+name: gmd-prod
+
+services: {}
