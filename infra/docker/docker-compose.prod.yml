@@ -114,6 +114,7 @@ services:
       OTP_FIXED_DEV: ${OTP_FIXED_DEV:-}
       INVITE_TTL_SECONDS: ${INVITE_TTL_SECONDS:-600}
       CLAIM_LANDING_BASE_URL: ${CLAIM_LANDING_BASE_URL:-https://gmd.link28rus.ru}
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
       SENTRY_DSN: ${SENTRY_DSN_BACKEND}
       PORT: '3001'
     volumes:
