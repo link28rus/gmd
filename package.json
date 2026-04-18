@@ -15,6 +15,11 @@
     "typecheck": "turbo run typecheck",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,yaml,yml}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,yaml,yml}\"",
+    "stack:up": "docker compose --env-file infra/docker/.env.dev -f infra/docker/docker-compose.dev.yml up -d",
+    "stack:down": "docker compose --env-file infra/docker/.env.dev -f infra/docker/docker-compose.dev.yml down",
+    "stack:logs": "docker compose --env-file infra/docker/.env.dev -f infra/docker/docker-compose.dev.yml logs -f",
+    "stack:ps": "docker compose --env-file infra/docker/.env.dev -f infra/docker/docker-compose.dev.yml ps",
+    "stack:reset": "docker compose --env-file infra/docker/.env.dev -f infra/docker/docker-compose.dev.yml down -v",
     "prepare": "husky"
   },
   "devDependencies": {
