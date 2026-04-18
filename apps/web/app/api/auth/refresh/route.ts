@@ -38,7 +38,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   });
   res.cookies.set(REFRESH_COOKIE, refreshToken, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: process.env.ALLOW_INSECURE_COOKIE !== 'true' && process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     path: '/',
     maxAge: REFRESH_MAX_AGE,

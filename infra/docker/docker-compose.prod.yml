@@ -110,6 +110,8 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
       SMTP_FROM: ${SMTP_FROM:-GMD <no-reply@gmd.link28rus.ru>}
+      OTP_LOG_DEV: ${OTP_LOG_DEV:-false}
+      OTP_FIXED_DEV: ${OTP_FIXED_DEV:-}
       INVITE_TTL_SECONDS: ${INVITE_TTL_SECONDS:-600}
       CLAIM_LANDING_BASE_URL: ${CLAIM_LANDING_BASE_URL:-https://gmd.link28rus.ru}
       SENTRY_DSN: ${SENTRY_DSN_BACKEND}
@@ -140,6 +142,8 @@ services:
       NODE_ENV: production
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
       NEXT_PUBLIC_SENTRY_DSN: ${SENTRY_DSN_WEB}
+      BACKEND_URL: http://backend:3001
+      ALLOW_INSECURE_COOKIE: ${ALLOW_INSECURE_COOKIE:-false}
     depends_on:
       backend: { condition: service_healthy }
     networks: [gmd_net]

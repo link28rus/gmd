@@ -26,7 +26,8 @@ export class OtpService {
       where: { email, consumedAt: null },
       data: { consumedAt: new Date() },
     });
-    const code = String(randomInt(100000, 1000000));
+    const fixed = process.env.OTP_FIXED_DEV;
+    const code = fixed && /^\d{6}$/.test(fixed) ? fixed : String(randomInt(100000, 1000000));
     const codeHash = await hash(code);
     const expiresAt = new Date(Date.now() + this.cfg.ttlSec * 1000);
     const row = await this.prisma.otpCode.create({

@@ -28,6 +28,13 @@ export class SmtpOtpProvider implements OtpDeliveryProvider {
   }
 
   async send(to: string, code: string): Promise<void> {
+    if (process.env.OTP_LOG_DEV === 'true') {
+      this.logger.warn(`DEV_OTP email=${to} code=${code}`);
+    }
+    if (!this.cfg.host || this.cfg.host === 'localhost') {
+      this.logger.warn(`SMTP not configured — skipping send to ${to.slice(0, 3)}***`);
+      return;
+    }
     const subject = 'Код входа в GMD';
     const text = `Ваш код входа: ${code}\n\nКод действителен 10 минут. Если вы не пытались войти — проигнорируйте это письмо.`;
     const html = `
