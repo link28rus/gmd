@@ -8,6 +8,7 @@ interface MockPrisma {
   membership: { findMany: jest.Mock };
   family: { findUnique: jest.Mock };
   refreshToken: { updateMany: jest.Mock };
+  child: { findMany: jest.Mock };
   $transaction: jest.Mock;
 }
 
@@ -28,6 +29,7 @@ function makePrismaMock(): MockPrisma {
     membership: { findMany: jest.fn(() => Promise.resolve([])) },
     family: { findUnique: jest.fn(() => Promise.resolve(null)) },
     refreshToken: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+    child: { findMany: jest.fn(() => Promise.resolve([])) },
     $transaction: jest.fn((ops: any[]) =>
       Promise.all(ops.map((p) => (typeof p === 'function' ? p(api) : p))),
     ),
@@ -36,7 +38,7 @@ function makePrismaMock(): MockPrisma {
 }
 
 describe('UsersService', () => {
-  it('getMe возвращает user + family + memberships', async () => {
+  it('getMe возвращает user + family + memberships + children', async () => {
     const p = makePrismaMock();
     p._users.push({
       id: 'u-1',
@@ -47,6 +49,16 @@ describe('UsersService', () => {
     });
     p.membership.findMany = jest.fn(() => Promise.resolve([{ role: 'owner', familyId: 'f-1' }]));
     p.family.findUnique = jest.fn(() => Promise.resolve({ id: 'f-1', name: 'Моя семья' }));
+    p.child.findMany = jest.fn(() =>
+      Promise.resolve([
+        {
+          id: 'ch-1',
+          name: 'Vanya',
+          dateOfBirth: null,
+          device: { id: 'd-1', deviceName: 'Pixel' },
+        },
+      ]),
+    );
     const svc = new UsersService(p as unknown as PrismaService);
 
     const r = await svc.getMe('u-1', 'f-1');
@@ -54,6 +66,9 @@ describe('UsersService', () => {
     expect(r.user.email).toBe('a@b.com');
     expect(r.family.name).toBe('Моя семья');
     expect(r.memberships[0].role).toBe('owner');
+    expect(r.children).toHaveLength(1);
+    expect(r.children[0].name).toBe('Vanya');
+    expect(r.children[0].device?.deviceName).toBe('Pixel');
   });
 
   it('updateMe патчит name и locale', async () => {

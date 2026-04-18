@@ -8,6 +8,9 @@ import { RedisModule } from './redis/redis.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { FamilyModule } from './family/family.module';
+import { ChildrenModule } from './children/children.module';
+import { InvitesModule } from './invites/invites.module';
+import { ChildDeviceModule } from './child-device/child-device.module';
 import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storage';
 
 @Module({
@@ -25,6 +28,9 @@ import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storag
     AuthModule,
     UsersModule,
     FamilyModule,
+    ChildrenModule,
+    InvitesModule,
+    ChildDeviceModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

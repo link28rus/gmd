@@ -34,7 +34,7 @@ export class ChildDeviceService {
 
     return this.prisma.$transaction(async (tx) => {
       const lockRows = (await tx.$queryRawUnsafe(
-        `SELECT id FROM invites WHERE code = $1 AND consumed_at IS NULL AND expires_at > NOW() FOR UPDATE`,
+        `SELECT id FROM invites WHERE code = $1 AND "consumedAt" IS NULL AND "expiresAt" > NOW() FOR UPDATE`,
         code,
       )) as Array<{ id: string }>;
       if (lockRows.length === 0) {
