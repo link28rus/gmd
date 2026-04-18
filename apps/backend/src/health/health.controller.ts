@@ -1,6 +1,6 @@
-import { Controller, Get } from '@nestjs/common';
-import type { PrismaService } from '../prisma/prisma.service';
-import type { RedisService } from '../redis/redis.service';
+import { Controller, Get, Inject } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../redis/redis.service';
 
 type LivenessResponse = {
   status: 'ok';
@@ -17,8 +17,8 @@ type ReadinessResponse = {
 @Controller()
 export class HealthController {
   constructor(
-    private readonly prisma: PrismaService,
-    private readonly redis: RedisService,
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(RedisService) private readonly redis: RedisService,
   ) {}
 
   @Get('healthz')
