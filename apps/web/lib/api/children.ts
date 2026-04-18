@@ -1,0 +1,54 @@
+// apps/web/lib/api/children.ts
+import { apiFetch } from './client';
+
+export interface ChildDevice {
+  id: string;
+  deviceName: string | null;
+  osVersion: string | null;
+  appVersion: string | null;
+  lastSeenAt: string | null;
+  revokedAt: string | null;
+}
+
+export interface Child {
+  id: string;
+  name: string;
+  dateOfBirth: string | null;
+  device: ChildDevice | null;
+}
+
+export interface InviteResponse {
+  code: string;
+  qrUrl: string;
+  deepLink: string;
+  expiresIn: number;
+}
+
+export interface CreateChildInput {
+  name: string;
+  dateOfBirth?: string;
+}
+
+export interface UpdateChildInput {
+  name?: string;
+  dateOfBirth?: string | null;
+}
+
+export const childrenApi = {
+  list: () => apiFetch<{ children: Child[] }>('/api/children'),
+  create: (body: CreateChildInput) =>
+    apiFetch<{ child: Child }>('/api/children', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  update: (id: string, body: UpdateChildInput) =>
+    apiFetch<{ child: Child }>(`/api/children/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  remove: (id: string) => apiFetch<void>(`/api/children/${id}`, { method: 'DELETE' }),
+  createInvite: (id: string) =>
+    apiFetch<InviteResponse>(`/api/children/${id}/invites`, { method: 'POST' }),
+  resetDevice: (id: string) =>
+    apiFetch<void>(`/api/children/${id}/reset-device`, { method: 'POST' }),
+};
