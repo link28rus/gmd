@@ -1,0 +1,9 @@
+name: gmd_workspace
+description: GMD Flutter/Dart workspace — melos root
+publish_to: 'none'
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+
+dev_dependencies:
+  melos: ^6.1.0

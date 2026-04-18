@@ -1,0 +1,28 @@
+name: gmd_flutter
+repository: https://github.com/link28rus/gmd
+
+packages:
+  - apps/mobile-parent
+  - apps/mobile-child
+  - packages/shared-dart
+
+command:
+  bootstrap:
+    runPubGetInParallel: true
+
+scripts:
+  analyze:
+    run: melos exec -- "dart analyze"
+    description: 'Analyze all Dart/Flutter packages'
+
+  test:
+    run: melos exec --dir-exists=test -- "flutter test"
+    description: 'Run Flutter tests in all packages'
+
+  format:
+    run: melos exec -- "dart format ."
+    description: 'Format all Dart code'
+
+  clean:
+    run: melos exec -- "flutter clean"
+    description: 'Clean all Flutter build artifacts'
