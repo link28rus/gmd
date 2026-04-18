@@ -35,20 +35,22 @@
 	}
 }
 
-# --- GlitchTip (под basic-auth на MVP) ---
-{$GLITCHTIP_DOMAIN} {
-	encode zstd gzip
-	basic_auth {
-		admin {$CADDY_BASIC_AUTH_HASH}
-	}
-	reverse_proxy glitchtip-web:8000
-}
-
-# --- Uptime Kuma ---
-{$KUMA_DOMAIN} {
-	encode zstd gzip
-	basic_auth {
-		admin {$CADDY_BASIC_AUTH_HASH}
-	}
-	reverse_proxy uptime-kuma:3001
-}
+# --- GlitchTip + Uptime Kuma subdomains ---
+# Включаются в Phase 0.3 Task 16/17 через `import` после того как сервисы
+# glitchtip-web и uptime-kuma появятся в docker-compose.prod.yml.
+# Без этого Caddy пытается получить TLS-сертификат на subdomain и ACME падает,
+# либо при обращении выдаёт 502 из-за отсутствия upstream DNS.
+#
+# После Task 16:
+# {$GLITCHTIP_DOMAIN} {
+#     encode zstd gzip
+#     basic_auth { admin {$CADDY_BASIC_AUTH_HASH} }
+#     reverse_proxy glitchtip-web:8000
+# }
+#
+# После Task 17:
+# {$KUMA_DOMAIN} {
+#     encode zstd gzip
+#     basic_auth { admin {$CADDY_BASIC_AUTH_HASH} }
+#     reverse_proxy uptime-kuma:3001
+# }
