@@ -1,10 +1,121 @@
 {
   "master": {
-    "tasks": [],
+    "tasks": [
+      {
+        "id": "1",
+        "title": "Phase 0.1 Task 1: git init + base config files",
+        "description": "Initialize git repo on main, create .gitignore / .gitattributes / .editorconfig / .nvmrc / LICENSE / README.md, commit initial state.",
+        "details": "Plan: docs/superpowers/plans/2026-04-18-gmd-phase0.1-monorepo-skeleton.md (Task 1).",
+        "testStrategy": "git log shows 1 commit; working tree clean",
+        "status": "done",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": [],
+        "updatedAt": "2026-04-18T03:46:44.147Z"
+      },
+      {
+        "id": "2",
+        "title": "Phase 0.1 Task 2: pnpm workspaces + Turborepo + tsconfig.base",
+        "description": "Root package.json with pnpm workspace manifest, turbo.json, tsconfig.base.json. Install root devDeps (turbo, typescript, husky, lint-staged, prettier, commitlint).",
+        "details": "Plan Task 2. Depends on Task 1.",
+        "testStrategy": "pnpm install без ошибок; pnpm-lock.yaml создан",
+        "status": "done",
+        "dependencies": ["1"],
+        "priority": "high",
+        "subtasks": [],
+        "updatedAt": "2026-04-18T03:46:44.153Z"
+      },
+      {
+        "id": "3",
+        "title": "Phase 0.1 Task 3: Prettier + ESLint + Husky + Commitlint",
+        "description": "Flat ESLint config, Prettier, commitlint (Conventional Commits), husky hooks (pre-commit=lint-staged, commit-msg=commitlint), lint-staged config в package.json.",
+        "details": "Plan Task 3. Зависит от 2.",
+        "testStrategy": "commitlint блокирует плохое сообщение; pre-commit хук работает",
+        "status": "done",
+        "dependencies": ["2"],
+        "priority": "high",
+        "subtasks": [],
+        "updatedAt": "2026-04-18T03:46:44.155Z"
+      },
+      {
+        "id": "4",
+        "title": "Phase 0.1 Task 4: NestJS backend skeleton + /healthz (TDD)",
+        "description": "apps/backend — NestJS 11, main.ts, AppModule, HealthController с /healthz. TDD: spec пишется первым, видим FAIL, потом реализация, видим PASS.",
+        "details": "Plan Task 4. Зависит от 2.",
+        "testStrategy": "Jest: 2 passed; curl /healthz → {status:ok}",
+        "status": "done",
+        "dependencies": ["2"],
+        "priority": "high",
+        "subtasks": [],
+        "updatedAt": "2026-04-18T03:46:44.157Z"
+      },
+      {
+        "id": "5",
+        "title": "Phase 0.1 Task 5: Prisma setup (stub User model)",
+        "description": "@prisma/client + prisma в apps/backend. schema.prisma с заглушечной моделью User. .env.example (committed), .env (ignored). Генерация клиента работает. Миграцию не запускаем (БД нет).",
+        "details": "Plan Task 5. Зависит от 4.",
+        "testStrategy": "prisma generate успешен; .env не попадает в коммит",
+        "status": "done",
+        "dependencies": ["4"],
+        "priority": "high",
+        "subtasks": [],
+        "updatedAt": "2026-04-18T03:48:16.751Z"
+      },
+      {
+        "id": "6",
+        "title": "Phase 0.1 Task 6: Next.js 15 web skeleton + /api/healthz",
+        "description": "apps/web — Next.js 15 App Router, TypeScript, Tailwind. Лендинг-заглушка + API route /api/healthz.",
+        "details": "Plan Task 6. Зависит от 3.",
+        "testStrategy": "next dev -p 3000; curl /api/healthz → {status:ok}",
+        "status": "done",
+        "dependencies": ["3"],
+        "priority": "high",
+        "subtasks": [],
+        "updatedAt": "2026-04-18T03:54:45.021Z"
+      },
+      {
+        "id": "7",
+        "title": "Phase 0.1 Task 7: shared-types + ui packages (stubs)",
+        "description": "packages/shared-types (будущий OpenAPI codegen target) и packages/ui (shadcn/ui base) — пока минимальные заглушки, чтобы workspace был валидным.",
+        "details": "Plan Task 7. Зависит от 2.",
+        "testStrategy": "pnpm typecheck зелёный во всех workspace-пакетах",
+        "status": "done",
+        "dependencies": ["2"],
+        "priority": "medium",
+        "subtasks": [],
+        "updatedAt": "2026-04-18T03:57:05.445Z"
+      },
+      {
+        "id": "8",
+        "title": "Phase 0.1 Task 8: Flutter apps + Melos + shared-dart",
+        "description": "flutter create mobile-parent (Android+iOS) и mobile-child (Android only). melos.yaml в корне. packages/shared-dart (stub).",
+        "details": "Plan Task 8. Зависит от 7. Требует установленный Flutter SDK.",
+        "testStrategy": "melos run analyze → No issues found",
+        "status": "done",
+        "dependencies": ["7"],
+        "priority": "medium",
+        "subtasks": [],
+        "updatedAt": "2026-04-18T04:00:18.887Z"
+      },
+      {
+        "id": "9",
+        "title": "Phase 0.1 Task 9: Final checks + CHANGELOG v0.1.0 + tag",
+        "description": "Clean install, lint/typecheck/test всё зелёное, pnpm dev оба сервиса, обновить CHANGELOG под v0.1.0, создать git-тег v0.1.0.",
+        "details": "Plan Task 9. Зависит от 5, 6, 8.",
+        "testStrategy": "git tag v0.1.0 создан; все smoke-проверки pass",
+        "status": "done",
+        "dependencies": ["5", "6", "8"],
+        "priority": "high",
+        "subtasks": [],
+        "updatedAt": "2026-04-18T04:09:01.957Z"
+      }
+    ],
     "metadata": {
-      "created": "2026-04-18T00:00:00.000Z",
-      "updated": "2026-04-18T00:00:00.000Z",
-      "description": "Tasks for master context"
+      "version": "1.0.0",
+      "lastModified": "2026-04-18T04:09:01.958Z",
+      "taskCount": 9,
+      "completedCount": 9,
+      "tags": ["master"]
     }
   }
 }
