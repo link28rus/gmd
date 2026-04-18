@@ -10,11 +10,31 @@
 
 ```bash
 pnpm install
-pnpm dev
+pnpm stack:up     # Postgres + PostGIS, Redis, MinIO, Adminer в docker
+pnpm dev          # backend + web параллельно
 ```
 
-- Backend: http://localhost:3001 (healthcheck: `/healthz`)
+- Backend: http://localhost:3001 (`/healthz`, `/readyz`)
 - Web: http://localhost:3000
+
+## Dev-стек в Docker
+
+```bash
+pnpm stack:up             # все 4 сервиса
+pnpm stack:down           # стоп (volumes остаются)
+pnpm stack:reset          # стоп + удаление volumes
+pnpm stack:logs
+pnpm stack:ps
+```
+
+Порты по умолчанию (см. `infra/docker/.env.dev.example`):
+
+- Postgres: `localhost:5432` (user `gmd`, db `gmd_dev`)
+- Redis: `localhost:6379`
+- MinIO: API `localhost:9000`, Console `localhost:9001` (`minio` / `minio12345`)
+- Adminer: http://localhost:8080
+
+Если порты заняты — переопределить в `infra/docker/.env.dev` и согласовать с `apps/backend/.env`.
 
 ## Стек
 

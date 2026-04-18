@@ -6,6 +6,7 @@
 ## Кратко
 
 Родитель в одном приложении получает:
+
 - GPS-геолокацию ребёнка (Android) + историю 30 дней
 - Геозоны с push при входе/выходе
 - SOS-кнопка от ребёнка
@@ -16,17 +17,17 @@
 
 ## Технологический стек
 
-| Слой | Технология |
-|---|---|
-| Mobile | Flutter 3.x, Riverpod, Dio, Drift, yandex_mapkit, firebase_messaging + RuStore Push |
-| Web | Next.js 15 (App Router), TypeScript, Tailwind, shadcn/ui, Zod |
-| Backend | NestJS, PostgreSQL 16 + PostGIS + pg_cron, Redis, MinIO |
-| API | REST + OpenAPI 3.1, codegen TS + Dart |
-| Auth | JWT (access 15m + refresh 30d) + long-lived device-token для детей |
-| Realtime | Short-polling + FCM/RuStore push (без WebSocket на MVP) |
-| Infra | Docker Compose, Caddy, GlitchTip, Uptime Kuma, Grafana+Loki+Prometheus |
-| Карты | Яндекс.Карты |
-| Оплаты | ❌ на MVP (монетизация после сбора аудитории) |
+| Слой     | Технология                                                                          |
+| -------- | ----------------------------------------------------------------------------------- |
+| Mobile   | Flutter 3.x, Riverpod, Dio, Drift, yandex_mapkit, firebase_messaging + RuStore Push |
+| Web      | Next.js 15 (App Router), TypeScript, Tailwind, shadcn/ui, Zod                       |
+| Backend  | NestJS, PostgreSQL 16 + PostGIS + pg_cron, Redis, MinIO                             |
+| API      | REST + OpenAPI 3.1, codegen TS + Dart                                               |
+| Auth     | JWT (access 15m + refresh 30d) + long-lived device-token для детей                  |
+| Realtime | Short-polling + FCM/RuStore push (без WebSocket на MVP)                             |
+| Infra    | Docker Compose, Caddy, GlitchTip, Uptime Kuma, Grafana+Loki+Prometheus              |
+| Карты    | Яндекс.Карты                                                                        |
+| Оплаты   | ❌ на MVP (монетизация после сбора аудитории)                                       |
 
 ## Монорепо
 
@@ -74,6 +75,7 @@ docs/superpowers/specs  design docs
 ## Скилы для GMD
 
 ### Используем регулярно
+
 - `memory-autopilot` — всегда, контекст между сессиями
 - `superpowers:*` — основной рабочий процесс (см. выше)
 - `frontend-design:frontend-design` — UI кабинета родителя, лендинг
@@ -86,6 +88,7 @@ docs/superpowers/specs  design docs
 - `update-config` — хуки, permissions, env
 
 ### Нужно создать (через `anthropic-skills:skill-creator`)
+
 - `gmd-development` — проект, пути, конвенции, dev-запуск (аналог `aquastart-development`)
 - `gmd-docker-ops` — compose up/down/logs/exec на 192.168.1.23
 - `gmd-db-backup` — pg_dump + restore + anonymize для dev
@@ -96,22 +99,22 @@ docs/superpowers/specs  design docs
 
 ## Субагенты
 
-| Задача | Агент |
-|---|---|
-| NestJS-модули, бизнес-логика | `backend-developer` |
-| REST/OpenAPI design | `api-designer` |
-| Next.js 15, кабинет, лендинг | `nextjs-developer` |
-| Сложные TS-типы, codegen | `typescript-pro` |
-| PG-настройки, индексы, PostGIS, pg_cron | `database-administrator` + `sql-pro` |
-| Dockerfile, compose | `docker-expert` |
-| CI/CD, Caddy, бэкапы | `devops-engineer` / `deployment-engineer` |
-| 152-ФЗ, OWASP, pentests | `security-auditor` |
-| Перед merge | `code-reviewer` |
-| Playwright, supertest, integration_test | `test-automator` |
-| Баги | `debugger` |
-| Flutter/Dart (нет спец. агента) | `general-purpose` |
-| Исследования по кодбазе | `Explore` |
-| Планирование крупных изменений | `Plan` |
+| Задача                                  | Агент                                     |
+| --------------------------------------- | ----------------------------------------- |
+| NestJS-модули, бизнес-логика            | `backend-developer`                       |
+| REST/OpenAPI design                     | `api-designer`                            |
+| Next.js 15, кабинет, лендинг            | `nextjs-developer`                        |
+| Сложные TS-типы, codegen                | `typescript-pro`                          |
+| PG-настройки, индексы, PostGIS, pg_cron | `database-administrator` + `sql-pro`      |
+| Dockerfile, compose                     | `docker-expert`                           |
+| CI/CD, Caddy, бэкапы                    | `devops-engineer` / `deployment-engineer` |
+| 152-ФЗ, OWASP, pentests                 | `security-auditor`                        |
+| Перед merge                             | `code-reviewer`                           |
+| Playwright, supertest, integration_test | `test-automator`                          |
+| Баги                                    | `debugger`                                |
+| Flutter/Dart (нет спец. агента)         | `general-purpose`                         |
+| Исследования по кодбазе                 | `Explore`                                 |
+| Планирование крупных изменений          | `Plan`                                    |
 
 ## MCP-серверы
 
@@ -153,20 +156,25 @@ docs/superpowers/specs  design docs
 ## v1.3.50 — 2026-04-15
 
 ### Новые возможности
+
 - **Название фичи кратко** — человекочитаемое описание, что это даёт пользователю (#123)
 
 ### Улучшения
+
 - **Короткое название** — что стало лучше и почему это важно (#124)
 
 ### Исправления
+
 - fix(scope): краткое описание починенного бага (#125)
 
 ### Изменения
+
 - docs: что-то по документации
 - refactor: техдолг без влияния на пользователя
 ```
 
 **Правила:**
+
 - **SemVer:** MAJOR.MINOR.PATCH. Breaking → MAJOR, фича → MINOR, fix/docs → PATCH.
 - **Conventional Commits** для исправлений/техчейнджей: `fix(scope):`, `docs:`, `refactor:`, `chore:`.
 - **Для пользовательских фич** — человеческие заголовки жирным + объяснение через em-dash (`—`). Не `feat(auth): add login` а `**Вход по номеру телефона** — быстрая авторизация без email`.
@@ -177,6 +185,7 @@ docs/superpowers/specs  design docs
 - **Автообновление:** скрипт/CI обновляет CHANGELOG при создании релиза (аналог v1.3.47 NiksDesk). В Фазе 0 закладываем.
 
 **Категории (в порядке убывания важности):**
+
 1. `### Новые возможности`
 2. `### Улучшения`
 3. `### Исправления`
@@ -184,30 +193,59 @@ docs/superpowers/specs  design docs
 5. `### Breaking changes` (если были — ставим первыми!)
 
 **Где выводить:**
+
 - Web-кабинет → страница `/changelog` (вёрстка как в скриншоте NiksDesk — карточки, версия + дата + badge «Текущая»).
 - Mobile-parent → экран «О приложении → Что нового» с той же информацией.
 - Версия приложения — всегда видна в sidebar web и на экране «О приложении» mobile.
 
 ## Команды (dev)
 
-_Будут заполнены в Фазе 0 после скаффолдинга. Планируемый интерфейс:_
+### Начальная установка
 
 ```bash
-# корневые
-pnpm install
-pnpm dev             # параллельный запуск backend+web
-pnpm build
-pnpm test
+pnpm install              # JS/TS-зависимости
+melos bootstrap           # Dart/Flutter-зависимости
+```
+
+### Docker-стек (Postgres + PostGIS, Redis, MinIO, Adminer)
+
+```bash
+pnpm stack:up             # поднять все сервисы
+pnpm stack:down           # остановить (volumes сохраняются)
+pnpm stack:reset          # остановить + удалить volumes (сброс БД!)
+pnpm stack:logs           # следить за логами всех сервисов
+pnpm stack:ps             # статус сервисов
+```
+
+Порты по умолчанию (`infra/docker/.env.dev.example`): Postgres `5432`, Redis `6379`, MinIO API `9000` / Console `9001`, Adminer `8080`.
+
+**Если локальный порт занят** (например, на машине разработчика уже крутится свой PostgreSQL или другой docker-стек), переопределить порты в `infra/docker/.env.dev` и согласовать с `apps/backend/.env` (`DATABASE_URL`, `REDIS_URL`). Локальная dev-машина проекта использует `POSTGRES_PORT=54320`, `REDIS_PORT=63790`, `MINIO_API_PORT=9050`, `MINIO_CONSOLE_PORT=9051`.
+
+### Приложения
+
+```bash
+pnpm dev                  # backend (3001) + web (3000) параллельно
+pnpm build                # сборка всех JS/TS workspace-пакетов
+pnpm test                 # Jest по всем пакетам
 pnpm lint
+pnpm typecheck
 
-# сервер
-docker compose -f infra/docker/docker-compose.dev.yml up -d
-docker compose logs -f backend
+# Только backend
+pnpm --filter @gmd/backend dev
+pnpm --filter @gmd/backend prisma migrate dev --name <name>
+pnpm --filter @gmd/backend prisma studio
 
-# mobile
+# Mobile
 cd apps/mobile-parent && flutter run
 cd apps/mobile-child && flutter run
+melos run analyze
 ```
+
+### Healthchecks
+
+- Backend liveness: http://localhost:3001/healthz
+- Backend readiness: http://localhost:3001/readyz (проверяет БД + Redis)
+- Web: http://localhost:3000/api/healthz
 
 ## Память и секреты
 
