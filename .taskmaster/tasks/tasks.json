@@ -108,13 +108,25 @@
         "priority": "high",
         "subtasks": [],
         "updatedAt": "2026-04-18T04:09:01.957Z"
+      },
+      {
+        "id": "10",
+        "title": "Phase 0.2 Task 1: infra/docker skeleton",
+        "description": "docker-compose.dev.yml (postgres+postgis, redis, minio, adminer), .env.dev.example, postgres/init.sql (PostGIS extensions), docker-compose.prod.yml stub, update .gitignore",
+        "details": "Plan Task 1. Files: infra/docker/docker-compose.dev.yml, .env.dev.example, postgres/init.sql, docker-compose.prod.yml (stub), .gitignore.",
+        "testStrategy": "git check-ignore infra/docker/.env.dev → IGNORED_OK",
+        "status": "done",
+        "dependencies": ["9"],
+        "priority": "high",
+        "subtasks": [],
+        "updatedAt": "2026-04-18T04:20:33.844Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-04-18T04:09:01.958Z",
-      "taskCount": 9,
-      "completedCount": 9,
+      "lastModified": "2026-04-18T04:20:33.845Z",
+      "taskCount": 10,
+      "completedCount": 10,
       "tags": ["master"]
     }
   }
