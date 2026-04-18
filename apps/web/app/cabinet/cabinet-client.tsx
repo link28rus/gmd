@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuthStore, type AuthUser, type AuthFamily } from '@/lib/auth-store';
 
@@ -94,6 +95,12 @@ export default function CabinetClient(): ReactElement {
           <p>Email: {user.email}</p>
           <p>Локаль: {user.locale}</p>
         </div>
+        <Link
+          href="/cabinet/children"
+          className="mt-6 block w-full rounded-md border border-zinc-300 bg-white py-2 text-center text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+        >
+          Перейти к разделу «Мои дети»
+        </Link>
         <button
           onClick={logout}
           disabled={loading}
