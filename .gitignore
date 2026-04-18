@@ -17,6 +17,8 @@ out/
 !.env.example
 infra/docker/.env.dev
 !infra/docker/.env.dev.example
+infra/docker/.env.prod
+!infra/docker/.env.prod.example
 
 # IDE
 .idea/
