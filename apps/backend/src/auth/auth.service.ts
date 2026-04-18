@@ -51,6 +51,7 @@ export class AuthService {
 
     const accessToken = await this.jwt.signAccessToken({
       sub: user.id,
+      email: user.email,
       familyId: family.id,
       role: 'owner',
     });
@@ -69,13 +70,17 @@ export class AuthService {
     const r = await this.refresh.rotate(oldRefresh, meta);
     if (!r.ok) return { ok: false, replay: r.replay };
 
-    const membership = await this.prisma.membership.findFirst({
-      where: { userId: r.userId },
-      orderBy: { createdAt: 'asc' },
-    });
-    if (!membership) return { ok: false };
+    const [userRow, membership] = await Promise.all([
+      this.prisma.user.findUnique({ where: { id: r.userId }, select: { email: true } }),
+      this.prisma.membership.findFirst({
+        where: { userId: r.userId },
+        orderBy: { createdAt: 'asc' },
+      }),
+    ]);
+    if (!membership || !userRow) return { ok: false };
     const accessToken = await this.jwt.signAccessToken({
       sub: r.userId,
+      email: userRow.email,
       familyId: membership.familyId,
       role: membership.role as 'owner' | 'parent',
     });

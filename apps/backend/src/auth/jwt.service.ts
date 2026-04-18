@@ -12,6 +12,7 @@ export interface JwtConfig {
 
 export interface JwtPayload {
   sub: string;
+  email: string;
   familyId: string;
   role: 'owner' | 'parent';
 }
@@ -33,7 +34,7 @@ export class JwtService implements OnModuleInit {
   }
 
   async signAccessToken(payload: JwtPayload): Promise<string> {
-    return new SignJWT({ familyId: payload.familyId, role: payload.role })
+    return new SignJWT({ email: payload.email, familyId: payload.familyId, role: payload.role })
       .setProtectedHeader({ alg: 'RS256' })
       .setSubject(payload.sub)
       .setIssuedAt()
@@ -48,6 +49,7 @@ export class JwtService implements OnModuleInit {
     });
     return {
       sub: String(payload.sub),
+      email: String(payload.email ?? ''),
       familyId: String(payload.familyId),
       role: payload.role as 'owner' | 'parent',
     };

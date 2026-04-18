@@ -35,6 +35,7 @@ describe('JwtAuthGuard', () => {
   it('true + req.user если verify ok', async () => {
     (mockJwt.verifyAccessToken as jest.Mock).mockResolvedValueOnce({
       sub: 'u1',
+      email: 'test@example.com',
       familyId: 'f1',
       role: 'owner',
     });
@@ -42,6 +43,11 @@ describe('JwtAuthGuard', () => {
     const c = ctx('Bearer xyz');
     expect(await guard.canActivate(c)).toBe(true);
     const req = c.switchToHttp().getRequest() as any;
-    expect(req.user).toEqual({ userId: 'u1', familyId: 'f1', role: 'owner' });
+    expect(req.user).toEqual({
+      userId: 'u1',
+      email: 'test@example.com',
+      familyId: 'f1',
+      role: 'owner',
+    });
   });
 });

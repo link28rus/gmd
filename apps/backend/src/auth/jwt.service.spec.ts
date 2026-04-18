@@ -34,6 +34,7 @@ describe('JwtService', () => {
 
   const payload: JwtPayload = {
     sub: 'user-1',
+    email: 'user@example.com',
     familyId: 'fam-1',
     role: 'owner',
   };
