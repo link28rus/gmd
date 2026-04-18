@@ -1,0 +1,11 @@
+[Unit]
+Description=GMD Postgres daily backup
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/gmd/bin/pg-backup.sh
+StandardOutput=journal
+StandardError=journal
+Nice=10

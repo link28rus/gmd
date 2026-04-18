@@ -1,0 +1,10 @@
+[Unit]
+Description=GMD Postgres weekly restore verify
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/gmd/bin/pg-restore-verify.sh
+StandardOutput=journal
+StandardError=journal
