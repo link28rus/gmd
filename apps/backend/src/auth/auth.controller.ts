@@ -10,6 +10,7 @@ import {
   UnauthorizedException,
   UsePipes,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
 import { ZodValidationPipe } from '../common/zod/zod-validation.pipe';
 import { AuthService } from './auth.service';
@@ -35,6 +36,7 @@ export class AuthController {
 
   @Post('request-otp')
   @HttpCode(HttpStatus.ACCEPTED)
+  @Throttle({ default: { ttl: 600_000, limit: 3 } })
   @UsePipes(new ZodValidationPipe(RequestOtpSchema))
   async requestOtp(@Body() dto: RequestOtpDto): Promise<{ expiresIn: number }> {
     // Enumeration defense: всегда отвечаем 202 через мин. задержку.
@@ -50,6 +52,7 @@ export class AuthController {
   }
 
   @Post('verify-otp')
+  @Throttle({ default: { ttl: 600_000, limit: 10 } })
   @UsePipes(new ZodValidationPipe(VerifyOtpSchema))
   async verifyOtp(@Body() dto: VerifyOtpDto, @Req() req: Request): Promise<unknown> {
     const r = await this.auth.verifyOtp(dto.email, dto.code, extractMeta(req));
@@ -63,6 +66,7 @@ export class AuthController {
   }
 
   @Post('refresh')
+  @Throttle({ default: { ttl: 60_000, limit: 30 } })
   @UsePipes(new ZodValidationPipe(RefreshSchema))
   async refresh(@Body() dto: RefreshDto, @Req() req: Request): Promise<unknown> {
     const r = await this.auth.refreshTokens(dto.refreshToken, extractMeta(req));
@@ -77,6 +81,7 @@ export class AuthController {
 
   @Post('logout')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @Throttle({ default: { ttl: 60_000, limit: 30 } })
   @UsePipes(new ZodValidationPipe(LogoutSchema))
   async logout(@Body() dto: LogoutDto): Promise<void> {
     await this.auth.logout(dto.refreshToken);
