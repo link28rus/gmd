@@ -16,6 +16,47 @@
 
 ---
 
+## v0.4.0 — 2026-04-18
+
+### Новые возможности
+
+- **Passwordless email-OTP вход** — регистрация и вход одним шагом через `/auth/request-otp` → `/auth/verify-otp` с 6-значным кодом; первая verify автоматически создаёт User + Family + Membership(owner)
+- **JWT access + opaque refresh** — RS256 access 15m, 32-byte refresh 30d с rotation on use и replay detection (revoke всей цепочки при reuse)
+- **Протектед endpoints** — `GET/PATCH /me`, `PATCH /family/:id` (owner-only), `DELETE /me` (soft-delete per 152-ФЗ) под `JwtAuthGuard`
+- **Контекст семьи по умолчанию** — `GET /me` возвращает user + family + memberships одним запросом, не нужно 3 последовательных
+- **Rate limiting через Redis** — `@nestjs/throttler` с кастомным `RedisThrottlerStorage`: OTP-request 3/10min, verify 10/10min, refresh/logout 30/min
+- **MailHog в dev-стеке** — локальный SMTP + Web UI `http://localhost:8025`, OTP-письма видны в браузере
+- **E2E на testcontainers** — 6 тестов на реальном Postgres (postgis/postgis:16-3.4) через `@testcontainers/postgresql`, полный auth-flow + replay detection + rate limit + delete account
+
+### Улучшения
+
+- **Единый формат ошибок** — `{ error: { code, message, details? } }` через глобальный `HttpExceptionFilter`
+- **Zod DTO** — все входные endpoints валидируются `ZodValidationPipe`; детали ошибок — массив `{path, message}`
+- **Enumeration defense** — `request-otp` всегда `202` + минимальная задержка 200ms против timing-attacks
+- **OTP argon2id** — код хранится как argon2id hash + per-code salt, brute-force защищён счётчиком attempts (3 неудачные → код invalidate)
+- **Refresh opaque + sha256** — в БД только sha256 от токена, утечка БД не даёт логин
+
+### Изменения
+
+- feat(auth): Prisma models `users`, `families`, `memberships`, `otp_codes`, `refresh_tokens` + миграция `auth_family`
+- feat(common): `HttpExceptionFilter`, `ZodValidationPipe`, `RedisThrottlerStorage`
+- feat(backend): модули `auth`, `users`, `family` с полным DI через `@Inject`
+- chore(deps): `@nestjs/throttler`, `jose`, `@node-rs/argon2`, `nodemailer`, `zod`, `cookie-parser`, `testcontainers`, `@testcontainers/postgresql`
+- chore(infra): MailHog в dev-стеке (`docker-compose.dev.yml`)
+- chore(web): порт web-приложения 3000 → 3003 (конфликт с параллельным стеком на dev-машине)
+- fix(auth): `@Body(ZodPipe)` вместо `@UsePipes` на методах с `@Param` — иначе Zod применяется к path-параметрам
+- fix(auth): `@HttpCode(200)` на `verify-otp` и `refresh` (Nest default POST = 201)
+- fix(smtp): dev `.env.example` использует `SMTP_HOST=127.0.0.1` — Windows резолвит `localhost` в IPv6, MailHog слушает IPv4
+
+### Security
+
+- **Refresh replay detection** — если клиент прислал уже-rotated token, сервер ревокает **всю цепочку** refresh-токенов этого userId
+- **OTP одноразовый + auto-invalidate** — повторный `request-otp` на тот же email инвалидирует предыдущий активный код
+- **JwtAuthGuard** — Bearer-only, clock-skew 30s, RS256 асимметричная подпись
+- **152-ФЗ** — `acceptedPrivacyPolicyVersion` фиксируется при первой verify, `DELETE /me` → soft-delete + revoke refresh; hard-delete через 30 дней — отдельный cron-job (Phase 1.3)
+
+---
+
 ## v0.3.0 — 2026-04-18
 
 ### Новые возможности

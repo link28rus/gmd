@@ -127,10 +127,10 @@ docs/superpowers/specs  design docs
 
 ## Открытые вопросы (решить в writing-plans)
 
-1. ORM: **Prisma** (рекомендация) vs TypeORM vs Drizzle
+1. ~~ORM~~ → **Prisma** (зафиксировано, Phase 0.2)
 2. Git: GitHub приватный vs self-hosted Gitea
 3. State-management Flutter: **Riverpod** (рекомендация) vs Bloc
-4. Регистрация: email vs **phone + OTP** (рекомендация, российская специфика)
+4. ~~Регистрация: email vs phone + OTP~~ → **email + OTP** (реализовано в Phase 1.1, см. [docs/superpowers/specs/2026-04-18-gmd-phase1.1-auth-design.md](docs/superpowers/specs/2026-04-18-gmd-phase1.1-auth-design.md))
 
 ## Документация и CHANGELOG (обязательно)
 
