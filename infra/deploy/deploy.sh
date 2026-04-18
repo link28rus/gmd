@@ -1,18 +1,10 @@
 #!/usr/bin/env bash
-# GMD prod deploy — запускается с локальной машины.
-# Требует: ssh-alias gmd-prod (см. ~/.ssh/config), rsync.
+# GMD prod deploy — запускается с локальной машины (git-bash/msys2 на Windows, либо Linux/Mac).
+# Требует: ssh-alias gmd-prod (см. ~/.ssh/config).
 #
-# Структура на сервере:
-#   /opt/gmd/docker/docker-compose.prod.yml  (compose-файл живёт здесь)
-#   /opt/gmd/docker/postgres/*.sql           (init+retention)
-#   /opt/gmd/caddy/Caddyfile
-#   /opt/gmd/apps/{backend,web}              (исходники для build)
-#   /opt/gmd/packages/*                      (shared workspace deps)
-#   /opt/gmd/.env.prod                       (секреты, не трогаем)
-#   /opt/gmd/data/*                          (persistent bind-mounts)
-#
-# Compose запускается из /opt/gmd/docker/, относительные пути (../caddy/Caddyfile,
-# ./postgres/*.sql, ../apps/*) резолвятся корректно.
+# Используем tar-pipe через SSH вместо rsync — rsync 3.4.x на Windows
+# падает с "dup() in/out/err failed" в git-bash pipeline. tar-pipe работает
+# с любым SSH и без отдельного бинарника на хосте.
 set -euo pipefail
 
 SERVER="${GMD_SSH_ALIAS:-gmd-prod}"
@@ -21,37 +13,30 @@ REMOTE_DOCKER="${REMOTE_DIR}/docker"
 
 say() { printf '\n\033[1;34m==>\033[0m %s\n' "$*"; }
 
-say "1) rsync infra/docker + infra/caddy (compose и Caddyfile)"
-rsync -avz --delete \
-  --exclude '.env*' \
-  --exclude 'data' \
-  infra/docker/ "${SERVER}:${REMOTE_DOCKER}/"
-rsync -avz --delete \
-  infra/caddy/ "${SERVER}:${REMOTE_DIR}/caddy/"
+# tar-copy: отправить содержимое локальной директории в удалённую (с удалением лишнего через rsync-like delete).
+# $1 — локальная директория, $2 — удалённая директория, $3+ — exclude-patterns
+tar_send() {
+  local src="$1" dst="$2"
+  shift 2
+  local excludes=()
+  for pat in "$@"; do
+    excludes+=("--exclude=${pat}")
+  done
+  ssh "${SERVER}" "mkdir -p ${dst}"
+  # Snapshot перед deploy — чтобы удалять только устаревшее
+  tar -cz "${excludes[@]}" -C "${src}" . | ssh "${SERVER}" "tar -xzf - -C ${dst}"
+}
 
-say "2) rsync исходники backend + web + packages"
-rsync -avz --delete \
-  --exclude 'node_modules' \
-  --exclude '.next' \
-  --exclude 'dist' \
-  --exclude '.turbo' \
-  --exclude '*.log' \
-  --exclude 'tsconfig.tsbuildinfo' \
-  apps/backend/ "${SERVER}:${REMOTE_DIR}/apps/backend/"
-rsync -avz --delete \
-  --exclude 'node_modules' \
-  --exclude '.next' \
-  --exclude 'dist' \
-  --exclude '.turbo' \
-  --exclude '*.log' \
-  --exclude 'tsconfig.tsbuildinfo' \
-  apps/web/ "${SERVER}:${REMOTE_DIR}/apps/web/"
-rsync -avz --delete \
-  --exclude 'node_modules' \
-  packages/ "${SERVER}:${REMOTE_DIR}/packages/"
-rsync -avz \
-  package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json \
-  "${SERVER}:${REMOTE_DIR}/"
+say "1) Upload infra/docker + infra/caddy"
+tar_send "infra/docker"  "${REMOTE_DOCKER}"  ".env*" "data"
+tar_send "infra/caddy"   "${REMOTE_DIR}/caddy"
+
+say "2) Upload apps/backend + apps/web + packages + root manifests"
+tar_send "apps/backend"  "${REMOTE_DIR}/apps/backend"  "node_modules" ".next" "dist" ".turbo" "*.log" "tsconfig.tsbuildinfo"
+tar_send "apps/web"      "${REMOTE_DIR}/apps/web"      "node_modules" ".next" "dist" ".turbo" "*.log" "tsconfig.tsbuildinfo"
+tar_send "packages"      "${REMOTE_DIR}/packages"      "node_modules"
+tar -cz package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json | \
+  ssh "${SERVER}" "tar -xzf - -C ${REMOTE_DIR}"
 
 say "3) docker compose build + up -d (из /opt/gmd/docker/)"
 ssh "${SERVER}" "cd ${REMOTE_DOCKER} && \

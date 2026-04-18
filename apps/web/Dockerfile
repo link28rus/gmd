@@ -5,7 +5,7 @@
 FROM node:22-alpine AS deps
 RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 WORKDIR /repo
-COPY pnpm-workspace.yaml package.json pnpm-lock.yaml turbo.json ./
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml turbo.json tsconfig.base.json ./
 COPY apps/web/package.json apps/web/
 COPY packages ./packages
 RUN pnpm install --frozen-lockfile --filter @gmd/web...
@@ -25,7 +25,7 @@ WORKDIR /app
 # Next.js standalone output: self-contained server.js + минимальный node_modules
 COPY --from=builder /repo/apps/web/.next/standalone/ ./
 COPY --from=builder /repo/apps/web/.next/static ./apps/web/.next/static
-COPY --from=builder /repo/apps/web/public ./apps/web/public
+# public/ появится, когда дизайнер добавит статику; сейчас в репо пусто.
 
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
