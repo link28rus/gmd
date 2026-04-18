@@ -247,6 +247,25 @@ melos run analyze
 - Backend readiness: http://localhost:3001/readyz (проверяет БД + Redis)
 - Web: http://localhost:3000/api/healthz
 
+## Prod-деплой
+
+Подробности: [docs/deploy.md](docs/deploy.md), [docs/backup-restore.md](docs/backup-restore.md), [docs/server-hardening.md](docs/server-hardening.md).
+
+```bash
+# Деплой актуального кода на gmd-prod (192.168.1.23)
+bash infra/deploy/deploy.sh
+
+# Проверки
+curl http://192.168.1.23/api/readyz                 # {status:ok,db:up,redis:up}
+ssh gmd-prod 'docker ps --format "{{.Names}} {{.Status}}"'
+
+# Бэкапы PG (systemd timers)
+ssh gmd-prod 'systemctl list-timers | grep pg-'
+ssh gmd-prod 'ls /opt/gmd/backups/postgres/'
+```
+
+Сервер доступен по `http://192.168.1.23/` (внешний TLS — через nginx на 95.104.240.96, настраивается в Phase 0.4).
+
 ## Память и секреты
 
 - Единственная система знаний — `mcp__memory-compiler__*`. Других vault'ов нет.

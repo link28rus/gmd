@@ -16,6 +16,39 @@
 
 ---
 
+## v0.3.0 — 2026-04-18
+
+### Новые возможности
+
+- **Production-стек на 192.168.1.23** — 6 docker-сервисов (postgres+PostGIS+pg_cron, redis, minio, backend NestJS, web Next.js 15, caddy) поднимаются одной командой `bash infra/deploy/deploy.sh`, все healthy
+- **Ежедневные бэкапы БД + weekly restore-verify** — `pg_dump -Fc | zstd -19`, systemd-timer 03:15 MSK, retention 14 daily + 12 monthly, автоматическая проверка целостности в throwaway-контейнере по понедельникам 04:00
+- **Автоматическая очистка локаций (152-ФЗ)** — `pg_cron` job `locations_retention_30d` в init-скрипте; реальный schedule активируется после первой Prisma-миграции Phase 1
+- **Кастомный образ Postgres** — `gmd-postgres:16-postgis-pgcron` на базе `postgis/postgis:16-3.4` с установленным `postgresql-16-cron`
+
+### Улучшения
+
+- **SSH hardening** — отключена авторизация по паролю, root только по ключу (`PermitRootLogin prohibit-password`), alias `gmd-prod` в `~/.ssh/config`
+- **UFW + fail2ban** — default deny incoming, allow 22/80/443; jail sshd с `maxretry=3, bantime=1h`
+- **Docker CE + overlay2** — официальный docker.com repo, log-rotation 10MB × 3 в `/etc/docker/daemon.json`
+- **Bootstrap-скрипт** — hostname `gmd-prod`, timezone `Europe/Moscow`, swap 4G, `unattended-upgrades`
+- **Документация развёртывания** — [deploy.md](docs/deploy.md), [backup-restore.md](docs/backup-restore.md), [server-hardening.md](docs/server-hardening.md)
+
+### Изменения
+
+- feat(infra): Caddy переведён в HTTP-режим (`auto_https off`, site `:80`) — TLS будет терминировать внешний nginx на 95.104.240.96 (Phase 0.4)
+- fix(infra): в `pg-restore-verify.sh` задан `cron.database_name=${POSTGRES_DB}`, иначе `CREATE EXTENSION pg_cron` падает при restore
+- chore(infra): раздел `/dev/sda2` расширен с 20G до 80G (growpart + resize2fs)
+- chore(infra): удалены старые сервисы `fk-norm` и `volleyball-attendance` с предварительным tar-бэкапом
+- chore(infra): удалён native PostgreSQL 16 и Node.js (оставлены только контейнеризованные версии)
+
+### Отложено на Phase 0.4
+
+- GlitchTip self-hosted + Sentry SDK в backend/web — нужен внешний TLS и subdomain `errors.gmd.link28rus.ru`
+- Uptime Kuma + мониторы — нужен внешний TLS и subdomain `status.gmd.link28rus.ru`
+- Let's Encrypt на самом Caddy — сейчас TLS выпускается на внешнем nginx
+
+---
+
 ## v0.2.0 — 2026-04-18
 
 ### Новые возможности

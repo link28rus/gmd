@@ -283,11 +283,11 @@
         "description": "DNS checkpoint (dig gmd.link28rus.ru → 85.15.75.126), bash infra/deploy/deploy.sh, проверка healthy 6 сервисов, curl /healthz + /api/readyz.",
         "details": "Plan Task 14. Блокирует DNS и проброс 80/443 — за пользователем.",
         "testStrategy": "curl -I https://gmd.link28rus.ru/healthz → HTTP/2 200; readyz {db:up,redis:up}",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": ["23"],
         "priority": "high",
         "subtasks": [],
-        "updatedAt": "2026-04-18T05:33:21.737Z"
+        "updatedAt": "2026-04-18T12:20:07.648Z"
       },
       {
         "id": "25",
@@ -307,10 +307,11 @@
         "description": "docker-compose: glitchtip-pg/redis/web/worker/migrate. createsuperuser. DSN → .env.prod. @sentry/node в backend (SentryModule+SentryExceptionFilter), @sentry/nextjs wizard в web.",
         "details": "Plan Task 16.",
         "testStrategy": "https://errors.gmd.link28rus.ru/ доступен под basic-auth; тестовая ошибка появляется в UI",
-        "status": "pending",
+        "status": "deferred",
         "dependencies": ["24"],
         "priority": "high",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-04-18T12:20:07.674Z"
       },
       {
         "id": "27",
@@ -318,10 +319,11 @@
         "description": "docker-compose: louislam/uptime-kuma:1 с volume /opt/gmd/data/uptime-kuma. Настроить мониторы /readyz, /healthz, TCP:443.",
         "details": "Plan Task 17.",
         "testStrategy": "https://status.gmd.link28rus.ru/ доступен; 3 monitor = UP",
-        "status": "pending",
+        "status": "deferred",
         "dependencies": ["26"],
         "priority": "medium",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-04-18T12:20:07.688Z"
       },
       {
         "id": "28",
@@ -348,9 +350,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-04-18T06:06:40.339Z",
+      "lastModified": "2026-04-18T12:20:07.688Z",
       "taskCount": 29,
-      "completedCount": 24,
+      "completedCount": 25,
       "tags": ["master"]
     }
   }
