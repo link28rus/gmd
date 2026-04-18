@@ -1,25 +1,165 @@
-# Production docker-compose for GMD — СКЕЛЕТ, наполняется в Phase 0.3
+# Production docker-compose для GMD (192.168.1.23 / gmd.link28rus.ru).
+# Запуск с сервера: cd /opt/gmd && docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+# Все bind-mounts лежат в /opt/gmd/data/<service>/.
+# Наружу открыты только caddy:80/443 (проверяется UFW).
 #
-# Отличия от dev:
-# - Caddy reverse proxy с TLS (Let's Encrypt) для gmd.link28rus.ru
-# - postgres без пробрасывания порта наружу (доступ только из compose-сети)
-# - redis без пробрасывания порта
-# - minio за Caddy на s3.gmd.link28rus.ru
-# - GlitchTip (self-hosted Sentry API-совместимый)
-# - Uptime Kuma на status.gmd.link28rus.ru
-# - Grafana + Loki + Prometheus для метрик и логов
-# - Ежедневный backup-сервис (pg_dump + age + загрузка в Yandex Object Storage)
-# - Backend и Web контейнеры (сейчас runs out of compose)
-#
-# TODO (Phase 0.3):
-# - [ ] Caddy
-# - [ ] GlitchTip
-# - [ ] Uptime Kuma
-# - [ ] Backup-cron
-# - [ ] Backend production image
-# - [ ] Web production image
-# - [ ] Grafana/Loki/Prometheus
+# GlitchTip (Task 16) и Uptime Kuma (Task 17) добавляются в следующих задачах.
 
 name: gmd-prod
 
-services: {}
+x-restart: &restart
+  restart: unless-stopped
+
+networks:
+  gmd_net:
+    driver: bridge
+
+services:
+  postgres:
+    <<: *restart
+    build:
+      context: ./postgres
+    image: gmd-postgres:16-postgis-pgcron
+    container_name: gmd-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_cron
+      - -c
+      - cron.database_name=${POSTGRES_DB}
+      - -c
+      - max_connections=200
+      - -c
+      - shared_buffers=512MB
+      - -c
+      - effective_cache_size=1536MB
+      - -c
+      - log_min_duration_statement=500
+    volumes:
+      - /opt/gmd/data/postgres:/var/lib/postgresql/data
+      - ./postgres/10-init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+      - ./postgres/20-retention.sql:/docker-entrypoint-initdb.d/20-retention.sql:ro
+    networks: [gmd_net]
+    ports:
+      - '127.0.0.1:${POSTGRES_PORT}:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    <<: *restart
+    image: redis:7-alpine
+    container_name: gmd-redis
+    command: ['redis-server', '--requirepass', '${REDIS_PASSWORD}', '--appendonly', 'yes']
+    volumes:
+      - /opt/gmd/data/redis:/data
+    networks: [gmd_net]
+    ports:
+      - '127.0.0.1:${REDIS_PORT}:6379'
+    healthcheck:
+      test: ['CMD-SHELL', 'redis-cli -a $${REDIS_PASSWORD} ping | grep -q PONG']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  minio:
+    <<: *restart
+    image: bitnami/minio:2024
+    container_name: gmd-minio
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_DEFAULT_BUCKETS: gmd-media
+    volumes:
+      - /opt/gmd/data/minio:/bitnami/minio/data
+    networks: [gmd_net]
+    ports:
+      - '127.0.0.1:${MINIO_API_PORT}:9000'
+      - '127.0.0.1:${MINIO_CONSOLE_PORT}:9001'
+    healthcheck:
+      test: ['CMD', 'curl', '-fsS', 'http://localhost:9000/minio/health/live']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  backend:
+    <<: *restart
+    build:
+      context: ../..
+      dockerfile: apps/backend/Dockerfile
+    image: gmd-backend:latest
+    container_name: gmd-backend
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      SENTRY_DSN: ${SENTRY_DSN_BACKEND}
+      PORT: '3001'
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    networks: [gmd_net]
+    expose: ['3001']
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '-O-', 'http://localhost:3001/healthz']
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  web:
+    <<: *restart
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+    image: gmd-web:latest
+    container_name: gmd-web
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+      NEXT_PUBLIC_SENTRY_DSN: ${SENTRY_DSN_WEB}
+    depends_on:
+      backend: { condition: service_healthy }
+    networks: [gmd_net]
+    expose: ['3000']
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '-O-', 'http://localhost:3000/api/healthz']
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  caddy:
+    <<: *restart
+    image: caddy:2-alpine
+    container_name: gmd-caddy
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      CADDY_DOMAIN: ${CADDY_DOMAIN}
+      CADDY_ACME_EMAIL: ${CADDY_ACME_EMAIL}
+      CADDY_BASIC_AUTH_HASH: ${CADDY_BASIC_AUTH_HASH}
+      GLITCHTIP_DOMAIN: ${GLITCHTIP_DOMAIN}
+      KUMA_DOMAIN: ${KUMA_DOMAIN}
+    volumes:
+      - ../caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - /opt/gmd/data/caddy/data:/data
+      - /opt/gmd/data/caddy/config:/config
+    depends_on:
+      - web
+      - backend
+    networks: [gmd_net]
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '--spider', 'http://localhost/healthz']
+      interval: 30s
+      timeout: 5s
+      retries: 3

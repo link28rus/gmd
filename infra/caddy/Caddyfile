@@ -1,0 +1,54 @@
+{
+	email {$CADDY_ACME_EMAIL}
+	admin off
+	# Для теста LE rate-limit:
+	# acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+}
+
+# --- Основной кабинет + API ---
+{$CADDY_DOMAIN} {
+	encode zstd gzip
+
+	handle_path /api/* {
+		reverse_proxy backend:3001
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "interest-cohort=()"
+		-Server
+	}
+
+	# Healthcheck без прокси (для internal liveness, вне subdomain-auth)
+	respond /healthz "OK" 200
+
+	log {
+		output stdout
+		format json
+	}
+}
+
+# --- GlitchTip (под basic-auth на MVP) ---
+{$GLITCHTIP_DOMAIN} {
+	encode zstd gzip
+	basic_auth {
+		admin {$CADDY_BASIC_AUTH_HASH}
+	}
+	reverse_proxy glitchtip-web:8000
+}
+
+# --- Uptime Kuma ---
+{$KUMA_DOMAIN} {
+	encode zstd gzip
+	basic_auth {
+		admin {$CADDY_BASIC_AUTH_HASH}
+	}
+	reverse_proxy uptime-kuma:3001
+}
