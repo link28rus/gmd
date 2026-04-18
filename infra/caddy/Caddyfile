@@ -22,6 +22,11 @@
 		reverse_proxy web:3000
 	}
 
+	# /api/admin/* → web (route handlers проксируют с Bearer в /admin/*)
+	handle /api/admin/* {
+		reverse_proxy web:3000
+	}
+
 	# /api/healthz — web (уже есть в Next.js)
 	handle /api/healthz {
 		reverse_proxy web:3000
