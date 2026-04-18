@@ -1,9 +1,14 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { ADMIN_CONFIG } from '../admin/admin.tokens';
+import type { AdminConfig } from '../admin/admin.tokens';
 
 @Injectable()
 export class UsersService {
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(ADMIN_CONFIG) private readonly adminCfg: AdminConfig,
+  ) {}
 
   async getMe(
     userId: string,
@@ -18,6 +23,7 @@ export class UsersService {
       dateOfBirth: Date | null;
       device: { id: string; deviceName: string | null } | null;
     }>;
+    isAdmin: boolean;
   }> {
     type ChildRow = {
       id: string;
@@ -44,6 +50,8 @@ export class UsersService {
     if (!user || user.deletedAt || !family) {
       throw new NotFoundException({ code: 'not_found', message: 'User or family not found' });
     }
+    const isAdmin = this.adminCfg.emails.includes(user.email.toLowerCase().trim());
+
     return {
       user: { id: user.id, email: user.email, name: user.name, locale: user.locale },
       family: { id: family.id, name: family.name },
@@ -54,6 +62,7 @@ export class UsersService {
         dateOfBirth: c.dateOfBirth,
         device: c.device ? { id: c.device.id, deviceName: c.device.deviceName } : null,
       })),
+      isAdmin,
     };
   }
 

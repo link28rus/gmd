@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { UsersService } from './users.service';
 import type { PrismaService } from '../prisma/prisma.service';
+import type { AdminConfig } from '../admin/admin.tokens';
 
 interface MockPrisma {
   _users: any[];
@@ -59,7 +60,8 @@ describe('UsersService', () => {
         },
       ]),
     );
-    const svc = new UsersService(p as unknown as PrismaService);
+    const adminCfg: AdminConfig = { emails: ['admin@example.com'] };
+    const svc = new UsersService(p as unknown as PrismaService, adminCfg);
 
     const r = await svc.getMe('u-1', 'f-1');
 
@@ -69,6 +71,27 @@ describe('UsersService', () => {
     expect(r.children).toHaveLength(1);
     expect(r.children[0].name).toBe('Vanya');
     expect(r.children[0].device?.deviceName).toBe('Pixel');
+    expect(r.isAdmin).toBe(false);
+  });
+
+  it('getMe возвращает isAdmin=true если email в whitelist', async () => {
+    const p = makePrismaMock();
+    p._users.push({
+      id: 'u-2',
+      email: 'ADMIN@Example.com',
+      name: null,
+      locale: 'ru',
+      deletedAt: null,
+    });
+    p.membership.findMany = jest.fn(() => Promise.resolve([{ role: 'owner', familyId: 'f-2' }]));
+    p.family.findUnique = jest.fn(() => Promise.resolve({ id: 'f-2', name: 'Семья' }));
+    p.child.findMany = jest.fn(() => Promise.resolve([]));
+    const adminCfg: AdminConfig = { emails: ['admin@example.com'] };
+    const svc = new UsersService(p as unknown as PrismaService, adminCfg);
+
+    const r = await svc.getMe('u-2', 'f-2');
+
+    expect(r.isAdmin).toBe(true);
   });
 
   it('updateMe патчит name и locale', async () => {
@@ -80,7 +103,8 @@ describe('UsersService', () => {
       locale: 'ru',
       deletedAt: null,
     });
-    const svc = new UsersService(p as unknown as PrismaService);
+    const adminCfg: AdminConfig = { emails: [] };
+    const svc = new UsersService(p as unknown as PrismaService, adminCfg);
 
     const r = await svc.updateMe('u-1', { name: 'Ivan', locale: 'en' });
 
@@ -91,7 +115,8 @@ describe('UsersService', () => {
   it('softDelete выставляет deletedAt и revoke всех refresh', async () => {
     const p = makePrismaMock();
     p._users.push({ id: 'u-1', email: 'a@b.com', deletedAt: null });
-    const svc = new UsersService(p as unknown as PrismaService);
+    const adminCfg: AdminConfig = { emails: [] };
+    const svc = new UsersService(p as unknown as PrismaService, adminCfg);
 
     await svc.softDelete('u-1');
 
