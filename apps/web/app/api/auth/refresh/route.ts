@@ -11,6 +11,7 @@ interface BackendMeResponse {
   user: { id: string; email: string; name: string | null; locale: string };
   family: { id: string; name: string };
   memberships: Array<{ role: string; familyId: string }>;
+  isAdmin: boolean;
 }
 
 const REFRESH_COOKIE = 'gmd_refresh';
@@ -32,9 +33,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
   const { accessToken, refreshToken } = r.body;
   const me = await backend<BackendMeResponse>('GET', '/me', undefined, accessToken);
+  const meUser =
+    me.status === 200 && me.body
+      ? { ...me.body.user, isAdmin: me.body.isAdmin ?? false }
+      : undefined;
   const res = NextResponse.json({
     accessToken,
-    ...(me.status === 200 && me.body ? { user: me.body.user, family: me.body.family } : {}),
+    ...(meUser && me.body ? { user: meUser, family: me.body.family } : {}),
   });
   res.cookies.set(REFRESH_COOKIE, refreshToken, {
     httpOnly: true,

@@ -9,6 +9,7 @@ export function CabinetHeader() {
   const pathname = usePathname();
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
+  const isAdmin = useAuthStore((s) => s.user?.isAdmin ?? false);
   const clear = useAuthStore((s) => s.clear);
 
   async function logout() {
@@ -41,6 +42,14 @@ export function CabinetHeader() {
         <nav className="flex items-center gap-1">
           {navLink('/cabinet', 'Главная')}
           {navLink('/cabinet/children', 'Мои дети')}
+          {isAdmin && (
+            <Link
+              href="/admin"
+              className="ml-2 rounded-md bg-red-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-800"
+            >
+              Админка
+            </Link>
+          )}
         </nav>
         <div className="flex items-center gap-3 text-sm text-zinc-500">
           {user && <span className="truncate max-w-[220px]">{user.email}</span>}
