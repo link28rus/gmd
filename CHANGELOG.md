@@ -16,6 +16,45 @@
 
 ---
 
+## v0.6.0 — 2026-04-19
+
+### Новые возможности
+
+- **Управление детьми в кабинете родителя** — страница `/cabinet/children` со списком детей, модалками создания/редактирования/удаления, QR-инвайтом с таймером и сбросом устройства
+- **QR-инвайт с обратным отсчётом** — код крупно + QR 240×240, таймер `mm:ss` до истечения, кнопка «Обновить код» перегенерирует invite
+- **Бейджи статуса устройства** — «Не привязано» / «Онлайн» (`lastSeenAt < 5 мин`) / «N мин назад» / «N ч назад» / `DD.MM в HH:mm` / «Отозвано»
+- **Подтверждение удаления по имени** — чтобы удалить ребёнка, нужно набрать его имя — защита от случайного клика
+- **Навигация кабинета** — шапка `/cabinet/*` со ссылками «Главная» и «Мои дети», кнопка «Выйти» в хедере
+
+### Изменения
+
+- chore(web): добавлены зависимости — React Query v5, shadcn/ui (Radix primitives), react-hook-form + Zod, qrcode.react, sonner, lucide-react
+- chore(web): Jest + Playwright настроены в web-пакете; добавлены unit-тесты для `useInviteTimer` и `DeviceStatusBadge`
+- chore(web): Next.js route-handlers `/api/children/*` как прокси на backend с Bearer-токеном и 401-retry через `/api/auth/refresh`
+
+---
+
+## v0.5.0 — 2026-04-19
+
+### Новые возможности
+
+- **Привязка устройств детей по QR-коду** — родитель создаёт ребёнка в семье и выдаёт одноразовый invite-код (8 символов Crockford Base32, TTL 10 минут) с QR-картинкой
+- **Long-lived device-token** — устройство ребёнка после claim получает постоянный токен (32 байта), которым авторизуется в child-API через заголовок `X-Child-Token`
+- **Сброс устройства родителем** — `reset-device` отзывает текущий токен и позволяет привязать новое устройство
+- **API ребёнка** — `POST /child/claim` (открытый, с rate-limit) и `GET /child/me` (под `ChildAuthGuard`)
+- **Web-лендинг `/claim/{code}`** — статическая страница с инструкцией для пользователей
+
+### Изменения
+
+- feat(backend): Prisma models `Child`, `Invite`, `ChildDevice` с soft-delete по `deletedAt`
+- feat(backend): модули `children`, `invites`, `child-device` — controller + service + DTO + unit-тесты
+- feat(backend): claim использует pessimistic lock (`SELECT ... FOR UPDATE`) для защиты от race condition
+- feat(backend): `GET /me` расширен полем `children[]` с eager-loaded device
+- test(backend): 77 unit-тестов + 15 e2e через testcontainers, все зелёные
+- chore(infra): prod-docker-compose монтирует JWT-ключи и добавляет env-переменные Phase 1.1 (ACCESS_TOKEN_TTL, OTP_*, SMTP_*, PRIVACY_POLICY_*)
+
+---
+
 ## v0.4.1 — 2026-04-19
 
 ### Новые возможности
