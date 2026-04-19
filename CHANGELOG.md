@@ -16,6 +16,30 @@
 
 ---
 
+## v0.7.0 — 2026-04-19
+
+### Новые возможности
+
+- **Админ-панель (read-only)** — страница `/admin` с дэшбордом и таблицами: пользователи (+ поиск по email и детали), семьи, дети, активные QR-инвайты. Доступ по email-whitelist через env `ADMIN_EMAILS`
+- **Режим администратора в шапке** — если email пользователя в whitelist, в шапке кабинета появляется ссылка «Админка», сам раздел выделен красной полосой сверху
+- **Endpoint `GET /me` возвращает `isAdmin`** — клиент знает флаг сразу после входа
+- **Dev-флаги входа для self-hosted** — `OTP_FIXED_DEV=XXXXXX` даёт постоянный код входа без SMTP (для ручного смока), `OTP_LOG_DEV=true` пишет сгенерированные коды в логи backend
+
+### Исправления
+
+- **Вход по email/OTP не сохранял сессию на prod** — Caddy проксировал `/api/*` напрямую на backend, обходя Next.js route handlers → httpOnly refresh-cookie никогда не устанавливалась, и после ввода кода пользователя возвращало обратно на `/login`. Caddy теперь маршрутизирует `/api/auth/*`, `/api/me`, `/api/children/*`, `/api/admin/*` через web (#login-fix)
+- **Web-контейнер не знал адреса backend** — не было `BACKEND_URL`, Next.js пытался ходить на `127.0.0.1:3001`. Добавлен `BACKEND_URL=http://backend:3001`
+- **httpOnly-cookie не работала по HTTP на internal IP** — флаг `Secure` блокировал cookie при доступе через `http://192.168.1.23`. Env `ALLOW_INSECURE_COOKIE=true` временно снимает `Secure` для dev-доступа (на HTTPS не влияет)
+- **SMTP с пустым хостом ронял отправку OTP** — теперь SmtpOtpProvider корректно skip-ает отправку если `SMTP_HOST` пустой, вместо падения на connection error
+
+### Изменения
+
+- feat(backend): `AdminGuard` + `ADMIN_CONFIG` на базе env-whitelist, 6 read-only endpoints `/admin/*` (stats, users, families, children, invites)
+- feat(web): `/api/admin/*` route handlers как прокси на backend с Bearer, React Query hooks, generic `DataTable` компонент
+- chore(backend): `email` добавлен в JWT-payload (нужно для AdminGuard)
+
+---
+
 ## v0.6.0 — 2026-04-19
 
 ### Новые возможности
