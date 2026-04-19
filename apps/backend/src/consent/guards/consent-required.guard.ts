@@ -1,5 +1,6 @@
 import type { CanActivate, ExecutionContext } from '@nestjs/common';
 import { ForbiddenException, Injectable } from '@nestjs/common';
+// NOTE: must NOT use 'import type' here — NestJS DI needs the runtime value for reflection
 import type { ConsentService } from '../consent.service';
 
 @Injectable()

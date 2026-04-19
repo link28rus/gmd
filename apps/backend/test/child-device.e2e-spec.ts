@@ -108,4 +108,76 @@ describe('Child Device (e2e)', () => {
     const { code } = await setupChildAndInvite();
     await request(server).post('/child/claim').send({ code: code.toLowerCase() }).expect(200);
   });
+
+  it('child 14+ без consent14Plus → 400 consent14plus_required', async () => {
+    const server = h.app.getHttpServer();
+    // Register parent
+    await request(server).post('/auth/request-otp').send({ email: 'parent14@x.com' }).expect(202);
+    const otp = h.delivery.lastCodeFor('parent14@x.com');
+    if (!otp) throw new Error('no otp');
+    const v = await request(server)
+      .post('/auth/verify-otp')
+      .send({ email: 'parent14@x.com', code: otp })
+      .expect(200);
+    const auth = { Authorization: `Bearer ${v.body.accessToken}` };
+
+    // Create child with dateOfBirth 14 years ago
+    const dob = new Date();
+    dob.setFullYear(dob.getFullYear() - 14);
+    const create = await request(server)
+      .post('/family/children')
+      .set(auth)
+      .send({ name: 'Teen', dateOfBirth: dob.toISOString() })
+      .expect(201);
+
+    const inv = await request(server)
+      .post(`/family/children/${create.body.child.id}/invites`)
+      .set(auth)
+      .expect(201);
+
+    // Claim without consent14Plus
+    const r = await request(server).post('/child/claim').send({ code: inv.body.code }).expect(400);
+    expect(r.body.error.code).toBe('consent14plus_required');
+  });
+
+  it('child 14+ с consent14Plus=true → 200 + ConsentRecord CHILD_14PLUS создан', async () => {
+    const server = h.app.getHttpServer();
+    // Register parent
+    await request(server).post('/auth/request-otp').send({ email: 'parent14ok@x.com' }).expect(202);
+    const otp = h.delivery.lastCodeFor('parent14ok@x.com');
+    if (!otp) throw new Error('no otp');
+    const v = await request(server)
+      .post('/auth/verify-otp')
+      .send({ email: 'parent14ok@x.com', code: otp })
+      .expect(200);
+    const auth = { Authorization: `Bearer ${v.body.accessToken}` };
+
+    // Create child with dateOfBirth 14 years ago
+    const dob = new Date();
+    dob.setFullYear(dob.getFullYear() - 14);
+    const create = await request(server)
+      .post('/family/children')
+      .set(auth)
+      .send({ name: 'Teen', dateOfBirth: dob.toISOString() })
+      .expect(201);
+
+    const inv = await request(server)
+      .post(`/family/children/${create.body.child.id}/invites`)
+      .set(auth)
+      .expect(201);
+
+    // Claim with consent14Plus=true
+    const claim = await request(server)
+      .post('/child/claim')
+      .send({ code: inv.body.code, consent14Plus: true })
+      .expect(200);
+    expect(claim.body.deviceToken).toBeTruthy();
+
+    // ConsentRecord CHILD_14PLUS should exist
+    const records = await h.prisma.consentRecord.findMany({
+      where: { subjectType: 'CHILD', documentType: 'CHILD_14PLUS' },
+    });
+    expect(records).toHaveLength(1);
+    expect(records[0].childId).toBe(create.body.child.id);
+  });
 });

@@ -4,12 +4,11 @@ import { ConsentService } from './consent.service';
 import { ConsentController } from './consent.controller';
 import { ConsentRequiredGuard } from './guards/consent-required.guard';
 import { AuthModule } from '../auth/auth.module';
+import { CONSENT_CONFIG } from './consent.tokens';
+import type { ConsentConfig } from './consent.tokens';
 
-export const CONSENT_CONFIG = Symbol('CONSENT_CONFIG');
-
-export interface ConsentConfig {
-  privacyPolicyVersion: string;
-}
+export { CONSENT_CONFIG };
+export type { ConsentConfig };
 
 @Module({
   imports: [PrismaModule, AuthModule],
