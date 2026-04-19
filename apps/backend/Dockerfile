@@ -14,7 +14,7 @@ RUN pnpm install --frozen-lockfile --filter @gmd/backend...
 FROM deps AS builder
 WORKDIR /repo
 COPY apps/backend/ apps/backend/
-RUN pnpm --filter @gmd/backend prisma generate
+RUN pnpm --filter @gmd/backend exec prisma generate
 RUN pnpm --filter @gmd/backend build
 
 FROM node:22-alpine AS runner
