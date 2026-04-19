@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { FormEvent, ReactElement } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuthStore, type AuthUser, type AuthFamily } from '@/lib/auth-store';
 
@@ -277,6 +278,17 @@ export default function LoginPage(): ReactElement {
             </button>
           </form>
         )}
+
+        <p className="mt-5 text-center text-xs text-zinc-500">
+          Нажимая кнопку, вы принимаете{' '}
+          <Link href="/privacy" className="underline hover:text-zinc-900">
+            Политику конфиденциальности
+          </Link>{' '}
+          и{' '}
+          <Link href="/terms" className="underline hover:text-zinc-900">
+            Условия использования
+          </Link>
+        </p>
 
         {error && <p className="mt-4 rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</p>}
       </div>
