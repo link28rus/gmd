@@ -131,3 +131,17 @@ ssh gmd-prod 'cd /opt/gmd/docker && docker compose --env-file /opt/gmd/.env.prod
 - `infra/server-setup/*.sh` — одноразовые скрипты bootstrap/hardening (Tasks 2, 6, 7, 8, 15).
 - `/opt/gmd/.env.prod` — секреты (на сервере, 600).
 - `/opt/gmd/backups/postgres/` — ежедневные бэкапы PG (Task 15).
+
+## Ключ Яндекс.Карт
+
+Web-кабинет использует Яндекс.Карты v3 JS API. Ключ получить:
+
+1. Открыть https://developer.tech.yandex.ru
+2. Войти под yandex-аккаунтом организации.
+3. Создать API-ключ для «JavaScript API и HTTP Геокодер».
+4. Указать разрешённые HTTP-рефереры: `https://gmd.link28rus.ru/*` + `http://localhost:3003/*` для dev.
+5. Положить ключ в `apps/web/.env.local` (dev) или в prod `.env` через `infra/deploy/deploy.sh`:
+   ```
+   NEXT_PUBLIC_YANDEX_MAPS_API_KEY=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+   ```
+6. Бесплатный тариф: 25 000 загрузок карты в сутки — достаточно для MVP на 1000 DAU.
