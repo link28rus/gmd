@@ -5,7 +5,7 @@ import { FamilyAccessGuard } from './family-access.guard';
 
 function mockCtx(userId: string, childId: string, accept = true): ExecutionContext {
   const req: any = {
-    user: accept ? { sub: userId } : undefined,
+    user: accept ? { userId } : undefined,
     params: { id: childId },
   };
   return {
