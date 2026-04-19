@@ -94,7 +94,7 @@ services:
     environment:
       POSTGRES_DB: glitchtip
       POSTGRES_USER: glitchtip
-      POSTGRES_PASSWORD: ${GLITCHTIP_POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${GLITCHTIP_DB_PASSWORD}
     volumes:
       - /opt/gmd/data/glitchtip-postgres:/var/lib/postgresql/data
     networks: [gmd_net]
@@ -125,7 +125,7 @@ services:
     image: glitchtip/glitchtip:v4.0
     container_name: gmd-glitchtip-web
     environment:
-      DATABASE_URL: postgres://glitchtip:${GLITCHTIP_POSTGRES_PASSWORD}@glitchtip-postgres:5432/glitchtip
+      DATABASE_URL: postgres://glitchtip:${GLITCHTIP_DB_PASSWORD}@glitchtip-postgres:5432/glitchtip
       REDIS_URL: redis://:${GLITCHTIP_REDIS_PASSWORD}@glitchtip-redis:6379/0
       SECRET_KEY: ${GLITCHTIP_SECRET_KEY}
       GLITCHTIP_DOMAIN: ${GLITCHTIP_DOMAIN}
@@ -157,7 +157,7 @@ services:
     container_name: gmd-glitchtip-worker
     command: ['./bin/run-celery-with-beat.sh']
     environment:
-      DATABASE_URL: postgres://glitchtip:${GLITCHTIP_POSTGRES_PASSWORD}@glitchtip-postgres:5432/glitchtip
+      DATABASE_URL: postgres://glitchtip:${GLITCHTIP_DB_PASSWORD}@glitchtip-postgres:5432/glitchtip
       REDIS_URL: redis://:${GLITCHTIP_REDIS_PASSWORD}@glitchtip-redis:6379/0
       SECRET_KEY: ${GLITCHTIP_SECRET_KEY}
       GLITCHTIP_DOMAIN: ${GLITCHTIP_DOMAIN}
