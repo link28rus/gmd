@@ -48,7 +48,7 @@ docs/superpowers/specs  design docs
 
 ## Инфраструктура
 
-- **Сервер:** 192.168.1.23 (internal), 85.15.75.126 (external) — проброс портов
+- **Сервер:** 192.168.1.23 (internal), 95.104.240.99 (external) — проброс портов
 - **Домен:** gmd.link28rus.ru
 - **Регион данных:** РФ (152-ФЗ)
 - **SSH credentials:** см. memory-compiler (secret). TODO: перейти на SSH-ключи, отключить password auth.
@@ -264,7 +264,7 @@ ssh gmd-prod 'systemctl list-timers | grep pg-'
 ssh gmd-prod 'ls /opt/gmd/backups/postgres/'
 ```
 
-Сервер доступен по `http://192.168.1.23/` (внешний TLS — через nginx на 95.104.240.96, настраивается в Phase 0.4).
+Сервер доступен по `http://192.168.1.23/` (внешний IP `95.104.240.99`, TLS настраивается в Phase 0.4).
 
 ## Память и секреты
 
