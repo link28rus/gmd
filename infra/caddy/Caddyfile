@@ -34,6 +34,11 @@
 		reverse_proxy web:3000
 	}
 
+	# /api/sentry-tunnel — web (Phase 0.4 relay браузер → GlitchTip через gmd_net)
+	handle /api/sentry-tunnel {
+		reverse_proxy web:3000
+	}
+
 	# Остальное /api/* — напрямую в backend (strip /api prefix)
 	handle_path /api/* {
 		reverse_proxy backend:3001
