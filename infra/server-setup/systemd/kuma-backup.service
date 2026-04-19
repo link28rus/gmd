@@ -1,0 +1,11 @@
+[Unit]
+Description=GMD Uptime Kuma daily backup
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/gmd/bin/kuma-backup.sh
+StandardOutput=journal
+StandardError=journal
+Nice=10
