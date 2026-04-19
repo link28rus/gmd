@@ -9,7 +9,9 @@ export default function CabinetLayout({ children }: { children: ReactNode }) {
     <QueryProvider>
       <CabinetHeader />
       <ConsentBannerSlot />
-      <main className="min-h-[calc(100vh-57px)] bg-zinc-50">{children}</main>
+      <main className="min-h-[calc(100vh-57px)] bg-zinc-50 text-foreground [color-scheme:light]">
+        {children}
+      </main>
       <Toaster richColors position="top-right" />
     </QueryProvider>
   );
