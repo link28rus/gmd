@@ -8,6 +8,37 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum ConsentSubjectType {
+  USER
+  CHILD
+}
+
+enum ConsentDocumentType {
+  PRIVACY_POLICY
+  TERMS_OF_USE
+  CHILD_14PLUS
+}
+
+model ConsentRecord {
+  id           String              @id @default(cuid())
+  subjectType  ConsentSubjectType
+  userId       String?
+  childId      String?
+  documentType ConsentDocumentType
+  version      String
+  acceptedAt   DateTime            @default(now())
+  ip           String?
+  userAgent    String?
+
+  user  User?  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  child Child? @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@index([userId, documentType, acceptedAt])
+  @@index([childId, documentType, acceptedAt])
+  @@index([subjectType, documentType, version])
+  @@map("consent_records")
+}
+
 model User {
   id                           String    @id @default(cuid())
   email                        String    @unique
@@ -23,6 +54,7 @@ model User {
   memberships   Membership[]
   refreshTokens RefreshToken[]
   otpCodes      OtpCode[]
+  consents      ConsentRecord[]
 
   @@index([email])
   @@map("users")
@@ -106,9 +138,10 @@ model Child {
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
-  family  Family       @relation(fields: [familyId], references: [id], onDelete: Cascade)
-  device  ChildDevice?
-  invites Invite[]
+  family   Family        @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  device   ChildDevice?
+  invites  Invite[]
+  consents ConsentRecord[]
 
   @@index([familyId])
   @@index([familyId, deletedAt])
