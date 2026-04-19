@@ -173,6 +173,23 @@ services:
       glitchtip-web: { condition: service_healthy }
     networks: [gmd_net]
 
+  uptime-kuma:
+    <<: *restart
+    image: louislam/uptime-kuma:1
+    container_name: gmd-uptime-kuma
+    volumes:
+      - /opt/gmd/data/uptime-kuma:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [gmd_net]
+    ports:
+      - '127.0.0.1:3001:3001'
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:3001/api/status-page/heartbeat || exit 1']
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
   backend:
     <<: *restart
     build:
