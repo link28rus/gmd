@@ -5,7 +5,7 @@ export const UpdateChildSchema = z
     name: z.string().min(1).max(120).optional(),
     dateOfBirth: z
       .string()
-      .datetime()
+      .date()
       .optional()
       .transform((v) => (v ? new Date(v) : undefined)),
   })
