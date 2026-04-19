@@ -9,7 +9,7 @@
     "start": "node dist/main",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:e2e": "jest --config test/jest-e2e.json",
+    "test:e2e": "jest --config test/jest-e2e.json --runInBand",
     "lint": "eslint \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit",
     "auth:keygen": "ts-node scripts/auth-keygen.ts",
