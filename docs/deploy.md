@@ -2,26 +2,28 @@
 
 Runbook по развёртыванию production-стека GMD на сервере `192.168.1.23`.
 
-## Архитектура (v0.3.0)
+## Архитектура (v0.4.0)
 
 ```
-Пользователь → [95.104.240.99:{80,443}, проброс портов] → … (TLS в Phase 0.4)
-                                                              ↓
-                          [Caddy :80 на 192.168.1.23]
-                             ├── /api/* → backend:3001 (NestJS)
-                             └── /*     → web:3000     (Next.js)
+Пользователь → [95.104.240.99:{80,443}, TLS терминирует внешний nginx] → [Caddy :80 на 192.168.1.23]
+                                                                              ├── /api/* → backend:3001 (NestJS)
+                                                                              └── /*     → web:3000     (Next.js)
 
 Внутри docker-сети gmd_net:
-  postgres:5432   (custom gmd-postgres:16-postgis-pgcron)
-  redis:6379
+  postgres:5432              (основная БД)
+  redis:6379                 (основной Redis)
   minio:9000
   backend:3001
   web:3000
   caddy:80
-```
+  glitchtip-postgres:5432    (GlitchTip — Phase 0.4)
+  glitchtip-redis:6379       (GlitchTip — Phase 0.4)
+  glitchtip-web:8000         (error tracking UI + API)
+  glitchtip-worker           (celery)
+  uptime-kuma:3001           (uptime-мониторинг + алерты)
 
-**Сейчас** сервис доступен только по `http://192.168.1.23/`.
-TLS на `gmd.link28rus.ru` (внешний IP `95.104.240.99`) настраивается в Phase 0.4.
+Наружу только 80/443 + 22 (SSH). Админ-панели GlitchTip/Kuma — через SSH-туннель (см. docs/monitoring.md).
+```
 
 ## Prerequisites
 
@@ -81,6 +83,10 @@ ssh gmd-prod 'docker ps --format "table {{.Names}}\t{{.Status}}"'
 ```
 
 Ожидаем 6 контейнеров в `Up (healthy)`: `gmd-postgres`, `gmd-redis`, `gmd-minio`, `gmd-backend`, `gmd-web`, `gmd-caddy`.
+
+## Мониторинг
+
+После деплоя stack включает GlitchTip (error tracking) и Uptime Kuma (uptime). Доступ: `ssh -N gmd-prod-tunnels` → `http://localhost:3010` и `http://localhost:3011`. Детали — [docs/monitoring.md](monitoring.md).
 
 ## Обновление `.env.prod`
 
