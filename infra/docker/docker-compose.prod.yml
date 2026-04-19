@@ -141,12 +141,15 @@ services:
     build:
       context: ..
       dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_YANDEX_MAPS_API_KEY: ${NEXT_PUBLIC_YANDEX_MAPS_API_KEY:-}
     image: gmd-web:latest
     container_name: gmd-web
     environment:
       NODE_ENV: production
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
       NEXT_PUBLIC_SENTRY_DSN: ${SENTRY_DSN_WEB}
+      NEXT_PUBLIC_YANDEX_MAPS_API_KEY: ${NEXT_PUBLIC_YANDEX_MAPS_API_KEY:-}
       BACKEND_URL: http://backend:3001
       ALLOW_INSECURE_COOKIE: ${ALLOW_INSECURE_COOKIE:-false}
     depends_on:
