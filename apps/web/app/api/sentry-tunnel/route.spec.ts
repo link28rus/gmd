@@ -41,7 +41,7 @@ describe('POST /api/sentry-tunnel', () => {
     expect(resp.status).toBe(200);
     expect(global.fetch).toHaveBeenCalledTimes(1);
     const call = (global.fetch as jest.Mock).mock.calls[0];
-    expect(call[0]).toBe('http://glitchtip-web:8000/api/2/envelope/');
+    expect(call[0]).toBe('http://glitchtip-web:8000/api/2/envelope/?sentry_key=abc');
     expect(call[1].method).toBe('POST');
     expect(call[1].body).toBe(envelope);
   });
