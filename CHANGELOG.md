@@ -16,6 +16,23 @@
 
 ---
 
+## v0.10.0 — 2026-04-19
+
+### Новые возможности
+
+- **Приём GPS-точек от устройства ребёнка** — новый endpoint `POST /child/locations` принимает батчи до 100 точек с device-token. Валидирует clock-skew (±24ч/+2мин), идемпотентен по `(device, recordedAt)`, ограничен 6 запросами в минуту
+- **История и текущая позиция ребёнка** — `GET /children/:id/location/latest` отдаёт последнюю точку + `ageSec`; `GET /children/:id/locations?from&to&limit&cursor&order` — пагинированная история с курсором
+- **Retention 30 дней** — старые локации удаляются ежедневно в 03:00 UTC через pg_cron; миграция guarded через `pg_available_extensions`, так что тестовые среды без pg_cron не падают
+
+### Изменения
+
+- feat(backend): таблица `locations` с generated `geography(Point,4326)` колонкой + GIST-индекс для будущих геозон
+- feat(backend): `FamilyAccessGuard` — переиспользуемый guard проверки доступа родителя к ребёнку. Возвращает 404 `child_not_found` для любого «нет доступа» (анти-enumeration)
+- feat(backend): consent-gate на ingest — если владелец семьи не принял текущую политику, приём возвращает 423 `consent_required` с `currentPolicyVersion`; in-memory кэш 60с per childId
+- fix(backend): `FamilyAccessGuard` читал `req.user?.sub`, но `JwtAuthGuard` кладёт `req.user.userId` — поймано e2e-тестами
+
+---
+
 ## v0.9.0 — 2026-04-19
 
 ### Новые возможности
