@@ -138,10 +138,11 @@ model Child {
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
-  family   Family        @relation(fields: [familyId], references: [id], onDelete: Cascade)
-  device   ChildDevice?
-  invites  Invite[]
-  consents ConsentRecord[]
+  family    Family          @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  device    ChildDevice?
+  invites   Invite[]
+  consents  ConsentRecord[]
+  locations Location[]
 
   @@index([familyId])
   @@index([familyId, deletedAt])
@@ -177,7 +178,32 @@ model ChildDevice {
   revokedAt  DateTime?
   createdAt  DateTime  @default(now())
 
-  child Child @relation(fields: [childId], references: [id], onDelete: Cascade)
+  child     Child      @relation(fields: [childId], references: [id], onDelete: Cascade)
+  locations Location[]
 
   @@map("child_devices")
+}
+
+model Location {
+  id               String   @id @default(cuid())
+  childId          String
+  childDeviceId    String
+  lat              Float
+  lon              Float
+  accuracy         Float?
+  altitude         Float?
+  speed            Float?
+  bearing          Float?
+  batteryLevel     Int?
+  isCharging       Boolean?
+  provider         String?
+  recordedAt       DateTime
+  serverReceivedAt DateTime @default(now())
+
+  child       Child       @relation(fields: [childId], references: [id], onDelete: Cascade)
+  childDevice ChildDevice @relation(fields: [childDeviceId], references: [id], onDelete: Cascade)
+
+  @@unique([childDeviceId, recordedAt])
+  @@index([childId, recordedAt(sort: Desc)])
+  @@map("locations")
 }
