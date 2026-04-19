@@ -2,7 +2,8 @@
 'use client';
 
 import { useState } from 'react';
-import { MoreVertical, QrCode, RotateCcw } from 'lucide-react';
+import Link from 'next/link';
+import { MapPin, MoreVertical, QrCode, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DeviceStatusBadge } from './device-status-badge';
 import { EditChildDialog } from './edit-child-dialog';
@@ -87,6 +88,15 @@ export function ChildCard({ child }: Props) {
           <QrCode className="h-4 w-4 mr-1" />
           QR для привязки
         </Button>
+        {hasActiveDevice && (
+          <Link
+            href={`/cabinet/children/${child.id}/map`}
+            className="inline-flex items-center gap-1 rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50"
+          >
+            <MapPin className="h-4 w-4" />
+            На карту
+          </Link>
+        )}
         {hasActiveDevice && (
           <Button variant="outline" size="sm" onClick={() => setResetOpen(true)}>
             <RotateCcw className="h-4 w-4 mr-1" />

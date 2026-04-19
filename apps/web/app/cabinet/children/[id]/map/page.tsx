@@ -1,0 +1,6 @@
+import MapClient from './map-client';
+
+export default async function MapPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  return <MapClient childId={id} />;
+}
