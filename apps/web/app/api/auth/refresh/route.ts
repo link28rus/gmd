@@ -12,6 +12,8 @@ interface BackendMeResponse {
   family: { id: string; name: string };
   memberships: Array<{ role: string; familyId: string }>;
   isAdmin: boolean;
+  requiresConsent: boolean;
+  currentPolicyVersion: string;
 }
 
 const REFRESH_COOKIE = 'gmd_refresh';
@@ -39,7 +41,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       : undefined;
   const res = NextResponse.json({
     accessToken,
-    ...(meUser && me.body ? { user: meUser, family: me.body.family } : {}),
+    ...(meUser && me.body
+      ? {
+          user: meUser,
+          family: me.body.family,
+          requiresConsent: me.body.requiresConsent ?? false,
+        }
+      : {}),
   });
   res.cookies.set(REFRESH_COOKIE, refreshToken, {
     httpOnly: true,

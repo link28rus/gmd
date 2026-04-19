@@ -10,6 +10,7 @@ interface RefreshResponse {
   accessToken: string;
   user?: AuthUser;
   family?: AuthFamily;
+  requiresConsent?: boolean;
 }
 
 export default function CabinetClient(): ReactElement {
@@ -18,6 +19,7 @@ export default function CabinetClient(): ReactElement {
   const user = useAuthStore((s) => s.user);
   const family = useAuthStore((s) => s.family);
   const setAll = useAuthStore((s) => s.setAll);
+  const setConsent = useAuthStore((s) => s.setConsent);
   const clear = useAuthStore((s) => s.clear);
 
   const [loading, setLoading] = useState(false);
@@ -43,6 +45,7 @@ export default function CabinetClient(): ReactElement {
           return;
         }
         setAll({ accessToken: data.accessToken, user: data.user, family: data.family });
+        setConsent(data.requiresConsent ?? false);
       } catch {
         router.replace('/login');
       } finally {

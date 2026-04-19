@@ -19,8 +19,10 @@ interface AuthState {
   accessToken: string | null;
   user: AuthUser | null;
   family: AuthFamily | null;
+  requiresConsent: boolean;
   setAll: (s: { accessToken: string; user: AuthUser; family: AuthFamily }) => void;
   setAccess: (t: string) => void;
+  setConsent: (requiresConsent: boolean) => void;
   clear: () => void;
 }
 
@@ -28,7 +30,9 @@ export const useAuthStore = create<AuthState>((set) => ({
   accessToken: null,
   user: null,
   family: null,
+  requiresConsent: false,
   setAll: ({ accessToken, user, family }) => set({ accessToken, user, family }),
   setAccess: (accessToken) => set({ accessToken }),
-  clear: () => set({ accessToken: null, user: null, family: null }),
+  setConsent: (requiresConsent) => set({ requiresConsent }),
+  clear: () => set({ accessToken: null, user: null, family: null, requiresConsent: false }),
 }));
