@@ -1,11 +1,10 @@
 import type { CanActivate, ExecutionContext } from '@nestjs/common';
-import { ForbiddenException, Injectable } from '@nestjs/common';
-// NOTE: must NOT use 'import type' here — NestJS DI needs the runtime value for reflection
-import type { ConsentService } from '../consent.service';
+import { ForbiddenException, Inject, Injectable } from '@nestjs/common';
+import { ConsentService } from '../consent.service';
 
 @Injectable()
 export class ConsentRequiredGuard implements CanActivate {
-  constructor(private readonly consent: ConsentService) {}
+  constructor(@Inject(ConsentService) private readonly consent: ConsentService) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
     const req = ctx.switchToHttp().getRequest<{ user?: { userId: string } }>();
