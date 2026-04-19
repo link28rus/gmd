@@ -13,6 +13,7 @@ import { InvitesModule } from './invites/invites.module';
 import { ChildDeviceModule } from './child-device/child-device.module';
 import { AdminModule } from './admin/admin.module';
 import { ConsentModule } from './consent/consent.module';
+import { LocationsModule } from './locations/locations.module';
 import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storage';
 
 @Module({
@@ -35,6 +36,7 @@ import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storag
     ChildDeviceModule,
     AdminModule,
     ConsentModule,
+    LocationsModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
