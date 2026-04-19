@@ -25,6 +25,8 @@
     "@node-rs/argon2": "^2.0.2",
     "@paralleldrive/cuid2": "^2.3.1",
     "@prisma/client": "^5.22.0",
+    "@sentry/nestjs": "^9",
+    "@sentry/node": "^9",
     "cookie-parser": "^1.4.7",
     "ioredis": "^5.10.1",
     "jose": "^5.9.6",
