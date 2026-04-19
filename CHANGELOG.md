@@ -16,6 +16,22 @@
 
 ---
 
+## v0.8.0 — 2026-04-19
+
+### Новые возможности
+
+- **Вход по паролю** — на странице `/login` появились вкладки «По коду из письма» / «По паролю». Юзер может задать пароль через API (UI управления в Phase 1.4) и входить без ожидания письма
+- **Защита от перебора пароля** — после 5 неудач подряд аккаунт блокируется на 15 минут (response 423 `account_locked` с `retryAfterSec`)
+
+### Изменения
+
+- feat(backend): `PasswordService` на argon2id + Redis lock counter
+- feat(backend): `POST /auth/login-password`, `POST /auth/set-password` (JwtAuthGuard), `POST /auth/dev/set-password` (защищён `AUTH_DEV_MODE` + `X-Auth-Dev-Secret` для первой установки на self-hosted)
+- feat(backend): anti-enumeration — DUMMY_HASH и timing floor 150ms, одинаковый 401 для всех неудач
+- chore(backend): поле `User.passwordHash` + миграция `add_user_password_hash`
+
+---
+
 ## v0.7.0 — 2026-04-19
 
 ### Новые возможности
