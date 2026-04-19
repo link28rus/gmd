@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useMemo, type ReactElement } from 'react';
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   YMap,
   YMapComponentsProvider,
@@ -44,14 +45,6 @@ export function ChildMapInner({
     if (latest) return { center: [latest.lon, latest.lat] as [number, number], zoom: 15 };
     return { center: DEFAULT_CENTER, zoom: DEFAULT_ZOOM };
   }, [latest, track]);
-
-  useEffect(() => {
-    const handle = window.setTimeout(() => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if (typeof window !== 'undefined' && !(window as any).ymaps3) onMapError();
-    }, 10_000);
-    return () => window.clearTimeout(handle);
-  }, [onMapError]);
 
   useEffect(() => {
     if (!apiKey) onMapError();
