@@ -29,13 +29,20 @@ export class ChildDeviceController {
   @Post('claim')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { ttl: 600_000, limit: 10 } })
-  async claim(@Body(new ZodValidationPipe(ClaimSchema)) dto: ClaimDto): Promise<unknown> {
+  async claim(
+    @Req() req: Request,
+    @Body(new ZodValidationPipe(ClaimSchema)) dto: ClaimDto,
+  ): Promise<unknown> {
     const started = Date.now();
+    const ua = req.headers['user-agent'];
     try {
       return await this.svc.claim(dto.code, {
         deviceName: dto.deviceName,
         osVersion: dto.osVersion,
         appVersion: dto.appVersion,
+        consent14Plus: dto.consent14Plus,
+        ip: req.ip,
+        ua: typeof ua === 'string' ? ua : undefined,
       });
     } finally {
       const elapsed = Date.now() - started;

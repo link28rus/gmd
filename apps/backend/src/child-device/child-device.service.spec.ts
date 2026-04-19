@@ -2,6 +2,7 @@
 import { ChildDeviceService } from './child-device.service';
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import type { PrismaService } from '../prisma/prisma.service';
+import type { ConsentService } from '../consent/consent.service';
 
 interface MockPrisma {
   _invites: any[];
@@ -79,19 +80,43 @@ function makePrismaMock(): MockPrisma {
   return api;
 }
 
+function makeConsentMock() {
+  return {
+    recordChildConsent: jest.fn().mockResolvedValue(undefined),
+  } as unknown as ConsentService;
+}
+
+function makeSvc(p: MockPrisma, consent?: ConsentService) {
+  return new ChildDeviceService(p as unknown as PrismaService, consent ?? makeConsentMock());
+}
+
+/** Returns a Date object representing `yearsAgo` years before today */
+function dobYearsAgo(years: number): Date {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - years);
+  return d;
+}
+
 describe('ChildDeviceService.claim', () => {
   it('валидный invite → создаёт device + consumed invite + plain token', async () => {
     const p = makePrismaMock();
-    p._children.push({ id: 'c1', familyId: 'f1', name: 'Vanya', deletedAt: null });
+    p._children.push({
+      id: 'c1',
+      familyId: 'f1',
+      name: 'Vanya',
+      deletedAt: null,
+      dateOfBirth: null,
+    });
     p._invites.push({
       id: 'i1',
       code: 'K4HJ9XPN',
       familyId: 'f1',
       childId: 'c1',
+      createdBy: 'u-parent',
       expiresAt: new Date(Date.now() + 600_000),
       consumedAt: null,
     });
-    const svc = new ChildDeviceService(p as unknown as PrismaService);
+    const svc = makeSvc(p);
     const r = await svc.claim('K4HJ9XPN', { deviceName: 'Pixel' });
     expect(r.deviceToken.length).toBeGreaterThan(30);
     expect(r.child.id).toBe('c1');
@@ -103,7 +128,7 @@ describe('ChildDeviceService.claim', () => {
 
   it('несуществующий код → 400 invite_invalid', async () => {
     const p = makePrismaMock();
-    const svc = new ChildDeviceService(p as unknown as PrismaService);
+    const svc = makeSvc(p);
     await expect(svc.claim('NOTHING1', {})).rejects.toThrow(BadRequestException);
   });
 
@@ -116,7 +141,7 @@ describe('ChildDeviceService.claim', () => {
       expiresAt: new Date(Date.now() - 1000),
       consumedAt: null,
     });
-    const svc = new ChildDeviceService(p as unknown as PrismaService);
+    const svc = makeSvc(p);
     await expect(svc.claim('K4HJ9XPN', {})).rejects.toThrow(BadRequestException);
   });
 
@@ -129,56 +154,137 @@ describe('ChildDeviceService.claim', () => {
       expiresAt: new Date(Date.now() + 600_000),
       consumedAt: new Date(),
     });
-    const svc = new ChildDeviceService(p as unknown as PrismaService);
+    const svc = makeSvc(p);
     await expect(svc.claim('K4HJ9XPN', {})).rejects.toThrow(BadRequestException);
   });
 
   it('у child уже есть device → 409', async () => {
     const p = makePrismaMock();
-    p._children.push({ id: 'c1', familyId: 'f1', name: 'V', deletedAt: null });
+    p._children.push({ id: 'c1', familyId: 'f1', name: 'V', deletedAt: null, dateOfBirth: null });
     p._invites.push({
       id: 'i1',
       code: 'K4HJ9XPN',
       familyId: 'f1',
       childId: 'c1',
+      createdBy: 'u-parent',
       expiresAt: new Date(Date.now() + 600_000),
       consumedAt: null,
     });
     p._devices.push({ id: 'd1', childId: 'c1', revokedAt: null });
-    const svc = new ChildDeviceService(p as unknown as PrismaService);
+    const svc = makeSvc(p);
     await expect(svc.claim('K4HJ9XPN', {})).rejects.toThrow(ConflictException);
   });
 
   it('нормализует code (lower-case и пробелы)', async () => {
     const p = makePrismaMock();
-    p._children.push({ id: 'c1', familyId: 'f1', name: 'V', deletedAt: null });
+    p._children.push({ id: 'c1', familyId: 'f1', name: 'V', deletedAt: null, dateOfBirth: null });
     p._invites.push({
       id: 'i1',
       code: 'K4HJ9XPN',
       familyId: 'f1',
       childId: 'c1',
+      createdBy: 'u-parent',
       expiresAt: new Date(Date.now() + 600_000),
       consumedAt: null,
     });
-    const svc = new ChildDeviceService(p as unknown as PrismaService);
+    const svc = makeSvc(p);
     const r = await svc.claim(' k4hj-9xpn ', {});
     expect(r.deviceToken).toBeTruthy();
+  });
+
+  // 14+ consent tests
+  it('ребёнок 13 лет без consent14Plus → успех', async () => {
+    const p = makePrismaMock();
+    p._children.push({
+      id: 'c-13',
+      familyId: 'f1',
+      name: 'Young',
+      deletedAt: null,
+      dateOfBirth: dobYearsAgo(13),
+    });
+    p._invites.push({
+      id: 'i-13',
+      code: 'ABCD1234',
+      familyId: 'f1',
+      childId: 'c-13',
+      createdBy: 'u-parent',
+      expiresAt: new Date(Date.now() + 600_000),
+      consumedAt: null,
+    });
+    const svc = makeSvc(p);
+    const r = await svc.claim('ABCD1234', {});
+    expect(r.deviceToken).toBeTruthy();
+  });
+
+  it('ребёнок 14 лет без consent14Plus → 400 consent14plus_required', async () => {
+    const p = makePrismaMock();
+    p._children.push({
+      id: 'c-14',
+      familyId: 'f1',
+      name: 'Teen',
+      deletedAt: null,
+      dateOfBirth: dobYearsAgo(14),
+    });
+    p._invites.push({
+      id: 'i-14',
+      code: 'EFGH5678',
+      familyId: 'f1',
+      childId: 'c-14',
+      createdBy: 'u-parent',
+      expiresAt: new Date(Date.now() + 600_000),
+      consumedAt: null,
+    });
+    const svc = makeSvc(p);
+    const err = await svc.claim('EFGH5678', {}).catch((e) => e);
+    expect(err).toBeInstanceOf(BadRequestException);
+    expect(err.getResponse()).toMatchObject({ code: 'consent14plus_required' });
+  });
+
+  it('ребёнок 14 лет с consent14Plus=true → успех и recordChildConsent вызван', async () => {
+    const p = makePrismaMock();
+    p._children.push({
+      id: 'c-14ok',
+      familyId: 'f1',
+      name: 'Teen',
+      deletedAt: null,
+      dateOfBirth: dobYearsAgo(14),
+    });
+    p._invites.push({
+      id: 'i-14ok',
+      code: 'IJKL9012',
+      familyId: 'f1',
+      childId: 'c-14ok',
+      createdBy: 'u-parent',
+      expiresAt: new Date(Date.now() + 600_000),
+      consumedAt: null,
+    });
+    const consent = makeConsentMock();
+    const svc = makeSvc(p, consent);
+    const r = await svc.claim('IJKL9012', { consent14Plus: true });
+    expect(r.deviceToken).toBeTruthy();
+    expect(consent.recordChildConsent).toHaveBeenCalledWith(
+      'c-14ok',
+      'u-parent',
+      undefined,
+      undefined,
+    );
   });
 });
 
 describe('ChildDeviceService.verifyToken', () => {
   it('возвращает context для валидного token', async () => {
     const p = makePrismaMock();
-    p._children.push({ id: 'c1', familyId: 'f1', name: 'V', deletedAt: null });
+    p._children.push({ id: 'c1', familyId: 'f1', name: 'V', deletedAt: null, dateOfBirth: null });
     p._invites.push({
       id: 'i1',
       code: 'K4HJ9XPN',
       familyId: 'f1',
       childId: 'c1',
+      createdBy: 'u-parent',
       expiresAt: new Date(Date.now() + 600_000),
       consumedAt: null,
     });
-    const svc = new ChildDeviceService(p as unknown as PrismaService);
+    const svc = makeSvc(p);
     const claimed = await svc.claim('K4HJ9XPN', {});
     const ctx = await svc.verifyToken(claimed.deviceToken);
     expect(ctx).not.toBeNull();
@@ -188,16 +294,17 @@ describe('ChildDeviceService.verifyToken', () => {
 
   it('null для revoked token', async () => {
     const p = makePrismaMock();
-    p._children.push({ id: 'c1', familyId: 'f1', name: 'V', deletedAt: null });
+    p._children.push({ id: 'c1', familyId: 'f1', name: 'V', deletedAt: null, dateOfBirth: null });
     p._invites.push({
       id: 'i1',
       code: 'K4HJ9XPN',
       familyId: 'f1',
       childId: 'c1',
+      createdBy: 'u-parent',
       expiresAt: new Date(Date.now() + 600_000),
       consumedAt: null,
     });
-    const svc = new ChildDeviceService(p as unknown as PrismaService);
+    const svc = makeSvc(p);
     const claimed = await svc.claim('K4HJ9XPN', {});
     p._devices[0].revokedAt = new Date();
     const ctx = await svc.verifyToken(claimed.deviceToken);
@@ -206,7 +313,7 @@ describe('ChildDeviceService.verifyToken', () => {
 
   it('null для несуществующего token', async () => {
     const p = makePrismaMock();
-    const svc = new ChildDeviceService(p as unknown as PrismaService);
+    const svc = makeSvc(p);
     const ctx = await svc.verifyToken('completely-fake-token');
     expect(ctx).toBeNull();
   });
