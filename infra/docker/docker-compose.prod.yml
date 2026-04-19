@@ -87,6 +87,39 @@ services:
       retries: 3
       start_period: 30s
 
+  glitchtip-postgres:
+    <<: *restart
+    image: postgres:15-alpine
+    container_name: gmd-glitchtip-postgres
+    environment:
+      POSTGRES_DB: glitchtip
+      POSTGRES_USER: glitchtip
+      POSTGRES_PASSWORD: ${GLITCHTIP_POSTGRES_PASSWORD}
+    volumes:
+      - /opt/gmd/data/glitchtip-postgres:/var/lib/postgresql/data
+    networks: [gmd_net]
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U glitchtip -d glitchtip']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  glitchtip-redis:
+    <<: *restart
+    image: redis:7-alpine
+    container_name: gmd-glitchtip-redis
+    command: ['redis-server', '--requirepass', '${GLITCHTIP_REDIS_PASSWORD}', '--appendonly', 'yes']
+    environment:
+      REDIS_PASSWORD: ${GLITCHTIP_REDIS_PASSWORD}
+    volumes:
+      - /opt/gmd/data/glitchtip-redis:/data
+    networks: [gmd_net]
+    healthcheck:
+      test: ['CMD-SHELL', 'redis-cli -a "$$REDIS_PASSWORD" ping | grep -q PONG']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
   backend:
     <<: *restart
     build:
