@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { SentryModule } from '@sentry/nestjs/setup';
 import Redis from 'ioredis';
 import { HealthController } from './health/health.controller';
 import { PrismaModule } from './prisma/prisma.module';
@@ -18,6 +19,7 @@ import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storag
 
 @Module({
   imports: [
+    SentryModule.forRoot(),
     PrismaModule,
     RedisModule,
     ThrottlerModule.forRootAsync({

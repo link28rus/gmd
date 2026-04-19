@@ -1,3 +1,5 @@
+import { initSentry } from './common/monitoring/sentry.init';
+initSentry();
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import cookieParser from 'cookie-parser';
