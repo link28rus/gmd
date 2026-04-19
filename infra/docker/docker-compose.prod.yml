@@ -120,6 +120,59 @@ services:
       timeout: 3s
       retries: 5
 
+  glitchtip-web:
+    <<: *restart
+    image: glitchtip/glitchtip:v4.0
+    container_name: gmd-glitchtip-web
+    environment:
+      DATABASE_URL: postgres://glitchtip:${GLITCHTIP_POSTGRES_PASSWORD}@glitchtip-postgres:5432/glitchtip
+      REDIS_URL: redis://:${GLITCHTIP_REDIS_PASSWORD}@glitchtip-redis:6379/0
+      SECRET_KEY: ${GLITCHTIP_SECRET_KEY}
+      GLITCHTIP_DOMAIN: ${GLITCHTIP_DOMAIN}
+      DEFAULT_FROM_EMAIL: ${GLITCHTIP_DEFAULT_FROM_EMAIL}
+      EMAIL_URL: ${GLITCHTIP_EMAIL_URL}
+      ENABLE_USER_REGISTRATION: ${GLITCHTIP_ENABLE_USER_REGISTRATION}
+      ENABLE_ORGANIZATION_CREATION: 'False'
+      EVENT_RETENTION_DAYS: ${GLITCHTIP_EVENT_RETENTION_DAYS}
+      CELERY_WORKER_CONCURRENCY: ${GLITCHTIP_CELERY_WORKER_CONCURRENCY}
+      PORT: '8000'
+    volumes:
+      - /opt/gmd/data/glitchtip-uploads:/code/uploads
+    depends_on:
+      glitchtip-postgres: { condition: service_healthy }
+      glitchtip-redis: { condition: service_healthy }
+    networks: [gmd_net]
+    ports:
+      - '127.0.0.1:8000:8000'
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '-O-', 'http://localhost:8000/api/health/']
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  glitchtip-worker:
+    <<: *restart
+    image: glitchtip/glitchtip:v4.0
+    container_name: gmd-glitchtip-worker
+    command: ['./bin/run-celery-with-beat.sh']
+    environment:
+      DATABASE_URL: postgres://glitchtip:${GLITCHTIP_POSTGRES_PASSWORD}@glitchtip-postgres:5432/glitchtip
+      REDIS_URL: redis://:${GLITCHTIP_REDIS_PASSWORD}@glitchtip-redis:6379/0
+      SECRET_KEY: ${GLITCHTIP_SECRET_KEY}
+      GLITCHTIP_DOMAIN: ${GLITCHTIP_DOMAIN}
+      DEFAULT_FROM_EMAIL: ${GLITCHTIP_DEFAULT_FROM_EMAIL}
+      EMAIL_URL: ${GLITCHTIP_EMAIL_URL}
+      EVENT_RETENTION_DAYS: ${GLITCHTIP_EVENT_RETENTION_DAYS}
+      CELERY_WORKER_CONCURRENCY: ${GLITCHTIP_CELERY_WORKER_CONCURRENCY}
+    volumes:
+      - /opt/gmd/data/glitchtip-uploads:/code/uploads
+    depends_on:
+      glitchtip-postgres: { condition: service_healthy }
+      glitchtip-redis: { condition: service_healthy }
+      glitchtip-web: { condition: service_healthy }
+    networks: [gmd_net]
+
   backend:
     <<: *restart
     build:
