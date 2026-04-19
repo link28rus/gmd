@@ -32,6 +32,8 @@ interface ConsentCacheEntry {
 @Injectable()
 export class LocationsService {
   private readonly logger = new Logger(LocationsService.name);
+  // TODO(perf): cache is not concurrency-safe — N parallel cold-cache requests hit DB N times. Consider storing in-flight Promise.
+  // TODO(memory): no eviction — entries accumulate for life of process. Safe at current scale; revisit in Phase 1.4.
   private readonly consentCache = new Map<string, ConsentCacheEntry>();
 
   constructor(
