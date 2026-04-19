@@ -17,13 +17,15 @@
 		reverse_proxy web:3000
 	}
 
-	# /api/children/* → web (route handlers проксируют с Bearer)
-	handle /api/children/* {
+	# /api/children + /api/children/* → web (route handlers проксируют с Bearer)
+	@children path /api/children /api/children/*
+	handle @children {
 		reverse_proxy web:3000
 	}
 
-	# /api/admin/* → web (route handlers проксируют с Bearer в /admin/*)
-	handle /api/admin/* {
+	# /api/admin + /api/admin/* → web (route handlers проксируют с Bearer в /admin/*)
+	@admin path /api/admin /api/admin/*
+	handle @admin {
 		reverse_proxy web:3000
 	}
 
