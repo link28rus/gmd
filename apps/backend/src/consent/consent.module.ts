@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
 import { ConsentService } from './consent.service';
 import { ConsentController } from './consent.controller';
+import { ConsentRequiredGuard } from './guards/consent-required.guard';
 import { AuthModule } from '../auth/auth.module';
 
 export const CONSENT_CONFIG = Symbol('CONSENT_CONFIG');
@@ -21,7 +22,8 @@ export interface ConsentConfig {
       }),
     },
     ConsentService,
+    ConsentRequiredGuard,
   ],
-  exports: [ConsentService, CONSENT_CONFIG],
+  exports: [ConsentService, ConsentRequiredGuard, CONSENT_CONFIG],
 })
 export class ConsentModule {}
