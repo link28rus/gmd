@@ -2,12 +2,15 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Headers,
   HttpCode,
   HttpStatus,
   Inject,
+  NotFoundException,
   Post,
   Req,
   UnauthorizedException,
+  UseGuards,
   UsePipes,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
@@ -22,6 +25,13 @@ import { RefreshSchema } from './dto/refresh.dto';
 import type { RefreshDto } from './dto/refresh.dto';
 import { LogoutSchema } from './dto/logout.dto';
 import type { LogoutDto } from './dto/logout.dto';
+import { LoginPasswordSchema } from './dto/login-password.dto';
+import type { LoginPasswordDto } from './dto/login-password.dto';
+import { SetPasswordSchema } from './dto/set-password.dto';
+import type { SetPasswordDto } from './dto/set-password.dto';
+import { DevSetPasswordSchema } from './dto/dev-set-password.dto';
+import type { DevSetPasswordDto } from './dto/dev-set-password.dto';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 function extractMeta(req: Request): { userAgent?: string; ipAddress?: string } {
   return {
@@ -87,5 +97,35 @@ export class AuthController {
   @UsePipes(new ZodValidationPipe(LogoutSchema))
   async logout(@Body() dto: LogoutDto): Promise<void> {
     await this.auth.logout(dto.refreshToken);
+  }
+
+  @Post('login-password')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: 600_000 } })
+  @UsePipes(new ZodValidationPipe(LoginPasswordSchema))
+  async loginPassword(@Body() dto: LoginPasswordDto, @Req() req: Request): Promise<unknown> {
+    return this.auth.loginWithPassword(dto.email, dto.password, extractMeta(req));
+  }
+
+  @Post('set-password')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(JwtAuthGuard)
+  @UsePipes(new ZodValidationPipe(SetPasswordSchema))
+  async setPwd(@Body() dto: SetPasswordDto, @Req() req: Request): Promise<void> {
+    const userId = (req as Request & { user?: { userId: string } }).user?.userId;
+    if (!userId) throw new UnauthorizedException();
+    await this.auth.setPassword(userId, dto.password);
+  }
+
+  @Post('dev/set-password')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UsePipes(new ZodValidationPipe(DevSetPasswordSchema))
+  async devSetPwd(
+    @Body() dto: DevSetPasswordDto,
+    @Headers('x-auth-dev-secret') secret: string | undefined,
+  ): Promise<void> {
+    if (process.env.AUTH_DEV_MODE !== 'true') throw new NotFoundException();
+    if (!secret || secret !== process.env.AUTH_DEV_SECRET) throw new NotFoundException();
+    await this.auth.devSetPassword(dto.email, dto.password);
   }
 }
