@@ -78,4 +78,41 @@ describe('LocationsService.ingestBatch', () => {
     ]);
     expect(res).toEqual({ accepted: 2, rejected: 0, rejectedReasons: {} });
   });
+
+  it('rejects points older than 24h with out_of_window', async () => {
+    const svc = makeService({ insertResult: 1 });
+    const now = new Date();
+    const res = await svc.ingestBatch(ctx, [
+      {
+        lat: 55,
+        lon: 37,
+        recordedAt: new Date(now.getTime() - 25 * 60 * 60 * 1000).toISOString(), // too old
+      },
+      {
+        lat: 55,
+        lon: 37,
+        recordedAt: new Date(now.getTime() - 60_000).toISOString(), // valid
+      },
+    ]);
+    expect(res.accepted).toBe(1);
+    expect(res.rejected).toBe(1);
+    expect(res.rejectedReasons.out_of_window).toBe(1);
+  });
+
+  it('rejects points >2min in future with out_of_window', async () => {
+    const svc = makeService({ insertResult: 0 });
+    const now = new Date();
+    const res = await svc.ingestBatch(ctx, [
+      {
+        lat: 55,
+        lon: 37,
+        recordedAt: new Date(now.getTime() + 3 * 60_000).toISOString(),
+      },
+    ]);
+    expect(res).toEqual({
+      accepted: 0,
+      rejected: 1,
+      rejectedReasons: { out_of_window: 1 },
+    });
+  });
 });
