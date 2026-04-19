@@ -145,7 +145,13 @@ services:
     ports:
       - '127.0.0.1:8000:8000'
     healthcheck:
-      test: ['CMD', 'wget', '-q', '-O-', 'http://localhost:8000/api/health/']
+      # GlitchTip v4 образ без wget/curl — используем python3 stdlib.
+      # /_health/ — встроенный django endpoint (возвращает 200 OK).
+      test:
+        - CMD
+        - python3
+        - -c
+        - "import urllib.request,sys; r=urllib.request.urlopen('http://localhost:8000/_health/',timeout=3); sys.exit(0 if r.status==200 else 1)"
       interval: 30s
       timeout: 5s
       retries: 5
