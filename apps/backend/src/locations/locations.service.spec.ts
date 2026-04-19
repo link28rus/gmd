@@ -165,3 +165,71 @@ describe('LocationsService.ingestBatch', () => {
     expect(true).toBe(true);
   });
 });
+
+describe('LocationsService.getLatest', () => {
+  it('returns null when no locations', async () => {
+    const svc = makeService();
+    (svc as any).prisma.location.findFirst.mockResolvedValue(null);
+    const res = await svc.getLatest('c1');
+    expect(res).toBeNull();
+  });
+
+  it('returns point with ageSec when present', async () => {
+    const svc = makeService();
+    const recordedAt = new Date(Date.now() - 5000);
+    (svc as any).prisma.location.findFirst.mockResolvedValue({
+      id: 'l1',
+      lat: 55,
+      lon: 37,
+      recordedAt,
+      serverReceivedAt: recordedAt,
+      accuracy: 1,
+      altitude: 2,
+      speed: 3,
+      bearing: 4,
+      batteryLevel: 50,
+      isCharging: false,
+      provider: 'gps',
+    });
+    const res = await svc.getLatest('c1');
+    expect(res).toMatchObject({ lat: 55, lon: 37, batteryLevel: 50 });
+    expect(res?.ageSec).toBeGreaterThanOrEqual(4);
+    expect(res?.ageSec).toBeLessThan(10);
+  });
+});
+
+describe('LocationsService.list', () => {
+  it('applies desc order + limit + cursor (recordedAt < cursor)', async () => {
+    const svc = makeService();
+    (svc as any).prisma.location.findMany.mockResolvedValue([
+      { id: 'a', recordedAt: new Date('2026-04-19T10:00:00Z'), lat: 55, lon: 37 },
+      { id: 'b', recordedAt: new Date('2026-04-19T09:00:00Z'), lat: 55.1, lon: 37.1 },
+    ]);
+    const res = await svc.list('c1', {
+      limit: 2,
+      order: 'desc',
+      cursor: '2026-04-19T11:00:00Z',
+    } as any);
+    expect(res.items).toHaveLength(2);
+    expect(res.nextCursor).toBe('2026-04-19T09:00:00.000Z');
+    expect((svc as any).prisma.location.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          childId: 'c1',
+          recordedAt: expect.objectContaining({ lt: new Date('2026-04-19T11:00:00Z') }),
+        }),
+        orderBy: { recordedAt: 'desc' },
+        take: 2,
+      }),
+    );
+  });
+
+  it('returns null nextCursor when fewer results than limit', async () => {
+    const svc = makeService();
+    (svc as any).prisma.location.findMany.mockResolvedValue([
+      { id: 'a', recordedAt: new Date('2026-04-19T10:00:00Z'), lat: 55, lon: 37 },
+    ]);
+    const res = await svc.list('c1', { limit: 10, order: 'desc' } as any);
+    expect(res.nextCursor).toBeNull();
+  });
+});

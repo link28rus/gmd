@@ -13,11 +13,54 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ConsentService } from '../consent/consent.service';
 import type { ChildAuthContext } from '../child-device/child-device.service';
 import type { LocationPoint } from './dto/ingest-locations.dto';
+import type { ListLocationsQuery } from './dto/list-locations.dto';
 
 export interface IngestResult {
   accepted: number;
   rejected: number;
   rejectedReasons: Record<string, number>;
+}
+
+export interface LocationDto {
+  lat: number;
+  lon: number;
+  recordedAt: string;
+  serverReceivedAt: string;
+  accuracy: number | null;
+  altitude: number | null;
+  speed: number | null;
+  bearing: number | null;
+  batteryLevel: number | null;
+  isCharging: boolean | null;
+  provider: string | null;
+}
+
+function toDto(row: {
+  lat: number;
+  lon: number;
+  recordedAt: Date;
+  serverReceivedAt?: Date | null;
+  accuracy?: number | null;
+  altitude?: number | null;
+  speed?: number | null;
+  bearing?: number | null;
+  batteryLevel?: number | null;
+  isCharging?: boolean | null;
+  provider?: string | null;
+}): LocationDto {
+  return {
+    lat: row.lat,
+    lon: row.lon,
+    recordedAt: row.recordedAt.toISOString(),
+    serverReceivedAt: (row.serverReceivedAt ?? row.recordedAt).toISOString(),
+    accuracy: row.accuracy ?? null,
+    altitude: row.altitude ?? null,
+    speed: row.speed ?? null,
+    bearing: row.bearing ?? null,
+    batteryLevel: row.batteryLevel ?? null,
+    isCharging: row.isCharging ?? null,
+    provider: row.provider ?? null,
+  };
 }
 
 const OUT_OF_WINDOW_PAST_MS = 24 * 60 * 60 * 1000; // 24h
@@ -119,6 +162,40 @@ export class LocationsService {
     );
 
     return { accepted, rejected, rejectedReasons };
+  }
+
+  async getLatest(childId: string): Promise<(LocationDto & { ageSec: number }) | null> {
+    const row = await this.prisma.location.findFirst({
+      where: { childId },
+      orderBy: { recordedAt: 'desc' },
+    });
+    if (!row) return null;
+    const ageSec = Math.floor((Date.now() - row.recordedAt.getTime()) / 1000);
+    return { ...toDto(row), ageSec };
+  }
+
+  async list(
+    childId: string,
+    q: ListLocationsQuery,
+  ): Promise<{ items: LocationDto[]; nextCursor: string | null }> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const where: any = { childId };
+    if (q.from) where.recordedAt = { ...(where.recordedAt ?? {}), gte: new Date(q.from) };
+    if (q.to) where.recordedAt = { ...(where.recordedAt ?? {}), lte: new Date(q.to) };
+    if (q.cursor) {
+      const op = q.order === 'desc' ? 'lt' : 'gt';
+      where.recordedAt = { ...(where.recordedAt ?? {}), [op]: new Date(q.cursor) };
+    }
+
+    const rows = await this.prisma.location.findMany({
+      where,
+      orderBy: { recordedAt: q.order },
+      take: q.limit,
+    });
+    const items = rows.map(toDto);
+    const nextCursor =
+      rows.length === q.limit ? rows[rows.length - 1].recordedAt.toISOString() : null;
+    return { items, nextCursor };
   }
 
   private async checkOwnerConsent(familyId: string, childId: string): Promise<boolean> {
