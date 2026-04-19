@@ -1,11 +1,16 @@
 import { PasswordService } from './password.service';
 import type { RedisService } from '../redis/redis.service';
 
-function makeRedisMock(): jest.Mocked<
-  Pick<RedisService, 'incr' | 'expire' | 'get' | 'del' | 'ttl'>
-> & {
+interface RedisMock {
   _store: Record<string, number>;
-} {
+  incr: jest.Mock;
+  expire: jest.Mock;
+  get: jest.Mock;
+  del: jest.Mock;
+  ttl: jest.Mock;
+}
+
+function makeRedisMock(): RedisMock {
   const store: Record<string, number> = {};
   return {
     _store: store,

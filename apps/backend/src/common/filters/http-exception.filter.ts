@@ -1,7 +1,7 @@
 import { Catch, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import type { ArgumentsHost, ExceptionFilter } from '@nestjs/common';
 
-type ErrorPayload = { code: string; message: string; details?: unknown };
+type ErrorPayload = { code: string; message: string; details?: unknown; [key: string]: unknown };
 
 function statusToCode(status: number): string {
   switch (status) {
@@ -58,8 +58,11 @@ function normalize(body: unknown, status: number): ErrorPayload {
         : typeof b.error === 'string'
           ? (b.error as string)
           : 'Error';
-    const details = b.details;
-    return details === undefined ? { code, message } : { code, message, details };
+    const { code: _c, message: _m, error: _e, ...rest } = b;
+    void _c;
+    void _m;
+    void _e;
+    return { code, message, ...rest };
   }
   return { code: statusToCode(status), message: 'Error' };
 }

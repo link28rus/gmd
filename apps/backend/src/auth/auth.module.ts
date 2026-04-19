@@ -8,13 +8,15 @@ import { SmtpOtpProvider, SMTP_CONFIG } from './providers/smtp-otp.provider';
 import { OTP_DELIVERY } from './providers/otp-delivery.provider';
 import { PrismaModule } from '../prisma/prisma.module';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { PasswordService, PASSWORD_CONFIG } from './password.service';
+import { RedisModule } from '../redis/redis.module';
 
 function asNum(v: string | undefined, def: number): number {
   return v ? Number(v) : def;
 }
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, RedisModule],
   controllers: [AuthController],
   providers: [
     {
@@ -54,6 +56,13 @@ function asNum(v: string | undefined, def: number): number {
         privacyPolicyVersion: process.env.PRIVACY_POLICY_VERSION || '1.0',
       }),
     },
+    {
+      provide: PASSWORD_CONFIG,
+      useFactory: () => ({
+        lockAfter: asNum(process.env.PASSWORD_LOCK_AFTER, 5),
+        lockTtlSec: asNum(process.env.PASSWORD_LOCK_TTL_SECONDS, 900),
+      }),
+    },
     { provide: OTP_DELIVERY, useClass: SmtpOtpProvider },
     SmtpOtpProvider,
     JwtService,
@@ -61,6 +70,7 @@ function asNum(v: string | undefined, def: number): number {
     RefreshTokenService,
     AuthService,
     JwtAuthGuard,
+    PasswordService,
   ],
   exports: [JwtService, JwtAuthGuard, AuthService],
 })
