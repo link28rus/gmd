@@ -3,7 +3,7 @@
 # Все bind-mounts лежат в /opt/gmd/data/<service>/.
 # Наружу открыты только caddy:80/443 (проверяется UFW).
 #
-# GlitchTip (Task 16) и Uptime Kuma (Task 17) добавляются в следующих задачах.
+# Phase 0.4: GlitchTip (postgres+redis: Task 1, web+worker: Task 2) и Uptime Kuma (Task 3).
 
 name: gmd-prod
 
