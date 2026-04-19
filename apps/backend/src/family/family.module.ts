@@ -1,11 +1,12 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { PrismaModule } from '../prisma/prisma.module';
+import { ConsentModule } from '../consent/consent.module';
 import { FamilyController } from './family.controller';
 import { FamilyService } from './family.service';
 
 @Module({
-  imports: [AuthModule, PrismaModule],
+  imports: [AuthModule, PrismaModule, ConsentModule],
   controllers: [FamilyController],
   providers: [FamilyService],
 })

@@ -12,6 +12,7 @@ import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
 import { InvitesService } from './invites.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ConsentRequiredGuard } from '../consent/guards/consent-required.guard';
 
 interface AuthedRequest extends Request {
   user: { userId: string; familyId: string; role: 'owner' | 'parent' };
@@ -23,6 +24,7 @@ export class InvitesController {
   constructor(@Inject(InvitesService) private readonly invites: InvitesService) {}
 
   @Post('invites')
+  @UseGuards(ConsentRequiredGuard)
   @Throttle({ default: { ttl: 600_000, limit: 10 } })
   async createInvite(
     @Req() req: AuthedRequest,
@@ -33,6 +35,7 @@ export class InvitesController {
 
   @Post('reset-device')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(ConsentRequiredGuard)
   @Throttle({ default: { ttl: 600_000, limit: 10 } })
   async resetDevice(@Req() req: AuthedRequest, @Param('childId') childId: string): Promise<void> {
     await this.invites.resetDevice(req.user.familyId, childId);

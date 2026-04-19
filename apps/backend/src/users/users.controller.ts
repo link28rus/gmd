@@ -14,6 +14,7 @@ import { z } from 'zod';
 import type { Request } from 'express';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ConsentRequiredGuard } from '../consent/guards/consent-required.guard';
 import { ZodValidationPipe } from '../common/zod/zod-validation.pipe';
 
 const UpdateMeSchema = z
@@ -38,6 +39,7 @@ export class UsersController {
   }
 
   @Patch('me')
+  @UseGuards(ConsentRequiredGuard)
   async update(
     @Req() req: AuthedRequest,
     @Body(new ZodValidationPipe(UpdateMeSchema)) dto: z.infer<typeof UpdateMeSchema>,

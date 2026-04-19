@@ -2,6 +2,7 @@
 import { UsersService } from './users.service';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { AdminConfig } from '../admin/admin.tokens';
+import type { ConsentService } from '../consent/consent.service';
 
 interface MockPrisma {
   _users: any[];
@@ -38,8 +39,15 @@ function makePrismaMock(): MockPrisma {
   return api;
 }
 
+function makeConsentService(requiresConsent = false, version = '1.0'): ConsentService {
+  return {
+    userRequiresConsent: jest.fn(() => requiresConsent),
+    getCurrentVersion: jest.fn(() => version),
+  } as unknown as ConsentService;
+}
+
 describe('UsersService', () => {
-  it('getMe возвращает user + family + memberships + children', async () => {
+  it('getMe возвращает user + family + memberships + children + requiresConsent + currentPolicyVersion', async () => {
     const p = makePrismaMock();
     p._users.push({
       id: 'u-1',
@@ -47,6 +55,7 @@ describe('UsersService', () => {
       name: null,
       locale: 'ru',
       deletedAt: null,
+      acceptedPrivacyPolicyVersion: '1.0',
     });
     p.membership.findMany = jest.fn(() => Promise.resolve([{ role: 'owner', familyId: 'f-1' }]));
     p.family.findUnique = jest.fn(() => Promise.resolve({ id: 'f-1', name: 'Моя семья' }));
@@ -61,7 +70,8 @@ describe('UsersService', () => {
       ]),
     );
     const adminCfg: AdminConfig = { emails: ['admin@example.com'] };
-    const svc = new UsersService(p as unknown as PrismaService, adminCfg);
+    const consent = makeConsentService(false, '1.0');
+    const svc = new UsersService(p as unknown as PrismaService, adminCfg, consent);
 
     const r = await svc.getMe('u-1', 'f-1');
 
@@ -72,6 +82,8 @@ describe('UsersService', () => {
     expect(r.children[0].name).toBe('Vanya');
     expect(r.children[0].device?.deviceName).toBe('Pixel');
     expect(r.isAdmin).toBe(false);
+    expect(r.requiresConsent).toBe(false);
+    expect(r.currentPolicyVersion).toBe('1.0');
   });
 
   it('getMe возвращает isAdmin=true если email в whitelist', async () => {
@@ -82,16 +94,41 @@ describe('UsersService', () => {
       name: null,
       locale: 'ru',
       deletedAt: null,
+      acceptedPrivacyPolicyVersion: '1.0',
     });
     p.membership.findMany = jest.fn(() => Promise.resolve([{ role: 'owner', familyId: 'f-2' }]));
     p.family.findUnique = jest.fn(() => Promise.resolve({ id: 'f-2', name: 'Семья' }));
     p.child.findMany = jest.fn(() => Promise.resolve([]));
     const adminCfg: AdminConfig = { emails: ['admin@example.com'] };
-    const svc = new UsersService(p as unknown as PrismaService, adminCfg);
+    const consent = makeConsentService(false, '1.0');
+    const svc = new UsersService(p as unknown as PrismaService, adminCfg, consent);
 
     const r = await svc.getMe('u-2', 'f-2');
 
     expect(r.isAdmin).toBe(true);
+  });
+
+  it('getMe возвращает requiresConsent=true если версия устарела', async () => {
+    const p = makePrismaMock();
+    p._users.push({
+      id: 'u-3',
+      email: 'b@c.com',
+      name: null,
+      locale: 'ru',
+      deletedAt: null,
+      acceptedPrivacyPolicyVersion: '1.0',
+    });
+    p.membership.findMany = jest.fn(() => Promise.resolve([{ role: 'owner', familyId: 'f-3' }]));
+    p.family.findUnique = jest.fn(() => Promise.resolve({ id: 'f-3', name: 'Семья' }));
+    p.child.findMany = jest.fn(() => Promise.resolve([]));
+    const adminCfg: AdminConfig = { emails: [] };
+    const consent = makeConsentService(true, '2.0');
+    const svc = new UsersService(p as unknown as PrismaService, adminCfg, consent);
+
+    const r = await svc.getMe('u-3', 'f-3');
+
+    expect(r.requiresConsent).toBe(true);
+    expect(r.currentPolicyVersion).toBe('2.0');
   });
 
   it('updateMe патчит name и locale', async () => {
@@ -104,7 +141,8 @@ describe('UsersService', () => {
       deletedAt: null,
     });
     const adminCfg: AdminConfig = { emails: [] };
-    const svc = new UsersService(p as unknown as PrismaService, adminCfg);
+    const consent = makeConsentService();
+    const svc = new UsersService(p as unknown as PrismaService, adminCfg, consent);
 
     const r = await svc.updateMe('u-1', { name: 'Ivan', locale: 'en' });
 
@@ -116,7 +154,8 @@ describe('UsersService', () => {
     const p = makePrismaMock();
     p._users.push({ id: 'u-1', email: 'a@b.com', deletedAt: null });
     const adminCfg: AdminConfig = { emails: [] };
-    const svc = new UsersService(p as unknown as PrismaService, adminCfg);
+    const consent = makeConsentService();
+    const svc = new UsersService(p as unknown as PrismaService, adminCfg, consent);
 
     await svc.softDelete('u-1');
 

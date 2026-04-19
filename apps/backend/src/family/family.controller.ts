@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { Request } from 'express';
 import { FamilyService } from './family.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ConsentRequiredGuard } from '../consent/guards/consent-required.guard';
 import { ZodValidationPipe } from '../common/zod/zod-validation.pipe';
 
 const PatchFamilySchema = z.object({ name: z.string().min(1).max(120) }).strict();
@@ -17,6 +18,7 @@ export class FamilyController {
   constructor(@Inject(FamilyService) private readonly family: FamilyService) {}
 
   @Patch(':id')
+  @UseGuards(ConsentRequiredGuard)
   async rename(
     @Param('id') id: string,
     @Body(new ZodValidationPipe(PatchFamilySchema)) dto: z.infer<typeof PatchFamilySchema>,

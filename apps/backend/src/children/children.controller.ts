@@ -15,6 +15,7 @@ import {
 import type { Request } from 'express';
 import { ChildrenService } from './children.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ConsentRequiredGuard } from '../consent/guards/consent-required.guard';
 import { ZodValidationPipe } from '../common/zod/zod-validation.pipe';
 import { CreateChildSchema } from './dto/create-child.dto';
 import type { CreateChildDto } from './dto/create-child.dto';
@@ -53,6 +54,7 @@ export class ChildrenController {
   }
 
   @Post()
+  @UseGuards(ConsentRequiredGuard)
   async create(
     @Req() req: AuthedRequest,
     @Body(new ZodValidationPipe(CreateChildSchema)) dto: CreateChildDto,
@@ -64,6 +66,7 @@ export class ChildrenController {
   }
 
   @Patch(':childId')
+  @UseGuards(ConsentRequiredGuard)
   async patch(
     @Req() req: AuthedRequest,
     @Param('childId') childId: string,
@@ -75,6 +78,7 @@ export class ChildrenController {
 
   @Delete(':childId')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(ConsentRequiredGuard)
   async remove(@Req() req: AuthedRequest, @Param('childId') childId: string): Promise<void> {
     await this.children.softDelete(req.user.familyId, childId);
   }

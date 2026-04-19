@@ -2,19 +2,27 @@ import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ADMIN_CONFIG } from '../admin/admin.tokens';
 import type { AdminConfig } from '../admin/admin.tokens';
+import { ConsentService } from '../consent/consent.service';
 
 @Injectable()
 export class UsersService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(ADMIN_CONFIG) private readonly adminCfg: AdminConfig,
+    @Inject(ConsentService) private readonly consent: ConsentService,
   ) {}
 
   async getMe(
     userId: string,
     familyId: string,
   ): Promise<{
-    user: { id: string; email: string; name: string | null; locale: string };
+    user: {
+      id: string;
+      email: string;
+      name: string | null;
+      locale: string;
+      acceptedPrivacyPolicyVersion: string | null;
+    };
     family: { id: string; name: string };
     memberships: Array<{ role: string; familyId: string }>;
     children: Array<{
@@ -24,6 +32,8 @@ export class UsersService {
       device: { id: string; deviceName: string | null } | null;
     }>;
     isAdmin: boolean;
+    requiresConsent: boolean;
+    currentPolicyVersion: string;
   }> {
     type ChildRow = {
       id: string;
@@ -51,9 +61,17 @@ export class UsersService {
       throw new NotFoundException({ code: 'not_found', message: 'User or family not found' });
     }
     const isAdmin = this.adminCfg.emails.includes(user.email.toLowerCase().trim());
+    const requiresConsent = this.consent.userRequiresConsent(user.acceptedPrivacyPolicyVersion);
+    const currentPolicyVersion = this.consent.getCurrentVersion();
 
     return {
-      user: { id: user.id, email: user.email, name: user.name, locale: user.locale },
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        locale: user.locale,
+        acceptedPrivacyPolicyVersion: user.acceptedPrivacyPolicyVersion,
+      },
       family: { id: family.id, name: family.name },
       memberships,
       children: children.map((c: ChildRow) => ({
@@ -63,6 +81,8 @@ export class UsersService {
         device: c.device ? { id: c.device.id, deviceName: c.device.deviceName } : null,
       })),
       isAdmin,
+      requiresConsent,
+      currentPolicyVersion,
     };
   }
 

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { PrismaModule } from '../prisma/prisma.module';
+import { ConsentModule } from '../consent/consent.module';
 import { InvitesController } from './invites.controller';
 import { InvitesService, INVITES_CONFIG } from './invites.service';
 
@@ -9,7 +10,7 @@ function asNum(v: string | undefined, def: number): number {
 }
 
 @Module({
-  imports: [AuthModule, PrismaModule],
+  imports: [AuthModule, PrismaModule, ConsentModule],
   controllers: [InvitesController],
   providers: [
     {
