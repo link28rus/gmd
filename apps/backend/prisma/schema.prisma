@@ -15,6 +15,7 @@ model User {
   name                         String?
   locale                       String    @default("ru")
   acceptedPrivacyPolicyVersion String?
+  passwordHash                 String?
   createdAt                    DateTime  @default(now())
   updatedAt                    DateTime  @updatedAt
   deletedAt                    DateTime?
