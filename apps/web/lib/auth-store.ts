@@ -8,6 +8,13 @@ export interface AuthUser {
   name: string | null;
   locale: string;
   isAdmin?: boolean;
+  hasPassword?: boolean;
+}
+
+interface AuthUserPatch {
+  hasPassword?: boolean;
+  name?: string | null;
+  locale?: string;
 }
 
 export interface AuthFamily {
@@ -23,6 +30,7 @@ interface AuthState {
   setAll: (s: { accessToken: string; user: AuthUser; family: AuthFamily }) => void;
   setAccess: (t: string) => void;
   setConsent: (requiresConsent: boolean) => void;
+  patchUser: (patch: AuthUserPatch) => void;
   clear: () => void;
 }
 
@@ -34,5 +42,6 @@ export const useAuthStore = create<AuthState>((set) => ({
   setAll: ({ accessToken, user, family }) => set({ accessToken, user, family }),
   setAccess: (accessToken) => set({ accessToken }),
   setConsent: (requiresConsent) => set({ requiresConsent }),
+  patchUser: (patch) => set((s) => (s.user ? { user: { ...s.user, ...patch } } : s)),
   clear: () => set({ accessToken: null, user: null, family: null, requiresConsent: false }),
 }));

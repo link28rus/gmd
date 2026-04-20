@@ -82,8 +82,32 @@ describe('UsersService', () => {
     expect(r.children[0].name).toBe('Vanya');
     expect(r.children[0].device?.deviceName).toBe('Pixel');
     expect(r.isAdmin).toBe(false);
+    expect(r.hasPassword).toBe(false);
     expect(r.requiresConsent).toBe(false);
     expect(r.currentPolicyVersion).toBe('1.0');
+  });
+
+  it('getMe возвращает hasPassword=true когда passwordHash установлен', async () => {
+    const p = makePrismaMock();
+    p._users.push({
+      id: 'u-pwd',
+      email: 'pwd@example.com',
+      name: null,
+      locale: 'ru',
+      deletedAt: null,
+      acceptedPrivacyPolicyVersion: '1.0',
+      passwordHash: '$2b$10$fakehash',
+    });
+    p.membership.findMany = jest.fn(() => Promise.resolve([{ role: 'owner', familyId: 'f-p' }]));
+    p.family.findUnique = jest.fn(() => Promise.resolve({ id: 'f-p', name: 'Семья' }));
+    p.child.findMany = jest.fn(() => Promise.resolve([]));
+    const adminCfg: AdminConfig = { emails: [] };
+    const consent = makeConsentService(false, '1.0');
+    const svc = new UsersService(p as unknown as PrismaService, adminCfg, consent);
+
+    const r = await svc.getMe('u-pwd', 'f-p');
+
+    expect(r.hasPassword).toBe(true);
   });
 
   it('getMe возвращает isAdmin=true если email в whitelist', async () => {

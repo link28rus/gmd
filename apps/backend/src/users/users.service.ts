@@ -32,6 +32,7 @@ export class UsersService {
       device: { id: string; deviceName: string | null } | null;
     }>;
     isAdmin: boolean;
+    hasPassword: boolean;
     requiresConsent: boolean;
     currentPolicyVersion: string;
   }> {
@@ -61,6 +62,7 @@ export class UsersService {
       throw new NotFoundException({ code: 'not_found', message: 'User or family not found' });
     }
     const isAdmin = this.adminCfg.emails.includes(user.email.toLowerCase().trim());
+    const hasPassword = Boolean(user.passwordHash);
     const requiresConsent = this.consent.userRequiresConsent(user.acceptedPrivacyPolicyVersion);
     const currentPolicyVersion = this.consent.getCurrentVersion();
 
@@ -81,6 +83,7 @@ export class UsersService {
         device: c.device ? { id: c.device.id, deviceName: c.device.deviceName } : null,
       })),
       isAdmin,
+      hasPassword,
       requiresConsent,
       currentPolicyVersion,
     };
