@@ -1,5 +1,6 @@
 import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
+import '../features/onboarding/onboarding_screen.dart';
 
 class AppRouter {
   static final GoRouter router = GoRouter(
@@ -7,8 +8,8 @@ class AppRouter {
     routes: [
       GoRoute(
         path: '/onboarding',
-        builder: (_, _) => const Scaffold(
-          body: Center(child: Text('Onboarding placeholder')),
+        builder: (context, _) => OnboardingScreen(
+          onConnect: () => context.go('/claim'),
         ),
       ),
       GoRoute(
