@@ -21,3 +21,8 @@ class ServerException extends ApiException {
 class BadRequestIngestException extends ApiException {
   const BadRequestIngestException() : super('Invalid batch');
 }
+
+class TooManyRequestsException extends ApiException {
+  const TooManyRequestsException([String? message])
+      : super(message ?? 'Слишком часто. Подождите немного.');
+}

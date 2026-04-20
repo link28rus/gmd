@@ -73,6 +73,18 @@ class IngestResponse {
   final List<int> rejectedIds;
 }
 
+class SosResponse {
+  SosResponse({required this.sosId, required this.createdAt});
+
+  factory SosResponse.fromJson(Map<String, dynamic> json) => SosResponse(
+        sosId: json['sosId'] as String,
+        createdAt: DateTime.parse(json['createdAt'] as String),
+      );
+
+  final String sosId;
+  final DateTime createdAt;
+}
+
 class ChildApi {
   ChildApi(this._dio);
   final Dio _dio;
@@ -118,6 +130,35 @@ class ChildApi {
         throw const BadRequestIngestException();
       }
       throw NetworkException(e.message ?? 'Network');
+    }
+  }
+
+  Future<SosResponse> sendSos({
+    required String deviceToken,
+    required double lat,
+    required double lon,
+    required DateTime recordedAt,
+    double? accuracy,
+    String? message,
+  }) async {
+    try {
+      final resp = await _dio.post(
+        '/sos',
+        data: {
+          'lat': lat,
+          'lon': lon,
+          'accuracy': ?accuracy,
+          'recordedAt': recordedAt.toUtc().toIso8601String(),
+          'message': ?message,
+        },
+        options: Options(headers: {'X-Child-Token': deviceToken}),
+      );
+      return SosResponse.fromJson(resp.data as Map<String, dynamic>);
+    } on DioException catch (e) {
+      final status = e.response?.statusCode;
+      if (status == 429) throw const TooManyRequestsException();
+      if (status == null) throw NetworkException(e.message ?? 'Сеть недоступна');
+      throw ServerException('Ошибка сервера', status);
     }
   }
 }
