@@ -292,8 +292,8 @@ model ZoneEvent {
   zone  Zone  @relation(fields: [zoneId], references: [id], onDelete: Cascade)
   child Child @relation(fields: [childId], references: [id], onDelete: Cascade)
 
-  @@index([childId, createdAt(sort: Desc)])
-  @@index([zoneId, createdAt(sort: Desc)])
+  @@index([childId, recordedAt(sort: Desc)])
+  @@index([zoneId, recordedAt(sort: Desc)])
   @@map("zone_events")
 }
 
@@ -305,6 +305,7 @@ model ZoneState {
   pendingTransition   Boolean   @default(false)
   pendingSince        DateTime?
   lastConfirmedChange DateTime?
+  updatedAt           DateTime  @updatedAt
 
   zone  Zone  @relation(fields: [zoneId], references: [id], onDelete: Cascade)
   child Child @relation(fields: [childId], references: [id], onDelete: Cascade)
