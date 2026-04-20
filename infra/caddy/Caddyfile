@@ -60,6 +60,12 @@
 		reverse_proxy web:3000
 	}
 
+	# /api/download + /api/download/* — web (list + stream APK из /srv/download)
+	@download path /api/download /api/download/*
+	handle @download {
+		reverse_proxy web:3000
+	}
+
 	# Остальное /api/* — напрямую в backend (strip /api prefix)
 	handle_path /api/* {
 		reverse_proxy backend:3001
