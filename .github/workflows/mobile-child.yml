@@ -26,18 +26,12 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.0'
           channel: 'stable'
           cache: true
 
-      - name: Install melos
-        run: dart pub global activate melos
-
-      - name: Add pub cache to PATH
-        run: echo "$HOME/.pub-cache/bin" >> $GITHUB_PATH
-
-      - name: melos bootstrap
-        run: melos bootstrap
+      - name: flutter pub get (mobile-child)
+        working-directory: apps/mobile-child
+        run: flutter pub get
 
       - name: flutter analyze
         working-directory: apps/mobile-child
