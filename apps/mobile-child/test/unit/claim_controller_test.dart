@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mocktail/mocktail.dart';
@@ -111,6 +113,57 @@ void main() {
     final state = container.read(claimControllerProvider);
     expect(state.status, ClaimStatus.error);
     expect(state.errorMessage, 'Ошибка сервера');
+  });
+
+  test('concurrent submitCode calls invoke api.claim only once', () async {
+    when(() => api.claim(
+          code: any(named: 'code'),
+          deviceName: any(named: 'deviceName'),
+          osVersion: any(named: 'osVersion'),
+          appVersion: any(named: 'appVersion'),
+          consent14Plus: any(named: 'consent14Plus'),
+        )).thenAnswer((_) async {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      return ClaimResponse(
+        deviceToken: 'tok_x',
+        childId: 'c1',
+        childName: 'Олег',
+        familyId: 'f1',
+        deviceId: 'd1',
+      );
+    });
+    when(() => storage.saveDeviceToken(any())).thenAnswer((_) async {});
+
+    final notifier = container.read(claimControllerProvider.notifier);
+    final f1 = notifier.submitCode('123456');
+    final f2 = notifier.submitCode('123456');
+    await Future.wait([f1, f2]);
+
+    verify(() => api.claim(
+          code: '123456',
+          deviceName: any(named: 'deviceName'),
+          osVersion: any(named: 'osVersion'),
+          appVersion: any(named: 'appVersion'),
+          consent14Plus: any(named: 'consent14Plus'),
+        )).called(1);
+  });
+
+  test(
+      'unexpected exception (TimeoutException) sets error state with generic message',
+      () async {
+    when(() => api.claim(
+          code: any(named: 'code'),
+          deviceName: any(named: 'deviceName'),
+          osVersion: any(named: 'osVersion'),
+          appVersion: any(named: 'appVersion'),
+          consent14Plus: any(named: 'consent14Plus'),
+        )).thenThrow(TimeoutException('x'));
+
+    final notifier = container.read(claimControllerProvider.notifier);
+    await notifier.submitCode('123456');
+    final state = container.read(claimControllerProvider);
+    expect(state.status, ClaimStatus.error);
+    expect(state.errorMessage, 'Неизвестная ошибка. Попробуйте ещё раз.');
   });
 
   test('reset returns state to idle', () async {

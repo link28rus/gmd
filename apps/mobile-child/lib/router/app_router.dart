@@ -13,6 +13,8 @@ class AppRouter {
           onConnect: () => context.go('/claim'),
         ),
       ),
+      // TODO(task-2.5): replace with QR scanner + chooser. Currently both
+      // /claim and /claim/manual render ClaimManualScreen as an interim stub.
       GoRoute(
         path: '/claim',
         builder: (_, _) => const ClaimManualScreen(),

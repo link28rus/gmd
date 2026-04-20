@@ -42,6 +42,7 @@ class _ClaimManualScreenState extends ConsumerState<ClaimManualScreen> {
             const SizedBox(height: 32),
             TextField(
               controller: _controller,
+              enabled: state.status != ClaimStatus.inProgress,
               autofocus: true,
               keyboardType: TextInputType.number,
               inputFormatters: [

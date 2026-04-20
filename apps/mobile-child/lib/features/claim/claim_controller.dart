@@ -83,9 +83,16 @@ class ClaimController extends StateNotifier<ClaimState> {
   final DeviceMetadataLoader _loadMetadata;
 
   Future<void> submitCode(String code, {bool consent14Plus = false}) async {
+    // Guard against re-entrant calls (e.g. rapid keyboard input or double-tap
+    // triggering submitCode twice before the first completes).
+    if (state.status == ClaimStatus.inProgress) return;
     state = const ClaimState(status: ClaimStatus.inProgress);
     try {
       final meta = await _loadMetadata();
+      // `mounted` guard: if the ProviderContainer was disposed mid-await
+      // (e.g. user navigated away), stop mutating state to avoid
+      // StateNotifier errors.
+      if (!mounted) return;
       final resp = await _api.claim(
         code: code,
         deviceName: meta.deviceName,
@@ -93,15 +100,20 @@ class ClaimController extends StateNotifier<ClaimState> {
         appVersion: meta.appVersion,
         consent14Plus: consent14Plus,
       );
+      if (!mounted) return;
       await _storage.saveDeviceToken(resp.deviceToken);
+      if (!mounted) return;
       state =
           ClaimState(status: ClaimStatus.success, childName: resp.childName);
-    } on InvalidCodeException catch (e) {
+    } on ApiException catch (e) {
+      if (!mounted) return;
       state = ClaimState(status: ClaimStatus.error, errorMessage: e.message);
-    } on NetworkException catch (e) {
-      state = ClaimState(status: ClaimStatus.error, errorMessage: e.message);
-    } on ServerException catch (e) {
-      state = ClaimState(status: ClaimStatus.error, errorMessage: e.message);
+    } catch (_) {
+      if (!mounted) return;
+      state = const ClaimState(
+        status: ClaimStatus.error,
+        errorMessage: 'Неизвестная ошибка. Попробуйте ещё раз.',
+      );
     }
   }
 
