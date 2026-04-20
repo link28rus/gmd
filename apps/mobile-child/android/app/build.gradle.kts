@@ -6,8 +6,8 @@ plugins {
 }
 
 android {
-    namespace = "ru.link28rus.gmd.gmd_child"
-    compileSdk = flutter.compileSdkVersion
+    namespace = "ru.link28rus.gmd.child"
+    compileSdk = 34
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -20,14 +20,11 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "ru.link28rus.gmd.gmd_child"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
-        versionCode = flutter.versionCode
-        versionName = flutter.versionName
+        applicationId = "ru.link28rus.gmd.child"
+        minSdk = 26
+        targetSdk = 34
+        versionCode = 1
+        versionName = "0.13.0"
     }
 
     buildTypes {
@@ -41,4 +38,8 @@ android {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    implementation("com.google.android.gms:play-services-location:21.3.0")
 }
