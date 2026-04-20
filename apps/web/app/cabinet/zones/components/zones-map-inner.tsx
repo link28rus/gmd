@@ -35,8 +35,8 @@ export function ZonesMapInner({
 
   const initialLocation = useMemo(() => {
     if (zones.length >= 2) {
-      const lons = zones.map((z) => z.lon);
-      const lats = zones.map((z) => z.lat);
+      const lons = zones.map((z) => z.centerLon);
+      const lats = zones.map((z) => z.centerLat);
       return {
         bounds: [
           [Math.min(...lons), Math.min(...lats)],
@@ -45,7 +45,7 @@ export function ZonesMapInner({
       };
     }
     if (zones.length === 1) {
-      return { center: [zones[0].lon, zones[0].lat] as [number, number], zoom: 13 };
+      return { center: [zones[0].centerLon, zones[0].centerLat] as [number, number], zoom: 13 };
     }
     return { center: DEFAULT_CENTER, zoom: DEFAULT_ZOOM };
   }, [zones]);
@@ -67,12 +67,9 @@ export function ZonesMapInner({
 
         {zones.map((zone) => {
           const isSelected = zone.id === selectedId;
+          const baseColor = zone.color ?? '#3b82f6';
           const fillOpacity = isSelected ? 0.35 : 0.2;
           const strokeWidth = isSelected ? 3 : 2;
-          const strokeColor = isSelected ? 'rgba(239,68,68,0.8)' : 'rgba(59,130,246,0.6)';
-          const fillColor = isSelected
-            ? `rgba(239,68,68,${fillOpacity})`
-            : `rgba(59,130,246,${fillOpacity})`;
 
           return (
             <YMapFeature
@@ -80,13 +77,14 @@ export function ZonesMapInner({
               geometry={
                 {
                   type: 'Polygon',
-                  coordinates: [circlePolygon(zone.lat, zone.lon, zone.radiusMeters)],
+                  coordinates: [circlePolygon(zone.centerLat, zone.centerLon, zone.radius)],
                 } as any
               }
               style={
                 {
-                  stroke: [{ color: strokeColor, width: strokeWidth }],
-                  fill: fillColor,
+                  stroke: [{ color: baseColor, width: strokeWidth }],
+                  fill: baseColor,
+                  fillOpacity,
                   cursor: 'pointer',
                 } as any
               }

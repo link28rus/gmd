@@ -9,18 +9,28 @@ interface Props {
   zones: Zone[];
   selectedId?: string | null;
   onSelect?: (id: string) => void;
+  onCreate?: () => void;
+  onEdit?: (zone: Zone) => void;
 }
 
 const MAX_ZONES = 20;
 
-export function ZonesList({ zones, selectedId, onSelect }: Props): ReactElement {
+export function ZonesList({ zones, selectedId, onSelect, onCreate, onEdit }: Props): ReactElement {
+  const canCreate = zones.length < MAX_ZONES;
+
   return (
     <div className="flex h-full flex-col rounded-md border border-zinc-200 bg-white">
       <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
         <h2 className="text-sm font-semibold text-zinc-900">
           Зоны ({zones.length}/{MAX_ZONES})
         </h2>
-        <Button variant="outline" size="sm" disabled className="text-xs">
+        <Button
+          variant="outline"
+          size="sm"
+          className="text-xs"
+          disabled={!canCreate || !onCreate}
+          onClick={onCreate}
+        >
           + Новая
         </Button>
       </div>
@@ -31,7 +41,13 @@ export function ZonesList({ zones, selectedId, onSelect }: Props): ReactElement 
           <p className="text-xs text-zinc-400">
             Создайте геозону, чтобы получать уведомления когда ребёнок входит или покидает её.
           </p>
-          <Button variant="outline" size="sm" disabled className="mt-2 text-xs">
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-2 text-xs"
+            disabled={!onCreate}
+            onClick={onCreate}
+          >
             + Новая зона
           </Button>
         </div>
@@ -54,16 +70,34 @@ export function ZonesList({ zones, selectedId, onSelect }: Props): ReactElement 
                     {zone.address && (
                       <p className="mt-0.5 truncate text-xs text-zinc-500">{zone.address}</p>
                     )}
-                    <p className="mt-0.5 text-xs text-zinc-400">Радиус: {zone.radiusMeters} м</p>
+                    <p className="mt-0.5 text-xs text-zinc-400">
+                      Радиус: {zone.radiusMeters ?? zone.radius} м
+                    </p>
                   </div>
-                  <span
-                    className={[
-                      'mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-xs font-medium',
-                      zone.active ? 'bg-green-100 text-green-700' : 'bg-zinc-100 text-zinc-500',
-                    ].join(' ')}
-                  >
-                    {zone.active ? 'Активна' : 'Отключена'}
-                  </span>
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    {zone.active !== undefined && (
+                      <span
+                        className={[
+                          'rounded-full px-2 py-0.5 text-xs font-medium',
+                          zone.active ? 'bg-green-100 text-green-700' : 'bg-zinc-100 text-zinc-500',
+                        ].join(' ')}
+                      >
+                        {zone.active ? 'Активна' : 'Отключена'}
+                      </span>
+                    )}
+                    {isSelected && onEdit && (
+                      <button
+                        type="button"
+                        className="rounded px-2 py-0.5 text-xs text-zinc-500 hover:bg-zinc-200 hover:text-zinc-800 transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEdit(zone);
+                        }}
+                      >
+                        Изменить
+                      </button>
+                    )}
+                  </div>
                 </div>
               </li>
             );

@@ -2,7 +2,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { zonesApi, type CreateZoneInput, type UpdateZoneInput } from '@/lib/api/zones';
+import { zonesApi, type Zone, type CreateZoneInput, type UpdateZoneInput } from '@/lib/api/zones';
 
 const KEY = ['zones'] as const;
 
@@ -22,15 +22,15 @@ function useInvalidating<T, V>(fn: (v: V) => Promise<T>) {
 }
 
 export function useCreateZone() {
-  return useInvalidating<unknown, CreateZoneInput>(zonesApi.create);
+  return useInvalidating<Zone, CreateZoneInput>(zonesApi.create);
 }
 
 export function useUpdateZone() {
-  return useInvalidating<unknown, { id: string; patch: UpdateZoneInput }>(({ id, patch }) =>
+  return useInvalidating<Zone, { id: string; patch: UpdateZoneInput }>(({ id, patch }) =>
     zonesApi.update(id, patch),
   );
 }
 
 export function useDeleteZone() {
-  return useInvalidating<unknown, string>(zonesApi.remove);
+  return useInvalidating<void, string>(zonesApi.remove);
 }

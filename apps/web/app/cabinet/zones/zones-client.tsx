@@ -5,8 +5,11 @@ import { useEffect, useState, type ReactElement } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore, type AuthUser, type AuthFamily } from '@/lib/auth-store';
 import { useZones } from '@/lib/hooks/use-zones';
+import { useChildren } from '@/lib/hooks/use-children';
 import { ZonesList } from './components/zones-list';
 import { ZonesMap } from './components/zones-map';
+import { ZoneEditorDialog } from './components/zone-editor-dialog';
+import type { Zone } from '@/lib/api/zones';
 
 interface RefreshResponse {
   accessToken: string;
@@ -65,7 +68,30 @@ export default function ZonesClient(): ReactElement {
 
 function ZonesContent(): ReactElement {
   const { data: zones, isLoading, isError, error, refetch } = useZones();
+  const { data: childrenData } = useChildren();
   const [selected, setSelected] = useState<string | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editingZone, setEditingZone] = useState<Zone | null>(null);
+
+  // childrenApi.list returns { children: Child[] }
+  const kids =
+    (childrenData as { children: Array<{ id: string; name: string }> } | undefined)?.children ?? [];
+
+  const openCreate = () => {
+    setEditingZone(null);
+    setEditorOpen(true);
+  };
+
+  const openEdit = (zone: Zone) => {
+    setEditingZone(zone);
+    setEditorOpen(true);
+  };
+
+  const handleSaved = (saved: Zone) => {
+    // useCreateZone / useUpdateZone already invalidate the zones query,
+    // so we just update the selected id to the saved zone.
+    setSelected(saved.id);
+  };
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-8">
@@ -87,13 +113,27 @@ function ZonesContent(): ReactElement {
       {!isLoading && !isError && (
         <div className="flex flex-col gap-4 lg:flex-row" style={{ minHeight: '500px' }}>
           <div className="lg:w-1/3">
-            <ZonesList zones={zones ?? []} selectedId={selected} onSelect={setSelected} />
+            <ZonesList
+              zones={zones ?? []}
+              selectedId={selected}
+              onSelect={setSelected}
+              onCreate={openCreate}
+              onEdit={openEdit}
+            />
           </div>
           <div className="overflow-hidden rounded-md border lg:flex-1">
             <ZonesMap zones={zones ?? []} selectedId={selected} onSelect={setSelected} />
           </div>
         </div>
       )}
+
+      <ZoneEditorDialog
+        open={editorOpen}
+        onOpenChange={setEditorOpen}
+        kids={kids}
+        initial={editingZone ?? undefined}
+        onSaved={handleSaved}
+      />
     </div>
   );
 }

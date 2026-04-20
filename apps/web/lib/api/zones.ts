@@ -1,21 +1,36 @@
 // apps/web/lib/api/zones.ts
 import { apiFetch } from './client';
 
-export type ZoneState = 'inside' | 'outside' | 'unknown';
+export type ZoneColor = '#22c55e' | '#3b82f6' | '#f59e0b' | '#ef4444' | '#a855f7' | '#64748b';
+
+export type ZoneIcon =
+  | 'home'
+  | 'school'
+  | 'sport'
+  | 'art'
+  | 'hospital'
+  | 'shop'
+  | 'music'
+  | 'other';
 
 export interface Zone {
   id: string;
   familyId: string;
   name: string;
-  lat: number;
-  lon: number;
-  radiusMeters: number;
-  address: string | null;
-  notifyOnEnter: boolean;
-  notifyOnExit: boolean;
-  active: boolean;
+  color: ZoneColor;
+  icon: ZoneIcon;
+  centerLat: number;
+  centerLon: number;
+  radius: number;
+  createdBy: string;
   createdAt: string;
   updatedAt: string;
+  childIds: string[];
+  states?: Array<{ childId: string; isInside: boolean }>;
+  /** Legacy alias kept for ZonesList display compat */
+  active?: boolean;
+  address?: string | null;
+  radiusMeters?: number;
 }
 
 export interface ZoneEvent {
@@ -30,24 +45,22 @@ export interface ZoneEvent {
 
 export interface CreateZoneInput {
   name: string;
-  lat: number;
-  lon: number;
-  radiusMeters: number;
-  address?: string;
-  notifyOnEnter?: boolean;
-  notifyOnExit?: boolean;
-  active?: boolean;
+  color: ZoneColor;
+  icon: ZoneIcon;
+  centerLat: number;
+  centerLon: number;
+  radius: number;
+  childIds?: string[];
 }
 
 export interface UpdateZoneInput {
   name?: string;
-  lat?: number;
-  lon?: number;
-  radiusMeters?: number;
-  address?: string | null;
-  notifyOnEnter?: boolean;
-  notifyOnExit?: boolean;
-  active?: boolean;
+  color?: ZoneColor;
+  icon?: ZoneIcon;
+  centerLat?: number;
+  centerLon?: number;
+  radius?: number;
+  childIds?: string[];
 }
 
 export interface ListEventsQuery {
