@@ -2,6 +2,7 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
 import '../features/claim/claim_manual_screen.dart';
 import '../features/claim/claim_screen.dart';
+import '../features/home/home_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
 import '../features/permissions/battery_step.dart';
 import '../features/permissions/location_step.dart';
@@ -43,9 +44,7 @@ class AppRouter {
       ),
       GoRoute(
         path: '/home',
-        builder: (_, _) => const Scaffold(
-          body: Center(child: Text('Home placeholder')),
-        ),
+        builder: (_, _) => const HomeScreen(),
       ),
     ],
   );
