@@ -12,6 +12,16 @@
 		respond "OK" 200
 	}
 
+	# /download/* — раздача release APK под basic auth
+	# User: gmd; пароль хэшируется bcrypt'ом, хранится в {$DOWNLOAD_PASSWORD_HASH}
+	handle /download/* {
+		basic_auth {
+			gmd {$DOWNLOAD_PASSWORD_HASH}
+		}
+		root * /srv/download
+		file_server browse
+	}
+
 	# /api/auth/* → web (Next.js route handlers ставят httpOnly refresh cookie)
 	handle /api/auth/* {
 		reverse_proxy web:3000
