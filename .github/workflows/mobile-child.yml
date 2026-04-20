@@ -7,7 +7,7 @@ on:
       - 'packages/shared-dart/**'
       - '.github/workflows/mobile-child.yml'
   push:
-    branches: [main]
+    branches: [main, 'feature/**']
     paths:
       - 'apps/mobile-child/**'
       - 'packages/shared-dart/**'
