@@ -1,6 +1,7 @@
 import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
 import '../features/claim/claim_manual_screen.dart';
+import '../features/claim/claim_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
 
 class AppRouter {
@@ -13,11 +14,9 @@ class AppRouter {
           onConnect: () => context.go('/claim'),
         ),
       ),
-      // TODO(task-2.5): replace with QR scanner + chooser. Currently both
-      // /claim and /claim/manual render ClaimManualScreen as an interim stub.
       GoRoute(
         path: '/claim',
-        builder: (_, _) => const ClaimManualScreen(),
+        builder: (_, _) => const ClaimScreen(),
       ),
       GoRoute(
         path: '/claim/manual',
