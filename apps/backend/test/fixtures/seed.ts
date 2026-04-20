@@ -1,6 +1,8 @@
 import { createHash, randomBytes } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
+import request from 'supertest';
 import type { PrismaService } from '../../src/prisma/prisma.service';
+import type { TestAppHandle } from '../helpers/test-app';
 
 function sha256(v: string): string {
   return createHash('sha256').update(v).digest('hex');
@@ -69,5 +71,37 @@ export async function seedFamilyWithClaim(
     childId: child.id,
     childDeviceId: device.id,
     parentEmail,
+  };
+}
+
+/**
+ * Registers a parent user via the real OTP flow and returns
+ * { accessToken, userId, familyId, email }. Use when an e2e test
+ * needs a valid JWT for GET endpoints guarded by JwtAuthGuard.
+ */
+export async function signUpParent(
+  h: TestAppHandle,
+  email?: string,
+): Promise<{
+  accessToken: string;
+  userId: string;
+  familyId: string;
+  email: string;
+}> {
+  const server = h.app.getHttpServer();
+  const uid = randomBytes(4).toString('hex');
+  const parentEmail = email ?? `parent-jwt-${uid}@seed.test`;
+  await request(server).post('/auth/request-otp').send({ email: parentEmail }).expect(202);
+  const code = h.delivery.lastCodeFor(parentEmail);
+  if (!code) throw new Error(`no OTP for ${parentEmail}`);
+  const v = await request(server)
+    .post('/auth/verify-otp')
+    .send({ email: parentEmail, code })
+    .expect(200);
+  return {
+    accessToken: v.body.accessToken as string,
+    userId: v.body.user.id as string,
+    familyId: v.body.family.id as string,
+    email: parentEmail,
   };
 }

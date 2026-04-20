@@ -1,7 +1,7 @@
-import { Body, Controller, Inject, Param, Patch, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Param, Patch, Query, Req, UseGuards } from '@nestjs/common';
 import { z } from 'zod';
 import type { Request } from 'express';
-import { FamilyService } from './family.service';
+import { FamilyService, type SosEventDto } from './family.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ConsentRequiredGuard } from '../consent/guards/consent-required.guard';
 import { ZodValidationPipe } from '../common/zod/zod-validation.pipe';
@@ -16,6 +16,14 @@ interface AuthedRequest extends Request {
 @UseGuards(JwtAuthGuard)
 export class FamilyController {
   constructor(@Inject(FamilyService) private readonly family: FamilyService) {}
+
+  @Get('sos')
+  async listSos(
+    @Req() req: AuthedRequest,
+    @Query('since') since?: string,
+  ): Promise<{ events: SosEventDto[] }> {
+    return this.family.listFamilySos(req.user.userId, since ? new Date(since) : undefined);
+  }
 
   @Patch(':id')
   @UseGuards(ConsentRequiredGuard)
