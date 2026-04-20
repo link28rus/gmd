@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import '../features/claim/claim_manual_screen.dart';
 import '../features/claim/claim_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
+import '../features/permissions/battery_step.dart';
+import '../features/permissions/location_step.dart';
+import '../features/permissions/notifications_step.dart';
 
 class AppRouter {
   static final GoRouter router = GoRouter(
@@ -24,9 +27,19 @@ class AppRouter {
       ),
       GoRoute(
         path: '/permissions/notifications',
-        builder: (_, _) => const Scaffold(
-          body: Center(child: Text('Permissions notifications placeholder')),
-        ),
+        builder: (_, _) => const NotificationsPermissionsStep(),
+      ),
+      GoRoute(
+        path: '/permissions/location',
+        builder: (_, _) => const LocationPermissionsStep(),
+      ),
+      GoRoute(
+        path: '/permissions/battery',
+        builder: (_, _) => const BatteryPermissionsStep(),
+      ),
+      GoRoute(
+        path: '/permissions/devadmin',
+        builder: (_, _) => const _DeviceAdminPlaceholder(),
       ),
       GoRoute(
         path: '/home',
@@ -35,5 +48,18 @@ class AppRouter {
         ),
       ),
     ],
+  );
+}
+
+class _DeviceAdminPlaceholder extends StatelessWidget {
+  const _DeviceAdminPlaceholder();
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    body: Center(
+      child: ElevatedButton(
+        onPressed: () => GoRouter.of(context).go('/home'),
+        child: const Text('Продолжить (devadmin placeholder)'),
+      ),
+    ),
   );
 }
