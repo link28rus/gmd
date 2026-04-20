@@ -104,6 +104,12 @@ export default function CabinetClient(): ReactElement {
         >
           Перейти к разделу «Мои дети»
         </Link>
+        <Link
+          href="/cabinet/password"
+          className="mt-2 block w-full rounded-md border border-zinc-300 bg-white py-2 text-center text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+        >
+          {user.hasPassword ? 'Сменить пароль' : 'Установить пароль'}
+        </Link>
         <button
           onClick={logout}
           disabled={loading}

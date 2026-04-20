@@ -12,6 +12,7 @@ interface BackendMeResponse {
   family: { id: string; name: string };
   memberships: Array<{ role: string; familyId: string }>;
   isAdmin: boolean;
+  hasPassword: boolean;
   requiresConsent: boolean;
   currentPolicyVersion: string;
 }
@@ -37,7 +38,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const me = await backend<BackendMeResponse>('GET', '/me', undefined, accessToken);
   const meUser =
     me.status === 200 && me.body
-      ? { ...me.body.user, isAdmin: me.body.isAdmin ?? false }
+      ? {
+          ...me.body.user,
+          isAdmin: me.body.isAdmin ?? false,
+          hasPassword: me.body.hasPassword ?? false,
+        }
       : undefined;
   const res = NextResponse.json({
     accessToken,
