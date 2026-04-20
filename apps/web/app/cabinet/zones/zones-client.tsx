@@ -9,6 +9,7 @@ import { useChildren } from '@/lib/hooks/use-children';
 import { ZonesList } from './components/zones-list';
 import { ZonesMap } from './components/zones-map';
 import { ZoneEditorDialog } from './components/zone-editor-dialog';
+import { ZoneEventsFeed } from './components/zone-events-feed';
 import type { Zone } from '@/lib/api/zones';
 
 interface RefreshResponse {
@@ -126,6 +127,13 @@ function ZonesContent(): ReactElement {
           </div>
         </div>
       )}
+
+      <div className="mt-8">
+        <h2 className="mb-3 text-lg font-semibold text-zinc-900">Последние события</h2>
+        <div className="rounded-md border border-zinc-200 bg-white p-4">
+          <ZoneEventsFeed />
+        </div>
+      </div>
 
       <ZoneEditorDialog
         open={editorOpen}

@@ -37,10 +37,16 @@ export interface ZoneEvent {
   id: string;
   zoneId: string;
   zoneName: string;
+  zoneColor: string;
+  zoneIcon: string;
   childId: string;
   childName: string;
-  eventType: 'entry' | 'exit';
-  occurredAt: string;
+  type: 'entry' | 'exit';
+  lat: number;
+  lon: number;
+  accuracy: number | null;
+  recordedAt: string;
+  createdAt: string;
 }
 
 export interface CreateZoneInput {
