@@ -68,21 +68,14 @@ class SosController extends StateNotifier<SosState> {
         return;
       }
 
-      Position? position;
-      try {
-        position = await _locate();
-      } catch (_) {
-        // Geolocator failure (permission denied, timeout, etc.) — we still
-        // want the SOS to go through with a best-effort "unknown" location.
-        position = null;
-      }
+      final position = await _locate();
       if (!mounted) return;
 
       final resp = await _api.sendSos(
         deviceToken: token,
-        lat: position?.latitude ?? 0,
-        lon: position?.longitude ?? 0,
-        accuracy: position?.accuracy,
+        lat: position.latitude,
+        lon: position.longitude,
+        accuracy: position.accuracy,
         recordedAt: DateTime.now().toUtc(),
       );
       if (!mounted) return;
