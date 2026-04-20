@@ -7,6 +7,11 @@
 :80 {
 	encode zstd gzip
 
+	# /healthz — edge liveness (должен идти до всех handle-матчеров)
+	handle /healthz {
+		respond "OK" 200
+	}
+
 	# /api/auth/* → web (Next.js route handlers ставят httpOnly refresh cookie)
 	handle /api/auth/* {
 		reverse_proxy web:3000
@@ -34,6 +39,11 @@
 		reverse_proxy web:3000
 	}
 
+	# /api/sentry-tunnel — web (Phase 0.4 relay браузер → GlitchTip через gmd_net)
+	handle /api/sentry-tunnel {
+		reverse_proxy web:3000
+	}
+
 	# Остальное /api/* — напрямую в backend (strip /api prefix)
 	handle_path /api/* {
 		reverse_proxy backend:3001
@@ -50,8 +60,6 @@
 		Permissions-Policy "interest-cohort=()"
 		-Server
 	}
-
-	respond /healthz "OK" 200
 
 	log {
 		output stdout

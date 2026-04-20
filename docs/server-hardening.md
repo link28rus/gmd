@@ -4,13 +4,13 @@ Runbook по безопасности production-сервера.
 
 ## Что сделано в Phase 0.3
 
-| Шаг | Что            | Где                                                                                                               |
-| --- | -------------- | ----------------------------------------------------------------------------------------------------------------- |
-| T2  | bootstrap      | hostname `gmd-prod`, TZ `Europe/Moscow`, swap 4G, `unattended-upgrades`                                           |
-| T5  | SSH ключи      | `ed25519` pubkey в `/root/.ssh/authorized_keys` + `~/.ssh/config` alias `gmd-prod`                                |
-| T6  | SSH hardening  | `PasswordAuthentication no`, `PermitRootLogin prohibit-password` (`/etc/ssh/sshd_config.d/99-gmd-hardening.conf`) |
-| T7  | UFW + fail2ban | default deny in / allow 22,80,443; jail sshd, maxretry=3, bantime=1h                                              |
-| T8  | Docker         | официальный Docker CE repo, overlay2, log rotate 10MB × 3 (`/etc/docker/daemon.json`)                             |
+| Шаг | Что            | Где                                                                                                                                                                                           |
+| --- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T2  | bootstrap      | hostname `gmd-prod`, TZ `Europe/Moscow`, swap 4G, `unattended-upgrades`                                                                                                                       |
+| T5  | SSH ключи      | `ed25519` pubkey в `/root/.ssh/authorized_keys` + `~/.ssh/config` alias `gmd-prod`                                                                                                            |
+| T6  | SSH hardening  | `PasswordAuthentication no`, `PermitRootLogin prohibit-password`, `AllowTcpForwarding local` + `PermitOpen 127.0.0.1:8000 127.0.0.1:3001` (для admin-доступа к GlitchTip/Kuma через `ssh -L`) |
+| T7  | UFW + fail2ban | default deny in / allow 22,80,443; jail sshd, maxretry=3, bantime=1h                                                                                                                          |
+| T8  | Docker         | официальный Docker CE repo, overlay2, log rotate 10MB × 3 (`/etc/docker/daemon.json`)                                                                                                         |
 
 ## Текущий inventory
 

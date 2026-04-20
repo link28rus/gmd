@@ -3,7 +3,7 @@
 # Все bind-mounts лежат в /opt/gmd/data/<service>/.
 # Наружу открыты только caddy:80/443 (проверяется UFW).
 #
-# GlitchTip (Task 16) и Uptime Kuma (Task 17) добавляются в следующих задачах.
+# Phase 0.4: GlitchTip (postgres+redis: Task 1, web+worker: Task 2) и Uptime Kuma (Task 3).
 
 name: gmd-prod
 
@@ -85,6 +85,117 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+      start_period: 30s
+
+  glitchtip-postgres:
+    <<: *restart
+    image: postgres:15-alpine
+    container_name: gmd-glitchtip-postgres
+    environment:
+      POSTGRES_DB: glitchtip
+      POSTGRES_USER: glitchtip
+      POSTGRES_PASSWORD: ${GLITCHTIP_DB_PASSWORD}
+    volumes:
+      - /opt/gmd/data/glitchtip-postgres:/var/lib/postgresql/data
+    networks: [gmd_net]
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U glitchtip -d glitchtip']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  glitchtip-redis:
+    <<: *restart
+    image: redis:7-alpine
+    container_name: gmd-glitchtip-redis
+    command: ['redis-server', '--requirepass', '${GLITCHTIP_REDIS_PASSWORD}', '--appendonly', 'yes']
+    environment:
+      REDIS_PASSWORD: ${GLITCHTIP_REDIS_PASSWORD}
+    volumes:
+      - /opt/gmd/data/glitchtip-redis:/data
+    networks: [gmd_net]
+    healthcheck:
+      test: ['CMD-SHELL', 'redis-cli -a "$$REDIS_PASSWORD" ping | grep -q PONG']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  glitchtip-web:
+    <<: *restart
+    image: glitchtip/glitchtip:v4.0
+    container_name: gmd-glitchtip-web
+    environment:
+      DATABASE_URL: postgres://glitchtip:${GLITCHTIP_DB_PASSWORD}@glitchtip-postgres:5432/glitchtip
+      REDIS_URL: redis://:${GLITCHTIP_REDIS_PASSWORD}@glitchtip-redis:6379/0
+      SECRET_KEY: ${GLITCHTIP_SECRET_KEY}
+      GLITCHTIP_DOMAIN: ${GLITCHTIP_DOMAIN}
+      DEFAULT_FROM_EMAIL: ${GLITCHTIP_DEFAULT_FROM_EMAIL}
+      EMAIL_URL: ${GLITCHTIP_EMAIL_URL}
+      ENABLE_USER_REGISTRATION: ${GLITCHTIP_ENABLE_USER_REGISTRATION}
+      ENABLE_ORGANIZATION_CREATION: 'False'
+      EVENT_RETENTION_DAYS: ${GLITCHTIP_EVENT_RETENTION_DAYS}
+      CELERY_WORKER_CONCURRENCY: ${GLITCHTIP_CELERY_WORKER_CONCURRENCY}
+      PORT: '8000'
+    volumes:
+      - /opt/gmd/data/glitchtip-uploads:/code/uploads
+    depends_on:
+      glitchtip-postgres: { condition: service_healthy }
+      glitchtip-redis: { condition: service_healthy }
+    networks: [gmd_net]
+    ports:
+      - '127.0.0.1:8000:8000'
+    healthcheck:
+      # GlitchTip v4 образ без wget/curl — используем python3 stdlib.
+      # /_health/ — встроенный django endpoint (возвращает 200 OK).
+      test:
+        - CMD
+        - python3
+        - -c
+        - "import urllib.request,sys; r=urllib.request.urlopen('http://localhost:8000/_health/',timeout=3); sys.exit(0 if r.status==200 else 1)"
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  glitchtip-worker:
+    <<: *restart
+    image: glitchtip/glitchtip:v4.0
+    container_name: gmd-glitchtip-worker
+    command: ['./bin/run-celery-with-beat.sh']
+    environment:
+      DATABASE_URL: postgres://glitchtip:${GLITCHTIP_DB_PASSWORD}@glitchtip-postgres:5432/glitchtip
+      REDIS_URL: redis://:${GLITCHTIP_REDIS_PASSWORD}@glitchtip-redis:6379/0
+      SECRET_KEY: ${GLITCHTIP_SECRET_KEY}
+      GLITCHTIP_DOMAIN: ${GLITCHTIP_DOMAIN}
+      DEFAULT_FROM_EMAIL: ${GLITCHTIP_DEFAULT_FROM_EMAIL}
+      EMAIL_URL: ${GLITCHTIP_EMAIL_URL}
+      EVENT_RETENTION_DAYS: ${GLITCHTIP_EVENT_RETENTION_DAYS}
+      CELERY_WORKER_CONCURRENCY: ${GLITCHTIP_CELERY_WORKER_CONCURRENCY}
+    volumes:
+      - /opt/gmd/data/glitchtip-uploads:/code/uploads
+    depends_on:
+      glitchtip-postgres: { condition: service_healthy }
+      glitchtip-redis: { condition: service_healthy }
+      glitchtip-web: { condition: service_healthy }
+    networks: [gmd_net]
+
+  uptime-kuma:
+    <<: *restart
+    image: louislam/uptime-kuma:1
+    container_name: gmd-uptime-kuma
+    volumes:
+      - /opt/gmd/data/uptime-kuma:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [gmd_net]
+    ports:
+      - '127.0.0.1:3001:3001'
+    healthcheck:
+      # Uptime Kuma предоставляет native healthcheck binary — /app/extra/healthcheck.
+      # wget в этом образе нет, поэтому используем встроенный скрипт.
+      test: ['CMD', 'extra/healthcheck']
+      interval: 30s
+      timeout: 5s
+      retries: 5
       start_period: 30s
 
   backend:

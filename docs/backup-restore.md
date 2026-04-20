@@ -131,11 +131,43 @@ ssh gmd-prod 'cd /opt/gmd/backups/postgres && sha256sum *.dump.zst'
 
 Сравнить визуально с ожидаемыми строками.
 
+## GlitchTip и Uptime Kuma
+
+**GlitchTip PG:** `pg-backup.sh` ежедневно делает `pg_dump glitchtip-postgres` → `/opt/gmd/backups/glitchtip/glitchtip-YYYY-MM-DD.sql.gz`. Retention 7 дней.
+
+**Uptime Kuma:** `kuma-backup.sh` (03:30 UTC daily) делает `tar czf` volume `uptime-kuma` → `/opt/gmd/backups/uptime-kuma/kuma-YYYY-MM-DD.tar.gz`. Retention 7 дней. Контейнер на время tar останавливается (секунды).
+
+Оба скрипта запускаются systemd-таймерами (см. `infra/server-setup/40-backups-install.sh`).
+
+### Restore GlitchTip
+
+```bash
+ssh gmd-prod '
+  docker stop gmd-glitchtip-web gmd-glitchtip-worker
+  gunzip -c /opt/gmd/backups/glitchtip/glitchtip-YYYY-MM-DD.sql.gz | \
+    docker exec -i gmd-glitchtip-postgres psql -U glitchtip -d glitchtip
+  docker start gmd-glitchtip-web gmd-glitchtip-worker
+'
+```
+
+### Restore Uptime Kuma
+
+```bash
+ssh gmd-prod '
+  docker stop gmd-uptime-kuma
+  rm -rf /opt/gmd/data/uptime-kuma
+  tar xzf /opt/gmd/backups/uptime-kuma/kuma-YYYY-MM-DD.tar.gz -C /opt/gmd/data
+  docker start gmd-uptime-kuma
+'
+```
+
 ## Файлы
 
 - `infra/server-setup/scripts/pg-backup.sh`
 - `infra/server-setup/scripts/pg-retention.sh`
 - `infra/server-setup/scripts/pg-restore-verify.sh`
+- `infra/server-setup/scripts/kuma-backup.sh`
 - `infra/server-setup/systemd/pg-backup.{service,timer}`
 - `infra/server-setup/systemd/pg-restore-verify.{service,timer}`
+- `infra/server-setup/systemd/kuma-backup.{service,timer}`
 - `infra/server-setup/40-backups-install.sh`

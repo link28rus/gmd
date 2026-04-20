@@ -16,6 +16,26 @@
 
 ---
 
+## v0.12.0 — 2026-04-DD
+
+### Новые возможности
+
+- **Мониторинг ошибок в кабинете и на сервере** — если в кабинете или на сервере возникает ошибка, админ мгновенно узнаёт об этом через GlitchTip и Telegram-бот (Phase 0.4).
+- **Автоматические уведомления о недоступности** — Uptime Kuma следит за доступностью кабинета и API; при падении или проблемах с SSL — пуш в Telegram в течение 2-3 минут.
+
+### Улучшения
+
+- **Регулярные бэкапы GlitchTip и Uptime Kuma** — ежедневные снапшоты + 7-дневный retention; если что-то пойдёт не так — всегда есть откат.
+
+### Изменения
+
+- feat(infra): +5 docker-сервисов (glitchtip-postgres, glitchtip-redis, glitchtip-web, glitchtip-worker, uptime-kuma); наружу порты не светятся — доступ через SSH-туннель.
+- feat(backend): `@sentry/node` + `@sentry/nestjs` v9 + PII-scrubbing + фильтр 4xx.
+- feat(web): `@sentry/nextjs` v9 + Sentry tunnel через `/api/sentry-tunnel`.
+- docs: новый runbook `docs/monitoring.md`.
+
+---
+
 ## v0.11.0 — 2026-04-19
 
 ### Новые возможности

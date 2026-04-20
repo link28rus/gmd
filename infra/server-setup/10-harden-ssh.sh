@@ -19,7 +19,11 @@ ClientAliveInterval 300
 ClientAliveCountMax 2
 X11Forwarding no
 AllowAgentForwarding no
-AllowTcpForwarding no
+# local: разрешить ssh -L (нужно для админ-доступа к GlitchTip/Kuma),
+# запретить ssh -R (remote tunneling) — опасный вектор exfiltration.
+AllowTcpForwarding local
+# Ограничиваем port-forward только admin-панелями мониторинга (Phase 0.4).
+PermitOpen 127.0.0.1:8000 127.0.0.1:3001
 Protocol 2
 EOF
 

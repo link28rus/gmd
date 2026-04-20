@@ -52,6 +52,7 @@ docs/superpowers/specs  design docs
 - **Домен:** gmd.link28rus.ru
 - **Регион данных:** РФ (152-ФЗ)
 - **SSH credentials:** см. memory-compiler (secret). TODO: перейти на SSH-ключи, отключить password auth.
+- **Мониторинг:** GlitchTip + Uptime Kuma (docs/monitoring.md). Доступ через SSH-tunnel `ssh -N gmd-prod-tunnels`.
 
 ## 152-ФЗ и приватность
 

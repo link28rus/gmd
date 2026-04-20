@@ -5,11 +5,14 @@ mkdir -p /opt/gmd/bin
 install -m 0755 /root/gmd-setup/scripts/pg-backup.sh          /opt/gmd/bin/
 install -m 0755 /root/gmd-setup/scripts/pg-restore-verify.sh  /opt/gmd/bin/
 install -m 0755 /root/gmd-setup/scripts/pg-retention.sh       /opt/gmd/bin/
+install -m 0755 /root/gmd-setup/scripts/kuma-backup.sh        /opt/gmd/bin/
 
 install -m 0644 /root/gmd-setup/systemd/pg-backup.service         /etc/systemd/system/
 install -m 0644 /root/gmd-setup/systemd/pg-backup.timer           /etc/systemd/system/
 install -m 0644 /root/gmd-setup/systemd/pg-restore-verify.service /etc/systemd/system/
 install -m 0644 /root/gmd-setup/systemd/pg-restore-verify.timer   /etc/systemd/system/
+install -m 0644 /root/gmd-setup/systemd/kuma-backup.service       /etc/systemd/system/
+install -m 0644 /root/gmd-setup/systemd/kuma-backup.timer         /etc/systemd/system/
 
 # zstd для сжатия бэкапов
 if ! command -v zstd >/dev/null 2>&1; then
@@ -19,7 +22,7 @@ if ! command -v zstd >/dev/null 2>&1; then
 fi
 
 systemctl daemon-reload
-systemctl enable --now pg-backup.timer pg-restore-verify.timer
+systemctl enable --now pg-backup.timer pg-restore-verify.timer kuma-backup.timer
 systemctl list-timers --no-pager | grep -E 'pg-backup|pg-restore' || true
 
 # Первый прогон руками для дыма

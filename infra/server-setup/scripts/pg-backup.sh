@@ -32,4 +32,28 @@ fi
 
 echo "Backup OK: ${FILE}.zst ($(du -h "${FILE}".zst | awk '{print $1}'))"
 
+# --- Phase 0.4: GlitchTip backup ---
+GT_BACKUP_DIR=/opt/gmd/backups/glitchtip
+mkdir -p "${GT_BACKUP_DIR}"
+GT_FILE="${GT_BACKUP_DIR}/glitchtip-$(date -u +%Y-%m-%d).sql.gz"
+
+docker exec -i gmd-glitchtip-postgres pg_dump -U glitchtip glitchtip \
+  | gzip > "${GT_FILE}"
+
+if [ ! -s "${GT_FILE}" ]; then
+  echo "ERROR: GlitchTip backup is empty: ${GT_FILE}" >&2
+  exit 1
+fi
+
+echo "GlitchTip backup OK: $(du -h "${GT_FILE}" | awk '{print $1}')"
+
+# Retention 7 дней для GlitchTip
+find "${GT_BACKUP_DIR}" -name 'glitchtip-*.sql.gz' -type f -mtime +7 -delete
+
+# --- Phase 0.4: Heartbeat в Uptime Kuma ---
+if [ -n "${KUMA_BACKUP_HEARTBEAT_URL:-}" ]; then
+  curl -fsS --max-time 10 "${KUMA_BACKUP_HEARTBEAT_URL}&msg=OK" >/dev/null \
+    || echo "WARN: Kuma heartbeat failed (non-fatal)"
+fi
+
 /opt/gmd/bin/pg-retention.sh
