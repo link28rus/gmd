@@ -44,6 +44,11 @@
 		reverse_proxy web:3000
 	}
 
+	# /api/geocode — web (server-side прокси Yandex Geocoder, ключ только на web)
+	handle /api/geocode {
+		reverse_proxy web:3000
+	}
+
 	# Остальное /api/* — напрямую в backend (strip /api prefix)
 	handle_path /api/* {
 		reverse_proxy backend:3001
