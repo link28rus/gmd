@@ -55,6 +55,7 @@ model User {
   refreshTokens RefreshToken[]
   otpCodes      OtpCode[]
   consents      ConsentRecord[]
+  createdZones  Zone[]
 
   @@index([email])
   @@map("users")
@@ -70,6 +71,7 @@ model Family {
   memberships Membership[]
   children    Child[]
   invites     Invite[]
+  zones       Zone[]
 
   @@map("families")
 }
@@ -144,6 +146,9 @@ model Child {
   consents   ConsentRecord[]
   locations  Location[]
   sosEvents  SosEvent[]
+  zoneAssignments ZoneChildAssignment[]
+  zoneEvents      ZoneEvent[]
+  zoneStates      ZoneState[]
 
   @@index([familyId])
   @@index([familyId, deletedAt])
@@ -228,4 +233,84 @@ model SosEvent {
 
   @@index([childId, serverCreatedAt(sort: Desc)])
   @@map("sos_events")
+}
+
+model Zone {
+  id        String    @id @default(cuid())
+  familyId  String
+  name      String    @db.VarChar(60)
+  color     String
+  icon      String
+  centerLat Float
+  centerLon Float
+  radius    Int
+  createdBy String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  family      Family                @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  creator     User                  @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  assignments ZoneChildAssignment[]
+  events      ZoneEvent[]
+  states      ZoneState[]
+
+  @@index([familyId, deletedAt])
+  @@map("zones")
+}
+
+model ZoneChildAssignment {
+  id        String   @id @default(cuid())
+  zoneId    String
+  childId   String
+  createdAt DateTime @default(now())
+
+  zone  Zone  @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  child Child @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@unique([zoneId, childId])
+  @@index([childId])
+  @@map("zone_child_assignments")
+}
+
+enum ZoneEventType {
+  entry
+  exit
+}
+
+model ZoneEvent {
+  id         String        @id @default(cuid())
+  zoneId     String
+  childId    String
+  type       ZoneEventType
+  lat        Float
+  lon        Float
+  accuracy   Float?
+  recordedAt DateTime
+  createdAt  DateTime      @default(now())
+
+  zone  Zone  @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  child Child @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@index([childId, recordedAt(sort: Desc)])
+  @@index([zoneId, recordedAt(sort: Desc)])
+  @@map("zone_events")
+}
+
+model ZoneState {
+  id                  String    @id @default(cuid())
+  zoneId              String
+  childId             String
+  isInside            Boolean   @default(false)
+  pendingTransition   Boolean   @default(false)
+  pendingSince        DateTime?
+  lastConfirmedChange DateTime?
+  updatedAt           DateTime  @updatedAt
+
+  zone  Zone  @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  child Child @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@unique([zoneId, childId])
+  @@index([childId])
+  @@map("zone_states")
 }
