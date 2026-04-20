@@ -116,6 +116,12 @@ export default function CabinetClient(): ReactElement {
         >
           Геозоны
         </Link>
+        <Link
+          href="/cabinet/download"
+          className="mt-2 block w-full rounded-md border border-zinc-300 bg-white py-2 text-center text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+        >
+          Приложение ребёнка
+        </Link>
         <button
           onClick={logout}
           disabled={loading}

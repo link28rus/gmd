@@ -263,6 +263,9 @@ services:
       NEXT_PUBLIC_YANDEX_MAPS_API_KEY: ${NEXT_PUBLIC_YANDEX_MAPS_API_KEY:-}
       BACKEND_URL: http://backend:3001
       ALLOW_INSECURE_COOKIE: ${ALLOW_INSECURE_COOKIE:-false}
+      DOWNLOAD_DIR: /srv/download
+    volumes:
+      - /opt/gmd/download:/srv/download:ro
     depends_on:
       backend: { condition: service_healthy }
     networks: [gmd_net]
