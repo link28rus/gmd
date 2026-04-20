@@ -17,3 +17,7 @@ class ServerException extends ApiException {
   const ServerException(super.message, this.statusCode);
   final int statusCode;
 }
+
+class BadRequestIngestException extends ApiException {
+  const BadRequestIngestException() : super('Invalid batch');
+}
