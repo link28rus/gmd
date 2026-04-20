@@ -7,6 +7,11 @@
 :80 {
 	encode zstd gzip
 
+	# /healthz — edge liveness (должен идти до всех handle-матчеров)
+	handle /healthz {
+		respond "OK" 200
+	}
+
 	# /api/auth/* → web (Next.js route handlers ставят httpOnly refresh cookie)
 	handle /api/auth/* {
 		reverse_proxy web:3000
@@ -55,8 +60,6 @@
 		Permissions-Policy "interest-cohort=()"
 		-Server
 	}
-
-	respond /healthz "OK" 200
 
 	log {
 		output stdout
