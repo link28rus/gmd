@@ -4,19 +4,20 @@ import { AuthService, AUTH_CONFIG } from './auth.service';
 import { JwtService, JWT_CONFIG } from './jwt.service';
 import { OtpService, OTP_CONFIG } from './otp.service';
 import { RefreshTokenService, REFRESH_TOKEN_CONFIG } from './refresh-token.service';
-import { SmtpOtpProvider, SMTP_CONFIG } from './providers/smtp-otp.provider';
+import { SmtpOtpProvider } from './providers/smtp-otp.provider';
 import { OTP_DELIVERY } from './providers/otp-delivery.provider';
 import { PrismaModule } from '../prisma/prisma.module';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { PasswordService, PASSWORD_CONFIG } from './password.service';
 import { RedisModule } from '../redis/redis.module';
+import { MailerModule } from '../mailer/mailer.module';
 
 function asNum(v: string | undefined, def: number): number {
   return v ? Number(v) : def;
 }
 
 @Module({
-  imports: [PrismaModule, RedisModule],
+  imports: [PrismaModule, RedisModule, MailerModule],
   controllers: [AuthController],
   providers: [
     {
@@ -38,16 +39,6 @@ function asNum(v: string | undefined, def: number): number {
       provide: REFRESH_TOKEN_CONFIG,
       useFactory: () => ({
         ttlSec: asNum(process.env.REFRESH_TOKEN_TTL_SECONDS, 2592000),
-      }),
-    },
-    {
-      provide: SMTP_CONFIG,
-      useFactory: () => ({
-        host: process.env.SMTP_HOST || 'localhost',
-        port: asNum(process.env.SMTP_PORT, 1025),
-        user: process.env.SMTP_USER || undefined,
-        pass: process.env.SMTP_PASS || undefined,
-        from: process.env.SMTP_FROM || 'GMD <no-reply@gmd.local>',
       }),
     },
     {

@@ -6,16 +6,20 @@ import type { PrismaService } from '../prisma/prisma.service';
 interface MockPrisma {
   _families: any[];
   _memberships: any[];
+  _sosEvents: any[];
   family: { findUnique: jest.Mock; update: jest.Mock };
-  membership: { findFirst: jest.Mock };
+  membership: { findFirst: jest.Mock; findMany: jest.Mock };
+  sosEvent: { findMany: jest.Mock };
 }
 
 function makePrismaMock(): MockPrisma {
   const families: any[] = [];
   const memberships: any[] = [];
+  const sosEvents: any[] = [];
   return {
     _families: families,
     _memberships: memberships,
+    _sosEvents: sosEvents,
     family: {
       findUnique: jest.fn(({ where }: any) =>
         Promise.resolve(families.find((f) => f.id === where.id) ?? null),
@@ -33,6 +37,39 @@ function makePrismaMock(): MockPrisma {
             null,
         ),
       ),
+      findMany: jest.fn(({ where }: any) => {
+        const requireLiveFamily = where?.family?.deletedAt === null;
+        return Promise.resolve(
+          memberships
+            .filter((m) => m.userId === where.userId)
+            .filter((m) => {
+              if (!requireLiveFamily) return true;
+              const f = families.find((x) => x.id === m.familyId);
+              // если family не добавлена в mock — считаем её "живой" для обратной совместимости
+              // со старыми тестами, которые не явно seed'ят families
+              if (f === undefined) return true;
+              return f.deletedAt === null;
+            })
+            .map((m) => ({ familyId: m.familyId })),
+        );
+      }),
+    },
+    sosEvent: {
+      findMany: jest.fn(({ where, orderBy: _orderBy, take }: any) => {
+        const familyIds: string[] = where?.child?.familyId?.in ?? [];
+        const requireLiveChild = where?.child?.deletedAt === null;
+        const since: Date | undefined = where?.serverCreatedAt?.gte;
+        const filtered = sosEvents.filter((e) => {
+          if (!familyIds.includes(e._familyId)) return false;
+          if (requireLiveChild && e._childDeletedAt !== null && e._childDeletedAt !== undefined) {
+            return false;
+          }
+          if (since && e.serverCreatedAt < since) return false;
+          return true;
+        });
+        filtered.sort((a, b) => b.serverCreatedAt.getTime() - a.serverCreatedAt.getTime());
+        return Promise.resolve(filtered.slice(0, take ?? 50));
+      }),
     },
   };
 }
@@ -63,5 +100,174 @@ describe('FamilyService', () => {
     const svc = new FamilyService(p as unknown as PrismaService);
 
     await expect(svc.rename('u-1', 'f-missing', 'X')).rejects.toThrow(NotFoundException);
+  });
+
+  describe('listFamilySos', () => {
+    it('returns empty when user has no memberships', async () => {
+      const p = makePrismaMock();
+      const svc = new FamilyService(p as unknown as PrismaService);
+
+      const r = await svc.listFamilySos('u-0');
+
+      expect(r.events).toEqual([]);
+    });
+
+    it('maps events from all user families, sorted desc', async () => {
+      const p = makePrismaMock();
+      p._memberships.push({ userId: 'u-1', familyId: 'f-1', role: 'owner' });
+      p._memberships.push({ userId: 'u-1', familyId: 'f-2', role: 'parent' });
+      const oldDate = new Date('2026-04-19T10:00:00Z');
+      const newDate = new Date('2026-04-20T10:00:00Z');
+      p._sosEvents.push({
+        id: 'e-old',
+        childId: 'c-1',
+        _familyId: 'f-1',
+        lat: 1,
+        lon: 1,
+        accuracy: null,
+        recordedAt: oldDate,
+        serverCreatedAt: oldDate,
+        message: null,
+        acknowledgedAt: null,
+      });
+      p._sosEvents.push({
+        id: 'e-new',
+        childId: 'c-2',
+        _familyId: 'f-2',
+        lat: 2,
+        lon: 2,
+        accuracy: 5,
+        recordedAt: newDate,
+        serverCreatedAt: newDate,
+        message: 'help',
+        acknowledgedAt: null,
+      });
+      const svc = new FamilyService(p as unknown as PrismaService);
+
+      const r = await svc.listFamilySos('u-1');
+
+      expect(r.events).toHaveLength(2);
+      expect(r.events[0].id).toBe('e-new');
+      expect(r.events[1].id).toBe('e-old');
+      expect(r.events[0].recordedAt).toBe(newDate.toISOString());
+      expect(r.events[0].message).toBe('help');
+    });
+
+    it('since filter excludes older events', async () => {
+      const p = makePrismaMock();
+      p._memberships.push({ userId: 'u-1', familyId: 'f-1', role: 'owner' });
+      const oldDate = new Date('2026-04-19T10:00:00Z');
+      const newDate = new Date('2026-04-20T10:00:00Z');
+      p._sosEvents.push({
+        id: 'e-old',
+        childId: 'c-1',
+        _familyId: 'f-1',
+        lat: 1,
+        lon: 1,
+        accuracy: null,
+        recordedAt: oldDate,
+        serverCreatedAt: oldDate,
+        message: null,
+        acknowledgedAt: null,
+      });
+      p._sosEvents.push({
+        id: 'e-new',
+        childId: 'c-1',
+        _familyId: 'f-1',
+        lat: 2,
+        lon: 2,
+        accuracy: null,
+        recordedAt: newDate,
+        serverCreatedAt: newDate,
+        message: null,
+        acknowledgedAt: null,
+      });
+      const svc = new FamilyService(p as unknown as PrismaService);
+
+      const r = await svc.listFamilySos('u-1', new Date('2026-04-20T00:00:00Z'));
+
+      expect(r.events).toHaveLength(1);
+      expect(r.events[0].id).toBe('e-new');
+    });
+
+    it('excludes events from soft-deleted family', async () => {
+      const p = makePrismaMock();
+      p._families.push({ id: 'f-live', name: 'Жива', deletedAt: null });
+      p._families.push({ id: 'f-dead', name: 'Удалённая', deletedAt: new Date() });
+      p._memberships.push({ userId: 'u-1', familyId: 'f-live', role: 'owner' });
+      p._memberships.push({ userId: 'u-1', familyId: 'f-dead', role: 'owner' });
+      const now = new Date();
+      p._sosEvents.push({
+        id: 'e-live',
+        childId: 'c-live',
+        _familyId: 'f-live',
+        _childDeletedAt: null,
+        lat: 1,
+        lon: 1,
+        accuracy: null,
+        recordedAt: now,
+        serverCreatedAt: now,
+        message: null,
+        acknowledgedAt: null,
+      });
+      p._sosEvents.push({
+        id: 'e-dead-family',
+        childId: 'c-dead',
+        _familyId: 'f-dead',
+        _childDeletedAt: null,
+        lat: 2,
+        lon: 2,
+        accuracy: null,
+        recordedAt: now,
+        serverCreatedAt: now,
+        message: null,
+        acknowledgedAt: null,
+      });
+      const svc = new FamilyService(p as unknown as PrismaService);
+
+      const r = await svc.listFamilySos('u-1');
+
+      expect(r.events).toHaveLength(1);
+      expect(r.events[0].id).toBe('e-live');
+    });
+
+    it('excludes events from soft-deleted child', async () => {
+      const p = makePrismaMock();
+      p._families.push({ id: 'f-1', name: 'Моя', deletedAt: null });
+      p._memberships.push({ userId: 'u-1', familyId: 'f-1', role: 'owner' });
+      const now = new Date();
+      p._sosEvents.push({
+        id: 'e-live-child',
+        childId: 'c-1',
+        _familyId: 'f-1',
+        _childDeletedAt: null,
+        lat: 1,
+        lon: 1,
+        accuracy: null,
+        recordedAt: now,
+        serverCreatedAt: now,
+        message: null,
+        acknowledgedAt: null,
+      });
+      p._sosEvents.push({
+        id: 'e-dead-child',
+        childId: 'c-gone',
+        _familyId: 'f-1',
+        _childDeletedAt: new Date(),
+        lat: 2,
+        lon: 2,
+        accuracy: null,
+        recordedAt: now,
+        serverCreatedAt: now,
+        message: null,
+        acknowledgedAt: null,
+      });
+      const svc = new FamilyService(p as unknown as PrismaService);
+
+      const r = await svc.listFamilySos('u-1');
+
+      expect(r.events).toHaveLength(1);
+      expect(r.events[0].id).toBe('e-live-child');
+    });
   });
 });

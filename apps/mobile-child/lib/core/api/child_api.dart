@@ -1,0 +1,164 @@
+import 'package:dio/dio.dart';
+import 'api_exceptions.dart';
+
+class ClaimResponse {
+  ClaimResponse({
+    required this.deviceToken,
+    required this.childId,
+    required this.childName,
+    required this.familyId,
+    required this.deviceId,
+  });
+
+  factory ClaimResponse.fromJson(Map<String, dynamic> json) {
+    final child = json['child'] as Map<String, dynamic>;
+    final device = json['device'] as Map<String, dynamic>;
+    return ClaimResponse(
+      deviceToken: json['deviceToken'] as String,
+      childId: child['id'] as String,
+      childName: child['name'] as String,
+      familyId: child['familyId'] as String,
+      deviceId: device['id'] as String,
+    );
+  }
+
+  final String deviceToken;
+  final String childId;
+  final String childName;
+  final String familyId;
+  final String deviceId;
+}
+
+class LocationPoint {
+  LocationPoint({
+    required this.lat,
+    required this.lon,
+    required this.recordedAt,
+    this.accuracy,
+    this.altitude,
+    this.speed,
+    this.bearing,
+    this.batteryLevel,
+    this.isCharging,
+    this.provider,
+  });
+  final double lat;
+  final double lon;
+  final double? accuracy;
+  final double? altitude;
+  final double? speed;
+  final double? bearing;
+  final int? batteryLevel;
+  final bool? isCharging;
+  final String? provider;
+  final DateTime recordedAt;
+
+  Map<String, dynamic> toJson() => {
+        'lat': lat,
+        'lon': lon,
+        if (accuracy != null) 'accuracy': accuracy,
+        if (altitude != null) 'altitude': altitude,
+        if (speed != null) 'speed': speed,
+        if (bearing != null) 'bearing': bearing,
+        if (batteryLevel != null) 'batteryLevel': batteryLevel,
+        if (isCharging != null) 'isCharging': isCharging,
+        if (provider != null) 'provider': provider,
+        'recordedAt': recordedAt.toUtc().toIso8601String(),
+      };
+}
+
+class IngestResponse {
+  IngestResponse({required this.acceptedIds, required this.rejectedIds});
+  final List<int> acceptedIds;
+  final List<int> rejectedIds;
+}
+
+class SosResponse {
+  SosResponse({required this.sosId, required this.createdAt});
+
+  factory SosResponse.fromJson(Map<String, dynamic> json) => SosResponse(
+        sosId: json['sosId'] as String,
+        createdAt: DateTime.parse(json['createdAt'] as String),
+      );
+
+  final String sosId;
+  final DateTime createdAt;
+}
+
+class ChildApi {
+  ChildApi(this._dio);
+  final Dio _dio;
+
+  Future<ClaimResponse> claim({
+    required String code,
+    required String deviceName,
+    required String osVersion,
+    required String appVersion,
+    bool consent14Plus = false,
+  }) async {
+    try {
+      final resp = await _dio.post('/child/claim', data: {
+        'code': code,
+        'deviceName': deviceName,
+        'osVersion': osVersion,
+        'appVersion': appVersion,
+        'consent14Plus': consent14Plus,
+      });
+      return ClaimResponse.fromJson(resp.data as Map<String, dynamic>);
+    } on DioException catch (e) {
+      final status = e.response?.statusCode;
+      if (status == 404 || status == 410) throw const InvalidCodeException();
+      if (status == null) throw NetworkException(e.message ?? 'Сеть недоступна');
+      throw ServerException('Ошибка сервера', status);
+    }
+  }
+
+  Future<IngestResponse> ingestLocations(
+    List<LocationPoint> points, {
+    required String deviceToken,
+  }) async {
+    try {
+      await _dio.post(
+        '/child/locations',
+        data: {'points': points.map((p) => p.toJson()).toList()},
+        options: Options(headers: {'X-Child-Token': deviceToken}),
+      );
+      return IngestResponse(acceptedIds: const [], rejectedIds: const []);
+    } on DioException catch (e) {
+      final status = e.response?.statusCode;
+      if (status != null && status >= 400 && status < 500) {
+        throw const BadRequestIngestException();
+      }
+      throw NetworkException(e.message ?? 'Network');
+    }
+  }
+
+  Future<SosResponse> sendSos({
+    required String deviceToken,
+    required double lat,
+    required double lon,
+    required DateTime recordedAt,
+    double? accuracy,
+    String? message,
+  }) async {
+    try {
+      final resp = await _dio.post(
+        '/sos',
+        data: {
+          'lat': lat,
+          'lon': lon,
+          'accuracy': ?accuracy,
+          'recordedAt': recordedAt.toUtc().toIso8601String(),
+          'message': ?message,
+        },
+        options: Options(headers: {'X-Child-Token': deviceToken}),
+      );
+      return SosResponse.fromJson(resp.data as Map<String, dynamic>);
+    } on DioException catch (e) {
+      final status = e.response?.statusCode;
+      if (status == 429) throw const TooManyRequestsException();
+      if (status == null) throw NetworkException(e.message ?? 'Сеть недоступна');
+      throw ServerException('Ошибка сервера', status);
+    }
+  }
+}
