@@ -283,10 +283,12 @@ services:
     environment:
       CADDY_ACME_EMAIL: ${CADDY_ACME_EMAIL}
       CADDY_BASIC_AUTH_HASH: ${CADDY_BASIC_AUTH_HASH}
+      DOWNLOAD_PASSWORD_HASH: ${DOWNLOAD_PASSWORD_HASH}
     volumes:
       - ../caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - /opt/gmd/data/caddy/data:/data
       - /opt/gmd/data/caddy/config:/config
+      - /opt/gmd/download:/srv/download:ro
     depends_on:
       - web
       - backend
