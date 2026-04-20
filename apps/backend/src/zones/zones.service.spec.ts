@@ -4,7 +4,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ZonesService } from './zones.service';
 import { MAX_ZONES_PER_FAMILY } from './dto/constants';
 
-const prismaMock = {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const prismaMock: any = {
   zone: {
     count: jest.fn(),
     create: jest.fn(),
@@ -26,10 +27,10 @@ const prismaMock = {
     findMany: jest.fn(),
   },
   child: { findMany: jest.fn() },
-  $transaction: jest.fn(async (fn: unknown) =>
-    typeof fn === 'function' ? (fn as (tx: unknown) => unknown)(prismaMock) : fn,
-  ),
 };
+prismaMock.$transaction = jest.fn(async (fn: unknown) =>
+  typeof fn === 'function' ? (fn as (tx: unknown) => unknown)(prismaMock) : fn,
+);
 
 describe('ZonesService.create', () => {
   let svc: ZonesService;
@@ -259,5 +260,40 @@ describe('ZonesService.softDelete', () => {
       data: { deletedAt: expect.any(Date) },
     });
     expect(prismaMock.zoneState.deleteMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('ZonesService.listEvents', () => {
+  let svc: ZonesService;
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    const module = await Test.createTestingModule({
+      providers: [ZonesService, { provide: PrismaService, useValue: prismaMock }],
+    }).compile();
+    svc = module.get(ZonesService);
+  });
+
+  it('возвращает события семьи с pagination cursor', async () => {
+    prismaMock.zoneEvent.findMany.mockResolvedValue([
+      {
+        id: 'e1',
+        zoneId: 'z1',
+        childId: 'c1',
+        type: 'entry',
+        lat: 48,
+        lon: 135,
+        accuracy: 10,
+        recordedAt: new Date('2026-04-20T10:00:00Z'),
+        createdAt: new Date('2026-04-20T10:00:05Z'),
+        zone: { name: 'Школа', color: '#22c55e', icon: 'school' },
+        child: { name: 'Аня' },
+      },
+    ]);
+
+    const result = await svc.listEvents('f1', { limit: 50 });
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].zoneName).toBe('Школа');
+    expect(result.items[0].childName).toBe('Аня');
+    expect(result.nextCursor).toBeNull();
   });
 });

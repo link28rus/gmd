@@ -3,6 +3,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { CreateZoneDto } from './dto/create-zone.schema';
 import type { UpdateZoneDto } from './dto/update-zone.schema';
 import type { ZoneDto } from './dto/zone.dto';
+import type { ZoneEventDto } from './dto/zone-event.dto';
+import type { ZonesEventsQuery } from './dto/zones-events-query.schema';
 import { MAX_ZONES_PER_FAMILY } from './dto/constants';
 
 interface ZoneRow {
@@ -217,6 +219,52 @@ export class ZonesService {
         updated.states,
       );
     });
+  }
+
+  async listEvents(
+    familyId: string,
+    q: ZonesEventsQuery,
+  ): Promise<{ items: ZoneEventDto[]; nextCursor: string | null }> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const where: any = { zone: { familyId } };
+    if (q.childId) where.childId = q.childId;
+    if (q.zoneId) where.zoneId = q.zoneId;
+    if (q.from) where.recordedAt = { ...(where.recordedAt ?? {}), gte: new Date(q.from) };
+    if (q.to) where.recordedAt = { ...(where.recordedAt ?? {}), lte: new Date(q.to) };
+    if (q.cursor) {
+      where.recordedAt = { ...(where.recordedAt ?? {}), lt: new Date(q.cursor) };
+    }
+
+    const rows = await this.prisma.zoneEvent.findMany({
+      where,
+      orderBy: { recordedAt: 'desc' },
+      take: q.limit,
+      include: {
+        zone: { select: { name: true, color: true, icon: true } },
+        child: { select: { name: true } },
+      },
+    });
+
+    const items: ZoneEventDto[] = rows.map((row) => ({
+      id: row.id,
+      zoneId: row.zoneId,
+      zoneName: row.zone.name,
+      zoneColor: row.zone.color,
+      zoneIcon: row.zone.icon,
+      childId: row.childId,
+      childName: row.child.name,
+      type: row.type as 'entry' | 'exit',
+      lat: row.lat,
+      lon: row.lon,
+      accuracy: row.accuracy ?? null,
+      recordedAt: row.recordedAt.toISOString(),
+      createdAt: row.createdAt.toISOString(),
+    }));
+
+    const nextCursor =
+      rows.length === q.limit ? rows[rows.length - 1].recordedAt.toISOString() : null;
+
+    return { items, nextCursor };
   }
 
   async softDelete(familyId: string, zoneId: string): Promise<void> {
