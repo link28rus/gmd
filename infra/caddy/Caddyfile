@@ -14,7 +14,8 @@
 
 	# /download/* — раздача release APK под basic auth
 	# User: gmd; пароль хэшируется bcrypt'ом, хранится в {$DOWNLOAD_PASSWORD_HASH}
-	handle /download/* {
+	# handle_path чтобы strip'нуть /download/ и file_server искал в /srv/download/
+	handle_path /download/* {
 		basic_auth {
 			gmd {$DOWNLOAD_PASSWORD_HASH}
 		}
