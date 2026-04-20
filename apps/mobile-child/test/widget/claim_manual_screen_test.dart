@@ -15,7 +15,7 @@ class _MockStorage extends Mock implements SecureStorageService {}
 Future<DeviceMetadata> _stubMetadata() async => const DeviceMetadata(
       deviceName: 'Pixel',
       osVersion: 'Android 14',
-      appVersion: '0.13.0',
+      appVersion: '0.14.1',
     );
 
 Widget _wrap({
@@ -41,14 +41,14 @@ void main() {
     storage = _MockStorage();
   });
 
-  testWidgets('renders title and hint', (tester) async {
+  testWidgets('renders title and hint (8-char alnum code)', (tester) async {
     await tester.pumpWidget(_wrap(api: api, storage: storage));
     expect(find.text('Введите код'), findsOneWidget);
     expect(find.text('Код покажет мама или папа'), findsOneWidget);
-    expect(find.text('000000'), findsOneWidget);
+    expect(find.text('6KDM3B1W'), findsOneWidget);
   });
 
-  testWidgets('entering 6-digit code triggers submitCode', (tester) async {
+  testWidgets('entering 8-char alnum code triggers submitCode', (tester) async {
     when(() => api.claim(
           code: any(named: 'code'),
           deviceName: any(named: 'deviceName'),
@@ -58,15 +58,40 @@ void main() {
         )).thenThrow(const InvalidCodeException());
 
     await tester.pumpWidget(_wrap(api: api, storage: storage));
-    await tester.enterText(find.byType(TextField), '123456');
+    await tester.enterText(find.byType(TextField), '6KDM3B1W');
     await tester.pumpAndSettle();
 
     verify(() => api.claim(
-          code: '123456',
+          code: '6KDM3B1W',
           deviceName: 'Pixel',
           osVersion: 'Android 14',
-          appVersion: '0.13.0',
+          appVersion: '0.14.1',
           consent14Plus: false,
+        )).called(1);
+  });
+
+  testWidgets('accepts lowercase + spaces, normalizes before submit',
+      (tester) async {
+    when(() => api.claim(
+          code: any(named: 'code'),
+          deviceName: any(named: 'deviceName'),
+          osVersion: any(named: 'osVersion'),
+          appVersion: any(named: 'appVersion'),
+          consent14Plus: any(named: 'consent14Plus'),
+        )).thenThrow(const InvalidCodeException());
+
+    await tester.pumpWidget(_wrap(api: api, storage: storage));
+    // TextField сам капитализирует на лету; нормализация из claim_code.dart
+    // срежет пробелы. submitCode должен получить канонические 8 символов.
+    await tester.enterText(find.byType(TextField), '6k dm 3b 1w');
+    await tester.pumpAndSettle();
+
+    verify(() => api.claim(
+          code: '6KDM3B1W',
+          deviceName: any(named: 'deviceName'),
+          osVersion: any(named: 'osVersion'),
+          appVersion: any(named: 'appVersion'),
+          consent14Plus: any(named: 'consent14Plus'),
         )).called(1);
   });
 
@@ -81,15 +106,16 @@ void main() {
         )).thenThrow(const InvalidCodeException());
 
     await tester.pumpWidget(_wrap(api: api, storage: storage));
-    await tester.enterText(find.byType(TextField), '000000');
+    await tester.enterText(find.byType(TextField), 'AAAAAAAA');
     await tester.pumpAndSettle();
 
     expect(find.text('Код не найден или истёк'), findsOneWidget);
   });
 
-  testWidgets('does not call API for partial (<6 char) input', (tester) async {
+  testWidgets('does not call API for partial input (< 8 valid chars)',
+      (tester) async {
     await tester.pumpWidget(_wrap(api: api, storage: storage));
-    await tester.enterText(find.byType(TextField), '12345');
+    await tester.enterText(find.byType(TextField), '6KDM3B1');
     await tester.pumpAndSettle();
 
     verifyNever(() => api.claim(
