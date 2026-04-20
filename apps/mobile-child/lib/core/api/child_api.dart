@@ -109,7 +109,7 @@ class ChildApi {
       await _dio.post(
         '/child/locations',
         data: {'points': points.map((p) => p.toJson()).toList()},
-        options: Options(headers: {'Authorization': 'Bearer $deviceToken'}),
+        options: Options(headers: {'X-Child-Token': deviceToken}),
       );
       return IngestResponse(acceptedIds: const [], rejectedIds: const []);
     } on DioException catch (e) {
