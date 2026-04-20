@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'claim_code.dart';
 import 'claim_controller.dart';
 
 class ClaimManualScreen extends ConsumerStatefulWidget {
@@ -19,6 +20,13 @@ class _ClaimManualScreenState extends ConsumerState<ClaimManualScreen> {
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  void _trySubmit(String raw) {
+    final code = extractInviteCode(raw);
+    if (code != null) {
+      ref.read(claimControllerProvider.notifier).submitCode(code);
+    }
   }
 
   @override
@@ -39,27 +47,54 @@ class _ClaimManualScreenState extends ConsumerState<ClaimManualScreen> {
               'Код покажет мама или папа',
               style: TextStyle(fontSize: 18),
             ),
+            const SizedBox(height: 16),
+            const Text(
+              'Из цифр и букв, например: 6K DM 3B 1W',
+              style: TextStyle(fontSize: 14, color: Colors.black54),
+            ),
             const SizedBox(height: 32),
             TextField(
               controller: _controller,
               enabled: state.status != ClaimStatus.inProgress,
               autofocus: true,
-              keyboardType: TextInputType.number,
+              // Обычная текстовая клавиатура — код содержит буквы (A-Z),
+              // не только цифры. visiblePassword даёт стабильную раскладку
+              // без автокоррекции/автокапитализации слов.
+              keyboardType: TextInputType.visiblePassword,
+              autocorrect: false,
+              enableSuggestions: false,
+              textCapitalization: TextCapitalization.characters,
               inputFormatters: [
-                FilteringTextInputFormatter.digitsOnly,
-                LengthLimitingTextInputFormatter(6),
+                // Разрешаем 0-9, A-Z и пробелы/дефисы для UX — сами
+                // нормализуем перед отправкой.
+                FilteringTextInputFormatter.allow(RegExp(r'[0-9A-Za-z\s\-]')),
+                // 8 содержательных + 3 разделителя (пробелы) = 11 макс.
+                LengthLimitingTextInputFormatter(11),
+                // Upper-case на лету.
+                TextInputFormatter.withFunction(
+                  (oldValue, newValue) => newValue.copyWith(
+                    text: newValue.text.toUpperCase(),
+                  ),
+                ),
               ],
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 32, letterSpacing: 12),
+              style: const TextStyle(
+                fontSize: 28,
+                letterSpacing: 6,
+                fontFeatures: [FontFeature.tabularFigures()],
+              ),
               decoration: const InputDecoration(
                 border: OutlineInputBorder(),
-                hintText: '000000',
+                hintText: '6KDM3B1W',
               ),
               onChanged: (v) {
-                if (v.length == 6) {
-                  ref.read(claimControllerProvider.notifier).submitCode(v);
+                // Авто-submit, когда после нормализации набралось ровно 8
+                // валидных символов Crockford alphabet.
+                if (extractInviteCode(v) != null) {
+                  _trySubmit(v);
                 }
               },
+              onSubmitted: _trySubmit,
             ),
             if (state.status == ClaimStatus.inProgress) ...[
               const SizedBox(height: 16),

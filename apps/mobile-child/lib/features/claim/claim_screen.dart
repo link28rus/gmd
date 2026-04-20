@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'claim_code.dart';
 import 'claim_controller.dart';
 
 class ClaimScreen extends ConsumerStatefulWidget {
@@ -32,10 +33,13 @@ class _ClaimScreenState extends ConsumerState<ClaimScreen> {
             onDetect: (capture) {
               if (_handled) return;
               for (final b in capture.barcodes) {
-                final v = b.rawValue;
-                if (v != null && RegExp(r'^\d{6}$').hasMatch(v)) {
+                // QR может содержать URL (`https://…/claim/CODE`), deep-link
+                // (`gmd://claim/CODE`) или просто код — extractInviteCode
+                // покрывает все случаи и возвращает канонические 8 символов.
+                final code = extractInviteCode(b.rawValue);
+                if (code != null) {
                   _handled = true;
-                  ref.read(claimControllerProvider.notifier).submitCode(v);
+                  ref.read(claimControllerProvider.notifier).submitCode(code);
                   break;
                 }
               }
