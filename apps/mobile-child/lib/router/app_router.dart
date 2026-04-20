@@ -1,5 +1,6 @@
 import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
+import '../features/claim/claim_manual_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
 
 class AppRouter {
@@ -14,8 +15,16 @@ class AppRouter {
       ),
       GoRoute(
         path: '/claim',
+        builder: (_, _) => const ClaimManualScreen(),
+      ),
+      GoRoute(
+        path: '/claim/manual',
+        builder: (_, _) => const ClaimManualScreen(),
+      ),
+      GoRoute(
+        path: '/permissions/notifications',
         builder: (_, _) => const Scaffold(
-          body: Center(child: Text('Claim placeholder')),
+          body: Center(child: Text('Permissions notifications placeholder')),
         ),
       ),
       GoRoute(
