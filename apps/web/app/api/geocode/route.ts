@@ -17,10 +17,13 @@ interface YandexResponse {
 }
 
 export async function GET(req: NextRequest) {
-  const apiKey = process.env.YANDEX_GEOCODER_API_KEY;
+  // У Яндекса один ключ поддерживает JavaScript API + HTTP Геокодер (сервис
+  // "JavaScript API и HTTP Геокодер"). Если YANDEX_GEOCODER_API_KEY отдельно
+  // не задан — используем тот же, что и для карт.
+  const apiKey = process.env.YANDEX_GEOCODER_API_KEY ?? process.env.NEXT_PUBLIC_YANDEX_MAPS_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
-      { code: 'geocoder_not_configured', message: 'YANDEX_GEOCODER_API_KEY missing' },
+      { code: 'geocoder_not_configured', message: 'Yandex API key missing' },
       { status: 503 },
     );
   }
@@ -39,8 +42,12 @@ export async function GET(req: NextRequest) {
     results: '5',
   });
 
+  // Ключ в кабинете Яндекса ограничен по HTTP Referer (домен приложения).
+  // Без заголовка Referer запросы с backend'а получают 403.
+  const referer = process.env.PUBLIC_SITE_URL ?? 'https://gmd.link28rus.ru/';
+
   const res = await fetch(`${YANDEX_GEOCODER_URL}?${params.toString()}`, {
-    headers: { Accept: 'application/json' },
+    headers: { Accept: 'application/json', Referer: referer },
   });
   if (!res.ok) {
     return NextResponse.json(
