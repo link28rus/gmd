@@ -11,6 +11,7 @@ import { Prisma } from '@prisma/client';
 import { createId } from '@paralleldrive/cuid2';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConsentService } from '../consent/consent.service';
+import { ZoneDetectionService } from '../zones/zone-detection.service';
 import type { ChildAuthContext } from '../child-device/child-device.service';
 import type { LocationPoint } from './dto/ingest-locations.dto';
 import type { ListLocationsQuery } from './dto/list-locations.dto';
@@ -82,6 +83,7 @@ export class LocationsService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(ConsentService) private readonly consent: ConsentService,
+    @Inject(ZoneDetectionService) private readonly zoneDetection: ZoneDetectionService,
   ) {}
 
   async ingestBatch(ctx: ChildAuthContext, points: LocationPoint[]): Promise<IngestResult> {
@@ -115,6 +117,7 @@ export class LocationsService {
 
     const rejectedReasons: Record<string, number> = {};
     const now = Date.now();
+    const validPoints: LocationPoint[] = [];
     const validRows: Prisma.Sql[] = [];
 
     for (const p of points) {
@@ -123,6 +126,7 @@ export class LocationsService {
         rejectedReasons.out_of_window = (rejectedReasons.out_of_window ?? 0) + 1;
         continue;
       }
+      validPoints.push(p);
       validRows.push(Prisma.sql`(
         ${createId()},
         ${ctx.childId},
@@ -142,17 +146,33 @@ export class LocationsService {
 
     let accepted = 0;
     if (validRows.length > 0) {
-      const inserted = await this.prisma.$executeRaw(Prisma.sql`
-        INSERT INTO "locations" (
-          "id","childId","childDeviceId","lat","lon","accuracy","altitude","speed","bearing","batteryLevel","isCharging","provider","recordedAt"
-        ) VALUES ${Prisma.join(validRows)}
-        ON CONFLICT ("childDeviceId","recordedAt") DO NOTHING
-      `);
-      accepted = Number(inserted);
-      const duplicates = validRows.length - accepted;
-      if (duplicates > 0) {
-        rejectedReasons.duplicate = (rejectedReasons.duplicate ?? 0) + duplicates;
-      }
+      await this.prisma.$transaction(async (tx) => {
+        const inserted = await tx.$executeRaw(Prisma.sql`
+          INSERT INTO "locations" (
+            "id","childId","childDeviceId","lat","lon","accuracy","altitude","speed","bearing","batteryLevel","isCharging","provider","recordedAt"
+          ) VALUES ${Prisma.join(validRows)}
+          ON CONFLICT ("childDeviceId","recordedAt") DO NOTHING
+        `);
+        accepted = Number(inserted);
+        const duplicates = validRows.length - accepted;
+        if (duplicates > 0) {
+          rejectedReasons.duplicate = (rejectedReasons.duplicate ?? 0) + duplicates;
+        }
+
+        // Zone detection for every valid (window-passed) point. Duplicates re-processed but
+        // they deterministically produce the same state — safe no-op effectively.
+        for (const p of validPoints) {
+          await this.zoneDetection.processPoint(tx, {
+            familyId: child.familyId,
+            childId: ctx.childId,
+            deviceId: ctx.deviceId,
+            lat: p.lat,
+            lon: p.lon,
+            accuracy: p.accuracy ?? null,
+            recordedAt: new Date(p.recordedAt),
+          });
+        }
+      });
     }
 
     const rejected = points.length - accepted;

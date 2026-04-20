@@ -19,6 +19,9 @@ function makeService(
     currentVersion: string;
   }> = {},
 ): LocationsService {
+  const tx: any = {
+    $executeRaw: jest.fn().mockResolvedValue(overrides.insertResult ?? 0),
+  };
   const prisma: any = {
     child: {
       findUnique: jest
@@ -51,13 +54,18 @@ function makeService(
       findFirst: jest.fn(),
       findMany: jest.fn(),
     },
-    $executeRaw: jest.fn().mockResolvedValue(overrides.insertResult ?? 0),
+    $executeRaw: tx.$executeRaw,
+    $transaction: jest.fn().mockImplementation((cb: (t: any) => Promise<unknown>) => cb(tx)),
   };
   const consent: any = {
     getCurrentVersion: () => overrides.currentVersion ?? '1.0',
     userRequiresConsent: (v: string | null) => v !== (overrides.currentVersion ?? '1.0'),
   };
-  return new LocationsService(prisma, consent);
+  const zoneDetection: any = {
+    processPoint: jest.fn().mockResolvedValue(undefined),
+    findCandidateZones: jest.fn().mockResolvedValue([]),
+  };
+  return new LocationsService(prisma, consent, zoneDetection);
 }
 
 describe('LocationsService.ingestBatch', () => {
