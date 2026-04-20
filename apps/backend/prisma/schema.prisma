@@ -138,11 +138,12 @@ model Child {
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
-  family    Family          @relation(fields: [familyId], references: [id], onDelete: Cascade)
-  device    ChildDevice?
-  invites   Invite[]
-  consents  ConsentRecord[]
-  locations Location[]
+  family     Family          @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  device     ChildDevice?
+  invites    Invite[]
+  consents   ConsentRecord[]
+  locations  Location[]
+  sosEvents  SosEvent[]
 
   @@index([familyId])
   @@index([familyId, deletedAt])
@@ -178,8 +179,9 @@ model ChildDevice {
   revokedAt  DateTime?
   createdAt  DateTime  @default(now())
 
-  child     Child      @relation(fields: [childId], references: [id], onDelete: Cascade)
-  locations Location[]
+  child      Child      @relation(fields: [childId], references: [id], onDelete: Cascade)
+  locations  Location[]
+  sosEvents  SosEvent[]
 
   @@map("child_devices")
 }
@@ -206,4 +208,24 @@ model Location {
   @@unique([childDeviceId, recordedAt])
   @@index([childId, recordedAt(sort: Desc)])
   @@map("locations")
+}
+
+model SosEvent {
+  id              String    @id @default(cuid())
+  childId         String
+  childDeviceId   String
+  lat             Float
+  lon             Float
+  accuracy        Float?
+  recordedAt      DateTime
+  serverCreatedAt DateTime  @default(now())
+  message         String?   @db.VarChar(500)
+  acknowledgedAt  DateTime?
+  acknowledgedBy  String?
+
+  child       Child       @relation(fields: [childId], references: [id], onDelete: Cascade)
+  childDevice ChildDevice @relation(fields: [childDeviceId], references: [id], onDelete: Cascade)
+
+  @@index([childId, serverCreatedAt(sort: Desc)])
+  @@map("sos_events")
 }

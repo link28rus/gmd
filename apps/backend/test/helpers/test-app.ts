@@ -85,7 +85,7 @@ export async function bootTestApp(): Promise<TestAppHandle> {
 
 export async function truncateAll(h: TestAppHandle): Promise<void> {
   await h.prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE locations, consent_records, child_devices, invites, children, refresh_tokens, otp_codes, memberships, families, users RESTART IDENTITY CASCADE;',
+    'TRUNCATE TABLE sos_events, locations, consent_records, child_devices, invites, children, refresh_tokens, otp_codes, memberships, families, users RESTART IDENTITY CASCADE;',
   );
   await h.redis.flushdb();
   h.delivery.reset();
