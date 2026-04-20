@@ -31,5 +31,30 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "ru.link28rus.gmd.child/device_admin")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "request" -> {
+                        val dpm = getSystemService(DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
+                        val component = android.content.ComponentName(this, GmdDeviceAdminReceiver::class.java)
+                        if (dpm.isAdminActive(component)) {
+                            result.success("already")
+                        } else {
+                            val intent = Intent(android.app.admin.DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
+                                .putExtra(android.app.admin.DevicePolicyManager.EXTRA_DEVICE_ADMIN, component)
+                                .putExtra(android.app.admin.DevicePolicyManager.EXTRA_ADD_EXPLANATION,
+                                    "Защита от удаления. Мама/папа получит уведомление, если ты попытаешься выключить.")
+                            startActivity(intent)
+                            result.success("requested")
+                        }
+                    }
+                    "isActive" -> {
+                        val dpm = getSystemService(DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
+                        result.success(dpm.isAdminActive(android.content.ComponentName(this, GmdDeviceAdminReceiver::class.java)))
+                    }
+                    else -> result.notImplemented()
+                }
+            }
     }
 }

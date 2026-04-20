@@ -1,10 +1,10 @@
 import 'package:go_router/go_router.dart';
-import 'package:flutter/material.dart';
 import '../features/claim/claim_manual_screen.dart';
 import '../features/claim/claim_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
 import '../features/permissions/battery_step.dart';
+import '../features/permissions/device_admin_step.dart';
 import '../features/permissions/location_step.dart';
 import '../features/permissions/notifications_step.dart';
 
@@ -40,25 +40,12 @@ class AppRouter {
       ),
       GoRoute(
         path: '/permissions/devadmin',
-        builder: (_, _) => const _DeviceAdminPlaceholder(),
+        builder: (_, _) => const DeviceAdminPermissionsStep(),
       ),
       GoRoute(
         path: '/home',
         builder: (_, _) => const HomeScreen(),
       ),
     ],
-  );
-}
-
-class _DeviceAdminPlaceholder extends StatelessWidget {
-  const _DeviceAdminPlaceholder();
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    body: Center(
-      child: ElevatedButton(
-        onPressed: () => GoRouter.of(context).go('/home'),
-        child: const Text('Продолжить (devadmin placeholder)'),
-      ),
-    ),
   );
 }
