@@ -23,6 +23,16 @@ describe('GET /family/sos (e2e)', () => {
     expect(resp.status).toBe(401);
   });
 
+  it('returns 400 when ?since is not a valid ISO datetime', async () => {
+    const parent = await signUpParent(h);
+    const resp = await request(h.app.getHttpServer())
+      .get('/family/sos?since=not-a-date')
+      .set('Authorization', `Bearer ${parent.accessToken}`);
+    expect(resp.status).toBe(400);
+    const body = resp.body as { error?: { code?: string }; code?: string };
+    expect(body.error?.code ?? body.code).toBe('invalid_since');
+  });
+
   it('authed parent sees SOS events from their family', async () => {
     const parent = await signUpParent(h);
 

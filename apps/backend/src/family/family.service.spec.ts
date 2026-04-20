@@ -37,20 +37,33 @@ function makePrismaMock(): MockPrisma {
             null,
         ),
       ),
-      findMany: jest.fn(({ where }: any) =>
-        Promise.resolve(
+      findMany: jest.fn(({ where }: any) => {
+        const requireLiveFamily = where?.family?.deletedAt === null;
+        return Promise.resolve(
           memberships
             .filter((m) => m.userId === where.userId)
+            .filter((m) => {
+              if (!requireLiveFamily) return true;
+              const f = families.find((x) => x.id === m.familyId);
+              // если family не добавлена в mock — считаем её "живой" для обратной совместимости
+              // со старыми тестами, которые не явно seed'ят families
+              if (f === undefined) return true;
+              return f.deletedAt === null;
+            })
             .map((m) => ({ familyId: m.familyId })),
-        ),
-      ),
+        );
+      }),
     },
     sosEvent: {
       findMany: jest.fn(({ where, orderBy: _orderBy, take }: any) => {
         const familyIds: string[] = where?.child?.familyId?.in ?? [];
+        const requireLiveChild = where?.child?.deletedAt === null;
         const since: Date | undefined = where?.serverCreatedAt?.gte;
         const filtered = sosEvents.filter((e) => {
           if (!familyIds.includes(e._familyId)) return false;
+          if (requireLiveChild && e._childDeletedAt !== null && e._childDeletedAt !== undefined) {
+            return false;
+          }
           if (since && e.serverCreatedAt < since) return false;
           return true;
         });
@@ -175,6 +188,86 @@ describe('FamilyService', () => {
 
       expect(r.events).toHaveLength(1);
       expect(r.events[0].id).toBe('e-new');
+    });
+
+    it('excludes events from soft-deleted family', async () => {
+      const p = makePrismaMock();
+      p._families.push({ id: 'f-live', name: 'Жива', deletedAt: null });
+      p._families.push({ id: 'f-dead', name: 'Удалённая', deletedAt: new Date() });
+      p._memberships.push({ userId: 'u-1', familyId: 'f-live', role: 'owner' });
+      p._memberships.push({ userId: 'u-1', familyId: 'f-dead', role: 'owner' });
+      const now = new Date();
+      p._sosEvents.push({
+        id: 'e-live',
+        childId: 'c-live',
+        _familyId: 'f-live',
+        _childDeletedAt: null,
+        lat: 1,
+        lon: 1,
+        accuracy: null,
+        recordedAt: now,
+        serverCreatedAt: now,
+        message: null,
+        acknowledgedAt: null,
+      });
+      p._sosEvents.push({
+        id: 'e-dead-family',
+        childId: 'c-dead',
+        _familyId: 'f-dead',
+        _childDeletedAt: null,
+        lat: 2,
+        lon: 2,
+        accuracy: null,
+        recordedAt: now,
+        serverCreatedAt: now,
+        message: null,
+        acknowledgedAt: null,
+      });
+      const svc = new FamilyService(p as unknown as PrismaService);
+
+      const r = await svc.listFamilySos('u-1');
+
+      expect(r.events).toHaveLength(1);
+      expect(r.events[0].id).toBe('e-live');
+    });
+
+    it('excludes events from soft-deleted child', async () => {
+      const p = makePrismaMock();
+      p._families.push({ id: 'f-1', name: 'Моя', deletedAt: null });
+      p._memberships.push({ userId: 'u-1', familyId: 'f-1', role: 'owner' });
+      const now = new Date();
+      p._sosEvents.push({
+        id: 'e-live-child',
+        childId: 'c-1',
+        _familyId: 'f-1',
+        _childDeletedAt: null,
+        lat: 1,
+        lon: 1,
+        accuracy: null,
+        recordedAt: now,
+        serverCreatedAt: now,
+        message: null,
+        acknowledgedAt: null,
+      });
+      p._sosEvents.push({
+        id: 'e-dead-child',
+        childId: 'c-gone',
+        _familyId: 'f-1',
+        _childDeletedAt: new Date(),
+        lat: 2,
+        lon: 2,
+        accuracy: null,
+        recordedAt: now,
+        serverCreatedAt: now,
+        message: null,
+        acknowledgedAt: null,
+      });
+      const svc = new FamilyService(p as unknown as PrismaService);
+
+      const r = await svc.listFamilySos('u-1');
+
+      expect(r.events).toHaveLength(1);
+      expect(r.events[0].id).toBe('e-live-child');
     });
   });
 });

@@ -19,14 +19,14 @@ export class FamilyService {
 
   async listFamilySos(userId: string, since?: Date): Promise<{ events: SosEventDto[] }> {
     const memberships = await this.prisma.membership.findMany({
-      where: { userId },
+      where: { userId, family: { deletedAt: null } },
       select: { familyId: true },
     });
     const familyIds = memberships.map((m) => m.familyId);
     if (familyIds.length === 0) return { events: [] };
     const events = await this.prisma.sosEvent.findMany({
       where: {
-        child: { familyId: { in: familyIds } },
+        child: { familyId: { in: familyIds }, deletedAt: null },
         ...(since ? { serverCreatedAt: { gte: since } } : {}),
       },
       orderBy: { serverCreatedAt: 'desc' },
