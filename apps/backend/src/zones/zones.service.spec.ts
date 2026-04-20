@@ -117,3 +117,147 @@ describe('ZonesService.create', () => {
     ).rejects.toThrow(NotFoundException);
   });
 });
+
+describe('ZonesService.list', () => {
+  let svc: ZonesService;
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    const module = await Test.createTestingModule({
+      providers: [ZonesService, { provide: PrismaService, useValue: prismaMock }],
+    }).compile();
+    svc = module.get(ZonesService);
+  });
+
+  it('возвращает зоны семьи с assignments и states', async () => {
+    prismaMock.zone.findMany.mockResolvedValue([
+      {
+        id: 'z1',
+        familyId: 'f1',
+        name: 'Школа',
+        color: '#22c55e',
+        icon: 'school',
+        centerLat: 48,
+        centerLon: 135,
+        radius: 250,
+        createdBy: 'u1',
+        createdAt: new Date('2026-04-20'),
+        updatedAt: new Date('2026-04-20'),
+        assignments: [{ childId: 'c1' }, { childId: 'c2' }],
+        states: [
+          { childId: 'c1', isInside: true },
+          { childId: 'c2', isInside: false },
+        ],
+      },
+    ]);
+    const result = await svc.list('f1');
+    expect(result).toHaveLength(1);
+    expect(result[0].childIds).toEqual(['c1', 'c2']);
+    expect(result[0].states).toEqual([
+      { childId: 'c1', isInside: true },
+      { childId: 'c2', isInside: false },
+    ]);
+  });
+});
+
+describe('ZonesService.get', () => {
+  let svc: ZonesService;
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    const module = await Test.createTestingModule({
+      providers: [ZonesService, { provide: PrismaService, useValue: prismaMock }],
+    }).compile();
+    svc = module.get(ZonesService);
+  });
+
+  it('бросает NotFoundException для чужой семьи (anti-enumeration)', async () => {
+    prismaMock.zone.findFirst.mockResolvedValue(null);
+    await expect(svc.get('f1', 'z1')).rejects.toThrow(NotFoundException);
+  });
+});
+
+describe('ZonesService.update', () => {
+  let svc: ZonesService;
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    const module = await Test.createTestingModule({
+      providers: [ZonesService, { provide: PrismaService, useValue: prismaMock }],
+    }).compile();
+    svc = module.get(ZonesService);
+  });
+
+  it('обновляет assignments: добавляет новые, удаляет убранные, синхронизирует ZoneState', async () => {
+    prismaMock.zone.findFirst.mockResolvedValue({
+      id: 'z1',
+      familyId: 'f1',
+      name: 'X',
+      color: '#22c55e',
+      icon: 'home',
+      centerLat: 0,
+      centerLon: 0,
+      radius: 100,
+      createdBy: 'u1',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      deletedAt: null,
+      assignments: [{ childId: 'c1' }, { childId: 'c2' }],
+    });
+    prismaMock.child.findMany.mockResolvedValue([{ id: 'c2' }, { id: 'c3' }]);
+    prismaMock.zone.update.mockResolvedValue({
+      id: 'z1',
+      familyId: 'f1',
+      name: 'X',
+      color: '#22c55e',
+      icon: 'home',
+      centerLat: 0,
+      centerLon: 0,
+      radius: 100,
+      createdBy: 'u1',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      assignments: [{ childId: 'c2' }, { childId: 'c3' }],
+      states: [
+        { childId: 'c2', isInside: false },
+        { childId: 'c3', isInside: false },
+      ],
+    });
+
+    await svc.update('f1', 'z1', { childIds: ['c2', 'c3'] });
+
+    expect(prismaMock.zoneChildAssignment.deleteMany).toHaveBeenCalledWith({
+      where: { zoneId: 'z1', childId: { in: ['c1'] } },
+    });
+    expect(prismaMock.zoneState.deleteMany).toHaveBeenCalledWith({
+      where: { zoneId: 'z1', childId: { in: ['c1'] } },
+    });
+    expect(prismaMock.zoneChildAssignment.createMany).toHaveBeenCalledWith({
+      data: [{ zoneId: 'z1', childId: 'c3' }],
+    });
+    expect(prismaMock.zoneState.createMany).toHaveBeenCalledWith({
+      data: [{ zoneId: 'z1', childId: 'c3', isInside: false }],
+    });
+  });
+});
+
+describe('ZonesService.softDelete', () => {
+  let svc: ZonesService;
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    const module = await Test.createTestingModule({
+      providers: [ZonesService, { provide: PrismaService, useValue: prismaMock }],
+    }).compile();
+    svc = module.get(ZonesService);
+  });
+
+  it('устанавливает deletedAt и не трогает события/состояния', async () => {
+    prismaMock.zone.findFirst.mockResolvedValue({ id: 'z1', familyId: 'f1', deletedAt: null });
+    prismaMock.zone.update.mockResolvedValue({ id: 'z1', deletedAt: new Date() });
+
+    await svc.softDelete('f1', 'z1');
+
+    expect(prismaMock.zone.update).toHaveBeenCalledWith({
+      where: { id: 'z1' },
+      data: { deletedAt: expect.any(Date) },
+    });
+    expect(prismaMock.zoneState.deleteMany).not.toHaveBeenCalled();
+  });
+});
