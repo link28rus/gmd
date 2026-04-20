@@ -49,6 +49,17 @@
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="location"/>
+        <receiver
+            android:name=".GmdDeviceAdminReceiver"
+            android:permission="android.permission.BIND_DEVICE_ADMIN"
+            android:exported="true">
+          <meta-data
+              android:name="android.app.device_admin"
+              android:resource="@xml/device_admin"/>
+          <intent-filter>
+            <action android:name="android.app.action.DEVICE_ADMIN_ENABLED"/>
+          </intent-filter>
+        </receiver>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
