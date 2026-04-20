@@ -1,12 +1,12 @@
-import { Injectable, Logger } from '@nestjs/common';
-import type { MailerService } from '../../mailer/mailer.service';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { MailerService } from '../../mailer/mailer.service';
 import type { OtpDeliveryProvider } from './otp-delivery.provider';
 
 @Injectable()
 export class SmtpOtpProvider implements OtpDeliveryProvider {
   private readonly logger = new Logger(SmtpOtpProvider.name);
 
-  constructor(private readonly mailer: MailerService) {}
+  constructor(@Inject(MailerService) private readonly mailer: MailerService) {}
 
   async send(to: string, code: string): Promise<void> {
     if (process.env.OTP_LOG_DEV === 'true') {
