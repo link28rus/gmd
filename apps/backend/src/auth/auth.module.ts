@@ -44,7 +44,7 @@ function asNum(v: string | undefined, def: number): number {
     {
       provide: AUTH_CONFIG,
       useFactory: () => ({
-        privacyPolicyVersion: process.env.PRIVACY_POLICY_VERSION || '1.0',
+        privacyPolicyVersion: process.env.PRIVACY_POLICY_VERSION || '1.1',
       }),
     },
     {
