@@ -199,6 +199,38 @@ docs/superpowers/specs  design docs
 - Mobile-parent → экран «О приложении → Что нового» с той же информацией.
 - Версия приложения — всегда видна в sidebar web и на экране «О приложении» mobile.
 
+### Правило №3: единый источник версии
+
+**Source of truth — корневой [package.json](package.json), поле `version`.** Все производные версии (`apps/*/package.json`, `mobile-*/pubspec.yaml` часть X.Y.Z, Sentry release, версия в UI кабинета) выводятся из него через `pnpm version:sync` ([scripts/sync-version.mjs](scripts/sync-version.mjs)).
+
+**Flutter build numbers (`+N`)** — инкрементируются независимо перед каждой сборкой APK (`versionCode` обязан монотонно расти для RuStore). `version:sync` обновляет только X.Y.Z, `+N` сохраняется.
+
+**Релизный workflow:**
+
+```bash
+# 1. Обновить CHANGELOG.md — добавить блок ## vX.Y.Z сверху
+# 2. Bump корневой package.json (вручную или через npm version)
+npm version X.Y.Z --no-git-tag-version --workspaces=false
+
+# 3. Распространить в apps
+pnpm version:sync
+
+# 4. Валидация
+pnpm version:check
+
+# 5. Если релизим mobile — bump build number (+N) отдельно
+
+# 6. Коммит + тег
+git add -A && git commit -m "chore: release vX.Y.Z" && git tag vX.Y.Z
+```
+
+**Проверки:**
+
+- `pnpm version:check` — локально, pre-commit hook, и CI workflow [.github/workflows/version-check.yml](.github/workflows/version-check.yml).
+- Падает при: рассинхроне `*/package.json`, pubspec X.Y.Z ≠ root, верхний `## vX.Y.Z` в CHANGELOG ≠ root, возврате `apps/web/lib/version.ts`.
+
+**Запрещено:** править версию в одном файле в обход `pnpm version:sync`; возвращать `apps/web/lib/version.ts` (удалён — UI читает `process.env.APP_VERSION`, пробрасывается через `next.config.ts`).
+
 ## Команды (dev)
 
 ### Начальная установка
