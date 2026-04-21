@@ -1,6 +1,12 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import * as Sentry from '@sentry/node';
 import type { ErrorEvent, Event, EventHint } from '@sentry/node';
 import { scrubPii } from './scrub-pii';
+
+const pkg = JSON.parse(readFileSync(join(__dirname, '../../../package.json'), 'utf8')) as {
+  version: string;
+};
 
 const FILTERED_EXCEPTION_NAMES = new Set([
   'UnauthorizedException',
@@ -30,7 +36,7 @@ export function initSentry(): void {
   Sentry.init({
     dsn,
     environment: process.env.NODE_ENV ?? 'development',
-    release: process.env.APP_VERSION,
+    release: process.env.APP_VERSION ?? pkg.version,
     sampleRate: 1.0,
     tracesSampleRate: 0,
     beforeSend(event: ErrorEvent, hint: EventHint): ErrorEvent | null {
