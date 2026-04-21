@@ -17,9 +17,21 @@ export function writePackageJsonVersion(filePath, version) {
   writeFileSync(filePath, updated);
 }
 
+export function writePubspecVersion(filePath, newSemver) {
+  const raw = readFileSync(filePath, 'utf8');
+  const updated = raw.replace(
+    /^(version:\s*)(\d+\.\d+\.\d+)(\+\d+)?\s*$/m,
+    (_, prefix, _old, build) => `${prefix}${newSemver}${build ?? ''}`
+  );
+  writeFileSync(filePath, updated);
+}
+
 export function sync(rootDir) {
   const v = getRootVersion(rootDir);
   for (const rel of TARGETS.packageJsons) {
     writePackageJsonVersion(join(rootDir, rel), v);
+  }
+  for (const rel of TARGETS.pubspecs) {
+    writePubspecVersion(join(rootDir, rel), v);
   }
 }

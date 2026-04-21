@@ -55,3 +55,31 @@ test('sync распространяет версию в apps/*/package.json', ()
     cleanup();
   }
 });
+
+test('sync обновляет X.Y.Z в pubspec, сохраняет build number +N', () => {
+  const { root, cleanup } = makeFakeRepo('1.2.3');
+  try {
+    sync(root);
+    const child = readFileSync(join(root, 'apps/mobile-child/pubspec.yaml'), 'utf8');
+    const parent = readFileSync(join(root, 'apps/mobile-parent/pubspec.yaml'), 'utf8');
+    assert.match(child, /^version:\s*1\.2\.3\+5$/m);
+    assert.match(parent, /^version:\s*1\.2\.3\+1$/m);
+  } finally {
+    cleanup();
+  }
+});
+
+test('sync оставляет pubspec без +N неизменным по части X.Y.Z', () => {
+  const { root, cleanup } = makeFakeRepo('2.0.0');
+  try {
+    writeFileSync(
+      join(root, 'apps/mobile-child/pubspec.yaml'),
+      'name: gmd_child\nversion: 0.0.0\n'
+    );
+    sync(root);
+    const child = readFileSync(join(root, 'apps/mobile-child/pubspec.yaml'), 'utf8');
+    assert.match(child, /^version:\s*2\.0\.0$/m);
+  } finally {
+    cleanup();
+  }
+});
