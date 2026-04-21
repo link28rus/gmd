@@ -9,7 +9,12 @@ interface MockPrisma {
   _children: any[];
   _devices: any[];
   invite: { findFirst: jest.Mock; update: jest.Mock };
-  childDevice: { findFirst: jest.Mock; create: jest.Mock; update: jest.Mock };
+  childDevice: {
+    findFirst: jest.Mock;
+    create: jest.Mock;
+    update: jest.Mock;
+    deleteMany: jest.Mock;
+  };
   child: { findFirst: jest.Mock };
   $transaction: jest.Mock;
   $queryRawUnsafe: jest.Mock;
@@ -58,6 +63,16 @@ function makePrismaMock(): MockPrisma {
         const row = devices.find((d) => d.id === where.id);
         Object.assign(row, data);
         return Promise.resolve(row);
+      }),
+      deleteMany: jest.fn(({ where }: any) => {
+        const before = devices.length;
+        for (let i = devices.length - 1; i >= 0; i--) {
+          const d = devices[i];
+          if (where.childId && d.childId !== where.childId) continue;
+          if (where.revokedAt?.not === null && d.revokedAt === null) continue;
+          devices.splice(i, 1);
+        }
+        return Promise.resolve({ count: before - devices.length });
       }),
     },
     child: {
@@ -173,6 +188,35 @@ describe('ChildDeviceService.claim', () => {
     p._devices.push({ id: 'd1', childId: 'c1', revokedAt: null });
     const svc = makeSvc(p);
     await expect(svc.claim('K4HJ9XPN', {})).rejects.toThrow(ConflictException);
+  });
+
+  it('revoked device для того же child → старая запись удаляется, новый claim проходит', async () => {
+    const p = makePrismaMock();
+    p._children.push({ id: 'c1', familyId: 'f1', name: 'V', deletedAt: null, dateOfBirth: null });
+    p._invites.push({
+      id: 'i1',
+      code: 'K4HJ9XPN',
+      familyId: 'f1',
+      childId: 'c1',
+      createdBy: 'u-parent',
+      expiresAt: new Date(Date.now() + 600_000),
+      consumedAt: null,
+    });
+    // старый device — revoked (имитирует повторный claim после /reset-device)
+    p._devices.push({
+      id: 'd-old',
+      childId: 'c1',
+      revokedAt: new Date(),
+      tokenHash: 'old-hash',
+    });
+    const svc = makeSvc(p);
+    const r = await svc.claim('K4HJ9XPN', { deviceName: 'Pixel-new' });
+    expect(r.deviceToken).toBeTruthy();
+    // старая запись удалена, в массиве остался только новый device
+    expect(p._devices).toHaveLength(1);
+    expect(p._devices[0].id).not.toBe('d-old');
+    expect(p._devices[0].revokedAt).toBeNull();
+    expect(p._devices[0].deviceName).toBe('Pixel-new');
   });
 
   it('нормализует code (lower-case и пробелы)', async () => {

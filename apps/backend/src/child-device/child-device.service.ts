@@ -63,6 +63,14 @@ export class ChildDeviceService {
           message: 'Child already has active device',
         });
       }
+      // `ChildDevice.childId` имеет глобальный `@unique`, не partial — поэтому
+      // старые revoked-записи (после /reset-device) остаются в индексе и
+      // валят следующий claim с P2002. Удаляем их до create (cascade снесёт
+      // старые locations/sos — они уже привязаны к revoked-устройству и
+      // не нужны новому claim'у).
+      await tx.childDevice.deleteMany({
+        where: { childId: invite.childId, revokedAt: { not: null } },
+      });
       const child = await tx.child.findFirst({
         where: { id: invite.childId, deletedAt: null },
       });
