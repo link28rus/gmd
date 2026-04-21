@@ -60,9 +60,15 @@
 		reverse_proxy web:3000
 	}
 
-	# /api/download + /api/download/* — web (list + stream APK из /srv/download)
+	# /api/download + /api/download/* — web (list + stream APK из /srv/download, auth)
 	@download path /api/download /api/download/*
 	handle @download {
+		reverse_proxy web:3000
+	}
+
+	# /api/public/download* — web (публичный листинг + скачивание APK для лендинга)
+	@publicDownload path /api/public/download /api/public/download/*
+	handle @publicDownload {
 		reverse_proxy web:3000
 	}
 
