@@ -120,6 +120,8 @@ export class TripsService {
 
     // Пересчёт в БД: атомарно удалим все trips ребёнка и вставим заново.
     // Оптимизация — diff'инг — позже; для MVP проще и надёжнее.
+    let saved = 0;
+    let skipped = 0;
     await this.prisma.$transaction(async (tx) => {
       await tx.trip.deleteMany({ where: { childId } });
       for (let i = 0; i < trips.length; i++) {
@@ -127,6 +129,17 @@ export class TripsService {
         const isLast = i === trips.length - 1;
         const idleSinceEnd = now - t.endedAt.getTime();
         const isActive = isLast && idleSinceEnd < idleMs;
+        // Фильтр «ложных» поездок: если ребёнок всё время был в радиусе
+        // idleRadiusM от стартовой точки (anchor ни разу не обновлялся
+        // → distanceM накоплено меньше радиуса остановки), это не поездка,
+        // а GPS-шум на стоянке. Такие trip засоряли «Историю передвижений»
+        // строчками «30 мин, 0 м, 134 точки». Активный trip оставляем
+        // всегда — он нужен онлайн-карте, чтобы рисовать трек сразу
+        // при начале движения, даже если пройдено пока мало.
+        if (!isActive && t.distanceM < idleRadiusM) {
+          skipped += 1;
+          continue;
+        }
         await tx.trip.create({
           data: {
             childId,
@@ -141,10 +154,11 @@ export class TripsService {
             endLon: t.endLon,
           },
         });
+        saved += 1;
       }
     });
 
-    this.logger.log(`trips recomputed child=${childId} total=${trips.length}`);
+    this.logger.log(`trips recomputed child=${childId} saved=${saved} skipped_idle=${skipped}`);
   }
 
   async getActiveTrack(childId: string): Promise<{ trip: TripDto | null; points: Point[] }> {
