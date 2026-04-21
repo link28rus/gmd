@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, readFileSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { sync } from './sync-version.mjs';
+import { sync, check } from './sync-version.mjs';
 
 function makeFakeRepo(version = '1.2.3') {
   const root = mkdtempSync(join(tmpdir(), 'gmd-sync-'));
@@ -79,6 +79,130 @@ test('sync оставляет pubspec без +N неизменным по час
     sync(root);
     const child = readFileSync(join(root, 'apps/mobile-child/pubspec.yaml'), 'utf8');
     assert.match(child, /^version:\s*2\.0\.0$/m);
+  } finally {
+    cleanup();
+  }
+});
+
+test('sync идемпотентен — повторный запуск не меняет файлы', () => {
+  const { root, cleanup } = makeFakeRepo('1.2.3');
+  try {
+    sync(root);
+    const webSnap = readFileSync(join(root, 'apps/web/package.json'), 'utf8');
+    const childSnap = readFileSync(join(root, 'apps/mobile-child/pubspec.yaml'), 'utf8');
+    sync(root);
+    assert.equal(readFileSync(join(root, 'apps/web/package.json'), 'utf8'), webSnap);
+    assert.equal(readFileSync(join(root, 'apps/mobile-child/pubspec.yaml'), 'utf8'), childSnap);
+  } finally {
+    cleanup();
+  }
+});
+
+test('check на синхронном репо возвращает пустой массив ошибок', () => {
+  const { root, cleanup } = makeFakeRepo('1.2.3');
+  try {
+    sync(root);
+    assert.deepEqual(check(root), []);
+  } finally {
+    cleanup();
+  }
+});
+
+test('check ловит расхождение apps/web/package.json', () => {
+  const { root, cleanup } = makeFakeRepo('1.2.3');
+  try {
+    sync(root);
+    writeFileSync(
+      join(root, 'apps/web/package.json'),
+      JSON.stringify({ name: '@gmd/web', version: '9.9.9' }, null, 2) + '\n'
+    );
+    const errors = check(root);
+    assert.equal(errors.length, 1);
+    assert.match(errors[0], /apps\/web\/package\.json/);
+    assert.match(errors[0], /1\.2\.3/);
+    assert.match(errors[0], /9\.9\.9/);
+  } finally {
+    cleanup();
+  }
+});
+
+test('check ловит расхождение X.Y.Z в pubspec (build number игнорируется)', () => {
+  const { root, cleanup } = makeFakeRepo('1.2.3');
+  try {
+    sync(root);
+    writeFileSync(
+      join(root, 'apps/mobile-child/pubspec.yaml'),
+      'name: gmd_child\nversion: 0.9.9+5\n'
+    );
+    const errors = check(root);
+    assert.equal(errors.length, 1);
+    assert.match(errors[0], /apps\/mobile-child\/pubspec\.yaml/);
+    assert.match(errors[0], /1\.2\.3/);
+    assert.match(errors[0], /0\.9\.9/);
+  } finally {
+    cleanup();
+  }
+});
+
+test('check игнорирует разные build number в pubspec', () => {
+  const { root, cleanup } = makeFakeRepo('1.2.3');
+  try {
+    sync(root);
+    writeFileSync(
+      join(root, 'apps/mobile-child/pubspec.yaml'),
+      'name: gmd_child\nversion: 1.2.3+999\n'
+    );
+    assert.deepEqual(check(root), []);
+  } finally {
+    cleanup();
+  }
+});
+
+test('check ловит расхождение верхней записи CHANGELOG', () => {
+  const { root, cleanup } = makeFakeRepo('1.2.3');
+  try {
+    sync(root);
+    writeFileSync(
+      join(root, 'CHANGELOG.md'),
+      `# Changelog\n\n## v0.9.9 — 2026-04-01\n\n- old\n`
+    );
+    const errors = check(root);
+    assert.equal(errors.length, 1);
+    assert.match(errors[0], /CHANGELOG\.md/);
+    assert.match(errors[0], /0\.9\.9/);
+    assert.match(errors[0], /1\.2\.3/);
+  } finally {
+    cleanup();
+  }
+});
+
+test('check пропускает CHANGELOG без ни одной записи', () => {
+  const { root, cleanup } = makeFakeRepo('1.2.3');
+  try {
+    sync(root);
+    writeFileSync(join(root, 'CHANGELOG.md'), '# Changelog\n\nНет записей.\n');
+    const errors = check(root);
+    assert.equal(errors.length, 1);
+    assert.match(errors[0], /CHANGELOG\.md/);
+    assert.match(errors[0], /no version entry/i);
+  } finally {
+    cleanup();
+  }
+});
+
+test('check падает, если apps/web/lib/version.ts вернулся', () => {
+  const { root, cleanup } = makeFakeRepo('1.2.3');
+  try {
+    sync(root);
+    mkdirSync(join(root, 'apps/web/lib'), { recursive: true });
+    writeFileSync(
+      join(root, 'apps/web/lib/version.ts'),
+      "export const APP_VERSION = '1.2.3';\n"
+    );
+    const errors = check(root);
+    assert.equal(errors.length, 1);
+    assert.match(errors[0], /apps\/web\/lib\/version\.ts/);
+    assert.match(errors[0], /source of truth/i);
   } finally {
     cleanup();
   }
