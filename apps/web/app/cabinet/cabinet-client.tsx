@@ -1,10 +1,19 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import type { ReactElement } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState, type ReactElement } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { toast } from 'sonner';
 import { useAuthStore, type AuthUser, type AuthFamily } from '@/lib/auth-store';
+import { useChildren } from '@/lib/hooks/use-children';
+import { useLatestLocation } from '@/lib/hooks/use-latest-location';
+import { useLocationHistory } from '@/lib/hooks/use-location-history';
+import { ChildrenSidebar } from '@/components/cabinet/children-sidebar';
+import { ChildMap } from '@/components/locations/child-map';
+import { ChildStatusCard } from '@/components/locations/child-status-card';
+import { MapErrorFallback } from '@/components/locations/map-error-fallback';
+import { TrackTruncatedBanner } from '@/components/locations/track-truncated-banner';
+import { todayIso } from '@/lib/date/day-bounds';
+import { ApiError } from '@/lib/api/client';
 
 interface RefreshResponse {
   accessToken: string;
@@ -15,18 +24,14 @@ interface RefreshResponse {
 
 export default function CabinetClient(): ReactElement {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const accessToken = useAuthStore((s) => s.accessToken);
-  const user = useAuthStore((s) => s.user);
-  const family = useAuthStore((s) => s.family);
   const setAll = useAuthStore((s) => s.setAll);
   const setConsent = useAuthStore((s) => s.setConsent);
-  const clear = useAuthStore((s) => s.clear);
-
-  const [loading, setLoading] = useState(false);
   const [bootstrapping, setBootstrapping] = useState(accessToken === null);
 
   useEffect(() => {
-    if (accessToken !== null && user !== null && family !== null) {
+    if (accessToken !== null) {
       setBootstrapping(false);
       return;
     }
@@ -58,78 +63,136 @@ export default function CabinetClient(): ReactElement {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function logout(): Promise<void> {
-    setLoading(true);
-    try {
-      await fetch('/api/auth/logout', { method: 'POST' });
-    } catch {
-      // всё равно очищаем локальное состояние
-    }
-    clear();
-    router.push('/');
-  }
-
   if (bootstrapping) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="flex h-[calc(100vh-49px)] items-center justify-center">
         <p className="text-sm text-zinc-500">Загружаем…</p>
       </div>
     );
   }
 
-  if (!user || !family) {
+  return <CabinetHome initialChildId={searchParams.get('childId')} />;
+}
+
+function CabinetHome({ initialChildId }: { initialChildId: string | null }): ReactElement {
+  const router = useRouter();
+  const childrenQ = useChildren();
+  const [selectedId, setSelectedId] = useState<string | null>(initialChildId);
+
+  // Если ничего не выбрано — выбираем первого ребёнка автоматически.
+  useEffect(() => {
+    if (selectedId) return;
+    const first = childrenQ.data?.children[0]?.id;
+    if (first) setSelectedId(first);
+  }, [childrenQ.data, selectedId]);
+
+  function selectChild(id: string): void {
+    setSelectedId(id);
+    const url = new URL(window.location.href);
+    url.searchParams.set('childId', id);
+    router.replace(`${url.pathname}?${url.searchParams.toString()}`, { scroll: false });
+  }
+
+  const kids = childrenQ.data?.children ?? [];
+  const selected = kids.find((c) => c.id === selectedId) ?? null;
+
+  if (childrenQ.isPending) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <p className="text-sm text-zinc-500">Сессия не активна</p>
+      <div className="flex h-[calc(100vh-49px)] items-center justify-center">
+        <p className="text-sm text-zinc-500">Загрузка…</p>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 p-6">
-      <div className="w-full max-w-md rounded-lg border border-zinc-200 bg-white p-8 shadow-sm">
-        <h1 className="mb-2 text-2xl font-semibold text-zinc-900">
-          Привет, {user.name ?? user.email}!
-        </h1>
-        <p className="mb-6 text-sm text-zinc-600">
-          Семья: <b className="text-zinc-900">{family.name}</b>
-        </p>
-        <div className="space-y-2 text-sm text-zinc-500">
-          <p>Email: {user.email}</p>
-          <p>Локаль: {user.locale}</p>
-        </div>
-        <Link
-          href="/cabinet/children"
-          className="mt-6 block w-full rounded-md border border-zinc-300 bg-white py-2 text-center text-sm font-medium text-zinc-700 hover:bg-zinc-50"
-        >
-          Перейти к разделу «Мои дети»
-        </Link>
-        <Link
-          href="/cabinet/password"
-          className="mt-2 block w-full rounded-md border border-zinc-300 bg-white py-2 text-center text-sm font-medium text-zinc-700 hover:bg-zinc-50"
-        >
-          {user.hasPassword ? 'Сменить пароль' : 'Установить пароль'}
-        </Link>
-        <Link
-          href="/cabinet/zones"
-          className="mt-2 block w-full rounded-md border border-zinc-300 bg-white py-2 text-center text-sm font-medium text-zinc-700 hover:bg-zinc-50"
-        >
-          Геозоны
-        </Link>
-        <Link
-          href="/cabinet/download"
-          className="mt-2 block w-full rounded-md border border-zinc-300 bg-white py-2 text-center text-sm font-medium text-zinc-700 hover:bg-zinc-50"
-        >
-          Приложение ребёнка
-        </Link>
-        <button
-          onClick={logout}
-          disabled={loading}
-          className="mt-8 w-full rounded-md bg-zinc-900 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50"
-        >
-          {loading ? 'Выходим…' : 'Выйти'}
-        </button>
+    <div className="flex h-[calc(100vh-49px)]">
+      <ChildrenSidebar children={kids} selectedId={selectedId} onSelect={selectChild} />
+      <div className="relative flex-1 overflow-hidden">
+        {selected ? (
+          <MapArea childId={selected.id} childName={selected.name} />
+        ) : (
+          <div className="flex h-full items-center justify-center bg-zinc-50 p-6 text-center text-zinc-600">
+            Добавьте первого ребёнка в меню слева, чтобы увидеть карту.
+          </div>
+        )}
       </div>
     </div>
+  );
+}
+
+function MapArea({ childId, childName }: { childId: string; childName: string }): ReactElement {
+  const router = useRouter();
+  const [date] = useState(todayIso());
+  const [mapFailed, setMapFailed] = useState(false);
+  const latestQ = useLatestLocation(childId);
+  const { query: historyQ, isTruncated } = useLocationHistory(childId, date);
+
+  useEffect(() => {
+    const err = latestQ.error ?? historyQ.error;
+    if (err instanceof ApiError && err.status === 404) {
+      toast.error('Ребёнок не найден');
+      router.replace('/cabinet');
+    } else if (err) {
+      toast.error('Не удалось загрузить данные карты');
+    }
+  }, [latestQ.error, historyQ.error, router]);
+
+  const latest = latestQ.data ?? null;
+  const track = historyQ.data?.items ?? [];
+  const emptyState =
+    latest === null && track.length === 0 && !latestQ.isPending && !historyQ.isPending;
+
+  if (emptyState) {
+    return (
+      <div className="flex h-full items-center justify-center bg-zinc-50 p-6 text-center text-zinc-600">
+        От устройства ребёнка ещё не приходили координаты. Убедитесь, что приложение установлено и
+        открыто хотя бы раз.
+      </div>
+    );
+  }
+
+  if (mapFailed) {
+    return (
+      <MapErrorFallback
+        latest={
+          latest
+            ? {
+                lat: latest.lat,
+                lon: latest.lon,
+                accuracy: latest.accuracy,
+                recordedAt: latest.recordedAt,
+              }
+            : null
+        }
+      />
+    );
+  }
+
+  return (
+    <>
+      {isTruncated && (
+        <div className="absolute left-4 right-4 top-4 z-10">
+          <TrackTruncatedBanner />
+        </div>
+      )}
+      <ChildMap
+        childName={childName}
+        latest={latest}
+        track={track}
+        onMapError={() => setMapFailed(true)}
+      />
+      {latest && (
+        <div className="absolute left-4 top-4 z-10">
+          <ChildStatusCard
+            childName={childName}
+            ageSec={latest.ageSec}
+            accuracy={latest.accuracy}
+            batteryLevel={latest.batteryLevel}
+            isCharging={latest.isCharging}
+            provider={latest.provider}
+          />
+        </div>
+      )}
+    </>
   );
 }

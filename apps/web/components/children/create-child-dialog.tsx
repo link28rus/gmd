@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useCreateChild } from '@/lib/hooks/use-children';
+import type { ReactNode } from 'react';
 
 const schema = z.object({
   name: z.string().trim().min(1, 'Укажите имя').max(120, 'Слишком длинное имя'),
@@ -27,7 +28,7 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 
-export function CreateChildDialog() {
+export function CreateChildDialog({ trigger }: { trigger?: ReactNode } = {}) {
   const [open, setOpen] = useState(false);
   const create = useCreateChild();
   const {
@@ -53,9 +54,7 @@ export function CreateChildDialog() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button>Добавить ребёнка</Button>
-      </DialogTrigger>
+      <DialogTrigger asChild>{trigger ?? <Button>Добавить ребёнка</Button>}</DialogTrigger>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Новый ребёнок</DialogTitle>

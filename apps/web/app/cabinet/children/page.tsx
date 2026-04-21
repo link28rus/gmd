@@ -1,11 +1,8 @@
 // apps/web/app/cabinet/children/page.tsx
-import { cookies } from 'next/headers';
+// Deprecated: страница «Мои дети» схлопнулась в главную `/cabinet`
+// (список детей слева + карта справа).
 import { redirect } from 'next/navigation';
-import type { ReactElement } from 'react';
-import ChildrenClient from './children-client';
 
-export default async function ChildrenPage(): Promise<ReactElement> {
-  const cookieStore = await cookies();
-  if (!cookieStore.get('gmd_refresh')) redirect('/login');
-  return <ChildrenClient />;
+export default function ChildrenPage(): never {
+  redirect('/cabinet');
 }
