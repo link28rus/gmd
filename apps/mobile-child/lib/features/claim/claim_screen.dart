@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import '../../core/version/app_version.dart';
 import 'claim_code.dart';
 import 'claim_controller.dart';
 
@@ -31,7 +32,15 @@ class _ClaimScreenState extends ConsumerState<ClaimScreen> {
     final hasError = state.status == ClaimStatus.error;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Покажи код от родителя')),
+      appBar: AppBar(
+        title: const Text('Покажи код от родителя'),
+        actions: const [
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 12),
+            child: AppVersionLabel(),
+          ),
+        ],
+      ),
       body: Stack(
         children: [
           MobileScanner(

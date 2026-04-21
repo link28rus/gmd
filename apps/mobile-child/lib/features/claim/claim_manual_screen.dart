@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/version/app_version.dart';
 import 'claim_code.dart';
 import 'claim_controller.dart';
 
@@ -38,7 +39,15 @@ class _ClaimManualScreenState extends ConsumerState<ClaimManualScreen> {
     });
     final state = ref.watch(claimControllerProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Введите код')),
+      appBar: AppBar(
+        title: const Text('Введите код'),
+        actions: const [
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 12),
+            child: AppVersionLabel(),
+          ),
+        ],
+      ),
       body: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(

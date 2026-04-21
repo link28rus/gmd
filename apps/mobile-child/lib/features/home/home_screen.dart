@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/version/app_version.dart';
 import '../sos/sos_controller.dart';
 import 'home_controller.dart';
 
@@ -32,7 +33,15 @@ class HomeScreen extends ConsumerWidget {
     final isSending = sosState.status == SosStatus.sending;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('GMD')),
+      appBar: AppBar(
+        title: const Text('GMD'),
+        actions: const [
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 12),
+            child: AppVersionLabel(),
+          ),
+        ],
+      ),
       body: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(

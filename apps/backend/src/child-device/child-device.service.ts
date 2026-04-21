@@ -18,6 +18,7 @@ export interface ClaimMeta {
 export interface ClaimResult {
   deviceToken: string;
   child: { id: string; name: string; familyId: string };
+  device: { id: string };
 }
 
 export interface ChildAuthContext {
@@ -88,7 +89,7 @@ export class ChildDeviceService {
       }
 
       const token = randomBytes(32).toString('base64url');
-      await tx.childDevice.create({
+      const newDevice = await tx.childDevice.create({
         data: {
           childId: invite.childId,
           tokenHash: sha256(token),
@@ -104,6 +105,7 @@ export class ChildDeviceService {
       return {
         deviceToken: token,
         child: { id: child.id, name: child.name, familyId: child.familyId },
+        device: { id: newDevice.id },
         childAge,
         parentUserId: invite.createdBy,
         childId: child.id,
@@ -118,6 +120,7 @@ export class ChildDeviceService {
     return {
       deviceToken: result.deviceToken,
       child: result.child,
+      device: result.device,
     };
   }
 

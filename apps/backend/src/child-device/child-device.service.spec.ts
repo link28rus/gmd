@@ -136,6 +136,7 @@ describe('ChildDeviceService.claim', () => {
     expect(r.deviceToken.length).toBeGreaterThan(30);
     expect(r.child.id).toBe('c1');
     expect(r.child.name).toBe('Vanya');
+    expect(r.device.id).toBe(p._devices[0].id);
     expect(p._invites[0].consumedAt).not.toBeNull();
     expect(p._devices[0].tokenHash).not.toBe(r.deviceToken);
     expect(p._devices[0].deviceName).toBe('Pixel');

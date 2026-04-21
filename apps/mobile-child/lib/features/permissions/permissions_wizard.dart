@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../core/version/app_version.dart';
+
 class PermissionsWizardScaffold extends StatelessWidget {
   const PermissionsWizardScaffold({
     super.key,
@@ -23,7 +25,15 @@ class PermissionsWizardScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Шаг ${stepIndex + 1} из $totalSteps')),
+      appBar: AppBar(
+        title: Text('Шаг ${stepIndex + 1} из $totalSteps'),
+        actions: const [
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 12),
+            child: AppVersionLabel(),
+          ),
+        ],
+      ),
       body: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
