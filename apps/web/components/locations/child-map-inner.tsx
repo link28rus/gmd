@@ -15,6 +15,7 @@ import { LatestMarker } from './latest-marker';
 import { TrackPolyline } from './track-polyline';
 
 export interface ChildMapInnerProps {
+  childId: string;
   childName: string;
   latest: LatestLocationDto | null;
   track: LocationDto[];
@@ -45,6 +46,7 @@ function initialLocationFor(latest: LatestLocationDto | null, track: LocationDto
 }
 
 export function ChildMapInner({
+  childId,
   childName,
   latest,
   track,
@@ -84,6 +86,17 @@ export function ChildMapInner({
   useEffect(() => {
     if (!apiKey) onMapError();
   }, [apiKey, onMapError]);
+
+  // При переключении ребёнка в сайдбаре — центрируем карту на выбранном
+  // ребёнке, как только приходят его координаты. Срабатывает один раз на
+  // смену childId: последующие апдейты latest (каждые 5 с) карту не двигают.
+  const [lastCenteredChildId, setLastCenteredChildId] = useState<string | null>(null);
+  useEffect(() => {
+    if (latest && lastCenteredChildId !== childId) {
+      setLocation({ center: [latest.lon, latest.lat], zoom: FOLLOW_ZOOM });
+      setLastCenteredChildId(childId);
+    }
+  }, [childId, latest, lastCenteredChildId]);
 
   if (!apiKey) return <></>;
 

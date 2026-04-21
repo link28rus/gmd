@@ -223,6 +223,7 @@ function MapArea({ child }: { child: Child }): ReactElement {
   return (
     <>
       <ChildMap
+        childId={child.id}
         childName={child.name}
         latest={latest}
         track={track}

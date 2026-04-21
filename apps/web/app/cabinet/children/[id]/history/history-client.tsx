@@ -157,6 +157,7 @@ function TripMapPreview({
   const last = points[points.length - 1];
   return (
     <ChildMap
+      childId={trip.id}
       childName={`Поездка ${fmtDate(trip.startedAt)}`}
       latest={{
         lat: last.lat,

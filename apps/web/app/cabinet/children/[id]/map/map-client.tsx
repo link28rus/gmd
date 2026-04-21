@@ -131,6 +131,7 @@ export default function MapClient({ childId }: Props): ReactElement {
         ) : (
           <>
             <ChildMap
+              childId={child.id}
               childName={child.name}
               latest={latest}
               track={track}
