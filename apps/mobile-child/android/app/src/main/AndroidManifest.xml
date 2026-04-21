@@ -94,6 +94,13 @@
             android:name=".RestartReceiver"
             android:enabled="true"
             android:exported="false"/>
+        <!-- AlarmManager-heartbeat: раз в 2 минуты сервис через этот ресивер
+             просыпается и отправляет текущую точку. Заменяет Handler.postDelayed,
+             который заморачивается MIUI после свайпа. -->
+        <receiver
+            android:name=".HeartbeatReceiver"
+            android:enabled="true"
+            android:exported="false"/>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

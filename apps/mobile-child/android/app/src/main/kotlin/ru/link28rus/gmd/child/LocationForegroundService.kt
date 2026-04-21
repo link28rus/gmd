@@ -9,7 +9,6 @@ import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
 import android.os.BatteryManager
 import android.os.Build
-import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
@@ -37,11 +36,15 @@ class LocationForegroundService : Service() {
         const val DART_LIBRARY_URI = "package:gmd_child/background/location_entry.dart"
         const val ACTION_START = "ACTION_START"
         const val ACTION_STOP = "ACTION_STOP"
+        const val ACTION_HEARTBEAT = "ACTION_HEARTBEAT"
         private const val WAKE_LOCK_TAG = "gmd:LocationForegroundService"
         // Heartbeat — гарантированная точка раз в 2 минуты, даже если телефон
         // неподвижен и fused с distance-filter 5м не присылает обновлений.
         // Родитель в web видит "Был тут только что" независимо от движения.
+        // Реализовано через AlarmManager (не Handler), чтобы MIUI не замораживал
+        // тики после свайпа — см. HeartbeatReceiver.
         private const val HEARTBEAT_INTERVAL_MS = 2 * 60 * 1000L
+        private const val HEARTBEAT_ALARM_REQUEST = 0x48
     }
 
     private lateinit var fused: FusedLocationProviderClient
@@ -49,27 +52,6 @@ class LocationForegroundService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var bgEngine: FlutterEngine? = null
     private var bgChannel: MethodChannel? = null
-    private var heartbeatHandler: Handler? = null
-    private val heartbeatRunnable = object : Runnable {
-        override fun run() {
-            log("heartbeat tick")
-            try {
-                fused.lastLocation
-                    .addOnSuccessListener { loc ->
-                        if (loc != null) {
-                            log("heartbeat: got last location, sending")
-                            sendToDart(loc)
-                        } else {
-                            log("heartbeat: lastLocation is null — provider has no cached fix yet")
-                        }
-                    }
-                    .addOnFailureListener { e -> logErr("heartbeat lastLocation failed", e) }
-            } catch (e: SecurityException) {
-                logErr("heartbeat lastLocation SecurityException", e)
-            }
-            heartbeatHandler?.postDelayed(this, HEARTBEAT_INTERVAL_MS)
-        }
-    }
 
     private fun log(msg: String) = DiagLog.write(this, "svc", msg)
     private fun logErr(msg: String, e: Throwable) =
@@ -87,14 +69,88 @@ class LocationForegroundService : Service() {
         log("onStartCommand action=${intent?.action} flags=$flags startId=$startId")
         when (intent?.action) {
             ACTION_STOP -> {
+                cancelHeartbeatAlarm()
                 releaseWakeLock()
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
                 return START_NOT_STICKY
             }
+            ACTION_HEARTBEAT -> {
+                // AlarmManager разбудил нас — нужен promote в foreground,
+                // иначе на Android 12+ startForegroundService без startForeground
+                // в 5 сек = ANR. Если сервис уже живой, повторный startForeground
+                // безопасен.
+                startForeground(NOTIF_ID, buildNotification())
+                handleHeartbeat()
+                // Перепланируем следующий alarm — делаем это всегда, в т.ч.
+                // после ошибок lastLocation, иначе цепочка оборвётся.
+                scheduleHeartbeatAlarm()
+            }
             else -> start()
         }
         return START_STICKY
+    }
+
+    // Отдельный метод для heartbeat-тика, вызывается только из AlarmManager
+    // через HeartbeatReceiver → onStartCommand(ACTION_HEARTBEAT).
+    private fun handleHeartbeat() {
+        log("heartbeat tick (from AlarmManager)")
+        try {
+            fused.lastLocation
+                .addOnSuccessListener { loc ->
+                    if (loc != null) {
+                        log("heartbeat: got last location, sending")
+                        sendToDart(loc)
+                    } else {
+                        log("heartbeat: lastLocation is null — provider has no cached fix yet")
+                    }
+                }
+                .addOnFailureListener { e -> logErr("heartbeat lastLocation failed", e) }
+        } catch (e: SecurityException) {
+            logErr("heartbeat lastLocation SecurityException", e)
+        }
+    }
+
+    private fun scheduleHeartbeatAlarm() {
+        try {
+            val pi = PendingIntent.getBroadcast(
+                this,
+                HEARTBEAT_ALARM_REQUEST,
+                Intent(this, HeartbeatReceiver::class.java)
+                    .setAction(HeartbeatReceiver.ACTION_HEARTBEAT),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+            val am = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            val triggerAt = System.currentTimeMillis() + HEARTBEAT_INTERVAL_MS
+            val canExact = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                am.canScheduleExactAlarms()
+            } else true
+            if (canExact) {
+                am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
+                log("heartbeat alarm scheduled (exact) in ${HEARTBEAT_INTERVAL_MS / 1000}s")
+            } else {
+                am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
+                log("heartbeat alarm scheduled (inexact) in ${HEARTBEAT_INTERVAL_MS / 1000}s")
+            }
+        } catch (e: Throwable) {
+            logErr("heartbeat alarm schedule failed", e)
+        }
+    }
+
+    private fun cancelHeartbeatAlarm() {
+        try {
+            val pi = PendingIntent.getBroadcast(
+                this,
+                HEARTBEAT_ALARM_REQUEST,
+                Intent(this, HeartbeatReceiver::class.java)
+                    .setAction(HeartbeatReceiver.ACTION_HEARTBEAT),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+            val am = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            am.cancel(pi)
+        } catch (_: Throwable) {
+            // ignore
+        }
     }
 
     private fun ensureBackgroundEngine() {
@@ -220,14 +276,10 @@ class LocationForegroundService : Service() {
             stopSelf()
             return
         }
-        // Heartbeat: шлём текущую точку раз в 2 минуты, даже если телефон
-        // неподвижен и fused молчит из-за distance-filter 5м.
-        if (heartbeatHandler == null) {
-            heartbeatHandler = Handler(Looper.getMainLooper()).also {
-                it.postDelayed(heartbeatRunnable, HEARTBEAT_INTERVAL_MS)
-                log("heartbeat scheduled every ${HEARTBEAT_INTERVAL_MS / 1000}s")
-            }
-        }
+        // Heartbeat: шлём текущую точку раз в 2 минуты через AlarmManager.
+        // Ставим даже если повторный start() — PendingIntent с одним requestCode
+        // идемпотентен (replace-semantics), лишнего alarm'а не будет.
+        scheduleHeartbeatAlarm()
     }
 
     private fun sendToDart(loc: android.location.Location) {
@@ -385,8 +437,9 @@ class LocationForegroundService : Service() {
 
     override fun onDestroy() {
         log("onDestroy")
-        heartbeatHandler?.removeCallbacks(heartbeatRunnable)
-        heartbeatHandler = null
+        // Alarm НЕ отменяем в onDestroy — если система прибила service, но
+        // потом перезапустит его по START_STICKY/RestartReceiver, alarm-цепочка
+        // сохранит heartbeat. Отменяем только при явном ACTION_STOP.
         callback?.let { fused.removeLocationUpdates(it) }
         callback = null
         releaseWakeLock()
