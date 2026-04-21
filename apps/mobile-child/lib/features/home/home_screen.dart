@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/version/app_version.dart';
 import '../sos/sos_controller.dart';
 import 'home_controller.dart';
+import 'permission_health_banner.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -42,12 +43,16 @@ class HomeScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          children: [
-            const Text('Привет!',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+      body: Column(
+        children: [
+          const PermissionHealthBanner(),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                children: [
+                  const Text('Привет!',
+                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             const Text('Ты подключён к семье'),
             const SizedBox(height: 24),
@@ -101,9 +106,12 @@ class HomeScreen extends ConsumerWidget {
                 ),
               ),
             ),
-            const Spacer(),
-          ],
-        ),
+                  const Spacer(),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
