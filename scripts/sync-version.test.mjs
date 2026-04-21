@@ -69,6 +69,24 @@ test('sync обновляет X.Y.Z в pubspec, сохраняет build number 
   }
 });
 
+test('sync сохраняет пустые строки после version в pubspec', () => {
+  const { root, cleanup } = makeFakeRepo('1.2.3');
+  try {
+    writeFileSync(
+      join(root, 'apps/mobile-child/pubspec.yaml'),
+      'name: gmd_child\nversion: 0.0.0+5\n\nenvironment:\n  sdk: ^3.11.5\n'
+    );
+    sync(root);
+    const child = readFileSync(join(root, 'apps/mobile-child/pubspec.yaml'), 'utf8');
+    assert.equal(
+      child,
+      'name: gmd_child\nversion: 1.2.3+5\n\nenvironment:\n  sdk: ^3.11.5\n'
+    );
+  } finally {
+    cleanup();
+  }
+});
+
 test('sync оставляет pubspec без +N неизменным по части X.Y.Z', () => {
   const { root, cleanup } = makeFakeRepo('2.0.0');
   try {

@@ -35,7 +35,7 @@ export function readPubspecVersion(filePath) {
 export function writePubspecVersion(filePath, newSemver) {
   const raw = readFileSync(filePath, 'utf8');
   const updated = raw.replace(
-    /^(version:\s*)(\d+\.\d+\.\d+)(\+\d+)?\s*$/m,
+    /^(version:[ \t]*)(\d+\.\d+\.\d+)(\+\d+)?[ \t]*$/m,
     (_, prefix, _old, build) => `${prefix}${newSemver}${build ?? ''}`
   );
   writeFileSync(filePath, updated);
