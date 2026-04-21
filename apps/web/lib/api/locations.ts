@@ -14,6 +14,8 @@ export interface LatestLocationDto {
   isCharging: boolean | null;
   provider: 'gps' | 'fused' | 'network' | null;
   networkType: 'wifi' | 'mobile' | 'offline' | 'unknown' | null;
+  wifiSsid: string | null;
+  mobileOperator: string | null;
   ageSec: number;
 }
 

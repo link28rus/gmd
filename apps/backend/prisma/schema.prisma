@@ -205,6 +205,8 @@ model Location {
   isCharging       Boolean?
   provider         String?
   networkType      String?
+  wifiSsid         String?
+  mobileOperator   String?
   recordedAt       DateTime
   serverReceivedAt DateTime @default(now())
 

@@ -27,6 +27,8 @@ class LocationIngestor {
       isCharging: payload['isCharging'] as bool?,
       provider: payload['provider'] as String?,
       networkType: payload['networkType'] as String?,
+      wifiSsid: payload['wifiSsid'] as String?,
+      mobileOperator: payload['mobileOperator'] as String?,
       recordedAt: DateTime.fromMillisecondsSinceEpoch(
         (payload['recordedAt'] as num).toInt(),
       ),
@@ -63,6 +65,8 @@ class LocationIngestor {
                   isCharging: r.isCharging,
                   provider: r.provider,
                   networkType: r.networkType,
+                  wifiSsid: r.wifiSsid,
+                  mobileOperator: r.mobileOperator,
                   recordedAt: r.recordedAt,
                 ))
             .toList(),

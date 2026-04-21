@@ -13,6 +13,8 @@ export const LocationPointSchema = z
     isCharging: z.boolean().optional(),
     provider: z.enum(['gps', 'fused', 'network']).optional(),
     networkType: z.enum(['wifi', 'mobile', 'offline', 'unknown']).optional(),
+    wifiSsid: z.string().max(64).optional(),
+    mobileOperator: z.string().max(64).optional(),
   })
   .strict();
 

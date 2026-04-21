@@ -15,6 +15,8 @@ class PendingLocations extends Table {
   BoolColumn get isCharging => boolean().nullable()();
   TextColumn get provider => text().nullable()();
   TextColumn get networkType => text().nullable()();
+  TextColumn get wifiSsid => text().nullable()();
+  TextColumn get mobileOperator => text().nullable()();
   DateTimeColumn get recordedAt => dateTime()();
   IntColumn get uploadAttempts => integer().withDefault(const Constant(0))();
   DateTimeColumn get lastAttemptAt => dateTime().nullable()();
@@ -40,13 +42,17 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onUpgrade: (m, from, to) async {
           if (from < 2) {
             await m.addColumn(pendingLocations, pendingLocations.networkType);
+          }
+          if (from < 3) {
+            await m.addColumn(pendingLocations, pendingLocations.wifiSsid);
+            await m.addColumn(pendingLocations, pendingLocations.mobileOperator);
           }
         },
       );

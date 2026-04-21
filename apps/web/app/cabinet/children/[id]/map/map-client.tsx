@@ -146,6 +146,8 @@ export default function MapClient({ childId }: Props): ReactElement {
                   isCharging={latest.isCharging}
                   provider={latest.provider}
                   networkType={latest.networkType}
+                  wifiSsid={latest.wifiSsid}
+                  mobileOperator={latest.mobileOperator}
                 />
               </div>
             )}

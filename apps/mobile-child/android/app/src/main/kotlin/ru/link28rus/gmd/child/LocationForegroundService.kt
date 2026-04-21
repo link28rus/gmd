@@ -5,12 +5,14 @@ import android.content.Context
 import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.net.wifi.WifiManager
 import android.os.BatteryManager
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
+import android.telephony.TelephonyManager
 import androidx.core.app.NotificationCompat
 import com.google.android.gms.location.*
 import io.flutter.FlutterInjector
@@ -225,9 +227,45 @@ class LocationForegroundService : Service() {
             "isCharging" to isCharging,
             "provider" to (loc.provider ?: "fused"),
             "networkType" to currentNetworkType(),
+            "wifiSsid" to currentWifiSsid(),
+            "mobileOperator" to currentMobileOperator(),
             "recordedAt" to loc.time,
         )
         channel.invokeMethod("onLocation", payload)
+    }
+
+    // Имя текущей Wi-Fi сети. Android возвращает SSID в кавычках ("MyWifi")
+    // — убираем. На Android <28 без FINE_LOCATION возвращается
+    // "<unknown ssid>" — отфильтровываем. На Android 12+ требуется
+    // NEARBY_WIFI_DEVICES (уже в манифесте).
+    private fun currentWifiSsid(): String? {
+        return try {
+            val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+                ?: return null
+            @Suppress("DEPRECATION")
+            val info = wm.connectionInfo ?: return null
+            @Suppress("DEPRECATION")
+            val raw = info.ssid ?: return null
+            val unquoted = raw.removePrefix("\"").removeSuffix("\"")
+            if (unquoted.isEmpty() || unquoted == "<unknown ssid>" || unquoted == "0x") null
+            else unquoted.take(64)
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    // Имя оператора текущей мобильной сети (МТС, Билайн, МегаФон и т.п.).
+    // Не требует READ_PHONE_STATE для чтения name. Если SIM нет или
+    // телефон в режиме "только Wi-Fi" — возвращаем null.
+    private fun currentMobileOperator(): String? {
+        return try {
+            val tm = applicationContext.getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
+                ?: return null
+            val name = tm.networkOperatorName
+            if (name.isNullOrBlank()) null else name.take(64)
+        } catch (_: Throwable) {
+            null
+        }
     }
 
     private fun currentNetworkType(): String {

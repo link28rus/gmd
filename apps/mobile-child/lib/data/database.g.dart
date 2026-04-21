@@ -129,6 +129,28 @@ class $PendingLocationsTable extends PendingLocations
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _wifiSsidMeta = const VerificationMeta(
+    'wifiSsid',
+  );
+  @override
+  late final GeneratedColumn<String> wifiSsid = GeneratedColumn<String>(
+    'wifi_ssid',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _mobileOperatorMeta = const VerificationMeta(
+    'mobileOperator',
+  );
+  @override
+  late final GeneratedColumn<String> mobileOperator = GeneratedColumn<String>(
+    'mobile_operator',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _recordedAtMeta = const VerificationMeta(
     'recordedAt',
   );
@@ -177,6 +199,8 @@ class $PendingLocationsTable extends PendingLocations
     isCharging,
     provider,
     networkType,
+    wifiSsid,
+    mobileOperator,
     recordedAt,
     uploadAttempts,
     lastAttemptAt,
@@ -266,6 +290,21 @@ class $PendingLocationsTable extends PendingLocations
         ),
       );
     }
+    if (data.containsKey('wifi_ssid')) {
+      context.handle(
+        _wifiSsidMeta,
+        wifiSsid.isAcceptableOrUnknown(data['wifi_ssid']!, _wifiSsidMeta),
+      );
+    }
+    if (data.containsKey('mobile_operator')) {
+      context.handle(
+        _mobileOperatorMeta,
+        mobileOperator.isAcceptableOrUnknown(
+          data['mobile_operator']!,
+          _mobileOperatorMeta,
+        ),
+      );
+    }
     if (data.containsKey('recorded_at')) {
       context.handle(
         _recordedAtMeta,
@@ -345,6 +384,14 @@ class $PendingLocationsTable extends PendingLocations
         DriftSqlType.string,
         data['${effectivePrefix}network_type'],
       ),
+      wifiSsid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}wifi_ssid'],
+      ),
+      mobileOperator: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}mobile_operator'],
+      ),
       recordedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}recorded_at'],
@@ -378,6 +425,8 @@ class PendingLocation extends DataClass implements Insertable<PendingLocation> {
   final bool? isCharging;
   final String? provider;
   final String? networkType;
+  final String? wifiSsid;
+  final String? mobileOperator;
   final DateTime recordedAt;
   final int uploadAttempts;
   final DateTime? lastAttemptAt;
@@ -393,6 +442,8 @@ class PendingLocation extends DataClass implements Insertable<PendingLocation> {
     this.isCharging,
     this.provider,
     this.networkType,
+    this.wifiSsid,
+    this.mobileOperator,
     required this.recordedAt,
     required this.uploadAttempts,
     this.lastAttemptAt,
@@ -426,6 +477,12 @@ class PendingLocation extends DataClass implements Insertable<PendingLocation> {
     }
     if (!nullToAbsent || networkType != null) {
       map['network_type'] = Variable<String>(networkType);
+    }
+    if (!nullToAbsent || wifiSsid != null) {
+      map['wifi_ssid'] = Variable<String>(wifiSsid);
+    }
+    if (!nullToAbsent || mobileOperator != null) {
+      map['mobile_operator'] = Variable<String>(mobileOperator);
     }
     map['recorded_at'] = Variable<DateTime>(recordedAt);
     map['upload_attempts'] = Variable<int>(uploadAttempts);
@@ -464,6 +521,12 @@ class PendingLocation extends DataClass implements Insertable<PendingLocation> {
       networkType: networkType == null && nullToAbsent
           ? const Value.absent()
           : Value(networkType),
+      wifiSsid: wifiSsid == null && nullToAbsent
+          ? const Value.absent()
+          : Value(wifiSsid),
+      mobileOperator: mobileOperator == null && nullToAbsent
+          ? const Value.absent()
+          : Value(mobileOperator),
       recordedAt: Value(recordedAt),
       uploadAttempts: Value(uploadAttempts),
       lastAttemptAt: lastAttemptAt == null && nullToAbsent
@@ -489,6 +552,8 @@ class PendingLocation extends DataClass implements Insertable<PendingLocation> {
       isCharging: serializer.fromJson<bool?>(json['isCharging']),
       provider: serializer.fromJson<String?>(json['provider']),
       networkType: serializer.fromJson<String?>(json['networkType']),
+      wifiSsid: serializer.fromJson<String?>(json['wifiSsid']),
+      mobileOperator: serializer.fromJson<String?>(json['mobileOperator']),
       recordedAt: serializer.fromJson<DateTime>(json['recordedAt']),
       uploadAttempts: serializer.fromJson<int>(json['uploadAttempts']),
       lastAttemptAt: serializer.fromJson<DateTime?>(json['lastAttemptAt']),
@@ -509,6 +574,8 @@ class PendingLocation extends DataClass implements Insertable<PendingLocation> {
       'isCharging': serializer.toJson<bool?>(isCharging),
       'provider': serializer.toJson<String?>(provider),
       'networkType': serializer.toJson<String?>(networkType),
+      'wifiSsid': serializer.toJson<String?>(wifiSsid),
+      'mobileOperator': serializer.toJson<String?>(mobileOperator),
       'recordedAt': serializer.toJson<DateTime>(recordedAt),
       'uploadAttempts': serializer.toJson<int>(uploadAttempts),
       'lastAttemptAt': serializer.toJson<DateTime?>(lastAttemptAt),
@@ -527,6 +594,8 @@ class PendingLocation extends DataClass implements Insertable<PendingLocation> {
     Value<bool?> isCharging = const Value.absent(),
     Value<String?> provider = const Value.absent(),
     Value<String?> networkType = const Value.absent(),
+    Value<String?> wifiSsid = const Value.absent(),
+    Value<String?> mobileOperator = const Value.absent(),
     DateTime? recordedAt,
     int? uploadAttempts,
     Value<DateTime?> lastAttemptAt = const Value.absent(),
@@ -542,6 +611,10 @@ class PendingLocation extends DataClass implements Insertable<PendingLocation> {
     isCharging: isCharging.present ? isCharging.value : this.isCharging,
     provider: provider.present ? provider.value : this.provider,
     networkType: networkType.present ? networkType.value : this.networkType,
+    wifiSsid: wifiSsid.present ? wifiSsid.value : this.wifiSsid,
+    mobileOperator: mobileOperator.present
+        ? mobileOperator.value
+        : this.mobileOperator,
     recordedAt: recordedAt ?? this.recordedAt,
     uploadAttempts: uploadAttempts ?? this.uploadAttempts,
     lastAttemptAt: lastAttemptAt.present
@@ -567,6 +640,10 @@ class PendingLocation extends DataClass implements Insertable<PendingLocation> {
       networkType: data.networkType.present
           ? data.networkType.value
           : this.networkType,
+      wifiSsid: data.wifiSsid.present ? data.wifiSsid.value : this.wifiSsid,
+      mobileOperator: data.mobileOperator.present
+          ? data.mobileOperator.value
+          : this.mobileOperator,
       recordedAt: data.recordedAt.present
           ? data.recordedAt.value
           : this.recordedAt,
@@ -593,6 +670,8 @@ class PendingLocation extends DataClass implements Insertable<PendingLocation> {
           ..write('isCharging: $isCharging, ')
           ..write('provider: $provider, ')
           ..write('networkType: $networkType, ')
+          ..write('wifiSsid: $wifiSsid, ')
+          ..write('mobileOperator: $mobileOperator, ')
           ..write('recordedAt: $recordedAt, ')
           ..write('uploadAttempts: $uploadAttempts, ')
           ..write('lastAttemptAt: $lastAttemptAt')
@@ -613,6 +692,8 @@ class PendingLocation extends DataClass implements Insertable<PendingLocation> {
     isCharging,
     provider,
     networkType,
+    wifiSsid,
+    mobileOperator,
     recordedAt,
     uploadAttempts,
     lastAttemptAt,
@@ -632,6 +713,8 @@ class PendingLocation extends DataClass implements Insertable<PendingLocation> {
           other.isCharging == this.isCharging &&
           other.provider == this.provider &&
           other.networkType == this.networkType &&
+          other.wifiSsid == this.wifiSsid &&
+          other.mobileOperator == this.mobileOperator &&
           other.recordedAt == this.recordedAt &&
           other.uploadAttempts == this.uploadAttempts &&
           other.lastAttemptAt == this.lastAttemptAt);
@@ -649,6 +732,8 @@ class PendingLocationsCompanion extends UpdateCompanion<PendingLocation> {
   final Value<bool?> isCharging;
   final Value<String?> provider;
   final Value<String?> networkType;
+  final Value<String?> wifiSsid;
+  final Value<String?> mobileOperator;
   final Value<DateTime> recordedAt;
   final Value<int> uploadAttempts;
   final Value<DateTime?> lastAttemptAt;
@@ -664,6 +749,8 @@ class PendingLocationsCompanion extends UpdateCompanion<PendingLocation> {
     this.isCharging = const Value.absent(),
     this.provider = const Value.absent(),
     this.networkType = const Value.absent(),
+    this.wifiSsid = const Value.absent(),
+    this.mobileOperator = const Value.absent(),
     this.recordedAt = const Value.absent(),
     this.uploadAttempts = const Value.absent(),
     this.lastAttemptAt = const Value.absent(),
@@ -680,6 +767,8 @@ class PendingLocationsCompanion extends UpdateCompanion<PendingLocation> {
     this.isCharging = const Value.absent(),
     this.provider = const Value.absent(),
     this.networkType = const Value.absent(),
+    this.wifiSsid = const Value.absent(),
+    this.mobileOperator = const Value.absent(),
     required DateTime recordedAt,
     this.uploadAttempts = const Value.absent(),
     this.lastAttemptAt = const Value.absent(),
@@ -698,6 +787,8 @@ class PendingLocationsCompanion extends UpdateCompanion<PendingLocation> {
     Expression<bool>? isCharging,
     Expression<String>? provider,
     Expression<String>? networkType,
+    Expression<String>? wifiSsid,
+    Expression<String>? mobileOperator,
     Expression<DateTime>? recordedAt,
     Expression<int>? uploadAttempts,
     Expression<DateTime>? lastAttemptAt,
@@ -714,6 +805,8 @@ class PendingLocationsCompanion extends UpdateCompanion<PendingLocation> {
       if (isCharging != null) 'is_charging': isCharging,
       if (provider != null) 'provider': provider,
       if (networkType != null) 'network_type': networkType,
+      if (wifiSsid != null) 'wifi_ssid': wifiSsid,
+      if (mobileOperator != null) 'mobile_operator': mobileOperator,
       if (recordedAt != null) 'recorded_at': recordedAt,
       if (uploadAttempts != null) 'upload_attempts': uploadAttempts,
       if (lastAttemptAt != null) 'last_attempt_at': lastAttemptAt,
@@ -732,6 +825,8 @@ class PendingLocationsCompanion extends UpdateCompanion<PendingLocation> {
     Value<bool?>? isCharging,
     Value<String?>? provider,
     Value<String?>? networkType,
+    Value<String?>? wifiSsid,
+    Value<String?>? mobileOperator,
     Value<DateTime>? recordedAt,
     Value<int>? uploadAttempts,
     Value<DateTime?>? lastAttemptAt,
@@ -748,6 +843,8 @@ class PendingLocationsCompanion extends UpdateCompanion<PendingLocation> {
       isCharging: isCharging ?? this.isCharging,
       provider: provider ?? this.provider,
       networkType: networkType ?? this.networkType,
+      wifiSsid: wifiSsid ?? this.wifiSsid,
+      mobileOperator: mobileOperator ?? this.mobileOperator,
       recordedAt: recordedAt ?? this.recordedAt,
       uploadAttempts: uploadAttempts ?? this.uploadAttempts,
       lastAttemptAt: lastAttemptAt ?? this.lastAttemptAt,
@@ -790,6 +887,12 @@ class PendingLocationsCompanion extends UpdateCompanion<PendingLocation> {
     if (networkType.present) {
       map['network_type'] = Variable<String>(networkType.value);
     }
+    if (wifiSsid.present) {
+      map['wifi_ssid'] = Variable<String>(wifiSsid.value);
+    }
+    if (mobileOperator.present) {
+      map['mobile_operator'] = Variable<String>(mobileOperator.value);
+    }
     if (recordedAt.present) {
       map['recorded_at'] = Variable<DateTime>(recordedAt.value);
     }
@@ -816,6 +919,8 @@ class PendingLocationsCompanion extends UpdateCompanion<PendingLocation> {
           ..write('isCharging: $isCharging, ')
           ..write('provider: $provider, ')
           ..write('networkType: $networkType, ')
+          ..write('wifiSsid: $wifiSsid, ')
+          ..write('mobileOperator: $mobileOperator, ')
           ..write('recordedAt: $recordedAt, ')
           ..write('uploadAttempts: $uploadAttempts, ')
           ..write('lastAttemptAt: $lastAttemptAt')
@@ -1358,6 +1463,8 @@ typedef $$PendingLocationsTableCreateCompanionBuilder =
       Value<bool?> isCharging,
       Value<String?> provider,
       Value<String?> networkType,
+      Value<String?> wifiSsid,
+      Value<String?> mobileOperator,
       required DateTime recordedAt,
       Value<int> uploadAttempts,
       Value<DateTime?> lastAttemptAt,
@@ -1375,6 +1482,8 @@ typedef $$PendingLocationsTableUpdateCompanionBuilder =
       Value<bool?> isCharging,
       Value<String?> provider,
       Value<String?> networkType,
+      Value<String?> wifiSsid,
+      Value<String?> mobileOperator,
       Value<DateTime> recordedAt,
       Value<int> uploadAttempts,
       Value<DateTime?> lastAttemptAt,
@@ -1441,6 +1550,16 @@ class $$PendingLocationsTableFilterComposer
 
   ColumnFilters<String> get networkType => $composableBuilder(
     column: $table.networkType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get wifiSsid => $composableBuilder(
+    column: $table.wifiSsid,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get mobileOperator => $composableBuilder(
+    column: $table.mobileOperator,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -1524,6 +1643,16 @@ class $$PendingLocationsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get wifiSsid => $composableBuilder(
+    column: $table.wifiSsid,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get mobileOperator => $composableBuilder(
+    column: $table.mobileOperator,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get recordedAt => $composableBuilder(
     column: $table.recordedAt,
     builder: (column) => ColumnOrderings(column),
@@ -1585,6 +1714,14 @@ class $$PendingLocationsTableAnnotationComposer
 
   GeneratedColumn<String> get networkType => $composableBuilder(
     column: $table.networkType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get wifiSsid =>
+      $composableBuilder(column: $table.wifiSsid, builder: (column) => column);
+
+  GeneratedColumn<String> get mobileOperator => $composableBuilder(
+    column: $table.mobileOperator,
     builder: (column) => column,
   );
 
@@ -1652,6 +1789,8 @@ class $$PendingLocationsTableTableManager
                 Value<bool?> isCharging = const Value.absent(),
                 Value<String?> provider = const Value.absent(),
                 Value<String?> networkType = const Value.absent(),
+                Value<String?> wifiSsid = const Value.absent(),
+                Value<String?> mobileOperator = const Value.absent(),
                 Value<DateTime> recordedAt = const Value.absent(),
                 Value<int> uploadAttempts = const Value.absent(),
                 Value<DateTime?> lastAttemptAt = const Value.absent(),
@@ -1667,6 +1806,8 @@ class $$PendingLocationsTableTableManager
                 isCharging: isCharging,
                 provider: provider,
                 networkType: networkType,
+                wifiSsid: wifiSsid,
+                mobileOperator: mobileOperator,
                 recordedAt: recordedAt,
                 uploadAttempts: uploadAttempts,
                 lastAttemptAt: lastAttemptAt,
@@ -1684,6 +1825,8 @@ class $$PendingLocationsTableTableManager
                 Value<bool?> isCharging = const Value.absent(),
                 Value<String?> provider = const Value.absent(),
                 Value<String?> networkType = const Value.absent(),
+                Value<String?> wifiSsid = const Value.absent(),
+                Value<String?> mobileOperator = const Value.absent(),
                 required DateTime recordedAt,
                 Value<int> uploadAttempts = const Value.absent(),
                 Value<DateTime?> lastAttemptAt = const Value.absent(),
@@ -1699,6 +1842,8 @@ class $$PendingLocationsTableTableManager
                 isCharging: isCharging,
                 provider: provider,
                 networkType: networkType,
+                wifiSsid: wifiSsid,
+                mobileOperator: mobileOperator,
                 recordedAt: recordedAt,
                 uploadAttempts: uploadAttempts,
                 lastAttemptAt: lastAttemptAt,
