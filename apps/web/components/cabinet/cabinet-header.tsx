@@ -6,7 +6,8 @@ import { useState, type ReactElement } from 'react';
 import { Download, Shield, ChevronDown, LogOut } from 'lucide-react';
 import { useAuthStore } from '@/lib/auth-store';
 import { avatarColor, avatarInitial } from '@/lib/color/avatar-color';
-import { APP_VERSION } from '@/lib/version';
+
+const APP_VERSION = process.env.APP_VERSION ?? '';
 
 export function CabinetHeader(): ReactElement {
   const router = useRouter();
