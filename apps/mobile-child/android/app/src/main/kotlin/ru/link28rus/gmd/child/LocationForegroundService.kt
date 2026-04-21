@@ -7,6 +7,7 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.BatteryManager
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
@@ -33,6 +34,10 @@ class LocationForegroundService : Service() {
         const val ACTION_START = "ACTION_START"
         const val ACTION_STOP = "ACTION_STOP"
         private const val WAKE_LOCK_TAG = "gmd:LocationForegroundService"
+        // Heartbeat — гарантированная точка раз в 2 минуты, даже если телефон
+        // неподвижен и fused с distance-filter 5м не присылает обновлений.
+        // Родитель в web видит "Был тут только что" независимо от движения.
+        private const val HEARTBEAT_INTERVAL_MS = 2 * 60 * 1000L
     }
 
     private lateinit var fused: FusedLocationProviderClient
@@ -40,6 +45,27 @@ class LocationForegroundService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var bgEngine: FlutterEngine? = null
     private var bgChannel: MethodChannel? = null
+    private var heartbeatHandler: Handler? = null
+    private val heartbeatRunnable = object : Runnable {
+        override fun run() {
+            log("heartbeat tick")
+            try {
+                fused.lastLocation
+                    .addOnSuccessListener { loc ->
+                        if (loc != null) {
+                            log("heartbeat: got last location, sending")
+                            sendToDart(loc)
+                        } else {
+                            log("heartbeat: lastLocation is null — provider has no cached fix yet")
+                        }
+                    }
+                    .addOnFailureListener { e -> logErr("heartbeat lastLocation failed", e) }
+            } catch (e: SecurityException) {
+                logErr("heartbeat lastLocation SecurityException", e)
+            }
+            heartbeatHandler?.postDelayed(this, HEARTBEAT_INTERVAL_MS)
+        }
+    }
 
     private fun log(msg: String) = DiagLog.write(this, "svc", msg)
     private fun logErr(msg: String, e: Throwable) =
@@ -166,6 +192,15 @@ class LocationForegroundService : Service() {
         } catch (e: SecurityException) {
             logErr("requestLocationUpdates SecurityException", e)
             stopSelf()
+            return
+        }
+        // Heartbeat: шлём текущую точку раз в 2 минуты, даже если телефон
+        // неподвижен и fused молчит из-за distance-filter 5м.
+        if (heartbeatHandler == null) {
+            heartbeatHandler = Handler(Looper.getMainLooper()).also {
+                it.postDelayed(heartbeatRunnable, HEARTBEAT_INTERVAL_MS)
+                log("heartbeat scheduled every ${HEARTBEAT_INTERVAL_MS / 1000}s")
+            }
         }
     }
 
@@ -233,6 +268,8 @@ class LocationForegroundService : Service() {
 
     override fun onDestroy() {
         log("onDestroy")
+        heartbeatHandler?.removeCallbacks(heartbeatRunnable)
+        heartbeatHandler = null
         callback?.let { fused.removeLocationUpdates(it) }
         callback = null
         releaseWakeLock()
