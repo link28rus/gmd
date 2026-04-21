@@ -13,6 +13,7 @@ class LocationIngestor {
   final Future<String?> Function() deviceToken;
 
   DateTime _lastFlush = DateTime.fromMillisecondsSinceEpoch(0);
+  bool _firstFlushed = false;
 
   Future<void> onLocation(Map<String, dynamic> payload) async {
     await repo.enqueue(
@@ -32,7 +33,11 @@ class LocationIngestor {
     await repo.trimOverflow(maxSize: 10000);
     final count = await repo.count();
     final age = DateTime.now().difference(_lastFlush);
-    if (count >= 5 || age > const Duration(minutes: 3)) {
+    // Первую локацию флашим сразу — чтобы родитель увидел точку на карте
+    // сразу после привязки, а не через 2.5 минуты (5 точек × 30с) ожидания.
+    // Дальше — стандартный батчинг.
+    if (!_firstFlushed || count >= 5 || age > const Duration(minutes: 3)) {
+      _firstFlushed = true;
       await flushQueue();
     }
   }

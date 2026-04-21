@@ -35,8 +35,11 @@ android {
         applicationId = "ru.link28rus.gmd.child"
         minSdk = 26
         targetSdk = 34
-        versionCode = 3
-        versionName = "0.14.1"
+        // Версия берётся из pubspec.yaml (поле `version: X.Y.Z+build`).
+        // Flutter-плагин прокидывает её через `flutter.versionCode`
+        // / `flutter.versionName`, так что bump pubspec → bump APK.
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
     }
 
     signingConfigs {
