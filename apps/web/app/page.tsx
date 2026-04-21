@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import type { ReactElement } from 'react';
 
+const APP_VERSION = process.env.APP_VERSION ?? '';
+
 export default function HomePage(): ReactElement {
   return (
     <main className="min-h-screen flex flex-col items-center justify-center px-4">
@@ -12,7 +14,7 @@ export default function HomePage(): ReactElement {
       >
         Войти
       </Link>
-      <p className="mt-8 text-xs text-gray-500">v0.4.1 — MVP</p>
+      <p className="mt-8 text-xs text-gray-500">v{APP_VERSION} — MVP</p>
     </main>
   );
 }

@@ -1,6 +1,6 @@
 {
   "name": "gmd",
-  "version": "0.11.0",
+  "version": "0.17.1",
   "private": true,
   "description": "GMD — сервис родительского контроля и геолокации детей",
   "packageManager": "pnpm@9.15.0",
@@ -20,6 +20,8 @@
     "stack:logs": "docker compose --env-file infra/docker/.env.dev -f infra/docker/docker-compose.dev.yml logs -f",
     "stack:ps": "docker compose --env-file infra/docker/.env.dev -f infra/docker/docker-compose.dev.yml ps",
     "stack:reset": "docker compose --env-file infra/docker/.env.dev -f infra/docker/docker-compose.dev.yml down -v",
+    "version:sync": "node scripts/sync-version.mjs sync",
+    "version:check": "node scripts/sync-version.mjs check",
     "prepare": "husky"
   },
   "devDependencies": {
