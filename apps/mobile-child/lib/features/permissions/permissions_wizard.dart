@@ -12,6 +12,7 @@ class PermissionsWizardScaffold extends StatelessWidget {
     required this.onRequest,
     required this.onSkip,
     this.actionLabel = 'Разрешить',
+    this.footer,
   });
 
   final int stepIndex;
@@ -21,6 +22,7 @@ class PermissionsWizardScaffold extends StatelessWidget {
   final VoidCallback onRequest;
   final VoidCallback onSkip;
   final String actionLabel;
+  final Widget? footer;
 
   @override
   Widget build(BuildContext context) {
@@ -44,6 +46,7 @@ class PermissionsWizardScaffold extends StatelessWidget {
             Text(title, style: Theme.of(context).textTheme.headlineSmall),
             const SizedBox(height: 12),
             Text(description, style: const TextStyle(fontSize: 16)),
+            if (footer != null) ...[const SizedBox(height: 16), footer!],
             const Spacer(),
             FilledButton(
               onPressed: onRequest,

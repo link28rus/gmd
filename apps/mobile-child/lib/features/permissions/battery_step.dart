@@ -18,9 +18,22 @@ class BatteryPermissionsStep extends StatelessWidget {
       totalSteps: 4,
       title: 'Не засыпать',
       description:
-          'Разреши приложению работать в фоне, чтобы оно не отключалось, когда нужно больше всего.',
+          'Разреши приложению работать в фоне, чтобы мама и папа видели где ты даже при '
+          'заблокированном экране.\n\n'
+          'На Xiaomi / Redmi / POCO дополнительно открой настройки приложения ('
+          'кнопка ниже) и включи:\n'
+          '• «Автозапуск»\n'
+          '• «Контроль активности» → «Нет ограничений»\n'
+          '• «Экономия энергии» → «Без ограничений»',
       onRequest: () => _request(context),
       onSkip: () => context.go('/permissions/devadmin'),
+      footer: Center(
+        child: TextButton.icon(
+          onPressed: openAppSettings,
+          icon: const Icon(Icons.settings_outlined, size: 18),
+          label: const Text('Открыть настройки приложения'),
+        ),
+      ),
     );
   }
 }
