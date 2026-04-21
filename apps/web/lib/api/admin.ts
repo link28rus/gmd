@@ -142,4 +142,21 @@ export const adminApi = {
     ),
 
   listActiveInvites: () => apiFetch<InviteList>('/api/admin/invites?active=true'),
+
+  listSettings: () => apiFetch<{ settings: AppSettingRow[] }>('/api/admin/settings'),
+
+  updateSetting: (key: string, value: string) =>
+    apiFetch<{ ok: true }>(`/api/admin/settings/${encodeURIComponent(key)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ value }),
+      headers: { 'content-type': 'application/json' },
+    }),
 };
+
+export interface AppSettingRow {
+  key: string;
+  value: string;
+  description: string | null;
+  updatedAt: string;
+  updatedBy: string | null;
+}

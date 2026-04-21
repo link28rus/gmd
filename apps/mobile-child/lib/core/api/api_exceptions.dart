@@ -26,3 +26,10 @@ class TooManyRequestsException extends ApiException {
   const TooManyRequestsException([String? message])
       : super(message ?? 'Слишком часто. Подождите немного.');
 }
+
+// Устройство отвязано на стороне сервера (родитель сбросил или удалил
+// ребёнка). Клиент должен очистить deviceToken и показать экран привязки —
+// старый токен больше не работает.
+class UnauthorizedException extends ApiException {
+  const UnauthorizedException() : super('Устройство отвязано');
+}

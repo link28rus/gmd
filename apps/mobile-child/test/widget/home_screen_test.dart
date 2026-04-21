@@ -8,7 +8,9 @@ void main() {
   testWidgets('HomeScreen renders title + SOS button', (tester) async {
     await tester.pumpWidget(ProviderScope(
       overrides: [
-        homeInitProvider.overrideWith((ref) async {}),
+        homeInitProvider.overrideWith(
+          (ref) async => const HomeInitResult(tokenValid: true),
+        ),
       ],
       child: const MaterialApp(home: HomeScreen()),
     ));

@@ -32,6 +32,30 @@ export interface LocationHistoryDto {
   nextCursor: string | null;
 }
 
+export interface TripDto {
+  id: string;
+  startedAt: string;
+  endedAt: string | null;
+  isActive: boolean;
+  pointsCount: number;
+  distanceM: number;
+  startLat: number;
+  startLon: number;
+  endLat: number;
+  endLon: number;
+}
+
+export interface TripPointDto {
+  lat: number;
+  lon: number;
+  recordedAt: string;
+}
+
+export interface ActiveTrackDto {
+  trip: TripDto | null;
+  points: TripPointDto[];
+}
+
 export const locationsApi = {
   getLatest: (childId: string) =>
     apiFetch<LatestLocationDto | null>(
@@ -49,4 +73,21 @@ export const locationsApi = {
       `/api/children/${encodeURIComponent(childId)}/location/history?${qs.toString()}`,
     );
   },
+
+  getActiveTrack: (childId: string) =>
+    apiFetch<ActiveTrackDto>(`/api/children/${encodeURIComponent(childId)}/trips/active-track`),
+
+  getTrips: (childId: string, from?: string, to?: string) => {
+    const qs = new URLSearchParams();
+    if (from) qs.set('from', from);
+    if (to) qs.set('to', to);
+    return apiFetch<{ trips: TripDto[] }>(
+      `/api/children/${encodeURIComponent(childId)}/trips${qs.toString() ? `?${qs}` : ''}`,
+    );
+  },
+
+  getTripPoints: (childId: string, tripId: string) =>
+    apiFetch<{ points: TripPointDto[] }>(
+      `/api/children/${encodeURIComponent(childId)}/trips/${encodeURIComponent(tripId)}/points`,
+    ),
 };

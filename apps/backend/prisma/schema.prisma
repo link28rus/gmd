@@ -140,12 +140,13 @@ model Child {
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
-  family     Family          @relation(fields: [familyId], references: [id], onDelete: Cascade)
-  device     ChildDevice?
-  invites    Invite[]
-  consents   ConsentRecord[]
-  locations  Location[]
-  sosEvents  SosEvent[]
+  family          Family                @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  device          ChildDevice?
+  invites         Invite[]
+  consents        ConsentRecord[]
+  locations       Location[]
+  sosEvents       SosEvent[]
+  trips           Trip[]
   zoneAssignments ZoneChildAssignment[]
   zoneEvents      ZoneEvent[]
   zoneStates      ZoneState[]
@@ -156,14 +157,19 @@ model Child {
 }
 
 model Invite {
-  id         String    @id @default(cuid())
-  familyId   String
-  childId    String
-  code       String    @unique
-  expiresAt  DateTime
-  consumedAt DateTime?
-  createdBy  String
-  createdAt  DateTime  @default(now())
+  id                    String    @id @default(cuid())
+  familyId              String
+  childId               String
+  code                  String    @unique
+  expiresAt             DateTime
+  consumedAt            DateTime?
+  // Для детей 14+: родитель при создании invite обязан отметить, что получил
+  // согласие ребёнка на обработку геолокации. Backend читает этот флаг при
+  // claim — если granted=true, телефону ребёнка не требуется передавать
+  // consent14Plus в теле запроса (согласие уже зафиксировано родителем).
+  consent14PlusGranted  Boolean   @default(false)
+  createdBy             String
+  createdAt             DateTime  @default(now())
 
   family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
   child  Child  @relation(fields: [childId], references: [id], onDelete: Cascade)
@@ -184,9 +190,9 @@ model ChildDevice {
   revokedAt  DateTime?
   createdAt  DateTime  @default(now())
 
-  child      Child      @relation(fields: [childId], references: [id], onDelete: Cascade)
-  locations  Location[]
-  sosEvents  SosEvent[]
+  child     Child      @relation(fields: [childId], references: [id], onDelete: Cascade)
+  locations Location[]
+  sosEvents SosEvent[]
 
   @@map("child_devices")
 }
@@ -218,6 +224,43 @@ model Location {
   @@map("locations")
 }
 
+// Поездка — последовательность точек между остановками. Конец = ребёнок
+// не сдвигался более TRIP_IDLE_MIN минут дальше TRIP_IDLE_RADIUS_M метров
+// от точки остановки. isActive=true — последняя, незакрытая.
+model Trip {
+  id          String    @id @default(cuid())
+  childId     String
+  startedAt   DateTime
+  endedAt     DateTime?
+  isActive    Boolean   @default(true)
+  pointsCount Int       @default(1)
+  distanceM   Int       @default(0)
+  startLat    Float
+  startLon    Float
+  endLat      Float
+  endLon      Float
+  updatedAt   DateTime  @updatedAt
+
+  child Child @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@index([childId, isActive])
+  @@index([childId, startedAt(sort: Desc)])
+  @@map("trips")
+}
+
+// Глобальные настройки приложения. key/value строкой — админка правит
+// через UI, backend читает с in-memory кэшем и инвалидацией на write.
+// Используется для TRIP_IDLE_* (сегментация поездок) и будущих параметров.
+model AppSetting {
+  key         String   @id
+  value       String
+  description String?
+  updatedAt   DateTime @updatedAt
+  updatedBy   String?
+
+  @@map("app_settings")
+}
+
 model SosEvent {
   id              String    @id @default(cuid())
   childId         String
@@ -247,9 +290,14 @@ model Zone {
   centerLat Float
   centerLon Float
   radius    Int
+  // PostGIS generated column `center_geo` существует в БД (см.
+  // 20260420064916_phase4_zones_postgis), но в schema.prisma её НЕТ — Prisma 5
+  // не умеет корректно описывать GENERATED ALWAYS AS. Поэтому каждый migrate
+  // diff генерирует DROP для этой колонки; его нужно вручную вычистить из
+  // migration.sql перед применением.
   createdBy String
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  createdAt DateTime                               @default(now())
+  updatedAt DateTime                               @updatedAt
   deletedAt DateTime?
 
   family      Family                @relation(fields: [familyId], references: [id], onDelete: Cascade)

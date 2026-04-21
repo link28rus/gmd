@@ -7,10 +7,15 @@ class LocationIngestor {
     required this.repo,
     required this.api,
     required this.deviceToken,
+    this.onUnauthorized,
   });
   final LocationQueueRepository repo;
   final ChildApi api;
   final Future<String?> Function() deviceToken;
+  // Вызывается когда backend отвечает 401/403 на ingest — устройство
+  // отозвано (родитель удалил ребёнка / сбросил девайс). Реализация
+  // обычно чистит secure storage и стопает foreground сервис.
+  final Future<void> Function()? onUnauthorized;
 
   DateTime _lastFlush = DateTime.fromMillisecondsSinceEpoch(0);
   bool _firstFlushed = false;
@@ -73,6 +78,14 @@ class LocationIngestor {
         deviceToken: token,
       );
       await repo.deleteIds(batch.map((r) => r.id).toList());
+    } on UnauthorizedException {
+      // Устройство отозвано сервером. Не ретраим, очищаем очередь и
+      // сообщаем наверх — при следующем открытии приложения home увидит
+      // пустой токен и уведёт на /onboarding.
+      await repo.deleteIds(batch.map((r) => r.id).toList());
+      if (onUnauthorized != null) {
+        await onUnauthorized!();
+      }
     } on BadRequestIngestException {
       await repo.deleteIds(batch.map((r) => r.id).toList());
     } catch (_) {

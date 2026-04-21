@@ -12,6 +12,7 @@ import { createId } from '@paralleldrive/cuid2';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConsentService } from '../consent/consent.service';
 import { ZoneDetectionService } from '../zones/zone-detection.service';
+import { TripsService } from './trips.service';
 import type { ChildAuthContext } from '../child-device/child-device.service';
 import type { LocationPoint } from './dto/ingest-locations.dto';
 import type { ListLocationsQuery } from './dto/list-locations.dto';
@@ -93,6 +94,7 @@ export class LocationsService {
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(ConsentService) private readonly consent: ConsentService,
     @Inject(ZoneDetectionService) private readonly zoneDetection: ZoneDetectionService,
+    @Inject(TripsService) private readonly trips: TripsService,
   ) {}
 
   async ingestBatch(ctx: ChildAuthContext, points: LocationPoint[]): Promise<IngestResult> {
@@ -192,6 +194,17 @@ export class LocationsService {
     this.logger.log(
       `ingest child=${ctx.childId} device=${ctx.deviceId} in=${points.length} accepted=${accepted} rejected=${rejected}`,
     );
+
+    if (accepted > 0) {
+      // Пересчёт поездок после вставки новых точек. fire-and-forget, чтобы не
+      // задерживать ingest-ответ телефону. Ошибки логируем, но не бросаем —
+      // онлайн-карта упадёт на fallback (старые trips).
+      void this.trips.recomputeForChild(ctx.childId).catch((err: unknown) => {
+        this.logger.warn(
+          `trips recompute failed child=${ctx.childId}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      });
+    }
 
     return { accepted, rejected, rejectedReasons };
   }

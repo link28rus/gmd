@@ -6,17 +6,16 @@ import { toast } from 'sonner';
 import { useAuthStore, type AuthUser, type AuthFamily } from '@/lib/auth-store';
 import { useChildren } from '@/lib/hooks/use-children';
 import { useLatestLocation } from '@/lib/hooks/use-latest-location';
-import { useLocationHistory } from '@/lib/hooks/use-location-history';
+import { useActiveTrack } from '@/lib/hooks/use-active-track';
 import { ChildrenSidebar } from '@/components/cabinet/children-sidebar';
 import { ChildActions } from '@/components/cabinet/child-actions';
 import { ChildNotAttachedView } from '@/components/cabinet/child-not-attached-view';
 import { ChildMap } from '@/components/locations/child-map';
 import { ChildStatusCard } from '@/components/locations/child-status-card';
 import { MapErrorFallback } from '@/components/locations/map-error-fallback';
-import { TrackTruncatedBanner } from '@/components/locations/track-truncated-banner';
-import { todayIso } from '@/lib/date/day-bounds';
 import { ApiError } from '@/lib/api/client';
 import type { Child } from '@/lib/api/children';
+import type { LocationDto } from '@/lib/api/locations';
 
 interface RefreshResponse {
   accessToken: string;
@@ -133,25 +132,33 @@ function hasActiveDevice(c: Child): boolean {
 
 function MapArea({ child }: { child: Child }): ReactElement {
   const router = useRouter();
-  const [date] = useState(todayIso());
   const [mapFailed, setMapFailed] = useState(false);
   const latestQ = useLatestLocation(child.id);
-  const { query: historyQ, isTruncated } = useLocationHistory(child.id, date);
+  const activeQ = useActiveTrack(child.id);
 
   useEffect(() => {
-    const err = latestQ.error ?? historyQ.error;
+    const err = latestQ.error ?? activeQ.error;
     if (err instanceof ApiError && err.status === 404) {
       toast.error('Ребёнок не найден');
       router.replace('/cabinet');
     } else if (err) {
       toast.error('Не удалось загрузить данные карты');
     }
-  }, [latestQ.error, historyQ.error, router]);
+  }, [latestQ.error, activeQ.error, router]);
 
   const latest = latestQ.data ?? null;
-  const track = historyQ.data?.items ?? [];
+  // Треком рисуем только точки активной поездки (от последней остановки до
+  // сейчас). Если ребёнок стоит > 30 мин — активной поездки нет → track пустой
+  // → линии пропадают с онлайн-карты. Прошлые поездки — в /history.
+  const track: LocationDto[] = (activeQ.data?.points ?? []).map((p) => ({
+    lat: p.lat,
+    lon: p.lon,
+    recordedAt: p.recordedAt,
+    accuracy: null,
+    speed: null,
+  }));
   const emptyState =
-    latest === null && track.length === 0 && !latestQ.isPending && !historyQ.isPending;
+    latest === null && track.length === 0 && !latestQ.isPending && !activeQ.isPending;
 
   if (emptyState) {
     return (
@@ -181,11 +188,6 @@ function MapArea({ child }: { child: Child }): ReactElement {
 
   return (
     <>
-      {isTruncated && (
-        <div className="absolute left-4 right-4 top-4 z-10">
-          <TrackTruncatedBanner />
-        </div>
-      )}
       <ChildMap
         childName={child.name}
         latest={latest}

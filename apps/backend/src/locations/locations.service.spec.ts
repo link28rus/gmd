@@ -65,7 +65,10 @@ function makeService(
     processPoint: jest.fn().mockResolvedValue(undefined),
     findCandidateZones: jest.fn().mockResolvedValue([]),
   };
-  return new LocationsService(prisma, consent, zoneDetection);
+  const trips: any = {
+    recomputeForChild: jest.fn().mockResolvedValue(undefined),
+  };
+  return new LocationsService(prisma, consent, zoneDetection, trips);
 }
 
 describe('LocationsService.ingestBatch', () => {

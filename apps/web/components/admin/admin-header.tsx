@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { href: '/admin/families', label: 'Families' },
   { href: '/admin/children', label: 'Children' },
   { href: '/admin/invites', label: 'Invites' },
+  { href: '/admin/settings', label: 'Settings' },
 ];
 
 export function AdminHeader() {

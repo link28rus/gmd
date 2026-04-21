@@ -37,7 +37,10 @@ export function useDeleteChild() {
 
 export function useCreateInvite() {
   // не invalidate — invite вне queries
-  return useMutation({ mutationFn: childrenApi.createInvite });
+  return useMutation({
+    mutationFn: (args: { id: string; consent14PlusGranted?: boolean }) =>
+      childrenApi.createInvite(args.id, { consent14PlusGranted: args.consent14PlusGranted }),
+  });
 }
 
 export function useResetDevice() {

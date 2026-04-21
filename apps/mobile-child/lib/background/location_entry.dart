@@ -42,6 +42,13 @@ Future<void> _bootstrap() async {
       repo: repo,
       api: api,
       deviceToken: storage.readDeviceToken,
+      onUnauthorized: () async {
+        // Device revoked на сервере — чистим токен, при следующем старте
+        // main.dart повёдет на /onboarding автоматически. Foreground сервис
+        // остаётся — его стопнет UI-изолят через homeInitProvider.
+        diagLog('bg', 'ingestor: UNAUTHORIZED → clearing token');
+        await storage.clearAll();
+      },
     );
     diagLog('bg', 'bootstrap: ingestor ready');
 

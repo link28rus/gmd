@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import { RotateCcw, Trash2 } from 'lucide-react';
+import Link from 'next/link';
+import { Clock, RotateCcw, Trash2 } from 'lucide-react';
 import type { Child } from '@/lib/api/children';
 import { ResetDeviceDialog } from '@/components/children/reset-device-dialog';
 import { DeleteChildDialog } from '@/components/children/delete-child-dialog';
@@ -19,11 +20,18 @@ export function ChildActions({ child, showReset }: Props): ReactElement {
   return (
     <>
       <div className="border-t border-zinc-100">
+        <Link
+          href={`/cabinet/children/${child.id}/history`}
+          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50"
+        >
+          <Clock className="h-4 w-4 text-zinc-500" />
+          История передвижений
+        </Link>
         {showReset && (
           <button
             type="button"
             onClick={() => setResetOpen(true)}
-            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50"
+            className="flex w-full items-center gap-2 border-t border-zinc-100 px-3 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50"
           >
             <RotateCcw className="h-4 w-4 text-zinc-500" />
             Отвязать устройство

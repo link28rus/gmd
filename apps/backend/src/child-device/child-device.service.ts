@@ -79,9 +79,13 @@ export class ChildDeviceService {
         throw new BadRequestException({ code: 'invite_invalid', message: 'Invite invalid' });
       }
 
-      // 14+ consent check
+      // 14+ consent check. Приоритет: согласие, данное родителем при создании
+      // invite (invite.consent14PlusGranted=true) — тогда телефон не обязан
+      // передавать consent14Plus. Fallback — флаг из тела запроса (для
+      // совместимости со старыми версиями клиента до v0.18.8).
       const childAge = child.dateOfBirth ? computeAgeYears(child.dateOfBirth, new Date()) : null;
-      if (childAge != null && childAge >= 14 && meta.consent14Plus !== true) {
+      const consentGranted = invite.consent14PlusGranted || meta.consent14Plus === true;
+      if (childAge != null && childAge >= 14 && !consentGranted) {
         throw new BadRequestException({
           code: 'consent14plus_required',
           message: 'Child aged 14+ requires consent14Plus flag',

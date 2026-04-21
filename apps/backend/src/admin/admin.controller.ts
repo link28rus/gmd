@@ -1,11 +1,29 @@
-import { Controller, Get, Inject, Logger, Param, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Inject,
+  Logger,
+  Param,
+  Patch,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ZodValidationPipe } from '../common/zod/zod-validation.pipe';
+import { AppSettingsService } from '../app-settings/app-settings.service';
 import { AdminGuard } from './guards/admin.guard';
 import { AdminService } from './admin.service';
 import { PaginationSchema, UsersQuerySchema } from './dto/pagination.dto';
 import type { PaginationDto, UsersQueryDto } from './dto/pagination.dto';
+import { z } from 'zod';
+
+const UpdateSettingSchema = z.object({ value: z.string().min(1).max(200) });
+type UpdateSettingDto = z.infer<typeof UpdateSettingSchema>;
 
 interface AdminRequest extends Request {
   user: { userId: string; email: string; familyId: string; role: string };
@@ -16,7 +34,10 @@ interface AdminRequest extends Request {
 export class AdminController {
   private readonly logger = new Logger(AdminController.name);
 
-  constructor(@Inject(AdminService) private readonly admin: AdminService) {}
+  constructor(
+    @Inject(AdminService) private readonly admin: AdminService,
+    @Inject(AppSettingsService) private readonly settings: AppSettingsService,
+  ) {}
 
   private audit(req: AdminRequest, path: string): void {
     this.logger.log(`admin access: email=${req.user.email} path=${path}`);
@@ -65,5 +86,24 @@ export class AdminController {
   async invites(@Req() req: AdminRequest): Promise<unknown> {
     this.audit(req, '/admin/invites');
     return this.admin.listActiveInvites();
+  }
+
+  @Get('settings')
+  async listSettings(@Req() req: AdminRequest): Promise<unknown> {
+    this.audit(req, '/admin/settings');
+    const settings = await this.settings.list();
+    return { settings };
+  }
+
+  @Patch('settings/:key')
+  @HttpCode(HttpStatus.OK)
+  async updateSetting(
+    @Req() req: AdminRequest,
+    @Param('key') key: string,
+    @Body(new ZodValidationPipe(UpdateSettingSchema)) body: UpdateSettingDto,
+  ): Promise<unknown> {
+    this.audit(req, `/admin/settings/${key}`);
+    await this.settings.update(key, body.value, req.user.email);
+    return { ok: true };
   }
 }

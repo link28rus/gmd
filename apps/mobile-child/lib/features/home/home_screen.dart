@@ -11,6 +11,26 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // При входе на home проверяем валидность deviceToken через /child/me.
+    // Если родитель удалил ребёнка или нажал «Отвязать устройство» — токен
+    // отозван сервером, home очищает storage и отправляет нас на onboarding
+    // с понятным сообщением.
+    ref.listen<AsyncValue<HomeInitResult>>(homeInitProvider, (prev, next) {
+      next.whenData((res) {
+        if (!res.tokenValid && context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Устройство отвязано от семьи. Отсканируй новый QR-код для привязки.',
+              ),
+              duration: Duration(seconds: 6),
+              backgroundColor: Colors.orange,
+            ),
+          );
+          context.go('/onboarding');
+        }
+      });
+    });
     ref.watch(homeInitProvider);
 
     ref.listen<SosState>(sosControllerProvider, (prev, next) {

@@ -23,7 +23,12 @@ export class InvitesService {
     @Inject(INVITES_CONFIG) private readonly cfg: InvitesServiceConfig,
   ) {}
 
-  async createInvite(familyId: string, childId: string, createdBy: string): Promise<InviteResult> {
+  async createInvite(
+    familyId: string,
+    childId: string,
+    createdBy: string,
+    opts: { consent14PlusGranted?: boolean } = {},
+  ): Promise<InviteResult> {
     const child = await this.prisma.child.findFirst({
       where: { id: childId, familyId, deletedAt: null },
     });
@@ -42,7 +47,14 @@ export class InvitesService {
     const code = generateInviteCode();
     const expiresAt = new Date(Date.now() + this.cfg.ttlSec * 1000);
     await this.prisma.invite.create({
-      data: { familyId, childId, code, expiresAt, createdBy },
+      data: {
+        familyId,
+        childId,
+        code,
+        expiresAt,
+        createdBy,
+        consent14PlusGranted: opts.consent14PlusGranted === true,
+      },
     });
     return {
       code,

@@ -47,8 +47,12 @@ export const childrenApi = {
       body: JSON.stringify(body),
     }),
   remove: (id: string) => apiFetch<void>(`/api/children/${id}`, { method: 'DELETE' }),
-  createInvite: (id: string) =>
-    apiFetch<InviteResponse>(`/api/children/${id}/invites`, { method: 'POST' }),
+  createInvite: (id: string, opts: { consent14PlusGranted?: boolean } = {}) =>
+    apiFetch<InviteResponse>(`/api/children/${id}/invites`, {
+      method: 'POST',
+      body: JSON.stringify({ consent14PlusGranted: opts.consent14PlusGranted === true }),
+      headers: { 'content-type': 'application/json' },
+    }),
   resetDevice: (id: string) =>
     apiFetch<void>(`/api/children/${id}/reset-device`, { method: 'POST' }),
 };

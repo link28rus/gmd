@@ -135,10 +135,32 @@ class ChildApi {
       return IngestResponse(acceptedIds: const [], rejectedIds: const []);
     } on DioException catch (e) {
       final status = e.response?.statusCode;
+      if (status == 401 || status == 403) {
+        throw const UnauthorizedException();
+      }
       if (status != null && status >= 400 && status < 500) {
         throw const BadRequestIngestException();
       }
       throw NetworkException(e.message ?? 'Network');
+    }
+  }
+
+  // Проверка валидности текущего deviceToken. Возвращает true если токен
+  // живой, false — если сервер вернул 401/403 (устройство отвязано). При
+  // сетевой ошибке возвращает true (не знаем статус, не дёргаем пользователя
+  // зря — подтянем при реальном ingest).
+  Future<bool> verifyToken(String deviceToken) async {
+    try {
+      await _dio.get(
+        '/child/me',
+        options: Options(headers: {'X-Child-Token': deviceToken}),
+      );
+      return true;
+    } on DioException catch (e) {
+      final status = e.response?.statusCode;
+      if (status == 401 || status == 403) return false;
+      // Network / 5xx — токен может быть валиден, не удаляем.
+      return true;
     }
   }
 
