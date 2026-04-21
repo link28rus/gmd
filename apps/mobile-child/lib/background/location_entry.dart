@@ -1,3 +1,5 @@
+import 'dart:ui' show DartPluginRegistrant;
+
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -20,6 +22,9 @@ import '../ingestor/location_ingestor.dart';
 @pragma('vm:entry-point')
 void locationEntryPoint() {
   WidgetsFlutterBinding.ensureInitialized();
+  // Обязательно для headless-изолятов в Flutter 3.x — регистрирует Dart-side
+  // плагинов, без этого MethodChannel handler'ы не доходят до native.
+  DartPluginRegistrant.ensureInitialized();
   diagLog('bg', 'locationEntryPoint: starting headless isolate');
 
   _bootstrap();
