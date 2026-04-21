@@ -327,6 +327,39 @@ class LocationForegroundService : Service() {
         }
     }
 
+    // Защита от свайпа: когда пользователь смахивает приложение из recents,
+    // Android вызывает onTaskRemoved() и затем убивает процесс. START_STICKY
+    // на MIUI/Huawei/Oppo не гарантирует рестарт. Ставим AlarmManager с exact
+    // alarm на +3 сек — RestartReceiver поднимет сервис обратно.
+    // setExactAndAllowWhileIdle даёт short-term exemption от FGS-restrictions
+    // на Android 12+, поэтому startForegroundService в ресивере разрешён.
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        log("onTaskRemoved: scheduling AlarmManager restart in 3s")
+        try {
+            val pi = PendingIntent.getBroadcast(
+                this,
+                0,
+                Intent(this, RestartReceiver::class.java).setAction(RestartReceiver.ACTION_RESTART),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+            val am = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            val triggerAt = System.currentTimeMillis() + 3_000L
+            val canExact = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                am.canScheduleExactAlarms()
+            } else true
+            if (canExact) {
+                am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
+                log("onTaskRemoved: exact alarm scheduled")
+            } else {
+                am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
+                log("onTaskRemoved: inexact alarm scheduled (no SCHEDULE_EXACT_ALARM)")
+            }
+        } catch (e: Throwable) {
+            logErr("onTaskRemoved: alarm schedule failed", e)
+        }
+        super.onTaskRemoved(rootIntent)
+    }
+
     override fun onDestroy() {
         log("onDestroy")
         heartbeatHandler?.removeCallbacks(heartbeatRunnable)

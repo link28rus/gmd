@@ -564,18 +564,18 @@
         "description": "Локация ребёнка обновляется в web-кабинете родителя только когда ребёнок открывает приложение. В карточке «Был тут 2 ч назад» — это означает, что фоновый трекинг не шлёт точки, пока процесс не выведен на передний план. Нужно обеспечить регулярную отправку локаций из фона (screen off, app background, после ребута устройства).",
         "details": "Симптом (скриншот от 2026-04-21): в карточке ребёнка «Артём» и в тултипе на карте отображается «Был тут 2 ч назад», хотя ребёнок ходит с телефоном. Точки приходят только в момент foreground-открытия приложения mobile-child.\n\nЧто проверить / починить:\n1. Foreground service с типом `location` — запущен ли и переживает ли screen off / Doze.\n2. WorkManager periodic task (или AlarmManager setExactAndAllowWhileIdle) для регулярного сэмпла локации — есть ли, какой интервал, не убивается ли системой.\n3. BOOT_COMPLETED receiver — автозапуск сервиса после ребута устройства.\n4. Battery optimization / App Standby Bucket — просим ли у пользователя whitelist (REQUEST_IGNORE_BATTERY_OPTIMIZATIONS), отражается ли в permission health banner v0.15.3.\n5. MIUI / Xiaomi autostart hints — уже добавлены в v0.15.2, проверить что срабатывают на реальном устройстве Артёма.\n6. WAKE_LOCK при locked screen — v0.15.2 фикс, проверить что удерживается на время GPS fix.\n7. Backend side: DTO принимает batch локаций, расчёт `last_seen_at` идёт по server receive time, а не по device timestamp (иначе старые offline-точки могут показывать «устаревшее»).\n8. Heartbeat-endpoint: нужен ли периодический ping (каждые N минут), даже если координаты не изменились, чтобы web показывал «был только что» а не «2 часа назад».\n9. Сетевой слой: retry с exponential backoff при отсутствии сети, локальный буфер в Drift, отправка батчем при восстановлении соединения.\n\nDefinition of Done:\n- На тестовом Android-устройстве (желательно Xiaomi/MIUI) локация шлётся каждые ≤ 5 минут при выключенном экране и закрытом приложении в течение минимум 2 часов.\n- После ребута устройства — в течение 5 минут снова идут точки без ручного открытия приложения.\n- В web-кабинете «Был тут …» показывает не более 10 минут, если устройство онлайн и разрешения выданы.\n- Permission health banner подсвечивает отключённые разрешения/оптимизации батареи.",
         "testStrategy": "",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "high",
         "subtasks": [],
-        "updatedAt": "2026-04-21T06:44:04.396Z"
+        "updatedAt": "2026-04-21T09:11:37.477Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-04-21T06:44:04.396Z",
+      "lastModified": "2026-04-21T09:11:37.477Z",
       "taskCount": 49,
-      "completedCount": 27,
+      "completedCount": 28,
       "tags": ["master"]
     }
   }

@@ -25,6 +25,11 @@
         tools:targetApi="s"/>
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
+    <!-- Защита от свайпа из recents: onTaskRemoved ставит AlarmManager-alarm
+         через 3 сек, RestartReceiver поднимает сервис обратно. USE_EXACT_ALARM
+         (Android 13+) granted автоматически для task-management приложений;
+         на Android 12 fallback на setAndAllowWhileIdle. -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
     <application
         android:label="gmd_child"
         android:name="${applicationName}"
@@ -73,6 +78,13 @@
                 <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
             </intent-filter>
         </receiver>
+        <!-- Получает AlarmManager-alarm, запланированный в onTaskRemoved
+             (после свайпа приложения из recents), и перезапускает сервис.
+             exported=false — alarm приходит только от своего же процесса. -->
+        <receiver
+            android:name=".RestartReceiver"
+            android:enabled="true"
+            android:exported="false"/>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
