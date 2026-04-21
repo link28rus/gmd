@@ -8,12 +8,15 @@ import { useChildren } from '@/lib/hooks/use-children';
 import { useLatestLocation } from '@/lib/hooks/use-latest-location';
 import { useLocationHistory } from '@/lib/hooks/use-location-history';
 import { ChildrenSidebar } from '@/components/cabinet/children-sidebar';
+import { ChildActions } from '@/components/cabinet/child-actions';
+import { ChildNotAttachedView } from '@/components/cabinet/child-not-attached-view';
 import { ChildMap } from '@/components/locations/child-map';
 import { ChildStatusCard } from '@/components/locations/child-status-card';
 import { MapErrorFallback } from '@/components/locations/map-error-fallback';
 import { TrackTruncatedBanner } from '@/components/locations/track-truncated-banner';
 import { todayIso } from '@/lib/date/day-bounds';
 import { ApiError } from '@/lib/api/client';
+import type { Child } from '@/lib/api/children';
 
 interface RefreshResponse {
   accessToken: string;
@@ -109,7 +112,11 @@ function CabinetHome({ initialChildId }: { initialChildId: string | null }): Rea
       <ChildrenSidebar children={kids} selectedId={selectedId} onSelect={selectChild} />
       <div className="relative flex-1 overflow-hidden">
         {selected ? (
-          <MapArea childId={selected.id} childName={selected.name} />
+          hasActiveDevice(selected) ? (
+            <MapArea child={selected} />
+          ) : (
+            <ChildNotAttachedView child={selected} />
+          )
         ) : (
           <div className="flex h-full items-center justify-center bg-zinc-50 p-6 text-center text-zinc-600">
             Добавьте первого ребёнка в меню слева, чтобы увидеть карту.
@@ -120,12 +127,16 @@ function CabinetHome({ initialChildId }: { initialChildId: string | null }): Rea
   );
 }
 
-function MapArea({ childId, childName }: { childId: string; childName: string }): ReactElement {
+function hasActiveDevice(c: Child): boolean {
+  return c.device !== null && c.device.revokedAt === null;
+}
+
+function MapArea({ child }: { child: Child }): ReactElement {
   const router = useRouter();
   const [date] = useState(todayIso());
   const [mapFailed, setMapFailed] = useState(false);
-  const latestQ = useLatestLocation(childId);
-  const { query: historyQ, isTruncated } = useLocationHistory(childId, date);
+  const latestQ = useLatestLocation(child.id);
+  const { query: historyQ, isTruncated } = useLocationHistory(child.id, date);
 
   useEffect(() => {
     const err = latestQ.error ?? historyQ.error;
@@ -176,7 +187,7 @@ function MapArea({ childId, childName }: { childId: string; childName: string })
         </div>
       )}
       <ChildMap
-        childName={childName}
+        childName={child.name}
         latest={latest}
         track={track}
         onMapError={() => setMapFailed(true)}
@@ -184,12 +195,13 @@ function MapArea({ childId, childName }: { childId: string; childName: string })
       {latest && (
         <div className="absolute left-4 top-4 z-10">
           <ChildStatusCard
-            childName={childName}
+            childName={child.name}
             ageSec={latest.ageSec}
             accuracy={latest.accuracy}
             batteryLevel={latest.batteryLevel}
             isCharging={latest.isCharging}
             provider={latest.provider}
+            actions={<ChildActions child={child} showReset={true} />}
           />
         </div>
       )}

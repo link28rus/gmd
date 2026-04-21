@@ -1,5 +1,5 @@
 'use client';
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { avatarColor, avatarInitial } from '@/lib/color/avatar-color';
 import { formatAgeShort } from '@/lib/date/age-format';
 
@@ -10,6 +10,8 @@ interface Props {
   batteryLevel: number | null;
   isCharging: boolean | null;
   provider: 'gps' | 'fused' | 'network' | null;
+  /** Блок действий (напр. «Отвязать устройство», «Удалить ребёнка») под метриками. */
+  actions?: ReactNode;
 }
 
 export function ChildStatusCard({
@@ -19,6 +21,7 @@ export function ChildStatusCard({
   batteryLevel,
   isCharging,
   provider,
+  actions,
 }: Props): ReactElement {
   const initial = avatarInitial(childName);
   const color = avatarColor(childName);
@@ -56,6 +59,7 @@ export function ChildStatusCard({
           Точность координат {accuracyQuality(accuracy)} ({Math.round(accuracy)} метров)
         </div>
       )}
+      {actions}
     </div>
   );
 }
