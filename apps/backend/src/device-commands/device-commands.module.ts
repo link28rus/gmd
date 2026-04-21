@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AuthModule } from '../auth/auth.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { ChildDeviceModule } from '../child-device/child-device.module';
 import { ConsentModule } from '../consent/consent.module';
@@ -7,7 +8,7 @@ import { ParentCommandsController } from './parent-commands.controller';
 import { ChildCommandsController } from './child-commands.controller';
 
 @Module({
-  imports: [PrismaModule, ChildDeviceModule, ConsentModule],
+  imports: [AuthModule, PrismaModule, ChildDeviceModule, ConsentModule],
   controllers: [ParentCommandsController, ChildCommandsController],
   providers: [DeviceCommandsService],
   exports: [DeviceCommandsService],
