@@ -12,11 +12,11 @@ import android.os.Looper
 import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import com.google.android.gms.location.*
+import io.flutter.FlutterInjector
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.FlutterEngineCache
 import io.flutter.embedding.engine.dart.DartExecutor
 import io.flutter.plugin.common.MethodChannel
-import io.flutter.view.FlutterMain
 
 class LocationForegroundService : Service() {
     companion object {
@@ -68,12 +68,13 @@ class LocationForegroundService : Service() {
             return
         }
 
-        FlutterMain.startInitialization(applicationContext)
-        FlutterMain.ensureInitializationComplete(applicationContext, null)
+        val loader = FlutterInjector.instance().flutterLoader()
+        loader.startInitialization(applicationContext)
+        loader.ensureInitializationComplete(applicationContext, null)
 
         val engine = FlutterEngine(applicationContext)
         val entrypoint = DartExecutor.DartEntrypoint(
-            FlutterMain.findAppBundlePath(),
+            loader.findAppBundlePath(),
             DART_LIBRARY_URI,
             DART_ENTRYPOINT,
         )
