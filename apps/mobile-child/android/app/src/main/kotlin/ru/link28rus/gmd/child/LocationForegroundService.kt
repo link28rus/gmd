@@ -17,6 +17,7 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.FlutterEngineCache
 import io.flutter.embedding.engine.dart.DartExecutor
 import io.flutter.plugin.common.MethodChannel
+import io.flutter.plugins.GeneratedPluginRegistrant
 
 class LocationForegroundService : Service() {
     companion object {
@@ -73,6 +74,11 @@ class LocationForegroundService : Service() {
         loader.ensureInitializationComplete(applicationContext, null)
 
         val engine = FlutterEngine(applicationContext)
+        // КРИТИЧНО: при ручном создании FlutterEngine (не через FlutterActivity) плагины
+        // НЕ регистрируются автоматически. Без этого вызова в headless-изоляте все
+        // MethodChannel'ы (path_provider / flutter_secure_storage / sqlite3_flutter_libs /
+        // connectivity_plus) падают с MissingPluginException и ingestor молча умирает.
+        GeneratedPluginRegistrant.registerWith(engine)
         val entrypoint = DartExecutor.DartEntrypoint(
             loader.findAppBundlePath(),
             DART_LIBRARY_URI,

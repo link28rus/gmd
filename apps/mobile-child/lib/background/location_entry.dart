@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -10,6 +12,10 @@ import '../data/database.dart';
 import '../data/location_queue_repository.dart';
 import '../ingestor/location_ingestor.dart';
 
+void _log(String msg, [Object? err, StackTrace? stack]) {
+  developer.log(msg, name: 'gmd.bg', error: err, stackTrace: stack);
+}
+
 // Headless Dart entrypoint для фонового изолята, запускаемого из
 // LocationForegroundService. Живёт пока жив service (переживает закрытие UI,
 // screen off, ребут — когда service перезапускает BootReceiver).
@@ -19,27 +25,37 @@ import '../ingestor/location_ingestor.dart';
 @pragma('vm:entry-point')
 void locationEntryPoint() {
   WidgetsFlutterBinding.ensureInitialized();
+  _log('locationEntryPoint: starting headless isolate');
 
-  final db = AppDatabase();
-  final repo = LocationQueueRepository(db);
-  final api = ChildApi(buildDio(baseUrl: apiBaseUrl));
-  final storage = SecureStorageService();
-  final ingestor = LocationIngestor(
-    repo: repo,
-    api: api,
-    deviceToken: storage.readDeviceToken,
-  );
+  try {
+    final db = AppDatabase();
+    final repo = LocationQueueRepository(db);
+    final api = ChildApi(buildDio(baseUrl: apiBaseUrl));
+    final storage = SecureStorageService();
+    final ingestor = LocationIngestor(
+      repo: repo,
+      api: api,
+      deviceToken: storage.readDeviceToken,
+    );
+    _log('locationEntryPoint: ingestor ready');
 
-  const channel = MethodChannel('ru.link28rus.gmd.child/location');
-  channel.setMethodCallHandler((call) async {
-    if (call.method == 'onLocation' && call.arguments is Map) {
-      await ingestor.onLocation(Map<String, dynamic>.from(call.arguments as Map));
-    }
-  });
+    const channel = MethodChannel('ru.link28rus.gmd.child/location');
+    channel.setMethodCallHandler((call) async {
+      if (call.method == 'onLocation' && call.arguments is Map) {
+        try {
+          await ingestor.onLocation(Map<String, dynamic>.from(call.arguments as Map));
+        } catch (e, st) {
+          _log('onLocation failed', e, st);
+        }
+      }
+    });
 
-  Connectivity().onConnectivityChanged.listen((list) {
-    if (list.any((r) => r != ConnectivityResult.none)) {
-      ingestor.flushQueue();
-    }
-  });
+    Connectivity().onConnectivityChanged.listen((list) {
+      if (list.any((r) => r != ConnectivityResult.none)) {
+        ingestor.flushQueue();
+      }
+    });
+  } catch (e, st) {
+    _log('locationEntryPoint init failed', e, st);
+  }
 }
