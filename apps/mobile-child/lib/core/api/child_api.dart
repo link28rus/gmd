@@ -94,6 +94,24 @@ class SosResponse {
   final DateTime createdAt;
 }
 
+class DeviceCommand {
+  DeviceCommand({
+    required this.id,
+    required this.type,
+    this.payload,
+  });
+
+  factory DeviceCommand.fromJson(Map<String, dynamic> json) => DeviceCommand(
+        id: json['id'] as String,
+        type: json['type'] as String,
+        payload: json['payload'] as Map<String, dynamic>?,
+      );
+
+  final String id;
+  final String type;
+  final Map<String, dynamic>? payload;
+}
+
 class ChildApi {
   ChildApi(this._dio);
   final Dio _dio;
@@ -161,6 +179,47 @@ class ChildApi {
       if (status == 401 || status == 403) return false;
       // Network / 5xx — токен может быть валиден, не удаляем.
       return true;
+    }
+  }
+
+  // Забрать pending-команды для этого устройства. Используется ingestor'ом
+  // после flushQueue — так команды доставляются в пределах 2 минут
+  // (heartbeat-интервал) без отдельного поллинга.
+  Future<List<DeviceCommand>> getPendingCommands({
+    required String deviceToken,
+  }) async {
+    try {
+      final resp = await _dio.get(
+        '/child/commands/pending',
+        options: Options(headers: {'X-Child-Token': deviceToken}),
+      );
+      final list = ((resp.data as Map<String, dynamic>)['commands'] as List)
+          .cast<Map<String, dynamic>>();
+      return list.map(DeviceCommand.fromJson).toList();
+    } on DioException catch (e) {
+      final status = e.response?.statusCode;
+      if (status == 401 || status == 403) throw const UnauthorizedException();
+      if (status == null) throw NetworkException(e.message ?? 'Сеть недоступна');
+      throw ServerException('Ошибка сервера', status);
+    }
+  }
+
+  // Подтвердить выполнение команды. Идемпотентно (сервер не ругается на
+  // повторный ack).
+  Future<void> ackCommand({
+    required String deviceToken,
+    required String commandId,
+  }) async {
+    try {
+      await _dio.post(
+        '/child/commands/$commandId/ack',
+        options: Options(headers: {'X-Child-Token': deviceToken}),
+      );
+    } on DioException catch (e) {
+      final status = e.response?.statusCode;
+      if (status == 401 || status == 403) throw const UnauthorizedException();
+      if (status == null) throw NetworkException(e.message ?? 'Сеть недоступна');
+      throw ServerException('Ошибка сервера', status);
     }
   }
 

@@ -8,6 +8,7 @@ import '../core/api/child_api.dart';
 import '../core/api/dio_client.dart';
 import '../core/config/env.dart';
 import '../core/diag/diag_channel.dart';
+import '../core/native/signal_channel.dart';
 import '../core/storage/secure_storage_service.dart';
 import '../data/database.dart';
 import '../data/location_queue_repository.dart';
@@ -38,6 +39,7 @@ Future<void> _bootstrap() async {
     diagLog('bg', 'bootstrap: building ChildApi base=$apiBaseUrl');
     final api = ChildApi(buildDio(baseUrl: apiBaseUrl));
     final storage = SecureStorageService();
+    final signalChannel = SignalChannel();
     final ingestor = LocationIngestor(
       repo: repo,
       api: api,
@@ -48,6 +50,14 @@ Future<void> _bootstrap() async {
         // остаётся — его стопнет UI-изолят через homeInitProvider.
         diagLog('bg', 'ingestor: UNAUTHORIZED → clearing token');
         await storage.clearAll();
+      },
+      onCommand: (cmd) async {
+        diagLog('bg', 'command received: ${cmd.type} id=${cmd.id}');
+        if (cmd.type == 'PLAY_SIGNAL') {
+          await signalChannel.play();
+        } else {
+          diagLog('bg', 'unknown command type ${cmd.type} — ignoring');
+        }
       },
     );
     diagLog('bg', 'bootstrap: ingestor ready');

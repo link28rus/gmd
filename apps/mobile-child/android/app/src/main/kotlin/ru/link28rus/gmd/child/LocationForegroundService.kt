@@ -29,6 +29,7 @@ class LocationForegroundService : Service() {
         const val NOTIF_ID = 0xC1
         const val METHOD_CHANNEL = "ru.link28rus.gmd.child/location"
         const val DIAG_CHANNEL = "ru.link28rus.gmd.child/diag"
+        const val SIGNAL_CHANNEL = "ru.link28rus.gmd.child/signal"
         // Отдельный engine для headless-изолята фонового сервиса. UI-Activity
         // держит свой engine через FlutterActivity — они не пересекаются.
         const val BG_ENGINE_ID = "gmd_bg_location_engine"
@@ -141,6 +142,28 @@ class LocationForegroundService : Service() {
                             val tag = call.argument<String>("tag") ?: "bg"
                             val msg = call.argument<String>("msg") ?: ""
                             DiagLog.write(applicationContext, tag, msg)
+                            result.success(null)
+                        }
+                        else -> result.notImplemented()
+                    }
+                }
+
+            // Канал сигнала — Dart (ingestor) вызывает play при PLAY_SIGNAL
+            // команде с сервера. Запускаем отдельный SignalSoundService с
+            // foregroundServiceType=mediaPlayback, чтобы он не зависел от
+            // нашего жизненного цикла и корректно переживал Doze.
+            MethodChannel(engine.dartExecutor.binaryMessenger, SIGNAL_CHANNEL)
+                .setMethodCallHandler { call, result ->
+                    when (call.method) {
+                        "play" -> {
+                            log("signal.play invoked from Dart")
+                            val intent = Intent(applicationContext, SignalSoundService::class.java)
+                                .setAction(SignalSoundService.ACTION_PLAY)
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                applicationContext.startForegroundService(intent)
+                            } else {
+                                applicationContext.startService(intent)
+                            }
                             result.success(null)
                         }
                         else -> result.notImplemented()

@@ -17,6 +17,7 @@ import { ConsentModule } from './consent/consent.module';
 import { LocationsModule } from './locations/locations.module';
 import { SosModule } from './sos/sos.module';
 import { ZonesModule } from './zones/zones.module';
+import { DeviceCommandsModule } from './device-commands/device-commands.module';
 import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storage';
 
 @Module({
@@ -43,6 +44,7 @@ import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storag
     LocationsModule,
     SosModule,
     ZonesModule,
+    DeviceCommandsModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

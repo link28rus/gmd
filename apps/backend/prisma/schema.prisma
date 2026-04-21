@@ -157,19 +157,19 @@ model Child {
 }
 
 model Invite {
-  id                    String    @id @default(cuid())
-  familyId              String
-  childId               String
-  code                  String    @unique
-  expiresAt             DateTime
-  consumedAt            DateTime?
+  id                   String    @id @default(cuid())
+  familyId             String
+  childId              String
+  code                 String    @unique
+  expiresAt            DateTime
+  consumedAt           DateTime?
   // Для детей 14+: родитель при создании invite обязан отметить, что получил
   // согласие ребёнка на обработку геолокации. Backend читает этот флаг при
   // claim — если granted=true, телефону ребёнка не требуется передавать
   // consent14Plus в теле запроса (согласие уже зафиксировано родителем).
-  consent14PlusGranted  Boolean   @default(false)
-  createdBy             String
-  createdAt             DateTime  @default(now())
+  consent14PlusGranted Boolean   @default(false)
+  createdBy            String
+  createdAt            DateTime  @default(now())
 
   family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
   child  Child  @relation(fields: [childId], references: [id], onDelete: Cascade)
@@ -190,11 +190,47 @@ model ChildDevice {
   revokedAt  DateTime?
   createdAt  DateTime  @default(now())
 
-  child     Child      @relation(fields: [childId], references: [id], onDelete: Cascade)
+  child     Child           @relation(fields: [childId], references: [id], onDelete: Cascade)
   locations Location[]
   sosEvents SosEvent[]
+  commands  DeviceCommand[]
 
   @@map("child_devices")
+}
+
+enum DeviceCommandType {
+  PLAY_SIGNAL
+}
+
+enum DeviceCommandStatus {
+  pending
+  executed
+  expired
+  cancelled
+}
+
+// Команда от родителя к child-устройству. Доставляется short-polling:
+// child-устройство при каждом ingest/heartbeat (≤ 2 мин) забирает pending
+// команды и выполняет их. FCM-доставки на MVP нет.
+//
+// expiresAt отсекает «устаревшие» команды — если родитель нажал «Сигнал»
+// 3 часа назад, а телефон только сейчас вышел в сеть, проигрывать уже
+// не нужно.
+model DeviceCommand {
+  id              String              @id @default(cuid())
+  childDeviceId   String
+  type            DeviceCommandType
+  status          DeviceCommandStatus @default(pending)
+  payload         Json?
+  createdByUserId String
+  createdAt       DateTime            @default(now())
+  expiresAt       DateTime
+  executedAt      DateTime?
+
+  childDevice ChildDevice @relation(fields: [childDeviceId], references: [id], onDelete: Cascade)
+
+  @@index([childDeviceId, status, expiresAt])
+  @@map("device_commands")
 }
 
 model Location {
@@ -296,8 +332,8 @@ model Zone {
   // diff генерирует DROP для этой колонки; его нужно вручную вычистить из
   // migration.sql перед применением.
   createdBy String
-  createdAt DateTime                               @default(now())
-  updatedAt DateTime                               @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
   family      Family                @relation(fields: [familyId], references: [id], onDelete: Cascade)

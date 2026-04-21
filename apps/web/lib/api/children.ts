@@ -55,4 +55,8 @@ export const childrenApi = {
     }),
   resetDevice: (id: string) =>
     apiFetch<void>(`/api/children/${id}/reset-device`, { method: 'POST' }),
+  sendSignal: (id: string) =>
+    apiFetch<{ commandId: string; expiresAt: string }>(`/api/children/${id}/signal`, {
+      method: 'POST',
+    }),
 };

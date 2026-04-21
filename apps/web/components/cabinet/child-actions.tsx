@@ -2,10 +2,11 @@
 
 import { useState, type ReactElement } from 'react';
 import Link from 'next/link';
-import { Clock, RotateCcw, Trash2 } from 'lucide-react';
+import { Bell, Clock, RotateCcw, Trash2 } from 'lucide-react';
 import type { Child } from '@/lib/api/children';
 import { ResetDeviceDialog } from '@/components/children/reset-device-dialog';
 import { DeleteChildDialog } from '@/components/children/delete-child-dialog';
+import { SendSignalDialog } from '@/components/children/send-signal-dialog';
 
 interface Props {
   child: Child;
@@ -16,6 +17,10 @@ interface Props {
 export function ChildActions({ child, showReset }: Props): ReactElement {
   const [resetOpen, setResetOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [signalOpen, setSignalOpen] = useState(false);
+
+  // «Отправить сигнал» доступен только если устройство привязано.
+  const canSignal = showReset;
 
   return (
     <>
@@ -27,6 +32,16 @@ export function ChildActions({ child, showReset }: Props): ReactElement {
           <Clock className="h-4 w-4 text-zinc-500" />
           История передвижений
         </Link>
+        {canSignal && (
+          <button
+            type="button"
+            onClick={() => setSignalOpen(true)}
+            className="flex w-full items-center gap-2 border-t border-zinc-100 px-3 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50"
+          >
+            <Bell className="h-4 w-4 text-zinc-500" />
+            Отправить сигнал
+          </button>
+        )}
         {showReset && (
           <button
             type="button"
@@ -50,6 +65,9 @@ export function ChildActions({ child, showReset }: Props): ReactElement {
       </div>
       {showReset && (
         <ResetDeviceDialog child={child} open={resetOpen} onOpenChange={setResetOpen} />
+      )}
+      {canSignal && (
+        <SendSignalDialog child={child} open={signalOpen} onOpenChange={setSignalOpen} />
       )}
       <DeleteChildDialog child={child} open={deleteOpen} onOpenChange={setDeleteOpen} />
     </>

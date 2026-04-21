@@ -1,5 +1,6 @@
 import '../core/api/api_exceptions.dart';
 import '../core/api/child_api.dart';
+import '../core/diag/diag_channel.dart';
 import '../data/location_queue_repository.dart';
 
 class LocationIngestor {
@@ -8,6 +9,7 @@ class LocationIngestor {
     required this.api,
     required this.deviceToken,
     this.onUnauthorized,
+    this.onCommand,
   });
   final LocationQueueRepository repo;
   final ChildApi api;
@@ -16,6 +18,11 @@ class LocationIngestor {
   // отозвано (родитель удалил ребёнка / сбросил девайс). Реализация
   // обычно чистит secure storage и стопает foreground сервис.
   final Future<void> Function()? onUnauthorized;
+  // Вызывается при каждой pending команде. Возвращаемый Future резолвится
+  // когда команда реально выполнена — только тогда шлём ack на сервер,
+  // чтобы при падении воспроизведения команда осталась pending и была
+  // переотправлена при следующем poll.
+  final Future<void> Function(DeviceCommand cmd)? onCommand;
 
   DateTime _lastFlush = DateTime.fromMillisecondsSinceEpoch(0);
   bool _firstFlushed = false;
@@ -55,41 +62,74 @@ class LocationIngestor {
     final token = await deviceToken();
     if (token == null) return;
     final batch = await repo.takeBatch(limit: 100);
-    if (batch.isEmpty) return;
+    if (batch.isNotEmpty) {
+      try {
+        await api.ingestLocations(
+          batch
+              .map((r) => LocationPoint(
+                    lat: r.lat,
+                    lon: r.lon,
+                    accuracy: r.accuracy,
+                    altitude: r.altitude,
+                    speed: r.speed,
+                    bearing: r.bearing,
+                    batteryLevel: r.batteryLevel,
+                    isCharging: r.isCharging,
+                    provider: r.provider,
+                    networkType: r.networkType,
+                    wifiSsid: r.wifiSsid,
+                    mobileOperator: r.mobileOperator,
+                    recordedAt: r.recordedAt,
+                  ))
+              .toList(),
+          deviceToken: token,
+        );
+        await repo.deleteIds(batch.map((r) => r.id).toList());
+      } on UnauthorizedException {
+        // Устройство отозвано сервером. Не ретраим, очищаем очередь и
+        // сообщаем наверх — при следующем открытии приложения home увидит
+        // пустой токен и уведёт на /onboarding.
+        await repo.deleteIds(batch.map((r) => r.id).toList());
+        if (onUnauthorized != null) {
+          await onUnauthorized!();
+        }
+        return;
+      } on BadRequestIngestException {
+        await repo.deleteIds(batch.map((r) => r.id).toList());
+      } catch (_) {
+        await repo.markRetry(batch.map((r) => r.id).toList());
+      }
+    }
+    // После ingest забираем pending команды. Делаем это каждый flush, а не
+    // только когда batch непустой: если очередь пуста (редкий случай), но
+    // команда ждёт — должны её забрать всё равно.
+    await _pollCommands(token);
+  }
+
+  Future<void> _pollCommands(String token) async {
+    if (onCommand == null) return;
+    List<DeviceCommand> commands;
     try {
-      await api.ingestLocations(
-        batch
-            .map((r) => LocationPoint(
-                  lat: r.lat,
-                  lon: r.lon,
-                  accuracy: r.accuracy,
-                  altitude: r.altitude,
-                  speed: r.speed,
-                  bearing: r.bearing,
-                  batteryLevel: r.batteryLevel,
-                  isCharging: r.isCharging,
-                  provider: r.provider,
-                  networkType: r.networkType,
-                  wifiSsid: r.wifiSsid,
-                  mobileOperator: r.mobileOperator,
-                  recordedAt: r.recordedAt,
-                ))
-            .toList(),
-        deviceToken: token,
-      );
-      await repo.deleteIds(batch.map((r) => r.id).toList());
+      commands = await api.getPendingCommands(deviceToken: token);
     } on UnauthorizedException {
-      // Устройство отозвано сервером. Не ретраим, очищаем очередь и
-      // сообщаем наверх — при следующем открытии приложения home увидит
-      // пустой токен и уведёт на /onboarding.
-      await repo.deleteIds(batch.map((r) => r.id).toList());
       if (onUnauthorized != null) {
         await onUnauthorized!();
       }
-    } on BadRequestIngestException {
-      await repo.deleteIds(batch.map((r) => r.id).toList());
-    } catch (_) {
-      await repo.markRetry(batch.map((r) => r.id).toList());
+      return;
+    } catch (e) {
+      diagLog('ingestor', 'getPendingCommands failed: $e');
+      return;
+    }
+    for (final cmd in commands) {
+      try {
+        await onCommand!(cmd);
+        await api.ackCommand(deviceToken: token, commandId: cmd.id);
+        diagLog('ingestor', 'command ${cmd.type} ${cmd.id} executed+acked');
+      } catch (e) {
+        // Не acked — сервер отдаст команду в следующий поллинг. expiresAt
+        // на сервере (5 мин) защитит от бесконечного перепривода.
+        diagLog('ingestor', 'command ${cmd.id} failed: $e');
+      }
     }
   }
 }
