@@ -67,6 +67,7 @@ export function ChildMapInner({
             lon={latest.lon}
             accuracy={latest.accuracy}
             childName={childName}
+            ageSec={latest.ageSec}
           />
         )}
         <TrackPolyline items={track} />

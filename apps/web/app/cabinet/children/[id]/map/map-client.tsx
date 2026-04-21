@@ -9,7 +9,7 @@ import { useChildren } from '@/lib/hooks/use-children';
 import { useLatestLocation } from '@/lib/hooks/use-latest-location';
 import { useLocationHistory } from '@/lib/hooks/use-location-history';
 import { ChildMap } from '@/components/locations/child-map';
-import { StaleIndicator } from '@/components/locations/stale-indicator';
+import { ChildStatusCard } from '@/components/locations/child-status-card';
 import { DateSelector } from '@/components/locations/date-selector';
 import { TrackTruncatedBanner } from '@/components/locations/track-truncated-banner';
 import { MapErrorFallback } from '@/components/locations/map-error-fallback';
@@ -137,11 +137,14 @@ export default function MapClient({ childId }: Props): ReactElement {
               onMapError={() => setMapFailed(true)}
             />
             {latest && (
-              <div className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2">
-                <StaleIndicator
+              <div className="absolute left-4 top-4">
+                <ChildStatusCard
+                  childName={child.name}
                   ageSec={latest.ageSec}
                   accuracy={latest.accuracy}
                   batteryLevel={latest.batteryLevel}
+                  isCharging={latest.isCharging}
+                  provider={latest.provider}
                 />
               </div>
             )}
