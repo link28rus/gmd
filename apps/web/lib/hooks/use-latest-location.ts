@@ -9,10 +9,10 @@ export function useLatestLocation(childId: string) {
     queryKey: ['location', 'latest', childId],
     queryFn: () => locationsApi.getLatest(childId),
     enabled: !!childId,
-    refetchInterval: () => (typeof document !== 'undefined' && document.hidden ? false : 15_000),
+    refetchInterval: () => (typeof document !== 'undefined' && document.hidden ? false : 5_000),
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
-    staleTime: 10_000,
+    staleTime: 3_000,
     retry: 1,
   });
 }

@@ -13,8 +13,8 @@ export function useLocationHistory(childId: string, date: string) {
       return locationsApi.getHistory(childId, from, to, 2000);
     },
     enabled: !!childId && !!date,
-    staleTime: date && isToday(date) ? 30_000 : 5 * 60_000,
-    refetchInterval: date && isToday(date) ? 60_000 : false,
+    staleTime: date && isToday(date) ? 5_000 : 5 * 60_000,
+    refetchInterval: date && isToday(date) ? 10_000 : false,
     gcTime: 60 * 60_000,
     placeholderData: (prev) => prev,
     retry: 1,

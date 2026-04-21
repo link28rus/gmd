@@ -29,7 +29,7 @@ export class LocationsController {
   @Post('locations')
   @HttpCode(HttpStatus.OK)
   @UseGuards(ChildAuthGuard)
-  @Throttle({ default: { ttl: 60_000, limit: 6 } })
+  @Throttle({ default: { ttl: 60_000, limit: 20 } })
   async ingest(@Req() req: ChildRequest, @Body() rawBody: unknown): Promise<unknown> {
     if (
       rawBody &&

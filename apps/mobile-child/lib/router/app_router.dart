@@ -9,45 +9,48 @@ import '../features/permissions/location_step.dart';
 import '../features/permissions/notifications_step.dart';
 
 class AppRouter {
-  static final GoRouter router = GoRouter(
-    initialLocation: '/onboarding',
-    routes: [
-      GoRoute(
-        path: '/onboarding',
-        builder: (context, _) => OnboardingScreen(
-          onConnect: () => context.go('/claim'),
-        ),
+  static GoRouter buildRouter({String initialLocation = '/onboarding'}) =>
+      GoRouter(initialLocation: initialLocation, routes: _routes);
+
+  // Backward-compat для тестов/старого кода: default — onboarding.
+  static final GoRouter router = buildRouter();
+
+  static final List<RouteBase> _routes = [
+    GoRoute(
+      path: '/onboarding',
+      builder: (context, _) => OnboardingScreen(
+        onConnect: () => context.go('/claim'),
       ),
-      GoRoute(
-        path: '/claim',
-        builder: (_, _) => const ClaimScreen(),
-      ),
-      GoRoute(
-        path: '/claim/manual',
-        builder: (_, _) => const ClaimManualScreen(),
-      ),
-      GoRoute(
-        path: '/permissions/notifications',
-        builder: (_, _) => const NotificationsPermissionsStep(),
-      ),
-      GoRoute(
-        path: '/permissions/location',
-        builder: (_, _) => const LocationPermissionsStep(),
-      ),
-      GoRoute(
-        path: '/permissions/battery',
-        builder: (_, _) => const BatteryPermissionsStep(),
-      ),
-      GoRoute(
-        path: '/permissions/devadmin',
-        builder: (_, _) => const _DeviceAdminPlaceholder(),
-      ),
-      GoRoute(
-        path: '/home',
-        builder: (_, _) => const HomeScreen(),
-      ),
-    ],
-  );
+    ),
+    GoRoute(
+      path: '/claim',
+      builder: (_, _) => const ClaimScreen(),
+    ),
+    GoRoute(
+      path: '/claim/manual',
+      builder: (_, _) => const ClaimManualScreen(),
+    ),
+    GoRoute(
+      path: '/permissions/notifications',
+      builder: (_, _) => const NotificationsPermissionsStep(),
+    ),
+    GoRoute(
+      path: '/permissions/location',
+      builder: (_, _) => const LocationPermissionsStep(),
+    ),
+    GoRoute(
+      path: '/permissions/battery',
+      builder: (_, _) => const BatteryPermissionsStep(),
+    ),
+    GoRoute(
+      path: '/permissions/devadmin',
+      builder: (_, _) => const _DeviceAdminPlaceholder(),
+    ),
+    GoRoute(
+      path: '/home',
+      builder: (_, _) => const HomeScreen(),
+    ),
+  ];
 }
 
 class _DeviceAdminPlaceholder extends StatelessWidget {

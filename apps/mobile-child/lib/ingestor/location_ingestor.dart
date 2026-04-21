@@ -33,10 +33,10 @@ class LocationIngestor {
     await repo.trimOverflow(maxSize: 10000);
     final count = await repo.count();
     final age = DateTime.now().difference(_lastFlush);
-    // Первую локацию флашим сразу — чтобы родитель увидел точку на карте
-    // сразу после привязки, а не через 2.5 минуты (5 точек × 30с) ожидания.
-    // Дальше — стандартный батчинг.
-    if (!_firstFlushed || count >= 5 || age > const Duration(minutes: 3)) {
+    // Первую локацию флашим сразу. Дальше — near-realtime: батчим по 2
+    // точки или раз в 20с, чтобы родитель видел движение почти вживую
+    // без перегрева rate-limit.
+    if (!_firstFlushed || count >= 2 || age > const Duration(seconds: 20)) {
       _firstFlushed = true;
       await flushQueue();
     }

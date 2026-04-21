@@ -41,9 +41,9 @@ class LocationForegroundService : Service() {
 
     private fun start() {
         startForeground(NOTIF_ID, buildNotification())
-        val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 30_000L)
-            .setMinUpdateDistanceMeters(20f)
-            .setMinUpdateIntervalMillis(15_000L)
+        val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 10_000L)
+            .setMinUpdateDistanceMeters(5f)
+            .setMinUpdateIntervalMillis(5_000L)
             .build()
         callback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
