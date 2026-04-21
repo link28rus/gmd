@@ -65,20 +65,32 @@ docs/superpowers/specs  design docs
 
 ## Рабочий процесс
 
-1. **Старт фичи** → `superpowers:brainstorming` → spec в `docs/superpowers/specs/`
-2. **После spec** → `superpowers:writing-plans` → implementation plan
-3. **Выполнение** → `superpowers:executing-plans` или `superpowers:subagent-driven-development`
-4. **Доменная логика** — обязательно TDD (`superpowers:test-driven-development`)
-5. **Баги** — `superpowers:systematic-debugging` перед фиксом
-6. **Перед «готово»** — `superpowers:verification-before-completion` (реально запустить, проверить)
-7. **Перед merge** — `superpowers:requesting-code-review`
+**Superpowers-скилы (`superpowers:*`) используются ТОЛЬКО по явному запросу пользователя.**
+По умолчанию работаем напрямую: читаем код, правим, проверяем, коммитим. Не вызывать `brainstorming`, `writing-plans`, `executing-plans`, `TDD`, `systematic-debugging`, `verification-before-completion`, `requesting-code-review` и прочие `superpowers:*` пока пользователь не попросит конкретный скил или общий режим «используй superpowers».
+
+**Что остаётся обязательным всегда (без superpowers):**
+
+1. Перед действием — подтянуть контекст из memory-compiler (`start_task` / `search` / `get_active_context`).
+2. После нетривиальной задачи — `finish_task` + при необходимости `save_decision` / `save_runbook` / `save_tracking`.
+3. Перед коммитом — реально запустить то, что менял, и убедиться что работает (без формального скила verification).
+4. Документация и CHANGELOG обновляются в том же коммите (см. раздел ниже).
+
+**Рекомендованный порядок при ручной работе:**
+
+1. Понять задачу → подтянуть контекст из памяти.
+2. Почитать релевантный код → спланировать изменения (в голове или кратко в чате).
+3. Внести правки → прогнать локально (build/lint/typecheck/тесты по ситуации).
+4. Обновить доки/CHANGELOG → коммит с понятным сообщением.
+5. `finish_task` в memory-compiler.
+
+Если пользователь просит «используй brainstorming», «спланируй через writing-plans», «сделай TDD», «проведи code-review» — тогда включаем соответствующий `superpowers:*` скил.
 
 ## Скилы для GMD
 
 ### Используем регулярно
 
 - `memory-autopilot` — всегда, контекст между сессиями
-- `superpowers:*` — основной рабочий процесс (см. выше)
+- `superpowers:*` — **только по явному запросу пользователя** (см. «Рабочий процесс»)
 - `frontend-design:frontend-design` — UI кабинета родителя, лендинг
 - `design:design-system`, `design:accessibility-review`, `design:ux-copy`, `design:design-handoff`
 - `chrome-devtools-mcp:chrome-devtools`, `chrome-devtools-mcp:a11y-debugging`, `chrome-devtools-mcp:debug-optimize-lcp`

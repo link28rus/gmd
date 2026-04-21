@@ -9,6 +9,15 @@
 
 ---
 
+## v0.18.1 — 2026-04-21
+
+### Исправления
+
+- **fix(mobile-child): регистрируем плагины в headless FlutterEngine** — без `GeneratedPluginRegistrant.registerWith(engine)` в фоновом сервисе Drift/path_provider/secure_storage не работали, ingestor молча умирал, локации не отправлялись даже при открытом приложении. Также убран устаревший ручной `src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java`, который затирал автогенерируемый (без path_provider).
+- **fix(backend): пересборка Prisma Client без Docker cache** — после деплоя v0.18.0 backend продолжал ходить к старому Prisma Client, ошибка `column locations.networkType does not exist`. Миграция применилась, но образ использовал кешированный слой `prisma generate`.
+
+---
+
 ## v0.18.0 — 2026-04-21
 
 ### Новые возможности
