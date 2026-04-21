@@ -3,6 +3,7 @@ package ru.link28rus.gmd.child
 import android.app.*
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
@@ -213,9 +214,7 @@ class LocationForegroundService : Service() {
             return
         }
         log("sendToDart lat=${loc.latitude} lon=${loc.longitude} acc=${loc.accuracy}")
-        val bm = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
-        val batteryLevel = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY).takeIf { it > 0 }
-        val isCharging = bm.isCharging
+        val (batteryLevel, isCharging) = batterySnapshot()
         val payload = mapOf(
             "lat" to loc.latitude,
             "lon" to loc.longitude,
@@ -232,6 +231,30 @@ class LocationForegroundService : Service() {
             "recordedAt" to loc.time,
         )
         channel.invokeMethod("onLocation", payload)
+    }
+
+    // Снимок батареи через sticky broadcast ACTION_BATTERY_CHANGED. Более
+    // надёжный способ на MIUI/Xiaomi — BatteryManager.isCharging иногда
+    // врёт (возвращает false при slow charge / энергосбережении). Intent
+    // даёт EXTRA_PLUGGED != 0 как раз когда физически воткнут кабель.
+    private fun batterySnapshot(): Pair<Int?, Boolean?> {
+        return try {
+            val intent = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+                ?: return Pair(null, null)
+            val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+            val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+            val pct = if (level >= 0 && scale > 0) (level * 100 / scale) else null
+            val plugged = intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0)
+            val status = intent.getIntExtra(
+                BatteryManager.EXTRA_STATUS, BatteryManager.BATTERY_STATUS_UNKNOWN,
+            )
+            val isCharging = plugged != 0 ||
+                status == BatteryManager.BATTERY_STATUS_CHARGING ||
+                status == BatteryManager.BATTERY_STATUS_FULL
+            Pair(pct, isCharging)
+        } catch (_: Throwable) {
+            Pair(null, null)
+        }
     }
 
     // Имя текущей Wi-Fi сети. Android возвращает SSID в кавычках ("MyWifi")
