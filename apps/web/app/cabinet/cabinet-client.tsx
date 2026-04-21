@@ -3,6 +3,7 @@
 import { useEffect, useState, type ReactElement } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
+import { Menu } from 'lucide-react';
 import { useAuthStore, type AuthUser, type AuthFamily } from '@/lib/auth-store';
 import { useChildren } from '@/lib/hooks/use-children';
 import { useLatestLocation } from '@/lib/hooks/use-latest-location';
@@ -80,6 +81,7 @@ function CabinetHome({ initialChildId }: { initialChildId: string | null }): Rea
   const router = useRouter();
   const childrenQ = useChildren();
   const [selectedId, setSelectedId] = useState<string | null>(initialChildId);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   // Если ничего не выбрано — выбираем первого ребёнка автоматически.
   useEffect(() => {
@@ -108,8 +110,31 @@ function CabinetHome({ initialChildId }: { initialChildId: string | null }): Rea
 
   return (
     <div className="flex h-[calc(100vh-49px)]">
-      <ChildrenSidebar children={kids} selectedId={selectedId} onSelect={selectChild} />
+      <ChildrenSidebar
+        children={kids}
+        selectedId={selectedId}
+        onSelect={selectChild}
+        mobileOpen={mobileSidebarOpen}
+        onCloseMobile={() => setMobileSidebarOpen(false)}
+      />
       <div className="relative flex-1 overflow-hidden">
+        {/* Mobile-only: floating trigger для drawer с детьми. Круглая кнопка
+            в левом-верхнем углу поверх карты — большой touch-target (44px). */}
+        <button
+          type="button"
+          onClick={() => setMobileSidebarOpen(true)}
+          aria-label="Открыть список детей"
+          className="absolute left-3 top-3 z-10 flex h-11 w-11 items-center justify-center rounded-full border border-zinc-200 bg-white shadow-md hover:bg-zinc-50 md:hidden"
+        >
+          <Menu className="h-5 w-5 text-zinc-700" />
+          {selected && (
+            <span
+              className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-white"
+              style={{ backgroundColor: 'currentColor' }}
+              aria-hidden="true"
+            />
+          )}
+        </button>
         {selected ? (
           hasActiveDevice(selected) ? (
             <MapArea child={selected} />
@@ -118,7 +143,16 @@ function CabinetHome({ initialChildId }: { initialChildId: string | null }): Rea
           )
         ) : (
           <div className="flex h-full items-center justify-center bg-zinc-50 p-6 text-center text-zinc-600">
-            Добавьте первого ребёнка в меню слева, чтобы увидеть карту.
+            <div>
+              <p className="mb-4">Добавьте первого ребёнка, чтобы увидеть карту.</p>
+              <button
+                type="button"
+                onClick={() => setMobileSidebarOpen(true)}
+                className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white md:hidden"
+              >
+                Открыть меню
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -195,7 +229,7 @@ function MapArea({ child }: { child: Child }): ReactElement {
         onMapError={() => setMapFailed(true)}
       />
       {latest && (
-        <div className="absolute left-4 top-4 z-10">
+        <div className="absolute inset-x-3 bottom-3 z-10 md:inset-x-auto md:bottom-auto md:left-4 md:top-4">
           <ChildStatusCard
             childName={child.name}
             ageSec={latest.ageSec}

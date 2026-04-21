@@ -47,14 +47,15 @@ export function CabinetHeader(): ReactElement {
 
   return (
     <header className="relative z-20 border-b bg-white">
-      <div className="flex items-center justify-between px-4 py-2">
+      <div className="flex items-center justify-between gap-2 px-3 py-2 sm:px-4">
         {/* Лого + основной nav */}
-        <div className="flex items-center gap-6">
-          <Link href="/cabinet" className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-3 sm:gap-6">
+          <Link href="/cabinet" className="flex shrink-0 items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-600 text-white">
               <span className="text-xs font-bold">GMD</span>
             </div>
-            <div className="flex flex-col leading-tight">
+            {/* Текст лого скрыт на узких экранах — место уходит под nav. */}
+            <div className="hidden flex-col leading-tight sm:flex">
               <span className="text-sm font-semibold text-zinc-900">Где мои дети</span>
               <span className="text-[10px] text-zinc-400">v{APP_VERSION}</span>
             </div>
@@ -66,10 +67,12 @@ export function CabinetHeader(): ReactElement {
         </div>
 
         {/* Правые кнопки */}
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+          {/* «Скачать приложение» — только на десктопе; на мобильном пункт
+              доступен из profile-меню. */}
           <Link
             href="/cabinet/download"
-            className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-100"
+            className="hidden items-center gap-1.5 rounded-md px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-100 md:inline-flex"
           >
             <Download className="h-4 w-4" />
             Скачать приложение
@@ -77,10 +80,11 @@ export function CabinetHeader(): ReactElement {
           {isAdmin && (
             <Link
               href="/admin"
-              className="inline-flex items-center gap-1.5 rounded-md bg-red-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-800"
+              aria-label="Админка"
+              className="inline-flex items-center gap-1.5 rounded-md bg-red-700 px-2 py-1.5 text-sm font-medium text-white hover:bg-red-800 sm:px-3"
             >
               <Shield className="h-4 w-4" />
-              Админка
+              <span className="hidden sm:inline">Админка</span>
             </Link>
           )}
           {/* Профиль */}
@@ -113,6 +117,15 @@ export function CabinetHeader(): ReactElement {
                   {user.name && <div className="truncate text-xs text-zinc-500">{user.email}</div>}
                   <div className="mt-1 text-[10px] text-zinc-400">GMD v{APP_VERSION}</div>
                 </div>
+                <Link
+                  href="/cabinet/download"
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 md:hidden"
+                  role="menuitem"
+                  onMouseDown={(e) => e.preventDefault()}
+                >
+                  <Download className="h-4 w-4" />
+                  Скачать приложение
+                </Link>
                 <Link
                   href="/cabinet/password"
                   className="block px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50"

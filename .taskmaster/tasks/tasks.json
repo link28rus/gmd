@@ -2,7 +2,7 @@
   "master": {
     "tasks": [
       {
-        "id": "1",
+        "id": 1,
         "title": "Phase 0.1 Task 1: git init + base config files",
         "description": "Initialize git repo on main, create .gitignore / .gitattributes / .editorconfig / .nvmrc / LICENSE / README.md, commit initial state.",
         "details": "Plan: docs/superpowers/plans/2026-04-18-gmd-phase0.1-monorepo-skeleton.md (Task 1).",
@@ -14,7 +14,7 @@
         "updatedAt": "2026-04-18T03:46:44.147Z"
       },
       {
-        "id": "2",
+        "id": 2,
         "title": "Phase 0.1 Task 2: pnpm workspaces + Turborepo + tsconfig.base",
         "description": "Root package.json with pnpm workspace manifest, turbo.json, tsconfig.base.json. Install root devDeps (turbo, typescript, husky, lint-staged, prettier, commitlint).",
         "details": "Plan Task 2. Depends on Task 1.",
@@ -26,7 +26,7 @@
         "updatedAt": "2026-04-18T03:46:44.153Z"
       },
       {
-        "id": "3",
+        "id": 3,
         "title": "Phase 0.1 Task 3: Prettier + ESLint + Husky + Commitlint",
         "description": "Flat ESLint config, Prettier, commitlint (Conventional Commits), husky hooks (pre-commit=lint-staged, commit-msg=commitlint), lint-staged config в package.json.",
         "details": "Plan Task 3. Зависит от 2.",
@@ -38,7 +38,7 @@
         "updatedAt": "2026-04-18T03:46:44.155Z"
       },
       {
-        "id": "4",
+        "id": 4,
         "title": "Phase 0.1 Task 4: NestJS backend skeleton + /healthz (TDD)",
         "description": "apps/backend — NestJS 11, main.ts, AppModule, HealthController с /healthz. TDD: spec пишется первым, видим FAIL, потом реализация, видим PASS.",
         "details": "Plan Task 4. Зависит от 2.",
@@ -50,7 +50,7 @@
         "updatedAt": "2026-04-18T03:46:44.157Z"
       },
       {
-        "id": "5",
+        "id": 5,
         "title": "Phase 0.1 Task 5: Prisma setup (stub User model)",
         "description": "@prisma/client + prisma в apps/backend. schema.prisma с заглушечной моделью User. .env.example (committed), .env (ignored). Генерация клиента работает. Миграцию не запускаем (БД нет).",
         "details": "Plan Task 5. Зависит от 4.",
@@ -62,7 +62,7 @@
         "updatedAt": "2026-04-18T03:48:16.751Z"
       },
       {
-        "id": "6",
+        "id": 6,
         "title": "Phase 0.1 Task 6: Next.js 15 web skeleton + /api/healthz",
         "description": "apps/web — Next.js 15 App Router, TypeScript, Tailwind. Лендинг-заглушка + API route /api/healthz.",
         "details": "Plan Task 6. Зависит от 3.",
@@ -74,7 +74,7 @@
         "updatedAt": "2026-04-18T03:54:45.021Z"
       },
       {
-        "id": "7",
+        "id": 7,
         "title": "Phase 0.1 Task 7: shared-types + ui packages (stubs)",
         "description": "packages/shared-types (будущий OpenAPI codegen target) и packages/ui (shadcn/ui base) — пока минимальные заглушки, чтобы workspace был валидным.",
         "details": "Plan Task 7. Зависит от 2.",
@@ -86,7 +86,7 @@
         "updatedAt": "2026-04-18T03:57:05.445Z"
       },
       {
-        "id": "8",
+        "id": 8,
         "title": "Phase 0.1 Task 8: Flutter apps + Melos + shared-dart",
         "description": "flutter create mobile-parent (Android+iOS) и mobile-child (Android only). melos.yaml в корне. packages/shared-dart (stub).",
         "details": "Plan Task 8. Зависит от 7. Требует установленный Flutter SDK.",
@@ -98,7 +98,7 @@
         "updatedAt": "2026-04-18T04:00:18.887Z"
       },
       {
-        "id": "9",
+        "id": 9,
         "title": "Phase 0.1 Task 9: Final checks + CHANGELOG v0.1.0 + tag",
         "description": "Clean install, lint/typecheck/test всё зелёное, pnpm dev оба сервиса, обновить CHANGELOG под v0.1.0, создать git-тег v0.1.0.",
         "details": "Plan Task 9. Зависит от 5, 6, 8.",
@@ -110,7 +110,7 @@
         "updatedAt": "2026-04-18T04:09:01.957Z"
       },
       {
-        "id": "10",
+        "id": 10,
         "title": "Phase 0.2 Task 1: infra/docker skeleton",
         "description": "docker-compose.dev.yml (postgres+postgis, redis, minio, adminer), .env.dev.example, postgres/init.sql (PostGIS extensions), docker-compose.prod.yml stub, update .gitignore",
         "details": "Plan Task 1. Files: infra/docker/docker-compose.dev.yml, .env.dev.example, postgres/init.sql, docker-compose.prod.yml (stub), .gitignore.",
@@ -122,7 +122,7 @@
         "updatedAt": "2026-04-18T04:20:33.844Z"
       },
       {
-        "id": "11",
+        "id": 11,
         "title": "Phase 0.3 Task 1: Расширить раздел sda2 до 80GB",
         "description": "Установить cloud-guest-utils, выполнить growpart /dev/sda 2 и resize2fs /dev/sda2 на 192.168.1.23.",
         "details": "Plan: docs/superpowers/plans/2026-04-18-gmd-phase0.3-server-deploy.md (Task 1).",
@@ -134,7 +134,7 @@
         "updatedAt": "2026-04-18T05:14:04.358Z"
       },
       {
-        "id": "12",
+        "id": 12,
         "title": "Phase 0.3 Task 2: Bootstrap (hostname, TZ, swap, apt upgrade)",
         "description": "Скрипт infra/server-setup/00-bootstrap.sh: hostname gmd-prod, TZ Europe/Moscow, swap 4G, unattended-upgrades, apt full-upgrade.",
         "details": "Plan Task 2. Идемпотентный скрипт, коммитится в репо.",
@@ -146,7 +146,7 @@
         "updatedAt": "2026-04-18T05:16:24.093Z"
       },
       {
-        "id": "13",
+        "id": 13,
         "title": "Phase 0.3 Task 3: Удалить fk-norm и volleyball-attendance",
         "description": "Stop/disable/remove systemd-юниты fk-norm.service и volleyball-attendance.service + /opt/fk-norm и /opt/volleyball-attendance. Предварительно сделать tar-дамп в /tmp/gmd-cleanup-backup/.",
         "details": "Plan Task 3. Деструктив — держать бэкап до завершения Task 14.",
@@ -158,7 +158,7 @@
         "updatedAt": "2026-04-18T05:17:29.061Z"
       },
       {
-        "id": "14",
+        "id": 14,
         "title": "Phase 0.3 Task 4: Удалить native PostgreSQL 16 и nodejs",
         "description": "pg_dumpall в бэкап, systemctl stop/disable postgresql, apt purge postgresql-16*/nodejs/libnode*, rm -rf /var/lib/postgresql.",
         "details": "Plan Task 4. Контейнерный Postgres в Task 10.",
@@ -170,7 +170,7 @@
         "updatedAt": "2026-04-18T05:18:09.828Z"
       },
       {
-        "id": "15",
+        "id": 15,
         "title": "Phase 0.3 Task 5: Сгенерировать SSH-ключ и выложить в authorized_keys",
         "description": "ssh-keygen ed25519 (если нет), положить pubkey в /root/.ssh/authorized_keys, добавить alias gmd-prod в ~/.ssh/config.",
         "details": "Plan Task 5. Обязательно верифицировать вход по ключу ДО Task 6 (иначе отрежет доступ).",
@@ -182,7 +182,7 @@
         "updatedAt": "2026-04-18T05:18:48.454Z"
       },
       {
-        "id": "16",
+        "id": 16,
         "title": "Phase 0.3 Task 6: SSH hardening (PasswordAuth off, PermitRootLogin prohibit-password)",
         "description": "Скрипт 10-harden-ssh.sh: /etc/ssh/sshd_config.d/99-gmd-hardening.conf + фикс 50-cloud-init.conf + sshd -t + restart.",
         "details": "Plan Task 6. После этого шага вход по паролю невозможен.",
@@ -194,7 +194,7 @@
         "updatedAt": "2026-04-18T05:19:47.205Z"
       },
       {
-        "id": "17",
+        "id": 17,
         "title": "Phase 0.3 Task 7: UFW + fail2ban",
         "description": "Скрипт 20-firewall.sh: apt install ufw fail2ban, UFW default deny in / allow 22,80,443, fail2ban jail sshd (maxretry=3, bantime=1h).",
         "details": "Plan Task 7.",
@@ -206,7 +206,7 @@
         "updatedAt": "2026-04-18T05:20:42.495Z"
       },
       {
-        "id": "18",
+        "id": 18,
         "title": "Phase 0.3 Task 8: Установить Docker CE + compose-plugin",
         "description": "Скрипт 30-install-docker.sh: официальный docker.com repo, docker-ce + cli + containerd + buildx + compose-plugin, /etc/docker/daemon.json с log-rotation и overlay2.",
         "details": "Plan Task 8.",
@@ -218,7 +218,7 @@
         "updatedAt": "2026-04-18T05:22:13.547Z"
       },
       {
-        "id": "19",
+        "id": 19,
         "title": "Phase 0.3 Task 9: Prod-структура /opt/gmd + .env.prod.example",
         "description": "Создать infra/docker/.env.prod.example (шаблон), на сервере mkdir /opt/gmd/{docker,caddy,data,backups,logs}, сгенерировать секреты (openssl rand), положить .env.prod 600 на сервер.",
         "details": "Plan Task 9. Секреты в memory-compiler save_secret.",
@@ -230,7 +230,7 @@
         "updatedAt": "2026-04-18T05:25:16.939Z"
       },
       {
-        "id": "20",
+        "id": 20,
         "title": "Phase 0.3 Task 10: Custom Postgres image с pg_cron + retention.sql",
         "description": "Dockerfile на базе postgis/postgis:16-3.4 + apt install postgresql-16-cron. init.sql с CREATE EXTENSION postgis/pg_cron. 20-retention.sql — cron.schedule для locations (с защитой от отсутствующей таблицы).",
         "details": "Plan Task 10. Реальная регистрация pg_cron job выполнится после Prisma-миграции Phase 1 (там появится таблица locations).",
@@ -242,7 +242,7 @@
         "updatedAt": "2026-04-18T05:26:18.304Z"
       },
       {
-        "id": "21",
+        "id": 21,
         "title": "Phase 0.3 Task 11: docker-compose.prod.yml + Dockerfiles backend/web",
         "description": "apps/backend/Dockerfile и apps/web/Dockerfile (multi-stage, node:22-alpine + pnpm 9.12.0). infra/docker/docker-compose.prod.yml: postgres, redis, minio, backend, web, caddy с healthchecks и bind-mount в /opt/gmd/data/*.",
         "details": "Plan Task 11. Наружу торчат только caddy:80/443. Для Next.js standalone-режим.",
@@ -254,7 +254,7 @@
         "updatedAt": "2026-04-18T05:27:20.308Z"
       },
       {
-        "id": "22",
+        "id": 22,
         "title": "Phase 0.3 Task 12: Caddyfile с TLS + basic-auth для subdomains",
         "description": "infra/caddy/Caddyfile: gmd.link28rus.ru (API+web), errors.gmd.link28rus.ru (GlitchTip), status.gmd.link28rus.ru (Uptime Kuma) под basic_auth. HSTS/X-Frame-Options/Referrer-Policy headers.",
         "details": "Plan Task 12. Валидация caddy validate.",
@@ -266,7 +266,7 @@
         "updatedAt": "2026-04-18T05:27:58.452Z"
       },
       {
-        "id": "23",
+        "id": 23,
         "title": "Phase 0.3 Task 13: Deploy-скрипт infra/deploy/deploy.sh + runbook",
         "description": "rsync infra/docker + caddy + apps/backend + apps/web + packages + root manifests. ssh docker compose build + up -d + prisma migrate deploy. infra/deploy/README.md с troubleshooting.",
         "details": "Plan Task 13. Идемпотентный, без реестра (build на сервере).",
@@ -278,7 +278,7 @@
         "updatedAt": "2026-04-18T05:29:18.269Z"
       },
       {
-        "id": "24",
+        "id": 24,
         "title": "Phase 0.3 Task 14: Первый deploy базового стека + TLS checkpoint",
         "description": "DNS checkpoint (dig gmd.link28rus.ru → 85.15.75.126), bash infra/deploy/deploy.sh, проверка healthy 6 сервисов, curl /healthz + /api/readyz.",
         "details": "Plan Task 14. Блокирует DNS и проброс 80/443 — за пользователем.",
@@ -290,7 +290,7 @@
         "updatedAt": "2026-04-18T12:20:07.648Z"
       },
       {
-        "id": "25",
+        "id": 25,
         "title": "Phase 0.3 Task 15: Бэкапы PG — systemd timers + restore-verify",
         "description": "pg-backup.sh (pg_dump -Fc | zstd -19, retention 14 daily + 12 monthly), pg-restore-verify.sh (еженедельно throwaway-контейнер). systemd units + timer 03:15/04:00.",
         "details": "Plan Task 15. 40-backups-install.sh монтирует всё на сервер.",
@@ -302,7 +302,7 @@
         "updatedAt": "2026-04-18T06:06:40.339Z"
       },
       {
-        "id": "26",
+        "id": 26,
         "title": "Phase 0.3 Task 16: GlitchTip self-hosted + Sentry SDK в backend/web",
         "description": "docker-compose: glitchtip-pg/redis/web/worker/migrate. createsuperuser. DSN → .env.prod. @sentry/node в backend (SentryModule+SentryExceptionFilter), @sentry/nextjs wizard в web.",
         "details": "Plan Task 16.",
@@ -314,7 +314,7 @@
         "updatedAt": "2026-04-18T12:20:07.674Z"
       },
       {
-        "id": "27",
+        "id": 27,
         "title": "Phase 0.3 Task 17: Uptime Kuma + первые мониторы",
         "description": "docker-compose: louislam/uptime-kuma:1 с volume /opt/gmd/data/uptime-kuma. Настроить мониторы /readyz, /healthz, TCP:443.",
         "details": "Plan Task 17.",
@@ -326,7 +326,7 @@
         "updatedAt": "2026-04-18T12:20:07.688Z"
       },
       {
-        "id": "28",
+        "id": 28,
         "title": "Phase 0.3 Task 18: Runbooks + CHANGELOG v0.3.0 + тег",
         "description": "docs/deploy.md, docs/backup-restore.md, docs/server-hardening.md. CHANGELOG — запись v0.3.0 в стиле NiksDesk. CLAUDE.md — раздел Prod-деплой. git tag -a v0.3.0.",
         "details": "Plan Task 18.",
@@ -338,7 +338,7 @@
         "updatedAt": "2026-04-18T12:23:26.701Z"
       },
       {
-        "id": "29",
+        "id": 29,
         "title": "Phase 0.3 Task 19: Финальная приёмка + memory-compiler finish_task",
         "description": "Полный чеклист: TLS 3 домена, docker compose ps all healthy, sshpass-логин FAIL, nmap 85.15.75.126 (только 22/80/443), pg-backup & restore-verify прошли, pg_cron job виден (или TODO зафиксирован). finish_task в memory-compiler.",
         "details": "Plan Task 19.",
@@ -350,7 +350,7 @@
         "updatedAt": "2026-04-18T12:23:26.705Z"
       },
       {
-        "id": "30",
+        "id": 30,
         "title": "P1.2-web T1: Dependencies + shadcn/ui init",
         "description": "Install React Query, RHF+Zod, qrcode.react, sonner, lucide-react, cva/clsx/twmerge, tailwindcss-animate. shadcn init neutral + add button/dialog/input/label/badge. Playwright + RTL + Jest devDeps.",
         "details": "",
@@ -361,7 +361,7 @@
         "subtasks": []
       },
       {
-        "id": "31",
+        "id": 31,
         "title": "P1.2-web T2: Jest + Playwright configs",
         "description": "jest.config.ts (next/jest), jest.setup.ts (jest-dom), playwright.config.ts (baseURL :3003).",
         "details": "",
@@ -372,7 +372,7 @@
         "subtasks": []
       },
       {
-        "id": "32",
+        "id": 32,
         "title": "P1.2-web T3: QueryProvider + cabinet layout + header",
         "description": "providers/query-provider.tsx, cabinet/cabinet-header.tsx (nav+logout), app/cabinet/layout.tsx (Provider+Toaster+Header).",
         "details": "",
@@ -383,7 +383,7 @@
         "subtasks": []
       },
       {
-        "id": "33",
+        "id": 33,
         "title": "P1.2-web T4: Next route handlers /api/children/*",
         "description": "_helpers.ts proxy+Bearer, route.ts GET/POST, [id]/route.ts PATCH/DELETE, [id]/invites/route.ts POST, [id]/reset-device/route.ts POST.",
         "details": "",
@@ -394,7 +394,7 @@
         "subtasks": []
       },
       {
-        "id": "34",
+        "id": 34,
         "title": "P1.2-web T5: lib/api/client.ts browser apiFetch + 401 retry",
         "description": "apiFetch читает Bearer из Zustand; retry через /api/auth/refresh при 401; ApiError(status, code, message).",
         "details": "",
@@ -405,7 +405,7 @@
         "subtasks": []
       },
       {
-        "id": "35",
+        "id": 35,
         "title": "P1.2-web T6: lib/api/children.ts types + methods",
         "description": "Child/ChildDevice/InviteResponse types, childrenApi { list, create, update, remove, createInvite, resetDevice }.",
         "details": "",
@@ -416,7 +416,7 @@
         "subtasks": []
       },
       {
-        "id": "36",
+        "id": 36,
         "title": "P1.2-web T7: React Query hooks use-children",
         "description": "useChildren/useCreateChild/useUpdateChild/useDeleteChild/useCreateInvite/useResetDevice. Invalidate ['children'] on mutations кроме invite.",
         "details": "",
@@ -427,7 +427,7 @@
         "subtasks": []
       },
       {
-        "id": "37",
+        "id": 37,
         "title": "P1.2-web T8: useInviteTimer + unit tests (TDD)",
         "description": "{formatted mm:ss, expired, secondsLeft}. Тикает каждую секунду. null→--:--, expired. 4 теста через fake timers.",
         "details": "",
@@ -438,7 +438,7 @@
         "subtasks": []
       },
       {
-        "id": "38",
+        "id": 38,
         "title": "P1.2-web T9: DeviceStatusBadge + tests (TDD)",
         "description": "null=Не привязано, revoked=Отозвано, lastSeenAt=null=Привязано, <5min=Онлайн, <60min=N мин, <24h=N ч, иначе DD.MM в HH:mm. 7 тестов.",
         "details": "",
@@ -449,7 +449,7 @@
         "subtasks": []
       },
       {
-        "id": "39",
+        "id": 39,
         "title": "P1.2-web T10: CreateChildDialog",
         "description": "name(1-120)+dateOfBirth?, RHF+Zod, Toast success/error, useCreateChild invalidates.",
         "details": "",
@@ -460,7 +460,7 @@
         "subtasks": []
       },
       {
-        "id": "40",
+        "id": 40,
         "title": "P1.2-web T11: EditChildDialog",
         "description": "Edit name/dateOfBirth, defaultValues from props.child, Save disabled if !isDirty.",
         "details": "",
@@ -471,7 +471,7 @@
         "subtasks": []
       },
       {
-        "id": "41",
+        "id": 41,
         "title": "P1.2-web T12: DeleteChildDialog",
         "description": "Confirm by typing child.name. Button enabled only if typed === child.name.",
         "details": "",
@@ -482,7 +482,7 @@
         "subtasks": []
       },
       {
-        "id": "42",
+        "id": 42,
         "title": "P1.2-web T13: InviteQrDialog",
         "description": "QRCodeSVG(qrUrl, 240), код крупно, countdown mm:ss, auto-generate on open, «Обновить код» регенерит.",
         "details": "",
@@ -493,7 +493,7 @@
         "subtasks": []
       },
       {
-        "id": "43",
+        "id": 43,
         "title": "P1.2-web T14: ResetDeviceDialog",
         "description": "Simple confirm + destructive button «Сбросить», Toast success/error.",
         "details": "",
@@ -504,7 +504,7 @@
         "subtasks": []
       },
       {
-        "id": "44",
+        "id": 44,
         "title": "P1.2-web T15: ChildCard",
         "description": "name, age(computed), DeviceStatusBadge, menu (edit/delete), QR-btn (disabled if active device), Reset-btn (if active device). Монтирует 4 диалога.",
         "details": "",
@@ -515,7 +515,7 @@
         "subtasks": []
       },
       {
-        "id": "45",
+        "id": 45,
         "title": "P1.2-web T16: Children page + client",
         "description": "app/cabinet/children/page.tsx server guard, children-client.tsx silent-refresh + ChildrenContent (useChildren + grid). CTA link в cabinet-client.",
         "details": "",
@@ -526,7 +526,7 @@
         "subtasks": []
       },
       {
-        "id": "46",
+        "id": 46,
         "title": "P1.2-web T17: Playwright e2e children flow",
         "description": "tests/e2e/children.spec.ts: login → create → QR → edit → delete. Требует backend dev-last-otp (проверить наличие).",
         "details": "",
@@ -537,7 +537,7 @@
         "subtasks": []
       },
       {
-        "id": "47",
+        "id": 47,
         "title": "P1.2-web T18: CHANGELOG v0.6.0 + tag",
         "description": "CHANGELOG.md v0.6.0 (Новые возможности + Изменения), bump apps/web/package.json version, git tag v0.6.0.",
         "details": "",
@@ -548,7 +548,7 @@
         "subtasks": []
       },
       {
-        "id": "48",
+        "id": 48,
         "title": "P1.2-web T19: Deploy v0.6.0 на prod",
         "description": "bash infra/deploy/deploy.sh, smoke https://gmd.link28rus.ru/cabinet/children, memory-compiler finish_task.",
         "details": "",
@@ -559,7 +559,7 @@
         "subtasks": []
       },
       {
-        "id": "49",
+        "id": 49,
         "title": "mobile-child: фоновая отправка локаций без открытого приложения",
         "description": "Локация ребёнка обновляется в web-кабинете родителя только когда ребёнок открывает приложение. В карточке «Был тут 2 ч назад» — это означает, что фоновый трекинг не шлёт точки, пока процесс не выведен на передний план. Нужно обеспечить регулярную отправку локаций из фона (screen off, app background, после ребута устройства).",
         "details": "Симптом (скриншот от 2026-04-21): в карточке ребёнка «Артём» и в тултипе на карте отображается «Был тут 2 ч назад», хотя ребёнок ходит с телефоном. Точки приходят только в момент foreground-открытия приложения mobile-child.\n\nЧто проверить / починить:\n1. Foreground service с типом `location` — запущен ли и переживает ли screen off / Doze.\n2. WorkManager periodic task (или AlarmManager setExactAndAllowWhileIdle) для регулярного сэмпла локации — есть ли, какой интервал, не убивается ли системой.\n3. BOOT_COMPLETED receiver — автозапуск сервиса после ребута устройства.\n4. Battery optimization / App Standby Bucket — просим ли у пользователя whitelist (REQUEST_IGNORE_BATTERY_OPTIMIZATIONS), отражается ли в permission health banner v0.15.3.\n5. MIUI / Xiaomi autostart hints — уже добавлены в v0.15.2, проверить что срабатывают на реальном устройстве Артёма.\n6. WAKE_LOCK при locked screen — v0.15.2 фикс, проверить что удерживается на время GPS fix.\n7. Backend side: DTO принимает batch локаций, расчёт `last_seen_at` идёт по server receive time, а не по device timestamp (иначе старые offline-точки могут показывать «устаревшее»).\n8. Heartbeat-endpoint: нужен ли периодический ping (каждые N минут), даже если координаты не изменились, чтобы web показывал «был только что» а не «2 часа назад».\n9. Сетевой слой: retry с exponential backoff при отсутствии сети, локальный буфер в Drift, отправка батчем при восстановлении соединения.\n\nDefinition of Done:\n- На тестовом Android-устройстве (желательно Xiaomi/MIUI) локация шлётся каждые ≤ 5 минут при выключенном экране и закрытом приложении в течение минимум 2 часов.\n- После ребута устройства — в течение 5 минут снова идут точки без ручного открытия приложения.\n- В web-кабинете «Был тут …» показывает не более 10 минут, если устройство онлайн и разрешения выданы.\n- Permission health banner подсвечивает отключённые разрешения/оптимизации батареи.",
@@ -569,6 +569,17 @@
         "priority": "high",
         "subtasks": [],
         "updatedAt": "2026-04-21T09:11:37.477Z"
+      },
+      {
+        "id": 50,
+        "title": "Адаптивность web-кабинета для мобильных устройств",
+        "description": "Сделать web-кабинет (Next.js) полностью пригодным для использования с телефона. Сейчас вёрстка ориентирована на desktop — sidebar со списком детей съедает всю ширину экрана, карта маленькая, диалоги не влезают, меню ребёнка и карточки обрезаются.",
+        "details": "Аудит и переработка:\n1. Layout /cabinet: sidebar со списком детей превратить в bottom-sheet / drawer на мобильном, карта — full-width.\n2. Header и навигация (главная/геозоны/changelog) — hamburger menu на <768px.\n3. Карточка ребёнка и меню действий (История/Сигнал/Отвязать/Удалить) — bottom-sheet вместо popover.\n4. Модалки (SendSignalDialog, ResetDeviceDialog, DeleteChildDialog, zone-editor) — full-screen на мобильном.\n5. Админка (/admin) — таблицы → cards на узких экранах.\n6. Страницы /download, /changelog, landing — проверить typography и spacing.\n7. Touch-targets ≥ 44px (WCAG).\n8. Тестировать на 360px (минимальная ширина), 390px (iPhone), 414px (Android Large).\n\nСтек: Tailwind breakpoints (sm/md/lg), shadcn/ui Sheet/Drawer, useMediaQuery hook.\n\nПроверка: Chrome DevTools device mode + реальный телефон родителя. Уделить внимание карте — Яндекс.Карты на touch-устройствах имеют свои жесты, проверить конфликты с вертикальным скроллом страницы.",
+        "testStrategy": "1. Chrome DevTools: прогнать весь кабинет на 360/390/414 px.\n2. Lighthouse mobile audit — performance > 80, accessibility > 90.\n3. chrome-devtools-mcp:a11y-debugging на ключевых страницах.\n4. Живой тест на Android-телефоне родителя: открыть кабинет, переключиться между детьми, открыть историю, отправить сигнал, создать геозону.\n5. Убедиться что карта корректно работает с touch-gestures и не блокирует вертикальный скролл страницы в узких местах.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": []
       }
     ],
     "metadata": {
@@ -576,7 +587,10 @@
       "lastModified": "2026-04-21T09:11:37.477Z",
       "taskCount": 49,
       "completedCount": 28,
-      "tags": ["master"]
+      "tags": ["master"],
+      "created": "2026-04-21T21:05:42.394Z",
+      "description": "Tasks for master context",
+      "updated": "2026-04-21T21:05:42.397Z"
     }
   }
 }

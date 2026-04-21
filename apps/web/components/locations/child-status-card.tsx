@@ -33,7 +33,7 @@ export function ChildStatusCard({
   const color = avatarColor(childName);
 
   return (
-    <div className="w-[280px] rounded-lg border border-zinc-200 bg-white shadow-md">
+    <div className="w-full rounded-lg border border-zinc-200 bg-white shadow-md md:w-[280px]">
       <div className="flex items-center gap-3 border-b border-zinc-100 px-3 py-2.5">
         <div
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white"

@@ -17,8 +17,8 @@ export function ChildNotAttachedView({ child }: Props): ReactElement {
 
   return (
     <>
-      <div className="flex h-full items-center justify-center bg-zinc-50 p-6">
-        <div className="w-[360px] overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
+      <div className="flex h-full items-center justify-center bg-zinc-50 p-4 sm:p-6">
+        <div className="w-full max-w-[360px] overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
           <div className="flex items-center gap-3 border-b border-zinc-100 px-4 py-3">
             <div
               className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-white"
