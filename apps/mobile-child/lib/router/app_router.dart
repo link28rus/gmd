@@ -2,6 +2,7 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
 import '../features/claim/claim_manual_screen.dart';
 import '../features/claim/claim_screen.dart';
+import '../features/debug/debug_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
 import '../features/permissions/battery_step.dart';
@@ -49,6 +50,10 @@ class AppRouter {
     GoRoute(
       path: '/home',
       builder: (_, _) => const HomeScreen(),
+    ),
+    GoRoute(
+      path: '/debug',
+      builder: (_, _) => const DebugScreen(),
     ),
   ];
 }

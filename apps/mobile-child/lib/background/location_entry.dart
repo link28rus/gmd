@@ -1,5 +1,3 @@
-import 'dart:developer' as developer;
-
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -7,14 +5,11 @@ import 'package:flutter/widgets.dart';
 import '../core/api/child_api.dart';
 import '../core/api/dio_client.dart';
 import '../core/config/env.dart';
+import '../core/diag/diag_channel.dart';
 import '../core/storage/secure_storage_service.dart';
 import '../data/database.dart';
 import '../data/location_queue_repository.dart';
 import '../ingestor/location_ingestor.dart';
-
-void _log(String msg, [Object? err, StackTrace? stack]) {
-  developer.log(msg, name: 'gmd.bg', error: err, stackTrace: stack);
-}
 
 // Headless Dart entrypoint для фонового изолята, запускаемого из
 // LocationForegroundService. Живёт пока жив service (переживает закрытие UI,
@@ -25,11 +20,17 @@ void _log(String msg, [Object? err, StackTrace? stack]) {
 @pragma('vm:entry-point')
 void locationEntryPoint() {
   WidgetsFlutterBinding.ensureInitialized();
-  _log('locationEntryPoint: starting headless isolate');
+  diagLog('bg', 'locationEntryPoint: starting headless isolate');
 
+  _bootstrap();
+}
+
+Future<void> _bootstrap() async {
   try {
+    diagLog('bg', 'bootstrap: opening AppDatabase');
     final db = AppDatabase();
     final repo = LocationQueueRepository(db);
+    diagLog('bg', 'bootstrap: building ChildApi base=$apiBaseUrl');
     final api = ChildApi(buildDio(baseUrl: apiBaseUrl));
     final storage = SecureStorageService();
     final ingestor = LocationIngestor(
@@ -37,25 +38,29 @@ void locationEntryPoint() {
       api: api,
       deviceToken: storage.readDeviceToken,
     );
-    _log('locationEntryPoint: ingestor ready');
+    diagLog('bg', 'bootstrap: ingestor ready');
 
     const channel = MethodChannel('ru.link28rus.gmd.child/location');
     channel.setMethodCallHandler((call) async {
       if (call.method == 'onLocation' && call.arguments is Map) {
         try {
           await ingestor.onLocation(Map<String, dynamic>.from(call.arguments as Map));
+          diagLog('bg', 'onLocation OK');
         } catch (e, st) {
-          _log('onLocation failed', e, st);
+          diagLog('bg', 'onLocation FAILED: $e');
+          diagLog('bg', st.toString().split('\n').take(3).join(' | '));
         }
       }
     });
 
     Connectivity().onConnectivityChanged.listen((list) {
       if (list.any((r) => r != ConnectivityResult.none)) {
+        diagLog('bg', 'connectivity changed → flushQueue');
         ingestor.flushQueue();
       }
     });
   } catch (e, st) {
-    _log('locationEntryPoint init failed', e, st);
+    diagLog('bg', 'bootstrap FAILED: $e');
+    diagLog('bg', st.toString().split('\n').take(5).join(' | '));
   }
 }

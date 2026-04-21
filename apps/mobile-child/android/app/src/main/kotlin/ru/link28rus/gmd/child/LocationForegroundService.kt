@@ -10,7 +10,6 @@ import android.os.Build
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
-import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.google.android.gms.location.*
 import io.flutter.FlutterInjector
@@ -25,6 +24,7 @@ class LocationForegroundService : Service() {
         const val CHANNEL_ID = "gmd_location_channel"
         const val NOTIF_ID = 0xC1
         const val METHOD_CHANNEL = "ru.link28rus.gmd.child/location"
+        const val DIAG_CHANNEL = "ru.link28rus.gmd.child/diag"
         // Отдельный engine для headless-изолята фонового сервиса. UI-Activity
         // держит свой engine через FlutterActivity — они не пересекаются.
         const val BG_ENGINE_ID = "gmd_bg_location_engine"
@@ -33,7 +33,6 @@ class LocationForegroundService : Service() {
         const val ACTION_START = "ACTION_START"
         const val ACTION_STOP = "ACTION_STOP"
         private const val WAKE_LOCK_TAG = "gmd:LocationForegroundService"
-        private const val TAG = "gmd.svc"
     }
 
     private lateinit var fused: FusedLocationProviderClient
@@ -42,16 +41,20 @@ class LocationForegroundService : Service() {
     private var bgEngine: FlutterEngine? = null
     private var bgChannel: MethodChannel? = null
 
+    private fun log(msg: String) = DiagLog.write(this, "svc", msg)
+    private fun logErr(msg: String, e: Throwable) =
+        DiagLog.write(this, "svc", "$msg: ${e.javaClass.simpleName}: ${e.message}")
+
     override fun onCreate() {
         super.onCreate()
-        Log.i(TAG, "onCreate")
+        log("onCreate")
         fused = LocationServices.getFusedLocationProviderClient(this)
         createChannel()
         ensureBackgroundEngine()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.i(TAG, "onStartCommand action=${intent?.action} flags=$flags startId=$startId")
+        log("onStartCommand action=${intent?.action} flags=$flags startId=$startId")
         when (intent?.action) {
             ACTION_STOP -> {
                 releaseWakeLock()
@@ -66,18 +69,18 @@ class LocationForegroundService : Service() {
 
     private fun ensureBackgroundEngine() {
         if (bgEngine != null) {
-            Log.i(TAG, "ensureBackgroundEngine: already have engine")
+            log("ensureBackgroundEngine: already have engine")
             return
         }
         val cached = FlutterEngineCache.getInstance().get(BG_ENGINE_ID)
         if (cached != null) {
-            Log.i(TAG, "ensureBackgroundEngine: using cached engine")
+            log("ensureBackgroundEngine: using cached engine")
             bgEngine = cached
             bgChannel = MethodChannel(cached.dartExecutor.binaryMessenger, METHOD_CHANNEL)
             return
         }
 
-        Log.i(TAG, "ensureBackgroundEngine: creating new headless engine")
+        log("ensureBackgroundEngine: creating new headless engine")
         try {
             val loader = FlutterInjector.instance().flutterLoader()
             loader.startInitialization(applicationContext)
@@ -89,7 +92,7 @@ class LocationForegroundService : Service() {
             // MethodChannel'ы (path_provider / flutter_secure_storage / sqlite3_flutter_libs /
             // connectivity_plus) падают с MissingPluginException и ingestor молча умирает.
             GeneratedPluginRegistrant.registerWith(engine)
-            Log.i(TAG, "ensureBackgroundEngine: plugins registered, starting Dart entrypoint")
+            log("ensureBackgroundEngine: plugins registered, starting Dart entrypoint")
             val entrypoint = DartExecutor.DartEntrypoint(
                 loader.findAppBundlePath(),
                 DART_LIBRARY_URI,
@@ -100,9 +103,23 @@ class LocationForegroundService : Service() {
 
             bgEngine = engine
             bgChannel = MethodChannel(engine.dartExecutor.binaryMessenger, METHOD_CHANNEL)
-            Log.i(TAG, "ensureBackgroundEngine: OK, channel ready")
+
+            // Диагностический канал для headless-Dart: принимает diagLog('bg', 'msg').
+            MethodChannel(engine.dartExecutor.binaryMessenger, DIAG_CHANNEL)
+                .setMethodCallHandler { call, result ->
+                    when (call.method) {
+                        "write" -> {
+                            val tag = call.argument<String>("tag") ?: "bg"
+                            val msg = call.argument<String>("msg") ?: ""
+                            DiagLog.write(applicationContext, tag, msg)
+                            result.success(null)
+                        }
+                        else -> result.notImplemented()
+                    }
+                }
+            log("ensureBackgroundEngine: OK, channel ready")
         } catch (e: Throwable) {
-            Log.e(TAG, "ensureBackgroundEngine FAILED", e)
+            logErr("ensureBackgroundEngine FAILED", e)
         }
     }
 
@@ -122,12 +139,12 @@ class LocationForegroundService : Service() {
     }
 
     private fun start() {
-        Log.i(TAG, "start()")
+        log("start()")
         startForeground(NOTIF_ID, buildNotification())
         acquireWakeLock()
         ensureBackgroundEngine()
         if (callback != null) {
-            Log.i(TAG, "start: callback already subscribed, skip requestLocationUpdates")
+            log("start: callback already subscribed, skip requestLocationUpdates")
             return
         }
         val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 10_000L)
@@ -136,7 +153,7 @@ class LocationForegroundService : Service() {
             .build()
         val cb = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
-                Log.i(TAG, "onLocationResult size=${result.locations.size}")
+                log("onLocationResult size=${result.locations.size}")
                 for (loc in result.locations) {
                     sendToDart(loc)
                 }
@@ -145,9 +162,9 @@ class LocationForegroundService : Service() {
         callback = cb
         try {
             fused.requestLocationUpdates(request, cb, Looper.getMainLooper())
-            Log.i(TAG, "requestLocationUpdates OK")
+            log("requestLocationUpdates OK")
         } catch (e: SecurityException) {
-            Log.e(TAG, "requestLocationUpdates SecurityException", e)
+            logErr("requestLocationUpdates SecurityException", e)
             stopSelf()
         }
     }
@@ -155,10 +172,10 @@ class LocationForegroundService : Service() {
     private fun sendToDart(loc: android.location.Location) {
         val channel = bgChannel
         if (channel == null) {
-            Log.w(TAG, "sendToDart: bgChannel is null — engine not ready, point DROPPED")
+            log("sendToDart: bgChannel is null — engine not ready, point DROPPED")
             return
         }
-        Log.i(TAG, "sendToDart lat=${loc.latitude} lon=${loc.longitude} acc=${loc.accuracy}")
+        log("sendToDart lat=${loc.latitude} lon=${loc.longitude} acc=${loc.accuracy}")
         val bm = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
         val batteryLevel = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY).takeIf { it > 0 }
         val isCharging = bm.isCharging
@@ -215,6 +232,7 @@ class LocationForegroundService : Service() {
     }
 
     override fun onDestroy() {
+        log("onDestroy")
         callback?.let { fused.removeLocationUpdates(it) }
         callback = null
         releaseWakeLock()

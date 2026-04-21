@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../core/version/app_version.dart';
 import '../sos/sos_controller.dart';
 import 'home_controller.dart';
@@ -36,10 +37,13 @@ class HomeScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('GMD'),
-        actions: const [
+        actions: [
           Padding(
-            padding: EdgeInsets.symmetric(horizontal: 12),
-            child: AppVersionLabel(),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: GestureDetector(
+              onLongPress: () => context.push('/debug'),
+              child: const AppVersionLabel(),
+            ),
           ),
         ],
       ),

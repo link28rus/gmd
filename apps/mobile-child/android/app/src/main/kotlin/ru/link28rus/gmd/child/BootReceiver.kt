@@ -20,6 +20,7 @@ class BootReceiver : BroadcastReceiver() {
             action != "com.htc.intent.action.QUICKBOOT_POWERON"
         ) return
 
+        DiagLog.write(context, "boot", "BootReceiver: $action → startForegroundService")
         val svc = Intent(context, LocationForegroundService::class.java)
             .setAction(LocationForegroundService.ACTION_START)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
