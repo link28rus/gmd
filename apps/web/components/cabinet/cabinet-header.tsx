@@ -6,6 +6,7 @@ import { useState, type ReactElement } from 'react';
 import { Download, Shield, ChevronDown, LogOut } from 'lucide-react';
 import { useAuthStore } from '@/lib/auth-store';
 import { avatarColor, avatarInitial } from '@/lib/color/avatar-color';
+import { APP_VERSION } from '@/lib/version';
 
 export function CabinetHeader(): ReactElement {
   const router = useRouter();
@@ -52,7 +53,10 @@ export function CabinetHeader(): ReactElement {
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-600 text-white">
               <span className="text-xs font-bold">GMD</span>
             </div>
-            <span className="text-sm font-semibold text-zinc-900">Где мои дети</span>
+            <div className="flex flex-col leading-tight">
+              <span className="text-sm font-semibold text-zinc-900">Где мои дети</span>
+              <span className="text-[10px] text-zinc-400">v{APP_VERSION}</span>
+            </div>
           </Link>
           <nav className="flex items-center gap-1">
             {navLink('/cabinet', 'Главная')}
@@ -106,6 +110,7 @@ export function CabinetHeader(): ReactElement {
                     {user.name ?? user.email}
                   </div>
                   {user.name && <div className="truncate text-xs text-zinc-500">{user.email}</div>}
+                  <div className="mt-1 text-[10px] text-zinc-400">GMD v{APP_VERSION}</div>
                 </div>
                 <Link
                   href="/cabinet/password"
