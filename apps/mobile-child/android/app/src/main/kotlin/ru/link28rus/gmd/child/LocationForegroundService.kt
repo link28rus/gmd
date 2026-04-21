@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.google.android.gms.location.*
 import io.flutter.FlutterInjector
@@ -32,6 +33,7 @@ class LocationForegroundService : Service() {
         const val ACTION_START = "ACTION_START"
         const val ACTION_STOP = "ACTION_STOP"
         private const val WAKE_LOCK_TAG = "gmd:LocationForegroundService"
+        private const val TAG = "gmd.svc"
     }
 
     private lateinit var fused: FusedLocationProviderClient
@@ -42,12 +44,14 @@ class LocationForegroundService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        Log.i(TAG, "onCreate")
         fused = LocationServices.getFusedLocationProviderClient(this)
         createChannel()
         ensureBackgroundEngine()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.i(TAG, "onStartCommand action=${intent?.action} flags=$flags startId=$startId")
         when (intent?.action) {
             ACTION_STOP -> {
                 releaseWakeLock()
@@ -61,34 +65,45 @@ class LocationForegroundService : Service() {
     }
 
     private fun ensureBackgroundEngine() {
-        if (bgEngine != null) return
+        if (bgEngine != null) {
+            Log.i(TAG, "ensureBackgroundEngine: already have engine")
+            return
+        }
         val cached = FlutterEngineCache.getInstance().get(BG_ENGINE_ID)
         if (cached != null) {
+            Log.i(TAG, "ensureBackgroundEngine: using cached engine")
             bgEngine = cached
             bgChannel = MethodChannel(cached.dartExecutor.binaryMessenger, METHOD_CHANNEL)
             return
         }
 
-        val loader = FlutterInjector.instance().flutterLoader()
-        loader.startInitialization(applicationContext)
-        loader.ensureInitializationComplete(applicationContext, null)
+        Log.i(TAG, "ensureBackgroundEngine: creating new headless engine")
+        try {
+            val loader = FlutterInjector.instance().flutterLoader()
+            loader.startInitialization(applicationContext)
+            loader.ensureInitializationComplete(applicationContext, null)
 
-        val engine = FlutterEngine(applicationContext)
-        // КРИТИЧНО: при ручном создании FlutterEngine (не через FlutterActivity) плагины
-        // НЕ регистрируются автоматически. Без этого вызова в headless-изоляте все
-        // MethodChannel'ы (path_provider / flutter_secure_storage / sqlite3_flutter_libs /
-        // connectivity_plus) падают с MissingPluginException и ingestor молча умирает.
-        GeneratedPluginRegistrant.registerWith(engine)
-        val entrypoint = DartExecutor.DartEntrypoint(
-            loader.findAppBundlePath(),
-            DART_LIBRARY_URI,
-            DART_ENTRYPOINT,
-        )
-        engine.dartExecutor.executeDartEntrypoint(entrypoint)
-        FlutterEngineCache.getInstance().put(BG_ENGINE_ID, engine)
+            val engine = FlutterEngine(applicationContext)
+            // КРИТИЧНО: при ручном создании FlutterEngine (не через FlutterActivity) плагины
+            // НЕ регистрируются автоматически. Без этого вызова в headless-изоляте все
+            // MethodChannel'ы (path_provider / flutter_secure_storage / sqlite3_flutter_libs /
+            // connectivity_plus) падают с MissingPluginException и ingestor молча умирает.
+            GeneratedPluginRegistrant.registerWith(engine)
+            Log.i(TAG, "ensureBackgroundEngine: plugins registered, starting Dart entrypoint")
+            val entrypoint = DartExecutor.DartEntrypoint(
+                loader.findAppBundlePath(),
+                DART_LIBRARY_URI,
+                DART_ENTRYPOINT,
+            )
+            engine.dartExecutor.executeDartEntrypoint(entrypoint)
+            FlutterEngineCache.getInstance().put(BG_ENGINE_ID, engine)
 
-        bgEngine = engine
-        bgChannel = MethodChannel(engine.dartExecutor.binaryMessenger, METHOD_CHANNEL)
+            bgEngine = engine
+            bgChannel = MethodChannel(engine.dartExecutor.binaryMessenger, METHOD_CHANNEL)
+            Log.i(TAG, "ensureBackgroundEngine: OK, channel ready")
+        } catch (e: Throwable) {
+            Log.e(TAG, "ensureBackgroundEngine FAILED", e)
+        }
     }
 
     private fun acquireWakeLock() {
@@ -107,16 +122,21 @@ class LocationForegroundService : Service() {
     }
 
     private fun start() {
+        Log.i(TAG, "start()")
         startForeground(NOTIF_ID, buildNotification())
         acquireWakeLock()
         ensureBackgroundEngine()
-        if (callback != null) return
+        if (callback != null) {
+            Log.i(TAG, "start: callback already subscribed, skip requestLocationUpdates")
+            return
+        }
         val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 10_000L)
             .setMinUpdateDistanceMeters(5f)
             .setMinUpdateIntervalMillis(5_000L)
             .build()
         val cb = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
+                Log.i(TAG, "onLocationResult size=${result.locations.size}")
                 for (loc in result.locations) {
                     sendToDart(loc)
                 }
@@ -125,13 +145,20 @@ class LocationForegroundService : Service() {
         callback = cb
         try {
             fused.requestLocationUpdates(request, cb, Looper.getMainLooper())
+            Log.i(TAG, "requestLocationUpdates OK")
         } catch (e: SecurityException) {
+            Log.e(TAG, "requestLocationUpdates SecurityException", e)
             stopSelf()
         }
     }
 
     private fun sendToDart(loc: android.location.Location) {
-        val channel = bgChannel ?: return
+        val channel = bgChannel
+        if (channel == null) {
+            Log.w(TAG, "sendToDart: bgChannel is null — engine not ready, point DROPPED")
+            return
+        }
+        Log.i(TAG, "sendToDart lat=${loc.latitude} lon=${loc.longitude} acc=${loc.accuracy}")
         val bm = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
         val batteryLevel = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY).takeIf { it > 0 }
         val isCharging = bm.isCharging
