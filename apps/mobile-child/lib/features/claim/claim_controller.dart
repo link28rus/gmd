@@ -1,11 +1,11 @@
 import 'package:device_info_plus/device_info_plus.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../core/api/api_exceptions.dart';
 import '../../core/api/child_api.dart';
 import '../../core/api/dio_client.dart';
+import '../../core/config/env.dart';
 import '../../core/storage/secure_storage_service.dart';
 
 enum ClaimStatus { idle, inProgress, success, error }
@@ -43,21 +43,8 @@ Future<DeviceMetadata> _defaultDeviceMetadataLoader() async {
   );
 }
 
-// Release-build (APK на реальном телефоне) ходит на prod через HTTPS-домен.
-// Caddy: `handle_path /api/* → backend:3001` стрипает префикс, поэтому baseUrl с `/api`.
-// Dev-build (flutter run на эмуляторе) ходит на хост-машину через loopback.
-// Переопределить можно через `--dart-define=API_BASE_URL=...`.
-const _fallbackApiBaseUrl = kReleaseMode
-    ? 'https://gmd.link28rus.ru/api'
-    : 'http://10.0.2.2:3001';
-
-const _apiBaseUrl = String.fromEnvironment(
-  'API_BASE_URL',
-  defaultValue: _fallbackApiBaseUrl,
-);
-
 final childApiProvider = Provider<ChildApi>(
-  (_) => ChildApi(buildDio(baseUrl: _apiBaseUrl)),
+  (_) => ChildApi(buildDio(baseUrl: apiBaseUrl)),
 );
 
 final secureStorageProvider =

@@ -204,6 +204,7 @@ model Location {
   batteryLevel     Int?
   isCharging       Boolean?
   provider         String?
+  networkType      String?
   recordedAt       DateTime
   serverReceivedAt DateTime @default(now())
 

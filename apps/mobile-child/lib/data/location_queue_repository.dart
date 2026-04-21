@@ -15,6 +15,7 @@ class LocationQueueRepository {
     int? batteryLevel,
     bool? isCharging,
     String? provider,
+    String? networkType,
     required DateTime recordedAt,
   }) async {
     return _db.into(_db.pendingLocations).insert(
@@ -28,6 +29,7 @@ class LocationQueueRepository {
             batteryLevel: Value(batteryLevel),
             isCharging: Value(isCharging),
             provider: Value(provider),
+            networkType: Value(networkType),
             recordedAt: recordedAt,
           ),
         );

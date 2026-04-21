@@ -10,6 +10,7 @@ interface Props {
   batteryLevel: number | null;
   isCharging: boolean | null;
   provider: 'gps' | 'fused' | 'network' | null;
+  networkType: 'wifi' | 'mobile' | 'offline' | 'unknown' | null;
   /** Блок действий (напр. «Отвязать устройство», «Удалить ребёнка») под метриками. */
   actions?: ReactNode;
 }
@@ -21,6 +22,7 @@ export function ChildStatusCard({
   batteryLevel,
   isCharging,
   provider,
+  networkType,
   actions,
 }: Props): ReactElement {
   const initial = avatarInitial(childName);
@@ -40,7 +42,7 @@ export function ChildStatusCard({
           <div className="truncate text-xs text-zinc-500">Был тут {formatAgeShort(ageSec)}</div>
         </div>
       </div>
-      <div className="grid grid-cols-3 gap-1 px-3 py-2.5 text-center text-[11px] text-zinc-600">
+      <div className="grid grid-cols-4 gap-1 px-3 py-2.5 text-center text-[11px] text-zinc-600">
         <Metric
           label={batteryLabel(batteryLevel, isCharging)}
           value={batteryLevel !== null ? `${batteryLevel}%` : '—'}
@@ -52,6 +54,7 @@ export function ChildStatusCard({
           value={accuracy !== null ? `±${Math.round(accuracy)} м` : '—'}
           icon="🎯"
         />
+        <Metric label="связь" value={networkLabel(networkType)} icon={networkIcon(networkType)} />
         <Metric label="источник" value={providerLabel(provider)} icon="📡" />
       </div>
       {accuracy !== null && (
@@ -111,6 +114,32 @@ function providerLabel(p: 'gps' | 'fused' | 'network' | null): string {
       return 'сеть';
     default:
       return '—';
+  }
+}
+
+function networkLabel(n: 'wifi' | 'mobile' | 'offline' | 'unknown' | null): string {
+  switch (n) {
+    case 'wifi':
+      return 'Wi-Fi';
+    case 'mobile':
+      return 'мобильн.';
+    case 'offline':
+      return 'нет сети';
+    default:
+      return '—';
+  }
+}
+
+function networkIcon(n: 'wifi' | 'mobile' | 'offline' | 'unknown' | null): string {
+  switch (n) {
+    case 'wifi':
+      return '📶';
+    case 'mobile':
+      return '📱';
+    case 'offline':
+      return '🚫';
+    default:
+      return '❓';
   }
 }
 

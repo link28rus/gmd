@@ -13,6 +13,7 @@ export interface LatestLocationDto {
   batteryLevel: number | null;
   isCharging: boolean | null;
   provider: 'gps' | 'fused' | 'network' | null;
+  networkType: 'wifi' | 'mobile' | 'offline' | 'unknown' | null;
   ageSec: number;
 }
 

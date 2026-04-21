@@ -26,6 +26,7 @@ class LocationIngestor {
       batteryLevel: payload['batteryLevel'] as int?,
       isCharging: payload['isCharging'] as bool?,
       provider: payload['provider'] as String?,
+      networkType: payload['networkType'] as String?,
       recordedAt: DateTime.fromMillisecondsSinceEpoch(
         (payload['recordedAt'] as num).toInt(),
       ),
@@ -61,6 +62,7 @@ class LocationIngestor {
                   batteryLevel: r.batteryLevel,
                   isCharging: r.isCharging,
                   provider: r.provider,
+                  networkType: r.networkType,
                   recordedAt: r.recordedAt,
                 ))
             .toList(),

@@ -145,6 +145,7 @@ export default function MapClient({ childId }: Props): ReactElement {
                   batteryLevel={latest.batteryLevel}
                   isCharging={latest.isCharging}
                   provider={latest.provider}
+                  networkType={latest.networkType}
                 />
               </div>
             )}

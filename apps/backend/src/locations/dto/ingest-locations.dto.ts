@@ -12,6 +12,7 @@ export const LocationPointSchema = z
     batteryLevel: z.number().int().gte(0).lte(100).optional(),
     isCharging: z.boolean().optional(),
     provider: z.enum(['gps', 'fused', 'network']).optional(),
+    networkType: z.enum(['wifi', 'mobile', 'offline', 'unknown']).optional(),
   })
   .strict();
 

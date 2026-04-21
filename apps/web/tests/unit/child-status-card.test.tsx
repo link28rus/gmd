@@ -14,6 +14,7 @@ describe('ChildStatusCard', () => {
         batteryLevel={73}
         isCharging={false}
         provider="gps"
+        networkType="wifi"
       />,
     );
     expect(screen.getByText('Артем')).toBeInTheDocument();
@@ -29,6 +30,7 @@ describe('ChildStatusCard', () => {
         batteryLevel={30}
         isCharging={false}
         provider="gps"
+        networkType="mobile"
       />,
     );
     expect(screen.getByText('30%')).toBeInTheDocument();
@@ -45,6 +47,7 @@ describe('ChildStatusCard', () => {
         batteryLevel={null}
         isCharging={null}
         provider={null}
+        networkType={null}
       />,
     );
     expect(screen.getByText(/Точность координат высокая \(18 метров\)/)).toBeInTheDocument();
@@ -59,6 +62,7 @@ describe('ChildStatusCard', () => {
         batteryLevel={null}
         isCharging={null}
         provider="network"
+        networkType="offline"
       />,
     );
     expect(screen.getByText('сеть')).toBeInTheDocument();

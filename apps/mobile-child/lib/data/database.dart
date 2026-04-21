@@ -14,6 +14,7 @@ class PendingLocations extends Table {
   IntColumn get batteryLevel => integer().nullable()();
   BoolColumn get isCharging => boolean().nullable()();
   TextColumn get provider => text().nullable()();
+  TextColumn get networkType => text().nullable()();
   DateTimeColumn get recordedAt => dateTime()();
   IntColumn get uploadAttempts => integer().withDefault(const Constant(0))();
   DateTimeColumn get lastAttemptAt => dateTime().nullable()();
@@ -39,5 +40,14 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+        onUpgrade: (m, from, to) async {
+          if (from < 2) {
+            await m.addColumn(pendingLocations, pendingLocations.networkType);
+          }
+        },
+      );
 }

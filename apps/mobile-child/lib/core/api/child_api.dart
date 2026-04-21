@@ -41,6 +41,7 @@ class LocationPoint {
     this.batteryLevel,
     this.isCharging,
     this.provider,
+    this.networkType,
   });
   final double lat;
   final double lon;
@@ -51,6 +52,7 @@ class LocationPoint {
   final int? batteryLevel;
   final bool? isCharging;
   final String? provider;
+  final String? networkType;
   final DateTime recordedAt;
 
   Map<String, dynamic> toJson() => {
@@ -63,6 +65,7 @@ class LocationPoint {
         if (batteryLevel != null) 'batteryLevel': batteryLevel,
         if (isCharging != null) 'isCharging': isCharging,
         if (provider != null) 'provider': provider,
+        if (networkType != null) 'networkType': networkType,
         'recordedAt': recordedAt.toUtc().toIso8601String(),
       };
 }

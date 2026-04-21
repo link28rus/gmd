@@ -201,6 +201,7 @@ function MapArea({ child }: { child: Child }): ReactElement {
             batteryLevel={latest.batteryLevel}
             isCharging={latest.isCharging}
             provider={latest.provider}
+            networkType={latest.networkType}
             actions={<ChildActions child={child} showReset={true} />}
           />
         </div>

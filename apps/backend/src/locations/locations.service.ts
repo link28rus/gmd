@@ -34,6 +34,7 @@ export interface LocationDto {
   batteryLevel: number | null;
   isCharging: boolean | null;
   provider: string | null;
+  networkType: string | null;
 }
 
 function toDto(row: {
@@ -48,6 +49,7 @@ function toDto(row: {
   batteryLevel?: number | null;
   isCharging?: boolean | null;
   provider?: string | null;
+  networkType?: string | null;
 }): LocationDto {
   return {
     lat: row.lat,
@@ -61,6 +63,7 @@ function toDto(row: {
     batteryLevel: row.batteryLevel ?? null,
     isCharging: row.isCharging ?? null,
     provider: row.provider ?? null,
+    networkType: row.networkType ?? null,
   };
 }
 
@@ -140,6 +143,7 @@ export class LocationsService {
         ${p.batteryLevel ?? null},
         ${p.isCharging ?? null},
         ${p.provider ?? null},
+        ${p.networkType ?? null},
         ${new Date(p.recordedAt)}
       )`);
     }
@@ -149,7 +153,7 @@ export class LocationsService {
       await this.prisma.$transaction(async (tx) => {
         const inserted = await tx.$executeRaw(Prisma.sql`
           INSERT INTO "locations" (
-            "id","childId","childDeviceId","lat","lon","accuracy","altitude","speed","bearing","batteryLevel","isCharging","provider","recordedAt"
+            "id","childId","childDeviceId","lat","lon","accuracy","altitude","speed","bearing","batteryLevel","isCharging","provider","networkType","recordedAt"
           ) VALUES ${Prisma.join(validRows)}
           ON CONFLICT ("childDeviceId","recordedAt") DO NOTHING
         `);

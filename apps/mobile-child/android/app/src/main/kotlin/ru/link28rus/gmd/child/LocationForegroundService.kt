@@ -3,6 +3,8 @@ package ru.link28rus.gmd.child
 import android.app.*
 import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.BatteryManager
 import android.os.Build
 import android.os.IBinder
@@ -10,28 +12,38 @@ import android.os.Looper
 import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import com.google.android.gms.location.*
+import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.FlutterEngineCache
+import io.flutter.embedding.engine.dart.DartExecutor
 import io.flutter.plugin.common.MethodChannel
+import io.flutter.view.FlutterMain
 
 class LocationForegroundService : Service() {
     companion object {
         const val CHANNEL_ID = "gmd_location_channel"
         const val NOTIF_ID = 0xC1
         const val METHOD_CHANNEL = "ru.link28rus.gmd.child/location"
-        const val ENGINE_ID = "gmd_main_engine"
+        // Отдельный engine для headless-изолята фонового сервиса. UI-Activity
+        // держит свой engine через FlutterActivity — они не пересекаются.
+        const val BG_ENGINE_ID = "gmd_bg_location_engine"
+        const val DART_ENTRYPOINT = "locationEntryPoint"
+        const val DART_LIBRARY_URI = "package:gmd_child/background/location_entry.dart"
         const val ACTION_START = "ACTION_START"
         const val ACTION_STOP = "ACTION_STOP"
         private const val WAKE_LOCK_TAG = "gmd:LocationForegroundService"
     }
 
     private lateinit var fused: FusedLocationProviderClient
-    private lateinit var callback: LocationCallback
+    private var callback: LocationCallback? = null
     private var wakeLock: PowerManager.WakeLock? = null
+    private var bgEngine: FlutterEngine? = null
+    private var bgChannel: MethodChannel? = null
 
     override fun onCreate() {
         super.onCreate()
         fused = LocationServices.getFusedLocationProviderClient(this)
         createChannel()
+        ensureBackgroundEngine()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -45,6 +57,31 @@ class LocationForegroundService : Service() {
             else -> start()
         }
         return START_STICKY
+    }
+
+    private fun ensureBackgroundEngine() {
+        if (bgEngine != null) return
+        val cached = FlutterEngineCache.getInstance().get(BG_ENGINE_ID)
+        if (cached != null) {
+            bgEngine = cached
+            bgChannel = MethodChannel(cached.dartExecutor.binaryMessenger, METHOD_CHANNEL)
+            return
+        }
+
+        FlutterMain.startInitialization(applicationContext)
+        FlutterMain.ensureInitializationComplete(applicationContext, null)
+
+        val engine = FlutterEngine(applicationContext)
+        val entrypoint = DartExecutor.DartEntrypoint(
+            FlutterMain.findAppBundlePath(),
+            DART_LIBRARY_URI,
+            DART_ENTRYPOINT,
+        )
+        engine.dartExecutor.executeDartEntrypoint(entrypoint)
+        FlutterEngineCache.getInstance().put(BG_ENGINE_ID, engine)
+
+        bgEngine = engine
+        bgChannel = MethodChannel(engine.dartExecutor.binaryMessenger, METHOD_CHANNEL)
     }
 
     private fun acquireWakeLock() {
@@ -65,26 +102,29 @@ class LocationForegroundService : Service() {
     private fun start() {
         startForeground(NOTIF_ID, buildNotification())
         acquireWakeLock()
+        ensureBackgroundEngine()
+        if (callback != null) return
         val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 10_000L)
             .setMinUpdateDistanceMeters(5f)
             .setMinUpdateIntervalMillis(5_000L)
             .build()
-        callback = object : LocationCallback() {
+        val cb = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
                 for (loc in result.locations) {
                     sendToDart(loc)
                 }
             }
         }
+        callback = cb
         try {
-            fused.requestLocationUpdates(request, callback, Looper.getMainLooper())
+            fused.requestLocationUpdates(request, cb, Looper.getMainLooper())
         } catch (e: SecurityException) {
             stopSelf()
         }
     }
 
     private fun sendToDart(loc: android.location.Location) {
-        val engine = FlutterEngineCache.getInstance().get(ENGINE_ID) ?: return
+        val channel = bgChannel ?: return
         val bm = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
         val batteryLevel = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY).takeIf { it > 0 }
         val isCharging = bm.isCharging
@@ -98,9 +138,24 @@ class LocationForegroundService : Service() {
             "batteryLevel" to batteryLevel,
             "isCharging" to isCharging,
             "provider" to (loc.provider ?: "fused"),
+            "networkType" to currentNetworkType(),
             "recordedAt" to loc.time,
         )
-        MethodChannel(engine.dartExecutor.binaryMessenger, METHOD_CHANNEL).invokeMethod("onLocation", payload)
+        channel.invokeMethod("onLocation", payload)
+    }
+
+    private fun currentNetworkType(): String {
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            ?: return "unknown"
+        val active = cm.activeNetwork ?: return "offline"
+        val caps = cm.getNetworkCapabilities(active) ?: return "offline"
+        if (!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) return "offline"
+        return when {
+            caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "wifi"
+            caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "mobile"
+            caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> "wifi"
+            else -> "unknown"
+        }
     }
 
     private fun buildNotification(): Notification {
@@ -126,8 +181,11 @@ class LocationForegroundService : Service() {
     }
 
     override fun onDestroy() {
-        if (::callback.isInitialized) fused.removeLocationUpdates(callback)
+        callback?.let { fused.removeLocationUpdates(it) }
+        callback = null
         releaseWakeLock()
+        // Не рушим bgEngine при onDestroy — он может пригодиться, если service
+        // тут же перезапустят (START_STICKY). Чистим только при явном ACTION_STOP.
         super.onDestroy()
     }
 
