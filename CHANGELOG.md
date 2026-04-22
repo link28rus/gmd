@@ -9,6 +9,21 @@
 
 ---
 
+## v0.28.0 — 2026-04-22
+
+### Новые возможности
+
+- **Страница PIN-кода родителя в кабинете** — `/cabinet/pin` с формами «Задать / Сменить / Удалить PIN». 4–8 цифр, маскированный ввод с подтверждением. Удаление PIN требует ввода текущего и каскадно выключает защиту на всех устройствах детей. Ссылка в меню профиля рядом с «Сменить пароль».
+- **Wizard Accessibility стал реактивным (mobile-child)** — шаги помечаются галочкой когда выполнены, весь bottom-sheet автозакрывается как только Accessibility Service стал активен. Пока пользователь ходит в системные настройки и обратно — плашка на home тоже пересчитывается через AppLifecycleState.resumed.
+
+### Инфраструктура
+
+- Web: новые route handlers `/api/me/pin` (GET/POST/DELETE) и `/api/me/pin/verify` — проксируют к backend с Bearer-токеном.
+- Web: `AuthUser.hasPin` добавлен в `auth-store`, меню профиля различает «Задать PIN» / «Сменить PIN».
+- Mobile-child: `_AccessibilityWizard` теперь `ConsumerStatefulWidget` с `WidgetsBindingObserver` + локальным state шагов. Автозакрытие через `Navigator.pop` в `postFrameCallback` когда `accessibilityActive=true`.
+
+---
+
 ## v0.27.2 — 2026-04-22
 
 ### Исправления
