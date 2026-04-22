@@ -4,7 +4,6 @@ import android.app.admin.DeviceAdminReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import java.lang.CharSequence
 
 // L1-защита от удаления приложения: пока DeviceAdmin активен, Android заменяет
 // кнопку «Удалить» в Settings → Apps → gmd_child на «Deactivate device
@@ -18,7 +17,9 @@ class ChildDeviceAdminReceiver : DeviceAdminReceiver() {
         DiagLog.write(context, "admin", "DeviceAdmin enabled")
     }
 
-    override fun onDisableRequested(context: Context, intent: Intent): CharSequence {
+    // Сигнатура в platform API — CharSequence? (nullable). Возвращаемый текст
+    // показывается пользователю в системном диалоге подтверждения деактивации.
+    override fun onDisableRequested(context: Context, intent: Intent): CharSequence? {
         DiagLog.write(context, "admin", "DeviceAdmin disable requested")
         return "Это отключит родительский контроль. Обратитесь к родителю — он должен подтвердить это действие из своего кабинета."
     }
