@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { hash, verify as argonVerify } from '@node-rs/argon2';
-import type { RedisService } from '../redis/redis.service';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports
+import { RedisService } from '../redis/redis.service';
 
 export interface PinConfig {
   lockAfter: number;
