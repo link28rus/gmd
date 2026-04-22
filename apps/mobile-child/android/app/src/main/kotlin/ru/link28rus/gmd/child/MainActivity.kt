@@ -15,7 +15,16 @@ private const val UI_METHOD_CHANNEL = "ru.link28rus.gmd.child/location"
 private const val DIAG_METHOD_CHANNEL = "ru.link28rus.gmd.child/diag"
 private const val PROTECTION_METHOD_CHANNEL = "ru.link28rus.gmd.child/protection"
 
+private const val REQUEST_CODE_ADD_ADMIN = 8101
+
 class MainActivity : FlutterActivity() {
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_CODE_ADD_ADMIN) {
+            DiagLog.write(this, "admin", "onActivityResult: ADD_DEVICE_ADMIN resultCode=$resultCode")
+        }
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
@@ -70,28 +79,38 @@ class MainActivity : FlutterActivity() {
                     "isActive" -> result.success(dpm.isAdminActive(admin))
                     "requestActivation" -> {
                         // Системный диалог подтверждения: «Разрешить этому приложению
-                        // управлять устройством». Текст explanation показывается
-                        // пользователю как обоснование. Результат деактивации/активации
-                        // получаем не здесь (диалог асинхронный) — Dart опрашивает
-                        // isActive после возврата на экран приложения.
+                        // управлять устройством». Важно — НЕ ставим FLAG_ACTIVITY_NEW_TASK,
+                        // т.к. intent запускается из существующей Activity (MainActivity
+                        // c taskAffinity=""), и NEW_TASK на MIUI/HyperOS глушит systemui
+                        // без видимого диалога. startActivityForResult даёт callback
+                        // onActivityResult — UI дёргает invalidate провайдера.
                         val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
                             .putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, admin)
                             .putExtra(
                                 DevicePolicyManager.EXTRA_ADD_EXPLANATION,
                                 "Родительский контроль gmd: защищает приложение от случайного удаления ребёнком. Отключение возможно только через кабинет родителя."
                             )
-                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        startActivity(intent)
-                        DiagLog.write(this, "admin", "requestActivation: intent started")
-                        result.success(null)
+                        val resolved = intent.resolveActivity(packageManager)
+                        DiagLog.write(
+                            this,
+                            "admin",
+                            "requestActivation: resolved=${resolved?.flattenToShortString() ?: "null"}",
+                        )
+                        if (resolved != null) {
+                            startActivityForResult(intent, REQUEST_CODE_ADD_ADMIN)
+                            result.success(null)
+                        } else {
+                            // Fallback: некоторые прошивки не резолвят ACTION_ADD_DEVICE_ADMIN —
+                            // открываем экран Device Administrators напрямую.
+                            val settings = Intent(android.provider.Settings.ACTION_SECURITY_SETTINGS)
+                            startActivity(settings)
+                            DiagLog.write(this, "admin", "requestActivation: fallback to security settings")
+                            result.success(null)
+                        }
                     }
                     "openSettings" -> {
-                        // Фоллбек: открыть системный экран списка Device Admin'ов
-                        // (например для деактивации админа вручную, только сценарий
-                        // отладки — пользователю показывать не надо).
-                        val intent = Intent("android.app.action.SET_NEW_PASSWORD")
-                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        startActivity(intent)
+                        val settings = Intent(android.provider.Settings.ACTION_SECURITY_SETTINGS)
+                        startActivity(settings)
                         result.success(null)
                     }
                     else -> result.notImplemented()
