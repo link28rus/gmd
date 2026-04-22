@@ -1,24 +1,39 @@
 'use client';
 
+import { Users, Home, Baby, Smartphone, Ticket, type LucideIcon } from 'lucide-react';
 import { useAdminStats } from '@/lib/hooks/use-admin';
 
 interface StatCardProps {
   title: string;
-  rows: { label: string; value: number | string }[];
+  icon: LucideIcon;
+  primary: { label: string; value: number };
+  secondary?: { label: string; value: number }[];
 }
 
-function StatCard({ title, rows }: StatCardProps) {
+function StatCard({ title, icon: Icon, primary, secondary = [] }: StatCardProps) {
   return (
-    <div className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
-      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500">{title}</h3>
-      <dl className="space-y-1">
-        {rows.map(({ label, value }) => (
-          <div key={label} className="flex items-baseline justify-between">
-            <dt className="text-sm text-zinc-600">{label}</dt>
-            <dd className="text-lg font-bold text-zinc-900">{value}</dd>
-          </div>
-        ))}
-      </dl>
+    <div className="group relative overflow-hidden rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-sky-200 hover:shadow-md">
+      <div className="mb-4 flex items-center gap-2.5">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-50 text-sky-600 ring-1 ring-inset ring-sky-100">
+          <Icon className="h-[18px] w-[18px]" strokeWidth={2} />
+        </div>
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">{title}</h3>
+      </div>
+
+      <div className="flex items-baseline gap-2">
+        <span className="text-3xl font-semibold tabular-nums text-slate-900">{primary.value}</span>
+        <span className="text-xs text-slate-500">{primary.label}</span>
+      </div>
+
+      {secondary.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t border-slate-100 pt-3">
+          {secondary.map(({ label, value }) => (
+            <div key={label} className="text-xs text-slate-500">
+              <span className="font-semibold tabular-nums text-slate-700">{value}</span> {label}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -27,7 +42,7 @@ export function StatsDashboard() {
   const { data, isLoading, error } = useAdminStats();
 
   if (isLoading) {
-    return <p className="text-sm text-zinc-400">Загружаем статистику…</p>;
+    return <p className="text-sm text-slate-400">Загружаем статистику…</p>;
   }
 
   if (error || !data) {
@@ -42,33 +57,35 @@ export function StatsDashboard() {
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       <StatCard
         title="Пользователи"
-        rows={[
-          { label: 'Всего', value: data.users.total },
-          { label: 'Удалено', value: data.users.deleted },
-        ]}
+        icon={Users}
+        primary={{ label: 'всего', value: data.users.total }}
+        secondary={[{ label: 'удалено', value: data.users.deleted }]}
       />
-      <StatCard title="Семьи" rows={[{ label: 'Всего', value: data.families.total }]} />
+      <StatCard
+        title="Семьи"
+        icon={Home}
+        primary={{ label: 'всего', value: data.families.total }}
+      />
       <StatCard
         title="Дети"
-        rows={[
-          { label: 'Всего', value: data.children.total },
-          { label: 'Удалено', value: data.children.deleted },
-        ]}
+        icon={Baby}
+        primary={{ label: 'всего', value: data.children.total }}
+        secondary={[{ label: 'удалено', value: data.children.deleted }]}
       />
       <StatCard
         title="Устройства"
-        rows={[
-          { label: 'Всего', value: data.devices.total },
-          { label: 'Активных', value: data.devices.active },
-          { label: 'Отозвано', value: data.devices.revoked },
+        icon={Smartphone}
+        primary={{ label: 'всего', value: data.devices.total }}
+        secondary={[
+          { label: 'активных', value: data.devices.active },
+          { label: 'отозвано', value: data.devices.revoked },
         ]}
       />
       <StatCard
-        title="Инвайты"
-        rows={[
-          { label: 'Всего', value: data.invites.total },
-          { label: 'Активных сейчас', value: data.invites.activeNow },
-        ]}
+        title="Приглашения"
+        icon={Ticket}
+        primary={{ label: 'всего', value: data.invites.total }}
+        secondary={[{ label: 'активных сейчас', value: data.invites.activeNow }]}
       />
     </div>
   );
