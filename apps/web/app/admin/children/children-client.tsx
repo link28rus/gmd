@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAdminChildren } from '@/lib/hooks/use-admin';
 import { DataTable } from '@/components/admin/data-table';
+import { ChildActionsMenu } from '@/components/admin/child-actions-menu';
 import { Badge } from '@/components/ui/badge';
 import type { AdminChildRow } from '@/lib/api/admin';
 import { Button } from '@/components/ui/button';
@@ -51,22 +52,65 @@ const columns = [
         '—'
       ),
   },
+  {
+    key: 'actions',
+    header: '',
+    render: (row: AdminChildRow) => (
+      <div className="text-right">
+        <ChildActionsMenu row={row} />
+      </div>
+    ),
+  },
 ] as const;
 
 export function ChildrenClient() {
   const [page, setPage] = useState(1);
-  const { data, isLoading, error } = useAdminChildren({ page });
+  const [inputQ, setInputQ] = useState('');
+  const [q, setQ] = useState('');
+  const [showDeleted, setShowDeleted] = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setQ(inputQ);
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [inputQ]);
+
+  const { data, isLoading, error } = useAdminChildren({ page, q, showDeleted });
 
   const totalPages = data ? Math.ceil(data.total / data.limit) : 1;
 
   return (
     <div>
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <input
+          type="text"
+          placeholder="Поиск по имени…"
+          value={inputQ}
+          onChange={(e) => setInputQ(e.target.value)}
+          className="w-72 rounded-md border border-slate-300 px-3 py-1.5 text-sm outline-none focus:border-slate-500"
+        />
+        <label className="flex items-center gap-2 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            checked={showDeleted}
+            onChange={(e) => {
+              setShowDeleted(e.target.checked);
+              setPage(1);
+            }}
+            className="h-4 w-4 rounded border-slate-300"
+          />
+          Показывать удалённых
+        </label>
+        {data && <span className="text-sm text-slate-500">Всего: {data.total}</span>}
+      </div>
+
       {isLoading && <p className="text-sm text-zinc-400">Загружаем…</p>}
       {error && <p className="text-sm text-red-600">Ошибка загрузки детей.</p>}
 
       {data && (
         <>
-          <p className="mb-3 text-sm text-zinc-500">Всего: {data.total}</p>
           <DataTable
             columns={columns as unknown as Parameters<typeof DataTable>[0]['columns']}
             rows={data.items as unknown as Record<string, unknown>[]}

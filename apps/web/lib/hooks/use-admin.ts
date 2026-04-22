@@ -34,17 +34,37 @@ export function useAdminUser(id: string) {
   });
 }
 
-export function useAdminFamilies({ page = 1, limit = 50 }: { page?: number; limit?: number } = {}) {
+export function useAdminFamilies({
+  page = 1,
+  limit = 50,
+  q = '',
+  showDeleted = false,
+}: {
+  page?: number;
+  limit?: number;
+  q?: string;
+  showDeleted?: boolean;
+} = {}) {
   return useQuery({
-    queryKey: ['admin', 'families', page],
-    queryFn: () => adminApi.listFamilies({ page, limit }),
+    queryKey: ['admin', 'families', page, q, showDeleted],
+    queryFn: () => adminApi.listFamilies({ page, limit, q, showDeleted }),
   });
 }
 
-export function useAdminChildren({ page = 1, limit = 50 }: { page?: number; limit?: number } = {}) {
+export function useAdminChildren({
+  page = 1,
+  limit = 50,
+  q = '',
+  showDeleted = false,
+}: {
+  page?: number;
+  limit?: number;
+  q?: string;
+  showDeleted?: boolean;
+} = {}) {
   return useQuery({
-    queryKey: ['admin', 'children', page],
-    queryFn: () => adminApi.listChildren({ page, limit }),
+    queryKey: ['admin', 'children', page, q, showDeleted],
+    queryFn: () => adminApi.listChildren({ page, limit, q, showDeleted }),
   });
 }
 

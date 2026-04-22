@@ -20,8 +20,8 @@ import { ZodValidationPipe } from '../common/zod/zod-validation.pipe';
 import { AppSettingsService } from '../app-settings/app-settings.service';
 import { AdminGuard } from './guards/admin.guard';
 import { AdminService } from './admin.service';
-import { PaginationSchema, UsersQuerySchema } from './dto/pagination.dto';
-import type { PaginationDto, UsersQueryDto } from './dto/pagination.dto';
+import { ChildrenQuerySchema, FamiliesQuerySchema, UsersQuerySchema } from './dto/pagination.dto';
+import type { ChildrenQueryDto, FamiliesQueryDto, UsersQueryDto } from './dto/pagination.dto';
 import { z } from 'zod';
 
 const UpdateSettingSchema = z.object({ value: z.string().min(1).max(200) });
@@ -82,19 +82,43 @@ export class AdminController {
   @Get('families')
   async families(
     @Req() req: AdminRequest,
-    @Query(new ZodValidationPipe(PaginationSchema)) query: PaginationDto,
+    @Query(new ZodValidationPipe(FamiliesQuerySchema)) query: FamiliesQueryDto,
   ): Promise<unknown> {
     this.audit(req, '/admin/families');
-    return this.admin.listFamilies(query.page, query.limit);
+    return this.admin.listFamilies(query.page, query.limit, query.q, query.showDeleted);
+  }
+
+  @Delete('families/:id')
+  @HttpCode(HttpStatus.OK)
+  async deleteFamily(@Req() req: AdminRequest, @Param('id') id: string): Promise<{ ok: true }> {
+    this.audit(req, `DELETE /admin/families/${id}`);
+    await this.admin.softDeleteFamily(id);
+    return { ok: true };
   }
 
   @Get('children')
   async children(
     @Req() req: AdminRequest,
-    @Query(new ZodValidationPipe(PaginationSchema)) query: PaginationDto,
+    @Query(new ZodValidationPipe(ChildrenQuerySchema)) query: ChildrenQueryDto,
   ): Promise<unknown> {
     this.audit(req, '/admin/children');
-    return this.admin.listChildren(query.page, query.limit);
+    return this.admin.listChildren(query.page, query.limit, query.q, query.showDeleted);
+  }
+
+  @Delete('children/:id')
+  @HttpCode(HttpStatus.OK)
+  async deleteChild(@Req() req: AdminRequest, @Param('id') id: string): Promise<{ ok: true }> {
+    this.audit(req, `DELETE /admin/children/${id}`);
+    await this.admin.softDeleteChild(id);
+    return { ok: true };
+  }
+
+  @Post('children/:id/reset-device')
+  @HttpCode(HttpStatus.OK)
+  async resetChildDevice(@Req() req: AdminRequest, @Param('id') id: string): Promise<{ ok: true }> {
+    this.audit(req, `POST /admin/children/${id}/reset-device`);
+    await this.admin.resetChildDevice(id);
+    return { ok: true };
   }
 
   @Get('invites')

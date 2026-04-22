@@ -1,5 +1,5 @@
 import { AdminService } from './admin.service';
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { PasswordResetService } from '../auth/password-reset.service';
 
@@ -23,17 +23,25 @@ function makePrisma() {
     family: {
       count: jest.fn(),
       findMany: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
     },
     child: {
       count: jest.fn(),
       findMany: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
+      updateMany: jest.fn(),
     },
     childDevice: {
       count: jest.fn(),
+      update: jest.fn(),
+      updateMany: jest.fn(),
     },
     invite: {
       count: jest.fn(),
       findMany: jest.fn(),
+      updateMany: jest.fn(),
     },
     refreshToken: {
       count: jest.fn(),
@@ -44,6 +52,12 @@ function makePrisma() {
     membership: {
       findMany: jest.fn(),
     },
+    $transaction: jest.fn(async (ops: unknown) => {
+      if (typeof ops === 'function') {
+        return await (ops as (tx: unknown) => Promise<unknown>)({});
+      }
+      return await Promise.all(ops as Promise<unknown>[]);
+    }),
   } as unknown as PrismaService;
 }
 
@@ -202,6 +216,140 @@ describe('AdminService', () => {
     expect(r.total).toBe(3);
     expect(r.items[0].name).toBe('Ваня');
     expect(r.items[0].deviceStatus).toBe('none');
+  });
+
+  it('listChildren: online если lastSeenAt < 5 мин назад', async () => {
+    const p = makePrisma();
+    (p.child.count as jest.Mock).mockResolvedValue(1);
+    (p.child.findMany as jest.Mock).mockResolvedValue([
+      {
+        id: 'ch1',
+        name: 'Вова',
+        dateOfBirth: null,
+        familyId: 'f1',
+        family: { name: 'Семья' },
+        device: { revokedAt: null, lastSeenAt: new Date(Date.now() - 60_000) },
+        deletedAt: null,
+      },
+    ]);
+    const svc = new AdminService(p, makePasswordReset());
+    const r = await svc.listChildren(1, 50);
+    expect(r.items[0].deviceStatus).toBe('online');
+  });
+
+  it('listChildren: offline если lastSeenAt старше 5 мин', async () => {
+    const p = makePrisma();
+    (p.child.count as jest.Mock).mockResolvedValue(1);
+    (p.child.findMany as jest.Mock).mockResolvedValue([
+      {
+        id: 'ch1',
+        name: 'Вова',
+        dateOfBirth: null,
+        familyId: 'f1',
+        family: { name: 'Семья' },
+        device: { revokedAt: null, lastSeenAt: new Date(Date.now() - 60 * 60 * 1000) },
+        deletedAt: null,
+      },
+    ]);
+    const svc = new AdminService(p, makePasswordReset());
+    const r = await svc.listChildren(1, 50);
+    expect(r.items[0].deviceStatus).toBe('offline');
+  });
+
+  it('listChildren: revoked если revokedAt заполнено', async () => {
+    const p = makePrisma();
+    (p.child.count as jest.Mock).mockResolvedValue(1);
+    (p.child.findMany as jest.Mock).mockResolvedValue([
+      {
+        id: 'ch1',
+        name: 'Вова',
+        dateOfBirth: null,
+        familyId: 'f1',
+        family: { name: 'Семья' },
+        device: { revokedAt: new Date(), lastSeenAt: new Date() },
+        deletedAt: null,
+      },
+    ]);
+    const svc = new AdminService(p, makePasswordReset());
+    const r = await svc.listChildren(1, 50);
+    expect(r.items[0].deviceStatus).toBe('revoked');
+  });
+
+  it('listFamilies фильтрует по q и по deletedAt', async () => {
+    const p = makePrisma();
+    (p.family.count as jest.Mock).mockResolvedValue(1);
+    (p.family.findMany as jest.Mock).mockResolvedValue([
+      {
+        id: 'f1',
+        name: 'Ивановы',
+        createdAt: new Date(),
+        deletedAt: null,
+        _count: { memberships: 1, children: 0 },
+        children: [],
+      },
+    ]);
+    const svc = new AdminService(p, makePasswordReset());
+    await svc.listFamilies(1, 50, 'Ив', false);
+    const call = (p.family.findMany as jest.Mock).mock.calls[0][0];
+    expect(call.where?.deletedAt).toBeNull();
+    expect(call.where?.name?.contains).toBe('Ив');
+  });
+
+  it('listFamilies без showDeleted=true игнорирует фильтр deletedAt', async () => {
+    const p = makePrisma();
+    (p.family.count as jest.Mock).mockResolvedValue(0);
+    (p.family.findMany as jest.Mock).mockResolvedValue([]);
+    const svc = new AdminService(p, makePasswordReset());
+    await svc.listFamilies(1, 50, undefined, true);
+    const call = (p.family.findMany as jest.Mock).mock.calls[0][0];
+    expect(call.where?.deletedAt).toBeUndefined();
+  });
+
+  it('softDeleteFamily 404 если нет семьи', async () => {
+    const p = makePrisma();
+    (p.family.findUnique as jest.Mock).mockResolvedValue(null);
+    const svc = new AdminService(p, makePasswordReset());
+    await expect(svc.softDeleteFamily('f404')).rejects.toThrow(NotFoundException);
+  });
+
+  it('softDeleteFamily BadRequest если уже удалена', async () => {
+    const p = makePrisma();
+    (p.family.findUnique as jest.Mock).mockResolvedValue({ id: 'f1', deletedAt: new Date() });
+    const svc = new AdminService(p, makePasswordReset());
+    await expect(svc.softDeleteFamily('f1')).rejects.toThrow(BadRequestException);
+  });
+
+  it('softDeleteChild 404', async () => {
+    const p = makePrisma();
+    (p.child.findUnique as jest.Mock).mockResolvedValue(null);
+    const svc = new AdminService(p, makePasswordReset());
+    await expect(svc.softDeleteChild('ch404')).rejects.toThrow(NotFoundException);
+  });
+
+  it('resetChildDevice BadRequest если нет устройства', async () => {
+    const p = makePrisma();
+    (p.child.findUnique as jest.Mock).mockResolvedValue({
+      id: 'ch1',
+      deletedAt: null,
+      device: null,
+    });
+    const svc = new AdminService(p, makePasswordReset());
+    await expect(svc.resetChildDevice('ch1')).rejects.toThrow(BadRequestException);
+  });
+
+  it('resetChildDevice ревокает активное устройство', async () => {
+    const p = makePrisma();
+    (p.child.findUnique as jest.Mock).mockResolvedValue({
+      id: 'ch1',
+      deletedAt: null,
+      device: { id: 'd1', revokedAt: null },
+    });
+    const svc = new AdminService(p, makePasswordReset());
+    await svc.resetChildDevice('ch1');
+    expect(p.childDevice.update).toHaveBeenCalledWith({
+      where: { id: 'd1' },
+      data: expect.objectContaining({ revokedAt: expect.any(Date) }),
+    });
   });
 
   it('listActiveInvites возвращает только активные', async () => {

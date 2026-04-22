@@ -70,6 +70,7 @@ export interface FamilyRow {
   id: string;
   name: string;
   createdAt: string;
+  deletedAt: string | null;
   membersCount: number;
   childrenCount: number;
   activeDevicesCount: number;
@@ -137,15 +138,38 @@ export const adminApi = {
 
   getUserDetail: (id: string) => apiFetch<UserDetail>(`/api/admin/users/${id}`),
 
-  listFamilies: ({ page = 1, limit = 50 }: { page?: number; limit?: number } = {}) =>
-    apiFetch<PaginatedFamilies>(
-      `/api/admin/families?${new URLSearchParams({ page: String(page), limit: String(limit) }).toString()}`,
-    ),
+  listFamilies: ({
+    page = 1,
+    limit = 50,
+    q = '',
+    showDeleted = false,
+  }: { page?: number; limit?: number; q?: string; showDeleted?: boolean } = {}) => {
+    const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+    if (q) params.set('q', q);
+    if (showDeleted) params.set('showDeleted', 'true');
+    return apiFetch<PaginatedFamilies>(`/api/admin/families?${params.toString()}`);
+  },
 
-  listChildren: ({ page = 1, limit = 50 }: { page?: number; limit?: number } = {}) =>
-    apiFetch<PaginatedChildren>(
-      `/api/admin/children?${new URLSearchParams({ page: String(page), limit: String(limit) }).toString()}`,
-    ),
+  deleteFamily: (id: string) =>
+    apiFetch<{ ok: true }>(`/api/admin/families/${id}`, { method: 'DELETE' }),
+
+  listChildren: ({
+    page = 1,
+    limit = 50,
+    q = '',
+    showDeleted = false,
+  }: { page?: number; limit?: number; q?: string; showDeleted?: boolean } = {}) => {
+    const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+    if (q) params.set('q', q);
+    if (showDeleted) params.set('showDeleted', 'true');
+    return apiFetch<PaginatedChildren>(`/api/admin/children?${params.toString()}`);
+  },
+
+  deleteChild: (id: string) =>
+    apiFetch<{ ok: true }>(`/api/admin/children/${id}`, { method: 'DELETE' }),
+
+  resetChildDevice: (id: string) =>
+    apiFetch<{ ok: true }>(`/api/admin/children/${id}/reset-device`, { method: 'POST' }),
 
   listActiveInvites: () => apiFetch<InviteList>('/api/admin/invites?active=true'),
 

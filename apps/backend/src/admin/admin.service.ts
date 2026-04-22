@@ -367,11 +367,14 @@ export class AdminService {
   async listFamilies(
     page: number,
     limit: number,
+    q?: string,
+    showDeleted = false,
   ): Promise<{
     items: Array<{
       id: string;
       name: string;
       createdAt: Date;
+      deletedAt: Date | null;
       membersCount: number;
       childrenCount: number;
       activeDevicesCount: number;
@@ -380,9 +383,14 @@ export class AdminService {
     limit: number;
     total: number;
   }> {
+    const where: Record<string, unknown> = {};
+    if (!showDeleted) where.deletedAt = null;
+    if (q) where.name = { contains: q, mode: 'insensitive' as const };
+
     const [total, rows] = await Promise.all([
-      this.prisma.family.count(),
+      this.prisma.family.count({ where }),
       this.prisma.family.findMany({
+        where,
         skip: (page - 1) * limit,
         take: limit,
         orderBy: { createdAt: 'desc' },
@@ -404,6 +412,7 @@ export class AdminService {
         id: f.id,
         name: f.name,
         createdAt: f.createdAt,
+        deletedAt: f.deletedAt,
         membersCount: f._count.memberships,
         childrenCount: f._count.children,
         activeDevicesCount: activeDevices,
@@ -416,6 +425,8 @@ export class AdminService {
   async listChildren(
     page: number,
     limit: number,
+    q?: string,
+    showDeleted = false,
   ): Promise<{
     items: Array<{
       id: string;
@@ -423,7 +434,7 @@ export class AdminService {
       dateOfBirth: Date | null;
       familyId: string;
       familyName: string;
-      deviceStatus: 'active' | 'revoked' | 'none';
+      deviceStatus: 'online' | 'offline' | 'revoked' | 'none';
       deviceLastSeenAt: Date | null;
       deletedAt: Date | null;
     }>;
@@ -431,9 +442,14 @@ export class AdminService {
     limit: number;
     total: number;
   }> {
+    const where: Record<string, unknown> = {};
+    if (!showDeleted) where.deletedAt = null;
+    if (q) where.name = { contains: q, mode: 'insensitive' as const };
+
     const [total, rows] = await Promise.all([
-      this.prisma.child.count(),
+      this.prisma.child.count({ where }),
       this.prisma.child.findMany({
+        where,
         skip: (page - 1) * limit,
         take: limit,
         orderBy: { createdAt: 'desc' },
@@ -444,10 +460,21 @@ export class AdminService {
       }),
     ]);
 
+    const onlineThresholdMs = 5 * 60 * 1000;
+    const now = Date.now();
     const items = (rows as any[]).map((c) => {
-      let deviceStatus: 'active' | 'revoked' | 'none' = 'none';
+      let deviceStatus: 'online' | 'offline' | 'revoked' | 'none' = 'none';
       if (c.device) {
-        deviceStatus = c.device.revokedAt ? 'revoked' : 'active';
+        if (c.device.revokedAt) {
+          deviceStatus = 'revoked';
+        } else if (
+          c.device.lastSeenAt &&
+          now - new Date(c.device.lastSeenAt).getTime() < onlineThresholdMs
+        ) {
+          deviceStatus = 'online';
+        } else {
+          deviceStatus = 'offline';
+        }
       }
       return {
         id: c.id,
@@ -462,6 +489,98 @@ export class AdminService {
     });
 
     return { items, page, limit, total };
+  }
+
+  /**
+   * Soft-delete семьи вручную (из админки). Каскадно soft-deleteим детей,
+   * revoke-аем устройства, гасим активные invites. Сам юзер-owner остаётся —
+   * админ обычно удаляет семью отдельно от юзера.
+   */
+  async softDeleteFamily(familyId: string): Promise<void> {
+    const family = await this.prisma.family.findUnique({
+      where: { id: familyId },
+      select: { id: true, deletedAt: true },
+    });
+    if (!family) {
+      throw new NotFoundException({ code: 'not_found', message: 'Family not found' });
+    }
+    if (family.deletedAt) {
+      throw new BadRequestException({
+        code: 'already_deleted',
+        message: 'Family already deleted',
+      });
+    }
+    const now = new Date();
+    await this.prisma.$transaction([
+      this.prisma.family.update({ where: { id: familyId }, data: { deletedAt: now } }),
+      this.prisma.child.updateMany({
+        where: { familyId, deletedAt: null },
+        data: { deletedAt: now },
+      }),
+      this.prisma.childDevice.updateMany({
+        where: { child: { familyId }, revokedAt: null },
+        data: { revokedAt: now },
+      }),
+      this.prisma.invite.updateMany({
+        where: { familyId, consumedAt: null, expiresAt: { gt: now } },
+        data: { expiresAt: now },
+      }),
+    ]);
+  }
+
+  async softDeleteChild(childId: string): Promise<void> {
+    const child = await this.prisma.child.findUnique({
+      where: { id: childId },
+      select: { id: true, deletedAt: true },
+    });
+    if (!child) {
+      throw new NotFoundException({ code: 'not_found', message: 'Child not found' });
+    }
+    if (child.deletedAt) {
+      throw new BadRequestException({
+        code: 'already_deleted',
+        message: 'Child already deleted',
+      });
+    }
+    const now = new Date();
+    await this.prisma.$transaction([
+      this.prisma.child.update({ where: { id: childId }, data: { deletedAt: now } }),
+      this.prisma.childDevice.updateMany({
+        where: { childId, revokedAt: null },
+        data: { revokedAt: now },
+      }),
+      this.prisma.invite.updateMany({
+        where: { childId, consumedAt: null, expiresAt: { gt: now } },
+        data: { expiresAt: now },
+      }),
+    ]);
+  }
+
+  async resetChildDevice(childId: string): Promise<void> {
+    const child = await this.prisma.child.findUnique({
+      where: { id: childId },
+      include: { device: { select: { id: true, revokedAt: true } } },
+    });
+    if (!child || child.deletedAt) {
+      throw new NotFoundException({ code: 'not_found', message: 'Child not found' });
+    }
+    const device = (child as any).device as { id: string; revokedAt: Date | null } | null;
+    if (!device) {
+      throw new BadRequestException({
+        code: 'no_device',
+        message: 'Child has no device',
+      });
+    }
+    if (device.revokedAt) {
+      throw new BadRequestException({
+        code: 'already_revoked',
+        message: 'Device already revoked',
+      });
+    }
+    await this.prisma.childDevice.update({
+      where: { id: device.id },
+      data: { revokedAt: new Date() },
+    });
   }
 
   async listActiveInvites(): Promise<{
