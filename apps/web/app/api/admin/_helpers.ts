@@ -25,3 +25,21 @@ export async function proxyAdminGet(backendPath: string, req: NextRequest): Prom
   const r = await backend('GET', `${backendPath}${qs}`, undefined, token);
   return NextResponse.json(r.body ?? {}, { status: r.status });
 }
+
+/**
+ * Универсальный write-proxy (POST/PATCH/DELETE) на бекенд. Тело передаётся
+ * без изменений, JWT берётся из заголовка Bearer. Используется для действий
+ * над пользователями (роль, блокировка, сброс пароля, удаление) и прочих
+ * admin-mutations.
+ */
+export async function proxyAdminWrite(
+  method: 'POST' | 'PATCH' | 'DELETE',
+  backendPath: string,
+  req: NextRequest,
+): Promise<NextResponse> {
+  const token = getBearer(req);
+  if (!token) return unauthorizedResponse();
+  const body = method === 'DELETE' ? undefined : ((await req.json().catch(() => ({}))) as unknown);
+  const r = await backend(method, backendPath, body, token);
+  return NextResponse.json(r.body ?? {}, { status: r.status });
+}

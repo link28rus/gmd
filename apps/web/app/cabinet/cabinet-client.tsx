@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { Menu } from 'lucide-react';
 import { useAuthStore, type AuthUser, type AuthFamily } from '@/lib/auth-store';
 import { useChildren } from '@/lib/hooks/use-children';
+import { apiFetch } from '@/lib/api/client';
 import { useLatestLocation } from '@/lib/hooks/use-latest-location';
 import { useActiveTrack } from '@/lib/hooks/use-active-track';
 import { ChildrenSidebar } from '@/components/cabinet/children-sidebar';
@@ -82,6 +83,30 @@ function CabinetHome({ initialChildId }: { initialChildId: string | null }): Rea
   const childrenQ = useChildren();
   const [selectedId, setSelectedId] = useState<string | null>(initialChildId);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
+  // Heartbeat: пока вкладка кабинета открыта и активна, дёргаем POST /me/seen
+  // раз в 2 мин, чтобы админы в /admin/users видели «Последний заход» в
+  // реальном времени. Backend сам троттлит до 1 записи в минуту на юзера.
+  useEffect(() => {
+    let cancelled = false;
+    const ping = (): void => {
+      if (cancelled || document.hidden) return;
+      void apiFetch('/api/me/seen', { method: 'POST' }).catch(() => {
+        /* heartbeat — best effort, игнорируем ошибки */
+      });
+    };
+    ping();
+    const id = window.setInterval(ping, 120_000);
+    const onVisible = (): void => {
+      if (!document.hidden) ping();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, []);
 
   // Если ничего не выбрано — выбираем первого ребёнка автоматически.
   useEffect(() => {

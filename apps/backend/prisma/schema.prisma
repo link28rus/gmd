@@ -39,6 +39,11 @@ model ConsentRecord {
   @@map("consent_records")
 }
 
+enum UserRole {
+  admin
+  parent
+}
+
 model User {
   id                           String    @id @default(cuid())
   email                        String    @unique
@@ -50,6 +55,11 @@ model User {
   locale                       String    @default("ru")
   acceptedPrivacyPolicyVersion String?
   passwordHash                 String?
+  role                         UserRole  @default(parent)
+  blockedAt                    DateTime?
+  blockedReason                String?
+  blockedById                  String?
+  lastSeenAt                   DateTime?
   createdAt                    DateTime  @default(now())
   updatedAt                    DateTime  @updatedAt
   deletedAt                    DateTime?
@@ -60,9 +70,25 @@ model User {
   consents                 ConsentRecord[]
   createdZones             Zone[]
   emailVerificationTokens  EmailVerificationToken[]
+  passwordResetTokens      PasswordResetToken[]
 
   @@index([email])
+  @@index([role])
   @@map("users")
+}
+
+model PasswordResetToken {
+  id         String    @id @default(cuid())
+  userId     String
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
 }
 
 model EmailVerificationToken {

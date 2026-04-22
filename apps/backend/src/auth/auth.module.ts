@@ -12,6 +12,7 @@ import { PasswordService, PASSWORD_CONFIG } from './password.service';
 import { RedisModule } from '../redis/redis.module';
 import { MailerModule } from '../mailer/mailer.module';
 import { EmailVerificationService, EMAIL_VERIFICATION_CONFIG } from './email-verification.service';
+import { PasswordResetService } from './password-reset.service';
 
 function asNum(v: string | undefined, def: number): number {
   return v ? Number(v) : def;
@@ -71,7 +72,8 @@ function asNum(v: string | undefined, def: number): number {
     JwtAuthGuard,
     PasswordService,
     EmailVerificationService,
+    PasswordResetService,
   ],
-  exports: [JwtService, JwtAuthGuard, AuthService],
+  exports: [JwtService, JwtAuthGuard, AuthService, PasswordResetService],
 })
 export class AuthModule {}

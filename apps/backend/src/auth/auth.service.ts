@@ -11,6 +11,7 @@ import type { OtpDeliveryProvider } from './providers/otp-delivery.provider';
 import { PasswordService } from './password.service';
 import { LockedException } from '../common/exceptions/locked.exception';
 import { EmailVerificationService } from './email-verification.service';
+import { PasswordResetService } from './password-reset.service';
 
 export interface AuthServiceConfig {
   privacyPolicyVersion: string;
@@ -35,7 +36,11 @@ export type VerifyOtpResult =
 
 export type RequestOtpResult =
   | { ok: true }
-  | { ok: false; reason: 'user_not_found' | 'email_not_verified' };
+  | { ok: false; reason: 'user_not_found' | 'email_not_verified' | 'account_blocked' };
+
+export type ResetPasswordResult =
+  | { ok: true }
+  | { ok: false; reason: 'invalid_token' | 'token_expired' | 'token_consumed' };
 
 export type RegisterResult =
   | { ok: true }
@@ -63,6 +68,8 @@ export class AuthService implements OnModuleInit {
     @Inject(PasswordService) private readonly password: PasswordService,
     @Inject(EmailVerificationService)
     private readonly emailVerification: EmailVerificationService,
+    @Inject(PasswordResetService)
+    private readonly passwordReset: PasswordResetService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -76,9 +83,10 @@ export class AuthService implements OnModuleInit {
     const normalized = email.toLowerCase().trim();
     const user = await this.prisma.user.findUnique({
       where: { email: normalized },
-      select: { id: true, emailVerifiedAt: true, deletedAt: true },
+      select: { id: true, emailVerifiedAt: true, deletedAt: true, blockedAt: true },
     });
     if (!user || user.deletedAt) return { ok: false, reason: 'user_not_found' };
+    if (user.blockedAt) return { ok: false, reason: 'account_blocked' };
     if (!user.emailVerifiedAt) return { ok: false, reason: 'email_not_verified' };
 
     const { code } = await this.otp.generate(normalized);
@@ -97,6 +105,9 @@ export class AuthService implements OnModuleInit {
     });
     if (!existing || existing.deletedAt) {
       return { ok: false, reason: 'invalid_code' };
+    }
+    if (existing.blockedAt) {
+      return { ok: false, reason: 'email_not_verified' };
     }
     if (!existing.emailVerifiedAt) {
       return { ok: false, reason: 'email_not_verified' };
@@ -160,6 +171,13 @@ export class AuthService implements OnModuleInit {
     }
 
     await this.password.clearFailures(normalizedEmail);
+
+    if (user.blockedAt) {
+      throw new UnauthorizedException({
+        code: 'account_blocked',
+        message: 'Account is blocked',
+      });
+    }
 
     if (!user.emailVerifiedAt) {
       throw new UnauthorizedException({
@@ -334,6 +352,54 @@ export class AuthService implements OnModuleInit {
       user: { id: user.id, email: user.email, name: user.name },
       family: { id: family.id, name: family.name },
     };
+  }
+
+  /**
+   * Завершает цикл «админ инициировал сброс пароля / пользователь забыл
+   * пароль». Потребляет токен из письма, обновляет hash и отзывает все
+   * активные refresh-токены — чтобы прежние сессии перестали работать.
+   */
+  async resetPassword(rawToken: string, newPassword: string): Promise<ResetPasswordResult> {
+    const r = await this.passwordReset.consume(rawToken);
+    if (!r.ok) return { ok: false, reason: r.reason };
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: r.userId },
+      select: { id: true, deletedAt: true },
+    });
+    if (!user || user.deletedAt) return { ok: false, reason: 'invalid_token' };
+
+    const hash = await this.password.hash(newPassword);
+    await this.prisma.$transaction([
+      this.prisma.user.update({ where: { id: user.id }, data: { passwordHash: hash } }),
+      this.prisma.refreshToken.updateMany({
+        where: { userId: user.id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
+    await this.password.clearFailures(
+      (await this.prisma.user.findUnique({
+        where: { id: user.id },
+        select: { email: true },
+      }))!.email,
+    );
+    return { ok: true };
+  }
+
+  /**
+   * Обновляет `lastSeenAt` у пользователя, вызывается heartbeat'ом из
+   * кабинета. Throttled на уровне контроллера (раз в минуту на JWT), чтобы
+   * не писать в БД на каждый рендер страницы.
+   */
+  async touchLastSeen(userId: string): Promise<void> {
+    await this.prisma.user
+      .update({
+        where: { id: userId },
+        data: { lastSeenAt: new Date() },
+      })
+      .catch(() => {
+        /* юзер мог быть удалён между JWT-проверкой и апдейтом — игнор */
+      });
   }
 
   private async ensureUserAndFamilyWithPassword(

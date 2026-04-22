@@ -1,6 +1,14 @@
 import { AdminService } from './admin.service';
 import { NotFoundException } from '@nestjs/common';
 import type { PrismaService } from '../prisma/prisma.service';
+import type { PasswordResetService } from '../auth/password-reset.service';
+
+function makePasswordReset(): PasswordResetService {
+  return {
+    issueAndSend: jest.fn().mockResolvedValue(undefined),
+    consume: jest.fn(),
+  } as unknown as PasswordResetService;
+}
 
 /**
  * Minimal mock for Prisma methods used by AdminService.
@@ -59,7 +67,7 @@ describe('AdminService', () => {
       .mockResolvedValue(15)
       .mockResolvedValueOnce(15)
       .mockResolvedValueOnce(4);
-    const svc = new AdminService(p);
+    const svc = new AdminService(p, makePasswordReset());
     const r = await svc.getStats();
     expect(r).toHaveProperty('users');
     expect(r).toHaveProperty('families');
@@ -84,7 +92,7 @@ describe('AdminService', () => {
         _count: { memberships: 1 },
       },
     ]);
-    const svc = new AdminService(p);
+    const svc = new AdminService(p, makePasswordReset());
     const r = await svc.listUsers(1, 50);
     expect(r.total).toBe(3);
     expect(r.items).toHaveLength(1);
@@ -108,7 +116,7 @@ describe('AdminService', () => {
         _count: { memberships: 0 },
       },
     ]);
-    const svc = new AdminService(p);
+    const svc = new AdminService(p, makePasswordReset());
     const r = await svc.listUsers(1, 50, 'admin');
     // verify Prisma was called with contains filter
     const call = (p.user.findMany as jest.Mock).mock.calls[0][0];
@@ -119,7 +127,7 @@ describe('AdminService', () => {
   it('getUserDetail 404 если не найден', async () => {
     const p = makePrisma();
     (p.user.findUnique as jest.Mock).mockResolvedValue(null);
-    const svc = new AdminService(p);
+    const svc = new AdminService(p, makePasswordReset());
     await expect(svc.getUserDetail('nonexistent')).rejects.toThrow(NotFoundException);
   });
 
@@ -147,7 +155,7 @@ describe('AdminService', () => {
     ]);
     (p.refreshToken.count as jest.Mock).mockResolvedValue(2);
     (p.otpCode.count as jest.Mock).mockResolvedValue(1);
-    const svc = new AdminService(p);
+    const svc = new AdminService(p, makePasswordReset());
     const r = await svc.getUserDetail('u1');
     expect(r.user.email).toBe('a@b.com');
     expect(r.memberships).toHaveLength(1);
@@ -168,7 +176,7 @@ describe('AdminService', () => {
         children: [{ device: { revokedAt: null } }],
       },
     ]);
-    const svc = new AdminService(p);
+    const svc = new AdminService(p, makePasswordReset());
     const r = await svc.listFamilies(1, 50);
     expect(r.total).toBe(2);
     expect(r.items[0].id).toBe('f1');
@@ -189,7 +197,7 @@ describe('AdminService', () => {
         deletedAt: null,
       },
     ]);
-    const svc = new AdminService(p);
+    const svc = new AdminService(p, makePasswordReset());
     const r = await svc.listChildren(1, 50);
     expect(r.total).toBe(3);
     expect(r.items[0].name).toBe('Ваня');
@@ -215,7 +223,7 @@ describe('AdminService', () => {
       },
     ]);
     (p.user.findMany as jest.Mock).mockResolvedValue([{ id: 'u1', email: 'parent@example.com' }]);
-    const svc = new AdminService(p);
+    const svc = new AdminService(p, makePasswordReset());
     const r = await svc.listActiveInvites();
     expect(r.items).toHaveLength(1);
     expect(r.items[0].code).toBe('ABC123');

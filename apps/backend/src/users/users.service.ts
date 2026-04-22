@@ -61,7 +61,10 @@ export class UsersService {
     if (!user || user.deletedAt || !family) {
       throw new NotFoundException({ code: 'not_found', message: 'User or family not found' });
     }
-    const isAdmin = this.adminCfg.emails.includes(user.email.toLowerCase().trim());
+    // isAdmin = role=admin в БД, либо email в env-fallback. Env-fallback
+    // остаётся для emergency-доступа если админ случайно снял с себя права.
+    const isAdmin =
+      user.role === 'admin' || this.adminCfg.emails.includes(user.email.toLowerCase().trim());
     const hasPassword = Boolean(user.passwordHash);
     const requiresConsent = this.consent.userRequiresConsent(user.acceptedPrivacyPolicyVersion);
     const currentPolicyVersion = this.consent.getCurrentVersion();

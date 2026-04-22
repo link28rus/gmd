@@ -8,6 +8,7 @@ import { FakeOtpProvider } from './providers/fake-otp.provider';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { PasswordService } from './password.service';
 import type { EmailVerificationService } from './email-verification.service';
+import type { PasswordResetService } from './password-reset.service';
 import { LockedException } from '../common/exceptions/locked.exception';
 
 function makeEmailVerificationMock(): jest.Mocked<EmailVerificationService> {
@@ -15,6 +16,13 @@ function makeEmailVerificationMock(): jest.Mocked<EmailVerificationService> {
     issueAndSend: jest.fn().mockResolvedValue(undefined),
     consume: jest.fn().mockResolvedValue({ ok: false, reason: 'invalid_token' as const }),
   } as unknown as jest.Mocked<EmailVerificationService>;
+}
+
+function makePasswordResetMock(): jest.Mocked<PasswordResetService> {
+  return {
+    issueAndSend: jest.fn().mockResolvedValue(undefined),
+    consume: jest.fn().mockResolvedValue({ ok: false, reason: 'invalid_token' as const }),
+  } as unknown as jest.Mocked<PasswordResetService>;
 }
 
 interface MockPrisma {
@@ -111,6 +119,7 @@ function makeService(prisma: MockPrisma, passwordMock?: jest.Mocked<PasswordServ
   const delivery = new FakeOtpProvider();
   const password = passwordMock ?? makePasswordMock();
   const emailVerification = makeEmailVerificationMock();
+  const passwordReset = makePasswordResetMock();
   const svc = new AuthService(
     prisma as unknown as PrismaService,
     otpSvc,
@@ -120,6 +129,7 @@ function makeService(prisma: MockPrisma, passwordMock?: jest.Mocked<PasswordServ
     { privacyPolicyVersion: '1.0' },
     password,
     emailVerification,
+    passwordReset,
   );
   // Skip onModuleInit (DUMMY_HASH) for unit tests — password.hash is mocked
   return svc;
@@ -161,6 +171,7 @@ describe('AuthService.verifyOtp', () => {
       { privacyPolicyVersion: '1.0' },
       password,
       makeEmailVerificationMock(),
+      makePasswordResetMock(),
     );
 
     const r = await svc.verifyOtp('a@b.com', '111111', {});
@@ -214,6 +225,7 @@ describe('AuthService.verifyOtp', () => {
       { privacyPolicyVersion: '1.0' },
       password,
       makeEmailVerificationMock(),
+      makePasswordResetMock(),
     );
 
     const r = await svc.verifyOtp('a@b.com', '111111', {});
@@ -239,6 +251,7 @@ describe('AuthService.verifyOtp', () => {
       { privacyPolicyVersion: '1.0' },
       password,
       makeEmailVerificationMock(),
+      makePasswordResetMock(),
     );
 
     const r = await svc.verifyOtp('a@b.com', '000000', {});
@@ -277,6 +290,7 @@ describe('AuthService.requestOtp', () => {
       { privacyPolicyVersion: '1.0' },
       password,
       makeEmailVerificationMock(),
+      makePasswordResetMock(),
     );
 
     const r = await svc.requestOtp('a@b.com');
@@ -303,6 +317,7 @@ describe('AuthService.requestOtp', () => {
       { privacyPolicyVersion: '1.0' },
       password,
       makeEmailVerificationMock(),
+      makePasswordResetMock(),
     );
 
     const r = await svc.requestOtp('nobody@x.com');
@@ -339,6 +354,7 @@ describe('AuthService.requestOtp', () => {
       { privacyPolicyVersion: '1.0' },
       password,
       makeEmailVerificationMock(),
+      makePasswordResetMock(),
     );
 
     const r = await svc.requestOtp('pending@x.com');

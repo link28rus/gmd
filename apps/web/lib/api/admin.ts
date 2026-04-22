@@ -13,11 +13,17 @@ export interface AdminStats {
 
 // ─── Users list ───────────────────────────────────────────────────────────────
 
+export type UserAdminRole = 'admin' | 'parent';
+
 export interface UserRow {
   id: string;
   email: string;
   name: string | null;
   locale: string;
+  role: UserAdminRole;
+  blockedAt: string | null;
+  blockedReason: string | null;
+  lastSeenAt: string | null;
   acceptedPrivacyPolicyVersion: string | null;
   createdAt: string;
   deletedAt: string | null;
@@ -151,6 +157,29 @@ export const adminApi = {
       body: JSON.stringify({ value }),
       headers: { 'content-type': 'application/json' },
     }),
+
+  setUserRole: (id: string, role: UserAdminRole) =>
+    apiFetch<{ ok: true }>(`/api/admin/users/${id}/role`, {
+      method: 'PATCH',
+      body: JSON.stringify({ role }),
+      headers: { 'content-type': 'application/json' },
+    }),
+
+  blockUser: (id: string, reason?: string) =>
+    apiFetch<{ ok: true }>(`/api/admin/users/${id}/block`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: reason ?? undefined }),
+      headers: { 'content-type': 'application/json' },
+    }),
+
+  unblockUser: (id: string) =>
+    apiFetch<{ ok: true }>(`/api/admin/users/${id}/unblock`, { method: 'POST' }),
+
+  resetUserPassword: (id: string) =>
+    apiFetch<{ ok: true }>(`/api/admin/users/${id}/reset-password`, { method: 'POST' }),
+
+  deleteUser: (id: string) =>
+    apiFetch<{ ok: true }>(`/api/admin/users/${id}`, { method: 'DELETE' }),
 };
 
 export interface AppSettingRow {

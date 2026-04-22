@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -8,6 +9,7 @@ import {
   Logger,
   Param,
   Patch,
+  Post,
   Query,
   Req,
   UseGuards,
@@ -24,6 +26,19 @@ import { z } from 'zod';
 
 const UpdateSettingSchema = z.object({ value: z.string().min(1).max(200) });
 type UpdateSettingDto = z.infer<typeof UpdateSettingSchema>;
+
+const SetRoleSchema = z.object({ role: z.enum(['admin', 'parent']) });
+type SetRoleDto = z.infer<typeof SetRoleSchema>;
+
+const BlockUserSchema = z.object({
+  reason: z
+    .string()
+    .trim()
+    .max(300)
+    .optional()
+    .or(z.literal('').transform(() => undefined)),
+});
+type BlockUserDto = z.infer<typeof BlockUserSchema>;
 
 interface AdminRequest extends Request {
   user: { userId: string; email: string; familyId: string; role: string };
@@ -104,6 +119,57 @@ export class AdminController {
   ): Promise<unknown> {
     this.audit(req, `/admin/settings/${key}`);
     await this.settings.update(key, body.value, req.user.email);
+    return { ok: true };
+  }
+
+  @Patch('users/:id/role')
+  @HttpCode(HttpStatus.OK)
+  async setUserRole(
+    @Req() req: AdminRequest,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(SetRoleSchema)) body: SetRoleDto,
+  ): Promise<{ ok: true }> {
+    this.audit(req, `PATCH /admin/users/${id}/role role=${body.role}`);
+    await this.admin.setRole(id, body.role, req.user.userId);
+    return { ok: true };
+  }
+
+  @Post('users/:id/block')
+  @HttpCode(HttpStatus.OK)
+  async blockUser(
+    @Req() req: AdminRequest,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(BlockUserSchema)) body: BlockUserDto,
+  ): Promise<{ ok: true }> {
+    this.audit(req, `POST /admin/users/${id}/block`);
+    await this.admin.blockUser(id, body.reason ?? null, req.user.userId);
+    return { ok: true };
+  }
+
+  @Post('users/:id/unblock')
+  @HttpCode(HttpStatus.OK)
+  async unblockUser(@Req() req: AdminRequest, @Param('id') id: string): Promise<{ ok: true }> {
+    this.audit(req, `POST /admin/users/${id}/unblock`);
+    await this.admin.unblockUser(id);
+    return { ok: true };
+  }
+
+  @Post('users/:id/reset-password')
+  @HttpCode(HttpStatus.OK)
+  async resetUserPassword(
+    @Req() req: AdminRequest,
+    @Param('id') id: string,
+  ): Promise<{ ok: true }> {
+    this.audit(req, `POST /admin/users/${id}/reset-password`);
+    await this.admin.initiatePasswordReset(id);
+    return { ok: true };
+  }
+
+  @Delete('users/:id')
+  @HttpCode(HttpStatus.OK)
+  async deleteUser(@Req() req: AdminRequest, @Param('id') id: string): Promise<{ ok: true }> {
+    this.audit(req, `DELETE /admin/users/${id}`);
+    await this.admin.softDeleteUser(id, req.user.userId);
     return { ok: true };
   }
 }

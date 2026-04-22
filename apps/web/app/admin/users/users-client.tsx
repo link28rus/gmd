@@ -3,16 +3,70 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAdminUsers } from '@/lib/hooks/use-admin';
+import { useAuthStore } from '@/lib/auth-store';
 import { DataTable } from '@/components/admin/data-table';
+import { UserActionsMenu } from '@/components/admin/user-actions-menu';
+import { Badge } from '@/components/ui/badge';
 import type { UserRow } from '@/lib/api/admin';
 import { Button } from '@/components/ui/button';
+
+function fmtLastSeen(iso: string | null): string {
+  if (!iso) return 'ни разу';
+  const ms = Date.now() - new Date(iso).getTime();
+  const sec = Math.floor(ms / 1000);
+  if (sec < 60) return 'только что';
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min} мин назад`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr} ч назад`;
+  const day = Math.floor(hr / 24);
+  if (day === 1) return 'вчера';
+  if (day < 7) return `${day} дн назад`;
+  return new Date(iso).toLocaleDateString('ru');
+}
+
+function RoleBadge({ role }: { role: UserRow['role'] }): React.ReactElement {
+  if (role === 'admin') {
+    return (
+      <Badge className="border-transparent bg-sky-100 text-sky-700 hover:bg-sky-100">Админ</Badge>
+    );
+  }
+  return (
+    <Badge className="border-transparent bg-slate-100 text-slate-700 hover:bg-slate-100">
+      Родитель
+    </Badge>
+  );
+}
+
+function StatusBadge({ row }: { row: UserRow }): React.ReactElement {
+  if (row.deletedAt) {
+    return (
+      <Badge className="border-transparent bg-red-100 text-red-700 hover:bg-red-100">Удалён</Badge>
+    );
+  }
+  if (row.blockedAt) {
+    return (
+      <Badge
+        className="border-transparent bg-amber-100 text-amber-700 hover:bg-amber-100"
+        title={row.blockedReason ?? undefined}
+      >
+        Заблокирован
+      </Badge>
+    );
+  }
+  return (
+    <Badge className="border-transparent bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+      Активен
+    </Badge>
+  );
+}
 
 export function UsersClient() {
   const [page, setPage] = useState(1);
   const [inputQ, setInputQ] = useState('');
   const [q, setQ] = useState('');
+  const currentUserId = useAuthStore((s) => s.user?.id ?? null);
 
-  // Debounce search 300ms
   useEffect(() => {
     const t = setTimeout(() => {
       setQ(inputQ);
@@ -30,36 +84,41 @@ export function UsersClient() {
       key: 'email',
       header: 'Email',
       render: (row: UserRow) => (
-        <Link href={`/admin/users/${row.id}`} className="text-blue-600 hover:underline">
+        <Link href={`/admin/users/${row.id}`} className="text-sky-600 hover:underline">
           {row.email}
         </Link>
       ),
     },
-    { key: 'name', header: 'Имя', render: (row: UserRow) => row.name ?? '—' },
+    { key: 'name', header: 'ФИО', render: (row: UserRow) => row.name ?? '—' },
+    { key: 'role', header: 'Роль', render: (row: UserRow) => <RoleBadge role={row.role} /> },
+    { key: 'status', header: 'Статус', render: (row: UserRow) => <StatusBadge row={row} /> },
     {
       key: 'familyName',
       header: 'Семья',
       render: (row: UserRow) => row.familyName ?? '—',
     },
     {
-      key: 'childrenCount',
-      header: 'Дети',
-      render: (row: UserRow) => String(row.childrenCount),
+      key: 'lastSeenAt',
+      header: 'Последний заход',
+      render: (row: UserRow) => (
+        <span className="text-slate-600" title={row.lastSeenAt ?? undefined}>
+          {fmtLastSeen(row.lastSeenAt)}
+        </span>
+      ),
     },
     {
       key: 'createdAt',
       header: 'Создан',
-      render: (row: UserRow) => new Date(row.createdAt).toLocaleString('ru'),
+      render: (row: UserRow) => new Date(row.createdAt).toLocaleDateString('ru'),
     },
     {
-      key: 'deletedAt',
-      header: 'Удалён',
-      render: (row: UserRow) =>
-        row.deletedAt ? (
-          <span className="text-red-600">{new Date(row.deletedAt).toLocaleString('ru')}</span>
-        ) : (
-          '—'
-        ),
+      key: 'actions',
+      header: '',
+      render: (row: UserRow) => (
+        <div className="text-right">
+          <UserActionsMenu row={row} currentUserId={currentUserId} />
+        </div>
+      ),
     },
   ] as const;
 
@@ -71,12 +130,12 @@ export function UsersClient() {
           placeholder="Поиск по email…"
           value={inputQ}
           onChange={(e) => setInputQ(e.target.value)}
-          className="w-72 rounded-md border border-zinc-300 px-3 py-1.5 text-sm outline-none focus:border-zinc-500"
+          className="w-72 rounded-md border border-slate-300 px-3 py-1.5 text-sm outline-none focus:border-slate-500"
         />
-        {data && <span className="text-sm text-zinc-500">Всего: {data.total}</span>}
+        {data && <span className="text-sm text-slate-500">Всего: {data.total}</span>}
       </div>
 
-      {isLoading && <p className="text-sm text-zinc-400">Загружаем…</p>}
+      {isLoading && <p className="text-sm text-slate-400">Загружаем…</p>}
       {error && <p className="text-sm text-red-600">Ошибка загрузки пользователей.</p>}
 
       {data && (
@@ -95,7 +154,7 @@ export function UsersClient() {
             >
               Назад
             </Button>
-            <span className="text-sm text-zinc-600">
+            <span className="text-sm text-slate-600">
               Страница {page} из {totalPages}
             </span>
             <Button

@@ -63,12 +63,16 @@ export default function LoginPage(): ReactElement {
         const code = json?.error?.code;
         if (code === 'user_not_found') {
           setError('Пользователь с такой почтой не найден');
+          setShowRegisterCta(true);
         } else if (code === 'email_not_verified') {
           setError('Почта не подтверждена. Проверьте письмо или зарегистрируйтесь ещё раз');
+          setShowRegisterCta(true);
+        } else if (code === 'account_blocked') {
+          setError('Аккаунт заблокирован. Обратитесь к администратору.');
         } else {
           setError(json?.error?.message ?? 'Пользователь не найден');
+          setShowRegisterCta(true);
         }
-        setShowRegisterCta(true);
         return;
       }
       if (res.status !== 200) {
@@ -158,6 +162,8 @@ export default function LoginPage(): ReactElement {
       } else if (errCode === 'email_not_verified') {
         setError('Почта не подтверждена. Проверьте письмо');
         setShowRegisterCta(true);
+      } else if (errCode === 'account_blocked') {
+        setError('Аккаунт заблокирован. Обратитесь к администратору.');
       } else if (errCode === 'account_locked') {
         const mins = Math.ceil((json?.error?.retryAfterSec ?? 900) / 60);
         setError(`Аккаунт временно заблокирован. Попробуйте через ${mins} мин.`);
