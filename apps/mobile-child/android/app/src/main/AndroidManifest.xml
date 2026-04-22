@@ -34,6 +34,10 @@
          (Android 13+) granted автоматически для task-management приложений;
          на Android 12 fallback на setAndAllowWhileIdle. -->
     <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
+    <!-- L2 PIN-lock: background activity start из AccessibilityService на
+         Android 12+/MIUI блокируется; fullScreenIntent-notification —
+         официальный обход. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
     <application
         android:label="gmd_child"
         android:name="${applicationName}"

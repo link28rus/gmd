@@ -1,6 +1,10 @@
 package ru.link28rus.gmd.child
 
 import android.accessibilityservice.AccessibilityService
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.view.accessibility.AccessibilityEvent
@@ -33,10 +37,44 @@ class GmdAccessibilityService : AccessibilityService() {
 
         DiagLog.write(this, "a11y", "dangerous screen detected, launching PIN lock")
         performGlobalAction(GLOBAL_ACTION_BACK)
+        showPinLockNotification()
+    }
 
-        val intent = Intent(this, PinLockActivity::class.java)
+    // Full-screen notification — обход background activity start restriction
+    // на Android 12+ / HyperOS. Android при IMPORTANCE_HIGH + fullScreenIntent
+    // сразу запускает Activity, не показывая notification если экран активен.
+    private fun showPinLockNotification() {
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "Родительский контроль",
+                NotificationManager.IMPORTANCE_HIGH,
+            ).apply {
+                description = "Запрос PIN при попытке отключения защиты"
+                setBypassDnd(true)
+            }
+            nm.createNotificationChannel(channel)
+        }
+
+        val pinIntent = Intent(this, PinLockActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-        startActivity(intent)
+        val pendingFlags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        val pendingIntent = PendingIntent.getActivity(this, 0, pinIntent, pendingFlags)
+
+        val notification = Notification.Builder(this, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_lock_lock)
+            .setContentTitle("Введите PIN родителя")
+            .setContentText("Для отключения защиты gmd_child")
+            .setPriority(Notification.PRIORITY_MAX)
+            .setCategory(Notification.CATEGORY_CALL)
+            .setFullScreenIntent(pendingIntent, true)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+
+        nm.notify(NOTIF_ID, notification)
+        DiagLog.write(this, "a11y", "pin-lock notification posted (fullScreenIntent)")
     }
 
     override fun onInterrupt() {
@@ -89,6 +127,8 @@ class GmdAccessibilityService : AccessibilityService() {
         const val PREFS = "gmd_a11y"
         const val KEY_UNLOCKED_UNTIL = "unlocked_until_ms"
         const val GRACE_PERIOD_MS = 30_000L
+        private const val CHANNEL_ID = "gmd_pin_lock"
+        private const val NOTIF_ID = 8102
 
         fun setGracePeriod(context: Context) {
             val until = System.currentTimeMillis() + GRACE_PERIOD_MS

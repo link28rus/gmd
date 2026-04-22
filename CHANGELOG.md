@@ -9,6 +9,20 @@
 
 ---
 
+## v0.27.2 — 2026-04-22
+
+### Исправления
+
+- **PIN-плашка не появлялась на Android 12+/HyperOS** — `startActivity(PinLockActivity)` из AccessibilityService блокировался системным правилом background activity start. Теперь L2 выставляет full-screen notification с `setFullScreenIntent` — официальный путь запустить Activity поверх системного экрана из фонового сервиса. Канал `gmd_pin_lock`, IMPORTANCE_HIGH, CATEGORY_CALL, USE_FULL_SCREEN_INTENT.
+
+### Инфраструктура
+
+- Permission `USE_FULL_SCREEN_INTENT` в AndroidManifest.
+- `GmdAccessibilityService.showPinLockNotification()` — создаёт канал at-first-use, full-screen PendingIntent к `PinLockActivity`.
+- Лог `a11y: pin-lock notification posted (fullScreenIntent)` — контрольная точка в DiagLog.
+
+---
+
 ## v0.27.1 — 2026-04-22
 
 ### Улучшения
