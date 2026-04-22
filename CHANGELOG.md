@@ -9,6 +9,14 @@
 
 ---
 
+## v0.21.1 — 2026-04-22
+
+### Исправления
+
+- fix(web): обёртка `/confirm-email` в Suspense — prod-билд Next.js 15 падал на prerender без boundary вокруг `useSearchParams`.
+
+---
+
 ## v0.21.0 — 2026-04-22
 
 ### Новые возможности

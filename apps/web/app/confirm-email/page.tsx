@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -20,6 +20,31 @@ interface ErrorResponse {
 type Status = 'loading' | 'success' | 'error';
 
 export default function ConfirmEmailPage(): ReactElement {
+  // useSearchParams() в Next.js 15 требует Suspense-обёртку при статической
+  // prerenderinge — без неё build падает. Сама страница всё равно полностью
+  // клиентская, но Next не знает об этом во время анализа.
+  return (
+    <Suspense fallback={<ConfirmEmailSkeleton />}>
+      <ConfirmEmailInner />
+    </Suspense>
+  );
+}
+
+function ConfirmEmailSkeleton(): ReactElement {
+  return (
+    <div className="relative min-h-screen overflow-hidden bg-[#050a15] text-slate-100">
+      <AuthMapBackground />
+      <main className="relative z-10 flex min-h-screen items-center justify-center p-6">
+        <div className="w-full max-w-sm rounded-xl border border-slate-700/60 bg-slate-900/70 p-8 text-center shadow-2xl backdrop-blur-xl">
+          <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-slate-700 border-t-sky-400" />
+          <h2 className="mb-1 text-lg font-semibold text-white">Подтверждаем почту…</h2>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+function ConfirmEmailInner(): ReactElement {
   const router = useRouter();
   const searchParams = useSearchParams();
   const setAll = useAuthStore((s) => s.setAll);
