@@ -11,6 +11,8 @@ import { ADMIN_CONFIG } from './admin.tokens';
 @Module({
   imports: [AuthModule, PrismaModule, AppSettingsModule, MailerModule],
   controllers: [AdminController],
+  // MailerModule уже экспортирует MailerService; импорт гарантирует инжект.
+
   providers: [
     {
       provide: ADMIN_CONFIG,

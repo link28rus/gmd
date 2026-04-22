@@ -335,6 +335,7 @@ model AppSetting {
   key         String   @id
   value       String
   description String?
+  isSecret    Boolean  @default(false)
   updatedAt   DateTime @updatedAt
   updatedBy   String?
 

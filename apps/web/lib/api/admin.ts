@@ -182,6 +182,13 @@ export const adminApi = {
       headers: { 'content-type': 'application/json' },
     }),
 
+  smtpTest: (to: string) =>
+    apiFetch<{ ok: boolean; messageId?: string; error?: string }>(`/api/admin/smtp/test`, {
+      method: 'POST',
+      body: JSON.stringify({ to }),
+      headers: { 'content-type': 'application/json' },
+    }),
+
   setUserRole: (id: string, role: UserAdminRole) =>
     apiFetch<{ ok: true }>(`/api/admin/users/${id}/role`, {
       method: 'PATCH',
@@ -208,8 +215,12 @@ export const adminApi = {
 
 export interface AppSettingRow {
   key: string;
-  value: string;
+  /** null для секретных ключей — фактическое значение админу не возвращается. */
+  value: string | null;
   description: string | null;
+  isSecret: boolean;
+  /** true если в БД лежит непустое значение (полезно для секретов). */
+  hasValue: boolean;
   updatedAt: string;
   updatedBy: string | null;
 }

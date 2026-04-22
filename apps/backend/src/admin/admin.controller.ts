@@ -18,17 +18,23 @@ import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ZodValidationPipe } from '../common/zod/zod-validation.pipe';
 import { AppSettingsService } from '../app-settings/app-settings.service';
+import { MailerService } from '../mailer/mailer.service';
 import { AdminGuard } from './guards/admin.guard';
 import { AdminService } from './admin.service';
 import { ChildrenQuerySchema, FamiliesQuerySchema, UsersQuerySchema } from './dto/pagination.dto';
 import type { ChildrenQueryDto, FamiliesQueryDto, UsersQueryDto } from './dto/pagination.dto';
 import { z } from 'zod';
 
-const UpdateSettingSchema = z.object({ value: z.string().min(1).max(200) });
+const UpdateSettingSchema = z.object({ value: z.string().max(500) });
 type UpdateSettingDto = z.infer<typeof UpdateSettingSchema>;
 
 const SetRoleSchema = z.object({ role: z.enum(['admin', 'parent']) });
 type SetRoleDto = z.infer<typeof SetRoleSchema>;
+
+const SmtpTestSchema = z.object({
+  to: z.string().trim().email(),
+});
+type SmtpTestDto = z.infer<typeof SmtpTestSchema>;
 
 const BlockUserSchema = z.object({
   reason: z
@@ -52,6 +58,7 @@ export class AdminController {
   constructor(
     @Inject(AdminService) private readonly admin: AdminService,
     @Inject(AppSettingsService) private readonly settings: AppSettingsService,
+    @Inject(MailerService) private readonly mailer: MailerService,
   ) {}
 
   private audit(req: AdminRequest, path: string): void {
@@ -130,7 +137,7 @@ export class AdminController {
   @Get('settings')
   async listSettings(@Req() req: AdminRequest): Promise<unknown> {
     this.audit(req, '/admin/settings');
-    const settings = await this.settings.list();
+    const settings = await this.settings.listForAdmin();
     return { settings };
   }
 
@@ -143,7 +150,25 @@ export class AdminController {
   ): Promise<unknown> {
     this.audit(req, `/admin/settings/${key}`);
     await this.settings.update(key, body.value, req.user.email);
+    // Изменение smtp.* → сбрасываем кэш mailer'а, чтобы следующий send
+    // (включая тестовый) подтянул свежую конфигурацию.
+    if (key.startsWith('smtp.')) {
+      this.mailer.invalidate();
+    }
     return { ok: true };
+  }
+
+  @Post('smtp/test')
+  @HttpCode(HttpStatus.OK)
+  async smtpTest(
+    @Req() req: AdminRequest,
+    @Body(new ZodValidationPipe(SmtpTestSchema)) body: SmtpTestDto,
+  ): Promise<{ ok: boolean; messageId?: string; error?: string }> {
+    this.audit(req, `POST /admin/smtp/test to=${body.to}`);
+    // Всегда берём свежую конфигурацию — иначе после последнего PATCH можно
+    // тестировать старый кэш.
+    this.mailer.invalidate();
+    return this.mailer.sendTest(body.to);
   }
 
   @Patch('users/:id/role')

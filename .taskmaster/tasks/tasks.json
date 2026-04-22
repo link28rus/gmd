@@ -588,6 +588,18 @@
         "description": "Очистить тестовые аккаунты на prod и довести админку families/children до того же уровня, что /admin/users.",
         "details": "1. PROD cleanup (192.168.1.23): hard-delete всех данных smoke2@t.ru и test@test.ru (user, memberships, family если owner-only, children, child_devices, invites, refresh_tokens, otp_codes, password_reset_tokens, locations, zones). Через psql в контейнере gmd-postgres.\n\n2. Backend fixes:\n   - Fix deviceStatus: backend сейчас отдаёт 'active'|'revoked'|'none', frontend ждёт 'online'|'offline'|'revoked'|'none'. Считать online по lastSeenAt < 5 min.\n   - GET /admin/families — поддержать ?q= и ?showDeleted=.\n   - GET /admin/children — поддержать ?q= и ?showDeleted=.\n   - DELETE /admin/families/:id — soft-delete семьи + каскад на детей/устройства/invites.\n   - DELETE /admin/children/:id — soft-delete ребёнка + revoke устройства + invalidate invites.\n   - POST /admin/children/:id/reset-device — revoke текущее устройство.\n\n3. Frontend:\n   - Families: actions-меню (soft-delete семьи), поиск по имени, фильтр showDeleted, колонка deletedAt.\n   - Children: actions-меню (soft-delete ребёнка, reset device), поиск по имени, фильтр showDeleted (колонка deletedAt уже есть).\n   - Исправить тип AdminChildRow.deviceStatus согласно backend.\n\n4. Тесты + bump версии + CHANGELOG + deploy на prod.",
         "testStrategy": "",
+        "status": "done",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": [],
+        "updatedAt": "2026-04-22T04:21:09.898Z"
+      },
+      {
+        "id": 52,
+        "title": "/admin/settings: секции, SMTP в БД, кнопка теста",
+        "description": "Сгруппировать настройки в /admin/settings в две секции: «Настройка сохранения маршрутов» (trip.idle_*) и «Настройка SMTP» (host/port/user/pass/from) с кнопкой теста отправки письма.",
+        "details": "Backend:\n- Prisma: AppSetting += isSecret Boolean default false.\n- SecretsService: AES-256-GCM на ключе из env SMTP_SECRET_KEY. Формат: enc:v1:<base64(iv+ct+tag)>.\n- AppSettingsService: при getString для isSecret — decrypt; при update — encrypt. В listForAdmin: для isSecret value не возвращается, вместо него флаг hasValue.\n- Seed SMTP при старте: если в БД нет smtp.* ключей — копируем из process.env.SMTP_*, pass шифруем.\n- MailerService: lazy getTransporter() — собирает из AppSettingsService. Кеш с инвалидацией по ключу.\n- AdminController: POST /admin/smtp/test { to } — отправляет тестовое письмо.\n- Next.js proxy route под /admin/smtp/test.\n\nFrontend:\n- Группировка ключей по prefix (smtp, trip) → 2 карточки-секции.\n- SMTP секция: поля host/port/user/pass/from с подходящими типами. Pass — type=password с placeholder «не менять», пустое значение не сохраняется.\n- Блок тестирования: input email (default = email текущего юзера из auth-store) + кнопка «Отправить тест». Toast с результатом.\n\nТесты:\n- SecretsService: encrypt→decrypt round-trip, неправильный ключ → error.\n- AppSettingsService: isSecret корректно шифруется/расшифровывается, listForAdmin не отдаёт value для секретов.\n- MailerService: testSend вызывает transporter.sendMail с актуальной SMTP-конфигурацией.\n- Admin e2e: POST /admin/smtp/test.\n\nРелиз v0.24.0 + deploy.",
+        "testStrategy": "",
         "status": "pending",
         "dependencies": [],
         "priority": "high",
@@ -596,13 +608,13 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-04-21T21:21:35.653Z",
-      "taskCount": 50,
-      "completedCount": 29,
+      "lastModified": "2026-04-22T04:21:09.898Z",
+      "taskCount": 51,
+      "completedCount": 30,
       "tags": ["master"],
-      "created": "2026-04-22T04:06:11.715Z",
+      "created": "2026-04-22T04:50:23.125Z",
       "description": "Tasks for master context",
-      "updated": "2026-04-22T04:06:11.717Z"
+      "updated": "2026-04-22T04:50:23.126Z"
     }
   }
 }

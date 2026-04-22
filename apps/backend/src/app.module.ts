@@ -19,10 +19,12 @@ import { SosModule } from './sos/sos.module';
 import { ZonesModule } from './zones/zones.module';
 import { DeviceCommandsModule } from './device-commands/device-commands.module';
 import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storage';
+import { SecretsModule } from './common/secrets/secrets.module';
 
 @Module({
   imports: [
     SentryModule.forRoot(),
+    SecretsModule,
     PrismaModule,
     RedisModule,
     ThrottlerModule.forRootAsync({
