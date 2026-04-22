@@ -81,7 +81,7 @@ export function CabinetHeader(): ReactElement {
             <Link
               href="/admin"
               aria-label="Админка"
-              className="inline-flex items-center gap-1.5 rounded-md bg-red-700 px-2 py-1.5 text-sm font-medium text-white hover:bg-red-800 sm:px-3"
+              className="inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-2 py-1.5 text-sm font-medium text-white hover:bg-slate-800 sm:px-3"
             >
               <Shield className="h-4 w-4" />
               <span className="hidden sm:inline">Админка</span>
