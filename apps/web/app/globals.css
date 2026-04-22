@@ -12,6 +12,20 @@ body {
   font-family: system-ui, -apple-system, sans-serif;
 }
 
+/* Появление контента hero-блока на landing — мягкий fade-up, используется
+   на главной (apps/web/app/page.tsx) для стаггерного проявления логотипа,
+   описания, кнопки и версии. */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;
