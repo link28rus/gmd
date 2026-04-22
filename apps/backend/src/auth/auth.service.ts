@@ -10,6 +10,7 @@ import { OTP_DELIVERY } from './providers/otp-delivery.provider';
 import type { OtpDeliveryProvider } from './providers/otp-delivery.provider';
 import { PasswordService } from './password.service';
 import { LockedException } from '../common/exceptions/locked.exception';
+import { EmailVerificationService } from './email-verification.service';
 
 export interface AuthServiceConfig {
   privacyPolicyVersion: string;
@@ -27,7 +28,22 @@ export type LoginResult = {
 
 export type VerifyOtpResult =
   | LoginResult
-  | { ok: false; reason: 'invalid_code' | 'code_expired' | 'code_consumed' };
+  | {
+      ok: false;
+      reason: 'invalid_code' | 'code_expired' | 'code_consumed' | 'email_not_verified';
+    };
+
+export type RequestOtpResult =
+  | { ok: true }
+  | { ok: false; reason: 'user_not_found' | 'email_not_verified' };
+
+export type RegisterResult =
+  | { ok: true }
+  | { ok: false; reason: 'email_taken' | 'email_taken_verified' };
+
+export type ConfirmEmailResult =
+  | (LoginResult & { ok: true })
+  | { ok: false; reason: 'invalid_token' | 'token_expired' | 'token_consumed' };
 
 export type RefreshResult =
   | { ok: true; accessToken: string; refreshToken: string }
@@ -45,6 +61,8 @@ export class AuthService implements OnModuleInit {
     @Inject(OTP_DELIVERY) private readonly delivery: OtpDeliveryProvider,
     @Inject(AUTH_CONFIG) private readonly cfg: AuthServiceConfig,
     @Inject(PasswordService) private readonly password: PasswordService,
+    @Inject(EmailVerificationService)
+    private readonly emailVerification: EmailVerificationService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -54,17 +72,43 @@ export class AuthService implements OnModuleInit {
     }
   }
 
-  async requestOtp(email: string): Promise<void> {
-    const { code } = await this.otp.generate(email);
-    await this.delivery.send(email, code);
+  async requestOtp(email: string): Promise<RequestOtpResult> {
+    const normalized = email.toLowerCase().trim();
+    const user = await this.prisma.user.findUnique({
+      where: { email: normalized },
+      select: { id: true, emailVerifiedAt: true, deletedAt: true },
+    });
+    if (!user || user.deletedAt) return { ok: false, reason: 'user_not_found' };
+    if (!user.emailVerifiedAt) return { ok: false, reason: 'email_not_verified' };
+
+    const { code } = await this.otp.generate(normalized);
+    await this.delivery.send(normalized, code);
+    return { ok: true };
   }
 
   async verifyOtp(email: string, code: string, meta: TokenMeta): Promise<VerifyOtpResult> {
-    const v = await this.otp.verify(email, code);
+    const normalized = email.toLowerCase().trim();
+    const v = await this.otp.verify(normalized, code);
     if (!v.ok) return { ok: false, reason: v.reason };
 
-    const { user, family } = await this.ensureUserAndFamily(email);
-    return this.issueTokens(user, family, meta);
+    const existing = await this.prisma.user.findUnique({
+      where: { email: normalized },
+      include: { memberships: { include: { family: true } } },
+    });
+    if (!existing || existing.deletedAt) {
+      return { ok: false, reason: 'invalid_code' };
+    }
+    if (!existing.emailVerifiedAt) {
+      return { ok: false, reason: 'email_not_verified' };
+    }
+    const membership = existing.memberships[0];
+    if (!membership) return { ok: false, reason: 'invalid_code' };
+
+    return this.issueTokens(
+      { id: existing.id, email: existing.email, name: existing.name },
+      { id: membership.family.id, name: membership.family.name },
+      meta,
+    );
   }
 
   async refreshTokens(oldRefresh: string, meta: TokenMeta): Promise<RefreshResult> {
@@ -117,6 +161,13 @@ export class AuthService implements OnModuleInit {
 
     await this.password.clearFailures(normalizedEmail);
 
+    if (!user.emailVerifiedAt) {
+      throw new UnauthorizedException({
+        code: 'email_not_verified',
+        message: 'Email is not confirmed',
+      });
+    }
+
     const membership = user.memberships[0];
     if (!membership) {
       throw new UnauthorizedException({
@@ -124,6 +175,122 @@ export class AuthService implements OnModuleInit {
         message: 'Invalid email or password',
       });
     }
+
+    return this.issueTokens(
+      { id: user.id, email: user.email, name: user.name },
+      { id: membership.family.id, name: membership.family.name },
+      meta,
+    );
+  }
+
+  /**
+   * Регистрация по почте + паролю. Создаёт User (unverified), Family,
+   * Membership (owner) в одной транзакции, затем отправляет письмо
+   * подтверждения. Повторная регистрация с тем же email, пока он не
+   * подтверждён, перезаписывает ФИО/пароль/семью и перевыпускает токен
+   * подтверждения — чтобы таймер начинался заново.
+   */
+  async register(dto: {
+    email: string;
+    password: string;
+    firstName: string;
+    lastName: string;
+    middleName?: string;
+    familyName?: string;
+  }): Promise<RegisterResult> {
+    const normalized = dto.email.toLowerCase().trim();
+    const fullName = [dto.lastName, dto.firstName, dto.middleName]
+      .filter((s): s is string => !!s && s.trim().length > 0)
+      .join(' ');
+    const familyName = dto.familyName?.trim() || dto.lastName.trim();
+    const passwordHash = await this.password.hash(dto.password);
+
+    const existing = await this.prisma.user.findUnique({ where: { email: normalized } });
+    if (existing && !existing.deletedAt && existing.emailVerifiedAt) {
+      return { ok: false, reason: 'email_taken_verified' };
+    }
+
+    let userId: string;
+    if (existing && !existing.deletedAt) {
+      // Пользователь зарегистрирован, но ещё не подтвердил email — разрешаем
+      // обновить данные и перевыпустить ссылку (по UX: «регистрируюсь снова —
+      // перезапустить таймер»).
+      const updatedUser = await this.prisma.user.update({
+        where: { id: existing.id },
+        data: {
+          firstName: dto.firstName,
+          lastName: dto.lastName,
+          middleName: dto.middleName ?? null,
+          name: fullName,
+          passwordHash,
+          acceptedPrivacyPolicyVersion: this.cfg.privacyPolicyVersion,
+        },
+      });
+      const membership = await this.prisma.membership.findFirst({
+        where: { userId: updatedUser.id },
+      });
+      if (membership) {
+        await this.prisma.family.update({
+          where: { id: membership.familyId },
+          data: { name: familyName },
+        });
+      } else {
+        const family = await this.prisma.family.create({ data: { name: familyName } });
+        await this.prisma.membership.create({
+          data: { userId: updatedUser.id, familyId: family.id, role: 'owner' },
+        });
+      }
+      userId = updatedUser.id;
+    } else {
+      const created = await this.prisma.$transaction(async (tx) => {
+        const u = await tx.user.create({
+          data: {
+            email: normalized,
+            firstName: dto.firstName,
+            lastName: dto.lastName,
+            middleName: dto.middleName ?? null,
+            name: fullName,
+            passwordHash,
+            acceptedPrivacyPolicyVersion: this.cfg.privacyPolicyVersion,
+          },
+        });
+        const f = await tx.family.create({ data: { name: familyName } });
+        await tx.membership.create({
+          data: { userId: u.id, familyId: f.id, role: 'owner' },
+        });
+        return u;
+      });
+      userId = created.id;
+    }
+
+    await this.emailVerification.issueAndSend(userId, normalized, fullName);
+    return { ok: true };
+  }
+
+  /**
+   * Подтверждает email по одноразовому токену из письма. При успехе
+   * проставляет `emailVerifiedAt` и сразу выдаёт access/refresh-пару —
+   * пользователь попадает в кабинет без дополнительного шага «войдите».
+   */
+  async confirmEmail(rawToken: string, meta: TokenMeta): Promise<ConfirmEmailResult> {
+    const r = await this.emailVerification.consume(rawToken);
+    if (!r.ok) return { ok: false, reason: r.reason };
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: r.userId },
+      include: { memberships: { include: { family: true } } },
+    });
+    if (!user || user.deletedAt) return { ok: false, reason: 'invalid_token' };
+
+    if (!user.emailVerifiedAt) {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { emailVerifiedAt: new Date() },
+      });
+    }
+
+    const membership = user.memberships[0];
+    if (!membership) return { ok: false, reason: 'invalid_token' };
 
     return this.issueTokens(
       { id: user.id, email: user.email, name: user.name },
@@ -164,52 +331,6 @@ export class AuthService implements OnModuleInit {
       ok: true,
       accessToken,
       refreshToken,
-      user: { id: user.id, email: user.email, name: user.name },
-      family: { id: family.id, name: family.name },
-    };
-  }
-
-  private async ensureUserAndFamily(email: string): Promise<{
-    user: { id: string; email: string; name: string | null };
-    family: { id: string; name: string };
-  }> {
-    const existing = await this.prisma.user.findUnique({ where: { email } });
-    if (existing && !existing.deletedAt) {
-      let m = await this.prisma.membership.findFirst({
-        where: { userId: existing.id },
-        orderBy: { createdAt: 'asc' },
-      });
-      if (!m) {
-        const newFamily = await this.prisma.family.create({ data: {} });
-        m = await this.prisma.membership.create({
-          data: { userId: existing.id, familyId: newFamily.id, role: 'owner' },
-        });
-      }
-      const family = await this.prisma.family.findUnique({ where: { id: m.familyId } });
-      const user = !existing.emailVerifiedAt
-        ? await this.prisma.user.update({
-            where: { id: existing.id },
-            data: { emailVerifiedAt: new Date() },
-          })
-        : existing;
-      return {
-        user: { id: user.id, email: user.email, name: user.name },
-        family: { id: family!.id, name: family!.name },
-      };
-    }
-
-    const user = await this.prisma.user.create({
-      data: {
-        email,
-        emailVerifiedAt: new Date(),
-        acceptedPrivacyPolicyVersion: this.cfg.privacyPolicyVersion,
-      },
-    });
-    const family = await this.prisma.family.create({ data: {} });
-    await this.prisma.membership.create({
-      data: { userId: user.id, familyId: family.id, role: 'owner' },
-    });
-    return {
       user: { id: user.id, email: user.email, name: user.name },
       family: { id: family.id, name: family.name },
     };

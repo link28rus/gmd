@@ -7,7 +7,15 @@ import type { JwtService } from './jwt.service';
 import { FakeOtpProvider } from './providers/fake-otp.provider';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { PasswordService } from './password.service';
+import type { EmailVerificationService } from './email-verification.service';
 import { LockedException } from '../common/exceptions/locked.exception';
+
+function makeEmailVerificationMock(): jest.Mocked<EmailVerificationService> {
+  return {
+    issueAndSend: jest.fn().mockResolvedValue(undefined),
+    consume: jest.fn().mockResolvedValue({ ok: false, reason: 'invalid_token' as const }),
+  } as unknown as jest.Mocked<EmailVerificationService>;
+}
 
 interface MockPrisma {
   _users: any[];
@@ -102,6 +110,7 @@ function makeService(prisma: MockPrisma, passwordMock?: jest.Mocked<PasswordServ
   } as unknown as JwtService;
   const delivery = new FakeOtpProvider();
   const password = passwordMock ?? makePasswordMock();
+  const emailVerification = makeEmailVerificationMock();
   const svc = new AuthService(
     prisma as unknown as PrismaService,
     otpSvc,
@@ -110,6 +119,7 @@ function makeService(prisma: MockPrisma, passwordMock?: jest.Mocked<PasswordServ
     delivery,
     { privacyPolicyVersion: '1.0' },
     password,
+    emailVerification,
   );
   // Skip onModuleInit (DUMMY_HASH) for unit tests — password.hash is mocked
   return svc;
@@ -134,7 +144,11 @@ describe('AuthService.verifyOtp', () => {
     delivery = new FakeOtpProvider();
   });
 
-  it('первая verify: создаёт User+Family+Membership, возвращает токены', async () => {
+  it('verify для незарегистрированного email → invalid_code, не создаёт User/Family', async () => {
+    // После перехода на регистрацию через /register, verifyOtp больше не
+    // «стелется под пользователя» — если user'а нет в БД, возвращаем
+    // invalid_code (OTP генерится только для зарегистрированных, значит
+    // сюда может прийти только код от кого-то, кого уже удалили).
     const prisma = makePrismaMock();
     (otpSvc.verify as jest.Mock).mockResolvedValueOnce({ ok: true, otpId: 'otp-1' });
     const password = makePasswordMock();
@@ -146,31 +160,38 @@ describe('AuthService.verifyOtp', () => {
       delivery,
       { privacyPolicyVersion: '1.0' },
       password,
+      makeEmailVerificationMock(),
     );
 
     const r = await svc.verifyOtp('a@b.com', '111111', {});
 
-    expect(r.ok).toBe(true);
-    if (!r.ok) return;
-    expect(r.accessToken).toBe('at');
-    expect(r.refreshToken).toBe('rt');
-    expect(prisma._users.length).toBe(1);
-    expect(prisma._users[0].email).toBe('a@b.com');
-    expect(prisma._users[0].acceptedPrivacyPolicyVersion).toBe('1.0');
-    expect(prisma._families.length).toBe(1);
-    expect(prisma._memberships[0].role).toBe('owner');
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.reason).toBe('invalid_code');
+    expect(prisma._users.length).toBe(0);
+    expect(prisma._families.length).toBe(0);
   });
 
-  it('повторная verify существующего user: не создаёт новых User/Family', async () => {
+  it('повторная verify существующего подтверждённого user → токены', async () => {
     const prisma = makePrismaMock();
-    prisma._users.push({
+    const userRow = {
       id: 'u-1',
       email: 'a@b.com',
       name: null,
       deletedAt: null,
       emailVerifiedAt: new Date(),
       acceptedPrivacyPolicyVersion: '1.0',
-    });
+      memberships: [
+        {
+          id: 'm-1',
+          userId: 'u-1',
+          familyId: 'f-1',
+          role: 'owner',
+          family: { id: 'f-1', name: 'Моя семья' },
+        },
+      ],
+    };
+    prisma._users.push(userRow);
     prisma._families.push({ id: 'f-1', name: 'Моя семья' });
     prisma._memberships.push({
       id: 'm-1',
@@ -178,6 +199,10 @@ describe('AuthService.verifyOtp', () => {
       familyId: 'f-1',
       role: 'owner',
     });
+    prisma.user.findUnique = jest.fn(({ where }: any) => {
+      const u = prisma._users.find((x: any) => x.email === where.email);
+      return Promise.resolve(u ?? null);
+    });
     (otpSvc.verify as jest.Mock).mockResolvedValueOnce({ ok: true, otpId: 'otp-1' });
     const password = makePasswordMock();
     const svc = new AuthService(
@@ -188,6 +213,7 @@ describe('AuthService.verifyOtp', () => {
       delivery,
       { privacyPolicyVersion: '1.0' },
       password,
+      makeEmailVerificationMock(),
     );
 
     const r = await svc.verifyOtp('a@b.com', '111111', {});
@@ -212,6 +238,7 @@ describe('AuthService.verifyOtp', () => {
       delivery,
       { privacyPolicyVersion: '1.0' },
       password,
+      makeEmailVerificationMock(),
     );
 
     const r = await svc.verifyOtp('a@b.com', '000000', {});
@@ -223,8 +250,17 @@ describe('AuthService.verifyOtp', () => {
 });
 
 describe('AuthService.requestOtp', () => {
-  it('generate + delivery.send вызываются', async () => {
+  it('verified user → generate + delivery.send вызываются', async () => {
     const prisma = makePrismaMock();
+    prisma._users.push({
+      id: 'u-1',
+      email: 'a@b.com',
+      deletedAt: null,
+      emailVerifiedAt: new Date(),
+    });
+    prisma.user.findUnique = jest.fn(({ where }: any) =>
+      Promise.resolve(prisma._users.find((u: any) => u.email === where.email) ?? null),
+    );
     const otpSvc = {
       generate: jest.fn().mockResolvedValue({ code: '123456', otpId: 'o-1' }),
     } as unknown as OtpService;
@@ -240,13 +276,77 @@ describe('AuthService.requestOtp', () => {
       delivery,
       { privacyPolicyVersion: '1.0' },
       password,
+      makeEmailVerificationMock(),
     );
 
-    await svc.requestOtp('a@b.com');
+    const r = await svc.requestOtp('a@b.com');
 
+    expect(r.ok).toBe(true);
     expect(otpSvc.generate).toHaveBeenCalledWith('a@b.com');
     expect(delivery.sent.length).toBe(1);
     expect(delivery.sent[0].code).toBe('123456');
+  });
+
+  it('незарегистрированный email → user_not_found, OTP не генерится', async () => {
+    const prisma = makePrismaMock();
+    const otpSvc = { generate: jest.fn() } as unknown as OtpService;
+    const rtSvc = {} as RefreshTokenService;
+    const jwt = {} as JwtService;
+    const delivery = new FakeOtpProvider();
+    const password = makePasswordMock();
+    const svc = new AuthService(
+      prisma as unknown as PrismaService,
+      otpSvc,
+      rtSvc,
+      jwt,
+      delivery,
+      { privacyPolicyVersion: '1.0' },
+      password,
+      makeEmailVerificationMock(),
+    );
+
+    const r = await svc.requestOtp('nobody@x.com');
+
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.reason).toBe('user_not_found');
+    expect(otpSvc.generate).not.toHaveBeenCalled();
+    expect(delivery.sent.length).toBe(0);
+  });
+
+  it('email не подтверждён → email_not_verified, OTP не генерится', async () => {
+    const prisma = makePrismaMock();
+    prisma._users.push({
+      id: 'u-1',
+      email: 'pending@x.com',
+      deletedAt: null,
+      emailVerifiedAt: null,
+    });
+    prisma.user.findUnique = jest.fn(({ where }: any) =>
+      Promise.resolve(prisma._users.find((u: any) => u.email === where.email) ?? null),
+    );
+    const otpSvc = { generate: jest.fn() } as unknown as OtpService;
+    const rtSvc = {} as RefreshTokenService;
+    const jwt = {} as JwtService;
+    const delivery = new FakeOtpProvider();
+    const password = makePasswordMock();
+    const svc = new AuthService(
+      prisma as unknown as PrismaService,
+      otpSvc,
+      rtSvc,
+      jwt,
+      delivery,
+      { privacyPolicyVersion: '1.0' },
+      password,
+      makeEmailVerificationMock(),
+    );
+
+    const r = await svc.requestOtp('pending@x.com');
+
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.reason).toBe('email_not_verified');
+    expect(otpSvc.generate).not.toHaveBeenCalled();
   });
 });
 

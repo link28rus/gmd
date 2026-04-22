@@ -44,6 +44,9 @@ model User {
   email                        String    @unique
   emailVerifiedAt              DateTime?
   name                         String?
+  firstName                    String?
+  lastName                     String?
+  middleName                   String?
   locale                       String    @default("ru")
   acceptedPrivacyPolicyVersion String?
   passwordHash                 String?
@@ -51,14 +54,29 @@ model User {
   updatedAt                    DateTime  @updatedAt
   deletedAt                    DateTime?
 
-  memberships   Membership[]
-  refreshTokens RefreshToken[]
-  otpCodes      OtpCode[]
-  consents      ConsentRecord[]
-  createdZones  Zone[]
+  memberships              Membership[]
+  refreshTokens            RefreshToken[]
+  otpCodes                 OtpCode[]
+  consents                 ConsentRecord[]
+  createdZones             Zone[]
+  emailVerificationTokens  EmailVerificationToken[]
 
   @@index([email])
   @@map("users")
+}
+
+model EmailVerificationToken {
+  id         String    @id @default(cuid())
+  userId     String
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("email_verification_tokens")
 }
 
 model Family {

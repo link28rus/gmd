@@ -11,6 +11,7 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { PasswordService, PASSWORD_CONFIG } from './password.service';
 import { RedisModule } from '../redis/redis.module';
 import { MailerModule } from '../mailer/mailer.module';
+import { EmailVerificationService, EMAIL_VERIFICATION_CONFIG } from './email-verification.service';
 
 function asNum(v: string | undefined, def: number): number {
   return v ? Number(v) : def;
@@ -55,6 +56,13 @@ function asNum(v: string | undefined, def: number): number {
       }),
     },
     { provide: OTP_DELIVERY, useClass: SmtpOtpProvider },
+    {
+      provide: EMAIL_VERIFICATION_CONFIG,
+      useFactory: () => ({
+        ttlSec: asNum(process.env.EMAIL_VERIFICATION_TTL_SECONDS, 86400),
+        webBaseUrl: process.env.WEB_BASE_URL?.replace(/\/+$/, '') || 'https://gmd.link28rus.ru',
+      }),
+    },
     SmtpOtpProvider,
     JwtService,
     OtpService,
@@ -62,6 +70,7 @@ function asNum(v: string | undefined, def: number): number {
     AuthService,
     JwtAuthGuard,
     PasswordService,
+    EmailVerificationService,
   ],
   exports: [JwtService, JwtAuthGuard, AuthService],
 })

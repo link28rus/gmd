@@ -31,6 +31,10 @@ import { SetPasswordSchema } from './dto/set-password.dto';
 import type { SetPasswordDto } from './dto/set-password.dto';
 import { DevSetPasswordSchema } from './dto/dev-set-password.dto';
 import type { DevSetPasswordDto } from './dto/dev-set-password.dto';
+import { RegisterSchema } from './dto/register.dto';
+import type { RegisterDto } from './dto/register.dto';
+import { ConfirmEmailSchema } from './dto/confirm-email.dto';
+import type { ConfirmEmailDto } from './dto/confirm-email.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 function extractMeta(req: Request): { userAgent?: string; ipAddress?: string } {
@@ -45,19 +49,26 @@ export class AuthController {
   constructor(@Inject(AuthService) private readonly auth: AuthService) {}
 
   @Post('request-otp')
-  @HttpCode(HttpStatus.ACCEPTED)
+  @HttpCode(HttpStatus.OK)
   @Throttle({ default: { ttl: 600_000, limit: 3 } })
   @UsePipes(new ZodValidationPipe(RequestOtpSchema))
-  async requestOtp(@Body() dto: RequestOtpDto): Promise<{ expiresIn: number }> {
-    // Enumeration defense: всегда отвечаем 202 через мин. задержку.
+  async requestOtp(@Body() dto: RequestOtpDto): Promise<unknown> {
+    // По UX-решению продукта: если пользователь не зарегистрирован,
+    // явно сообщаем об этом и предлагаем регистрацию (а не молчим как в
+    // enumeration-defence). Rate-limit (3/10 мин) ограничивает подбор email.
     const started = Date.now();
-    try {
-      await this.auth.requestOtp(dto.email);
-    } catch {
-      // глушим реальную ошибку, чтобы timing был однотипным (enumeration defense)
-    }
+    const r = await this.auth.requestOtp(dto.email);
     const elapsed = Date.now() - started;
-    if (elapsed < 200) await new Promise((r) => setTimeout(r, 200 - elapsed));
+    if (elapsed < 200) await new Promise((res) => setTimeout(res, 200 - elapsed));
+    if (!r.ok) {
+      // 404 — «нет такой почты / не подтверждена»; frontend даст ссылку
+      // на /register. Email подтверждения требует отдельного шага — тоже
+      // сообщаем отдельным code, чтобы UI мог показать правильный CTA.
+      throw new NotFoundException({
+        code: r.reason,
+        message: r.reason === 'user_not_found' ? 'User not found' : 'Email is not confirmed',
+      });
+    }
     return { expiresIn: 600 };
   }
 
@@ -71,6 +82,39 @@ export class AuthController {
       throw new BadRequestException({
         code: r.reason,
         message: 'OTP verification failed',
+      });
+    }
+    return r;
+  }
+
+  @Post('register')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @Throttle({ default: { ttl: 600_000, limit: 5 } })
+  @UsePipes(new ZodValidationPipe(RegisterSchema))
+  async register(@Body() dto: RegisterDto): Promise<{ ok: true }> {
+    const r = await this.auth.register(dto);
+    if (!r.ok) {
+      throw new BadRequestException({
+        code: r.reason,
+        message:
+          r.reason === 'email_taken_verified'
+            ? 'Email is already registered'
+            : 'Email already awaits confirmation',
+      });
+    }
+    return { ok: true };
+  }
+
+  @Post('confirm-email')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { ttl: 600_000, limit: 20 } })
+  @UsePipes(new ZodValidationPipe(ConfirmEmailSchema))
+  async confirmEmail(@Body() dto: ConfirmEmailDto, @Req() req: Request): Promise<unknown> {
+    const r = await this.auth.confirmEmail(dto.token, extractMeta(req));
+    if (!r.ok) {
+      throw new BadRequestException({
+        code: r.reason,
+        message: 'Email confirmation failed',
       });
     }
     return r;
