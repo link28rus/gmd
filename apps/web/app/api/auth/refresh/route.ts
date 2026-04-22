@@ -13,6 +13,7 @@ interface BackendMeResponse {
   memberships: Array<{ role: string; familyId: string }>;
   isAdmin: boolean;
   hasPassword: boolean;
+  hasPin: boolean;
   requiresConsent: boolean;
   currentPolicyVersion: string;
 }
@@ -42,6 +43,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           ...me.body.user,
           isAdmin: me.body.isAdmin ?? false,
           hasPassword: me.body.hasPassword ?? false,
+          hasPin: me.body.hasPin ?? false,
         }
       : undefined;
   const res = NextResponse.json({

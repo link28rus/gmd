@@ -14,6 +14,13 @@ interface BackendLoginResponse {
   family: { id: string; name: string };
 }
 
+interface BackendMeResponse {
+  user: { id: string; email: string; name: string | null; locale: string };
+  isAdmin: boolean;
+  hasPassword: boolean;
+  hasPin: boolean;
+}
+
 const REFRESH_COOKIE = 'gmd_refresh';
 const REFRESH_MAX_AGE = 60 * 60 * 24 * 30;
 
@@ -27,7 +34,20 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json(r.body ?? {}, { status: r.status });
   }
   const { accessToken, refreshToken, user, family } = r.body;
-  const res = NextResponse.json({ accessToken, user, family });
+  // Обогащаем user полями isAdmin/hasPassword/hasPin — backend
+  // /auth/login-password их не возвращает, а frontend хранит их в
+  // auth-store (меню профиля, страницы /cabinet/password и /cabinet/pin).
+  const me = await backend<BackendMeResponse>('GET', '/me', undefined, accessToken);
+  const enrichedUser =
+    me.status === 200 && me.body
+      ? {
+          ...user,
+          isAdmin: me.body.isAdmin ?? false,
+          hasPassword: me.body.hasPassword ?? false,
+          hasPin: me.body.hasPin ?? false,
+        }
+      : user;
+  const res = NextResponse.json({ accessToken, user: enrichedUser, family });
   res.cookies.set(REFRESH_COOKIE, refreshToken, {
     httpOnly: true,
     secure: process.env.ALLOW_INSECURE_COOKIE !== 'true' && process.env.NODE_ENV === 'production',

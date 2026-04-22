@@ -31,6 +31,7 @@ export default function PinClient(): ReactElement {
   const [bootstrapping, setBootstrapping] = useState(accessToken === null);
   const [status, setStatus] = useState<PinStatus | null>(null);
   const [statusLoaded, setStatusLoaded] = useState(false);
+  const [, setStatusError] = useState<string | null>(null);
   const [currentPin, setCurrentPin] = useState('');
   const [newPin, setNewPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
@@ -80,6 +81,7 @@ export default function PinClient(): ReactElement {
   }, [accessToken]);
 
   async function refreshStatus(token: string): Promise<void> {
+    setStatusError(null);
     try {
       const res = await fetch('/api/me/pin', {
         headers: { Authorization: `Bearer ${token}` },
@@ -88,13 +90,15 @@ export default function PinClient(): ReactElement {
         router.replace('/login');
         return;
       }
-      if (res.ok) {
-        const data = (await res.json()) as PinStatus;
-        setStatus(data);
-        patchUser({ hasPin: data.isSet });
+      if (!res.ok) {
+        setStatusError(`HTTP ${res.status}`);
+        return;
       }
-    } catch {
-      /* ignore */
+      const data = (await res.json()) as PinStatus;
+      setStatus(data);
+      patchUser({ hasPin: data.isSet });
+    } catch (e) {
+      setStatusError(e instanceof Error ? e.message : 'network');
     } finally {
       setStatusLoaded(true);
     }

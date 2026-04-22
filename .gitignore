@@ -76,3 +76,6 @@ phase1.1-web-*.png
 
 # Superpowers brainstorming sessions (visual companion)
 .superpowers/
+
+# Claude Code local config
+.claude/settings.local.json
