@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { ReactElement } from 'react';
 import { MoreVertical, Shield, ShieldOff, Lock, Unlock, KeyRound, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -31,15 +32,56 @@ export function UserActionsMenu({ row, currentUserId }: Props): ReactElement | n
   const [open, setOpen] = useState(false);
   const [modal, setModal] = useState<ModalKind>(null);
   const [blockReason, setBlockReason] = useState('');
+  /**
+   * Меню рендерится через portal в document.body — иначе его клипает
+   * overflow-x-auto у DataTable и дропдаун обрезается снизу.
+   * Координаты пересчитываются при открытии и при скролле/resize окна.
+   */
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
+  const MENU_WIDTH = 224; // w-56
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setMenuPos(null);
+      return;
+    }
+    const reposition = (): void => {
+      const btn = triggerRef.current;
+      if (!btn) return;
+      const rect = btn.getBoundingClientRect();
+      setMenuPos({
+        top: rect.bottom + 4,
+        left: Math.max(8, rect.right - MENU_WIDTH),
+      });
+    };
+    reposition();
+    window.addEventListener('scroll', reposition, true);
+    window.addEventListener('resize', reposition);
+    return () => {
+      window.removeEventListener('scroll', reposition, true);
+      window.removeEventListener('resize', reposition);
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
     const onClick = (e: MouseEvent): void => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (triggerRef.current?.contains(t)) return;
+      if (menuRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    const onEsc = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') setOpen(false);
     };
     window.addEventListener('mousedown', onClick);
-    return () => window.removeEventListener('mousedown', onClick);
+    window.addEventListener('keydown', onEsc);
+    return () => {
+      window.removeEventListener('mousedown', onClick);
+      window.removeEventListener('keydown', onEsc);
+    };
   }, [open]);
 
   const isSelf = currentUserId === row.id;
@@ -107,19 +149,14 @@ export function UserActionsMenu({ row, currentUserId }: Props): ReactElement | n
   const makeAdmin = row.role !== 'admin';
   const isBlocked = row.blockedAt !== null;
 
-  return (
-    <>
-      <div ref={menuRef} className="relative inline-block">
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          aria-label="Действия"
-          className="rounded-md p-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900"
-        >
-          <MoreVertical className="h-4 w-4" />
-        </button>
-        {open && (
-          <div className="absolute right-0 z-20 mt-1 w-56 overflow-hidden rounded-md border border-zinc-200 bg-white shadow-lg">
+  const menu =
+    open && menuPos && typeof document !== 'undefined'
+      ? createPortal(
+          <div
+            ref={menuRef}
+            style={{ position: 'fixed', top: menuPos.top, left: menuPos.left, width: MENU_WIDTH }}
+            className="z-50 overflow-hidden rounded-md border border-zinc-200 bg-white shadow-lg"
+          >
             <MenuItem
               disabled={isSelf && !makeAdmin}
               icon={makeAdmin ? Shield : ShieldOff}
@@ -172,9 +209,23 @@ export function UserActionsMenu({ row, currentUserId }: Props): ReactElement | n
             >
               Удалить
             </MenuItem>
-          </div>
-        )}
-      </div>
+          </div>,
+          document.body,
+        )
+      : null;
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-label="Действия"
+        className="rounded-md p-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900"
+      >
+        <MoreVertical className="h-4 w-4" />
+      </button>
+      {menu}
 
       <Dialog open={modal === 'block'} onOpenChange={(o) => !o && setModal(null)}>
         <DialogContent>
