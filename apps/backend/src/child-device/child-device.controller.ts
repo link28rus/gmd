@@ -11,12 +11,15 @@ import {
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
+import { z } from 'zod';
 import { ChildDeviceService } from './child-device.service';
 import type { ChildAuthContext } from './child-device.service';
 import { ChildAuthGuard } from './guards/child-auth.guard';
 import { ZodValidationPipe } from '../common/zod/zod-validation.pipe';
 import { ClaimSchema } from './dto/claim.dto';
 import type { ClaimDto } from './dto/claim.dto';
+
+const VerifyPinSchema = z.object({ pin: z.string().regex(/^\d{4,8}$/) }).strict();
 
 interface ChildRequest extends Request {
   childDevice: ChildAuthContext;
@@ -73,5 +76,24 @@ export class ChildDeviceController {
   @Throttle({ default: { ttl: 60_000, limit: 60 } })
   async protection(@Req() req: ChildRequest): Promise<{ enabled: boolean }> {
     return this.svc.getProtection(req.childDevice.childId);
+  }
+
+  // L2 PIN-lock: ребёнок в системном диалоге деактивации Device Admin вводит
+  // PIN → AccessibilityService шлёт сюда. Rate-limit 10 попыток в 10 мин
+  // (сверх внутреннего pin-lock). Ответ 200 {ok:true} = пускать, 401/429 = нет.
+  @Post('protection/verify-pin')
+  @UseGuards(ChildAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { ttl: 600_000, limit: 10 } })
+  async verifyProtectionPin(
+    @Req() req: ChildRequest,
+    @Body(new ZodValidationPipe(VerifyPinSchema)) dto: z.infer<typeof VerifyPinSchema>,
+  ): Promise<{ ok: true }> {
+    return this.svc.verifyParentPin({
+      deviceId: req.childDevice.deviceId,
+      childId: req.childDevice.childId,
+      familyId: req.childDevice.familyId,
+      pin: dto.pin,
+    });
   }
 }
