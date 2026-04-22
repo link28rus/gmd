@@ -1,5 +1,11 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+
+export interface ProtectionState {
+  enabled: boolean;
+  enabledAt: Date | null;
+  enabledBy: string | null;
+}
 
 export interface CreateChildInput {
   name: string;
@@ -90,6 +96,69 @@ export class ChildrenService {
       where: { id: childId },
       data: { name: patch.name, dateOfBirth: patch.dateOfBirth },
     });
+  }
+
+  async getProtection(familyId: string, childId: string): Promise<ProtectionState> {
+    const child = await this.prisma.child.findFirst({
+      where: { id: childId, familyId, deletedAt: null },
+      select: { protectionEnabled: true, protectionEnabledAt: true, protectionEnabledBy: true },
+    });
+    if (!child) {
+      throw new NotFoundException({ code: 'child_not_found', message: 'Child not found' });
+    }
+    return {
+      enabled: child.protectionEnabled,
+      enabledAt: child.protectionEnabledAt,
+      enabledBy: child.protectionEnabledBy,
+    };
+  }
+
+  // enable=true требует чтобы у родителя был задан PIN (User.pinHash != null) —
+  // без него нечем будет подтвердить деактивацию Device Admin на устройстве
+  // ребёнка. Свежесть verified-marker проверяется в PinVerifiedGuard, здесь
+  // только целостность данных.
+  async setProtection(
+    familyId: string,
+    childId: string,
+    enabled: boolean,
+    userId: string,
+  ): Promise<ProtectionState> {
+    const child = await this.prisma.child.findFirst({
+      where: { id: childId, familyId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!child) {
+      throw new NotFoundException({ code: 'child_not_found', message: 'Child not found' });
+    }
+
+    if (enabled) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { pinHash: true },
+      });
+      if (!user || !user.pinHash) {
+        throw new BadRequestException({
+          code: 'pin_not_set',
+          message: 'Set parent PIN before enabling protection',
+        });
+      }
+    }
+
+    const now = enabled ? new Date() : null;
+    const updated = await this.prisma.child.update({
+      where: { id: childId },
+      data: {
+        protectionEnabled: enabled,
+        protectionEnabledAt: now,
+        protectionEnabledBy: enabled ? userId : null,
+      },
+      select: { protectionEnabled: true, protectionEnabledAt: true, protectionEnabledBy: true },
+    });
+    return {
+      enabled: updated.protectionEnabled,
+      enabledAt: updated.protectionEnabledAt,
+      enabledBy: updated.protectionEnabledBy,
+    };
   }
 
   async softDelete(familyId: string, childId: string): Promise<void> {

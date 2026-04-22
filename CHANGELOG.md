@@ -9,6 +9,23 @@
 
 ---
 
+## v0.25.0 — 2026-04-22
+
+### Новые возможности
+
+- **PIN-код родителя** — единый секрет для подтверждения критичных действий: защиты от удаления приложения ребёнка (включение/выключение дистанционно), будущей разблокировки родительского приложения, подтверждения отвязки устройства. 4–8 цифр, argon2 на сервере, 5 неверных попыток подряд → блокировка на 15 минут. После удаления PIN защита на всех детях снимается каскадом.
+- **Защита от удаления на устройстве ребёнка (backend)** — каждая запись ребёнка теперь имеет флаг «защита включена» с отметкой даты и автором (важно в семьях с несколькими родителями). Включение требует заранее заданного PIN и свежей PIN-верификации. Клиент подтверждает PIN один раз и может переключить защиту у нескольких детей подряд без повторного ввода (окно 5 минут).
+
+### Инфраструктура
+
+- Prisma: в `users` — поля `pinHash` / `pinUpdatedAt`; в `children` — `protectionEnabled` / `protectionEnabledAt` / `protectionEnabledBy`. Миграция `20260422100000_add_user_pin_and_child_protection`.
+- Новый `PinService` (argon2 + Redis rate-limit и verify-marker) и `PinVerifiedGuard`. ENV: `PIN_LOCK_AFTER=5`, `PIN_LOCK_TTL_SECONDS=900`, `PIN_VERIFY_TTL_SECONDS=300`.
+- Новые эндпоинты: `GET /me/pin/status`, `POST /me/pin`, `POST /me/pin/verify`, `DELETE /me/pin`, `GET /family/children/:childId/protection`, `PATCH /family/children/:childId/protection`.
+- `GET /me` теперь возвращает флаг `hasPin` (рядом с `hasPassword`) — клиент использует его для выбора между «задать» и «сменить» PIN.
+- 9 новых unit-тестов (PinService, UserPinService, PinVerifiedGuard, ChildrenService.setProtection). Всего по backend — 238.
+
+---
+
 ## v0.24.2 — 2026-04-22
 
 ### Улучшения

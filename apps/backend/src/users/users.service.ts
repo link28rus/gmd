@@ -33,6 +33,7 @@ export class UsersService {
     }>;
     isAdmin: boolean;
     hasPassword: boolean;
+    hasPin: boolean;
     requiresConsent: boolean;
     currentPolicyVersion: string;
   }> {
@@ -66,6 +67,7 @@ export class UsersService {
     const isAdmin =
       user.role === 'admin' || this.adminCfg.emails.includes(user.email.toLowerCase().trim());
     const hasPassword = Boolean(user.passwordHash);
+    const hasPin = Boolean(user.pinHash);
     const requiresConsent = this.consent.userRequiresConsent(user.acceptedPrivacyPolicyVersion);
     const currentPolicyVersion = this.consent.getCurrentVersion();
 
@@ -87,6 +89,7 @@ export class UsersService {
       })),
       isAdmin,
       hasPassword,
+      hasPin,
       requiresConsent,
       currentPolicyVersion,
     };

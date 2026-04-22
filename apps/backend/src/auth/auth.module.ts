@@ -8,7 +8,9 @@ import { SmtpOtpProvider } from './providers/smtp-otp.provider';
 import { OTP_DELIVERY } from './providers/otp-delivery.provider';
 import { PrismaModule } from '../prisma/prisma.module';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { PinVerifiedGuard } from './guards/pin-verified.guard';
 import { PasswordService, PASSWORD_CONFIG } from './password.service';
+import { PinService, PIN_CONFIG } from './pin.service';
 import { RedisModule } from '../redis/redis.module';
 import { MailerModule } from '../mailer/mailer.module';
 import { EmailVerificationService, EMAIL_VERIFICATION_CONFIG } from './email-verification.service';
@@ -56,6 +58,14 @@ function asNum(v: string | undefined, def: number): number {
         lockTtlSec: asNum(process.env.PASSWORD_LOCK_TTL_SECONDS, 900),
       }),
     },
+    {
+      provide: PIN_CONFIG,
+      useFactory: () => ({
+        lockAfter: asNum(process.env.PIN_LOCK_AFTER, 5),
+        lockTtlSec: asNum(process.env.PIN_LOCK_TTL_SECONDS, 900),
+        verifyTtlSec: asNum(process.env.PIN_VERIFY_TTL_SECONDS, 300),
+      }),
+    },
     { provide: OTP_DELIVERY, useClass: SmtpOtpProvider },
     {
       provide: EMAIL_VERIFICATION_CONFIG,
@@ -70,10 +80,19 @@ function asNum(v: string | undefined, def: number): number {
     RefreshTokenService,
     AuthService,
     JwtAuthGuard,
+    PinVerifiedGuard,
     PasswordService,
+    PinService,
     EmailVerificationService,
     PasswordResetService,
   ],
-  exports: [JwtService, JwtAuthGuard, AuthService, PasswordResetService],
+  exports: [
+    JwtService,
+    JwtAuthGuard,
+    PinVerifiedGuard,
+    AuthService,
+    PasswordResetService,
+    PinService,
+  ],
 })
 export class AuthModule {}
