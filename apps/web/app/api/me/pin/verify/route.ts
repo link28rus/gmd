@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { backend } from '@/lib/backend';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const auth = req.headers.get('authorization');
   if (!auth || !auth.startsWith('Bearer ')) {

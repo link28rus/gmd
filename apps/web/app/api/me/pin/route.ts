@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { backend } from '@/lib/backend';
 
+// Роут опирается на Authorization header — Next.js должен понять что это
+// dynamic и не кэшировать build-time snapshot (симптом: GET всегда возвращает
+// одно и то же значение — исходное в момент билда).
+export const dynamic = 'force-dynamic';
+
 function unauthorized(): NextResponse {
   return NextResponse.json(
     { error: { code: 'unauthorized', message: 'Missing Bearer token' } },
