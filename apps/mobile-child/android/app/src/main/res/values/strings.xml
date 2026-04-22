@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="gmd_accessibility_description">Родительский контроль GMD: запрашивает PIN родителя при попытке удалить приложение или отключить администратора устройства. Не собирает и не передаёт никакие данные с других приложений.</string>
+    <string name="gmd_pin_lock_title">Введите PIN родителя</string>
+    <string name="gmd_pin_lock_subtitle">Для удаления приложения или отключения родительского контроля</string>
+    <string name="gmd_pin_lock_cancel">Отмена</string>
+    <string name="gmd_pin_lock_confirm">Подтвердить</string>
+    <string name="gmd_pin_lock_invalid">Неверный PIN</string>
+    <string name="gmd_pin_lock_no_parent">Сначала задайте PIN в кабинете родителя</string>
+    <string name="gmd_pin_lock_locked">Слишком много попыток — попробуйте позже</string>
+    <string name="gmd_pin_lock_network">Нет связи. Подключитесь к интернету.</string>
+</resources>

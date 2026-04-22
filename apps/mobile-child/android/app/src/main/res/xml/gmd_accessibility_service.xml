@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- L2 защита: перехватываем экраны подтверждения Uninstall / Deactivate
+     admin в Settings и требуем PIN родителя. canRetrieveWindowContent нужен
+     для чтения текста заголовков/кнопок (RU + EN + OEM-варианты). События —
+     только WINDOW_STATE_CHANGED: детектим появление нужного экрана, не ждём
+     тапа (успеем перехватить до показа диалога). -->
+<accessibility-service
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/gmd_accessibility_description"
+    android:accessibilityEventTypes="typeWindowStateChanged"
+    android:packageNames="com.android.settings,com.miui.securitycenter,com.android.packageinstaller,com.miui.packageinstaller"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:notificationTimeout="100"
+    android:canRetrieveWindowContent="true"
+    android:settingsActivity="ru.link28rus.gmd.child.MainActivity" />

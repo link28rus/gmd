@@ -9,6 +9,22 @@
 
 ---
 
+## v0.27.0 — 2026-04-22
+
+### Новые возможности
+
+- **L2 защита от удаления через AccessibilityService** — теперь ребёнок не может отключить администратора устройства или удалить приложение даже из Settings → Security → Device Administrators. При попытке открыть подтверждающий экран (Uninstall, Force stop, Deactivate administrator) сервис перехватывает навигацию и показывает нативную плашку ввода PIN родителя. После ввода корректного PIN включается «окно разрешения» 30 сек — ребёнок может завершить законное действие, затем защита снова активна.
+
+### Инфраструктура
+
+- Новый backend-эндпоинт `POST /child/protection/verify-pin` под `ChildAuthGuard` — ребёнок верифицирует PIN родителя по device-token. Проверяется против хешей всех родителей в семье (любой валиден). Rate-limit per-childDevice: 5 неверных подряд → lock 15 мин. Ошибки: 401 `invalid_pin`, 401 `no_parent_pin`, 429 `pin_locked`.
+- Android: новый `GmdAccessibilityService` + `accessibility_service_config.xml`, `PinLockActivity` (нативная Kotlin-Activity с XML-layout, `HttpURLConnection` без Flutter engine), `NativeCreds` (зеркало deviceToken + apiBaseUrl в plain SharedPreferences для чтения из нативного слоя).
+- Android разрешение `BIND_ACCESSIBILITY_SERVICE` декларируется на сервисе — активация только через Settings → Accessibility вручную.
+- В кабинете ребёнка добавилась вторая плашка «Остался один шаг» (оранжевая) — предлагает включить Accessibility Service после активации Device Admin.
+- ENV для сборки: `API_BASE_URL` должен быть передан через `--dart-define` или выставлен в `env.dart` — `NativeCreds` ссылается на него при HTTP-запросе с нативного слоя.
+
+---
+
 ## v0.26.0 — 2026-04-22
 
 ### Новые возможности
