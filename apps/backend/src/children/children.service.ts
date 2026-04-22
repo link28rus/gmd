@@ -1,4 +1,4 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 export interface ProtectionState {
@@ -36,6 +36,8 @@ export class ChildrenService {
       id: string;
       name: string;
       dateOfBirth: Date | null;
+      protectionEnabled: boolean;
+      protectionEnabledAt: Date | null;
       device: {
         id: string;
         deviceName: string | null;
@@ -50,6 +52,8 @@ export class ChildrenService {
       id: string;
       name: string;
       dateOfBirth: Date | null;
+      protectionEnabled: boolean;
+      protectionEnabledAt: Date | null;
       device: {
         id: string;
         deviceName: string | null;
@@ -68,6 +72,8 @@ export class ChildrenService {
       id: c.id,
       name: c.name,
       dateOfBirth: c.dateOfBirth,
+      protectionEnabled: c.protectionEnabled,
+      protectionEnabledAt: c.protectionEnabledAt,
       device: c.device
         ? {
             id: c.device.id,
@@ -113,10 +119,6 @@ export class ChildrenService {
     };
   }
 
-  // enable=true требует чтобы у родителя был задан PIN (User.pinHash != null) —
-  // без него нечем будет подтвердить деактивацию Device Admin на устройстве
-  // ребёнка. Свежесть verified-marker проверяется в PinVerifiedGuard, здесь
-  // только целостность данных.
   async setProtection(
     familyId: string,
     childId: string,
@@ -129,19 +131,6 @@ export class ChildrenService {
     });
     if (!child) {
       throw new NotFoundException({ code: 'child_not_found', message: 'Child not found' });
-    }
-
-    if (enabled) {
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: { pinHash: true },
-      });
-      if (!user || !user.pinHash) {
-        throw new BadRequestException({
-          code: 'pin_not_set',
-          message: 'Set parent PIN before enabling protection',
-        });
-      }
     }
 
     const now = enabled ? new Date() : null;

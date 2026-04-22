@@ -1,5 +1,5 @@
 'use client';
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 
 interface LatestLite {
   lat: number;
@@ -10,9 +10,11 @@ interface LatestLite {
 
 interface Props {
   latest: LatestLite | null;
+  /** Блок действий (toggle защиты, отвязать устройство, удалить ребёнка). */
+  actions?: ReactNode;
 }
 
-export function MapErrorFallback({ latest }: Props): ReactElement {
+export function MapErrorFallback({ latest, actions }: Props): ReactElement {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 bg-zinc-50 p-6 text-center">
       <p className="text-zinc-700">
@@ -35,6 +37,11 @@ export function MapErrorFallback({ latest }: Props): ReactElement {
           >
             Открыть в Яндекс.Картах
           </a>
+        </div>
+      )}
+      {actions && (
+        <div className="mt-4 w-full max-w-[320px] overflow-hidden rounded-lg border border-zinc-200 bg-white text-left shadow-sm">
+          {actions}
         </div>
       )}
     </div>

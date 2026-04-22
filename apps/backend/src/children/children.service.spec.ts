@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { ChildrenService } from './children.service';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 import type { PrismaService } from '../prisma/prisma.service';
 
 interface MockPrisma {
@@ -113,19 +113,43 @@ describe('ChildrenService', () => {
     expect(p._children[0].familyId).toBe('fam-1');
   });
 
-  it('listChildren возвращает только family и не-deleted, с device', async () => {
+  it('listChildren возвращает только family и не-deleted, с device и protection', async () => {
     const p = makePrismaMock();
     const svc = new ChildrenService(p as unknown as PrismaService);
+    const enabledAt = new Date();
     p._children.push(
-      { id: 'c1', familyId: 'f1', name: 'A', deletedAt: null },
-      { id: 'c2', familyId: 'f1', name: 'B', deletedAt: new Date() },
-      { id: 'c3', familyId: 'f2', name: 'C', deletedAt: null },
+      {
+        id: 'c1',
+        familyId: 'f1',
+        name: 'A',
+        deletedAt: null,
+        protectionEnabled: true,
+        protectionEnabledAt: enabledAt,
+      },
+      {
+        id: 'c2',
+        familyId: 'f1',
+        name: 'B',
+        deletedAt: new Date(),
+        protectionEnabled: false,
+        protectionEnabledAt: null,
+      },
+      {
+        id: 'c3',
+        familyId: 'f2',
+        name: 'C',
+        deletedAt: null,
+        protectionEnabled: false,
+        protectionEnabledAt: null,
+      },
     );
     p._devices.push({ id: 'd1', childId: 'c1', revokedAt: null, deviceName: 'X' });
     const list = await svc.listChildren('f1');
     expect(list).toHaveLength(1);
     expect(list[0].id).toBe('c1');
     expect(list[0].device?.id).toBe('d1');
+    expect(list[0].protectionEnabled).toBe(true);
+    expect(list[0].protectionEnabledAt).toEqual(enabledAt);
   });
 
   it('updateChild обновляет name', async () => {
@@ -177,7 +201,7 @@ describe('ChildrenService', () => {
       await expect(svc.getProtection('f1', 'missing')).rejects.toThrow(NotFoundException);
     });
 
-    it('setProtection enable=true без pinHash → 400 pin_not_set', async () => {
+    it('setProtection enable=true без pinHash → включает защиту (L1-only, без PIN-gate)', async () => {
       const p = makePrismaMock();
       const svc = new ChildrenService(p as unknown as PrismaService);
       p._children.push({
@@ -185,12 +209,14 @@ describe('ChildrenService', () => {
         familyId: 'f1',
         deletedAt: null,
         protectionEnabled: false,
+        protectionEnabledAt: null,
+        protectionEnabledBy: null,
       });
       p._users.push({ id: 'u1', pinHash: null });
-      await expect(svc.setProtection('f1', 'c1', true, 'u1')).rejects.toBeInstanceOf(
-        BadRequestException,
-      );
-      expect(p._children[0].protectionEnabled).toBe(false);
+      const s = await svc.setProtection('f1', 'c1', true, 'u1');
+      expect(s.enabled).toBe(true);
+      expect(s.enabledBy).toBe('u1');
+      expect(p._children[0].protectionEnabled).toBe(true);
     });
 
     it('setProtection enable=true с pinHash → сохраняет enabled+At+By', async () => {

@@ -9,6 +9,25 @@
 
 ---
 
+## v0.29.0 — 2026-04-23
+
+### Новые возможности
+
+- **Защита от удаления — простой тумблер без PIN** — в карточке выбранного ребёнка появился переключатель «Защита от удаления». Одно нажатие включает/выключает защиту, без модалки ввода PIN. Работает по аналогии с «Где мои дети / Пинго». Бэкенд-флаг `Child.protectionEnabled` управляется по `PATCH /family/children/:childId/protection` — теперь просто под JWT, без `PinVerifiedGuard`.
+
+### Улучшения
+
+- **Действия доступны даже при падении карты Яндекса** — `MapErrorFallback` теперь рендерит панель действий (история, защита, сигнал, отвязать, удалить), чтобы родитель мог управлять ребёнком при временном сбое карты.
+
+### Изменения
+
+- backend: `PATCH /family/children/:childId/protection` снят `PinVerifiedGuard`, `setProtection` больше не требует `pinHash` (защита включается «L1-only» даже без PIN-gate на детском устройстве).
+- backend: `GET /family/children` возвращает `protectionEnabled` и `protectionEnabledAt` в списке — UI рендерит тумблер по этому полю.
+- web: новый route `/api/children/[id]/protection` (proxy), хук `useToggleProtection`, компонент тумблера встроен в `ChildActions`.
+- tests: обновлён `children.service.spec` — enable=true без pinHash проходит (было `BadRequestException pin_not_set`, стало `enabled=true`).
+
+---
+
 ## v0.28.0 — 2026-04-22
 
 ### Новые возможности

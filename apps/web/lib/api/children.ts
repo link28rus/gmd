@@ -14,7 +14,15 @@ export interface Child {
   id: string;
   name: string;
   dateOfBirth: string | null;
+  protectionEnabled: boolean;
+  protectionEnabledAt: string | null;
   device: ChildDevice | null;
+}
+
+export interface ProtectionState {
+  enabled: boolean;
+  enabledAt: string | null;
+  enabledBy: string | null;
 }
 
 export interface InviteResponse {
@@ -58,5 +66,10 @@ export const childrenApi = {
   sendSignal: (id: string) =>
     apiFetch<{ commandId: string; expiresAt: string }>(`/api/children/${id}/signal`, {
       method: 'POST',
+    }),
+  setProtection: (id: string, enabled: boolean) =>
+    apiFetch<ProtectionState>(`/api/children/${id}/protection`, {
+      method: 'PATCH',
+      body: JSON.stringify({ enabled }),
     }),
 };

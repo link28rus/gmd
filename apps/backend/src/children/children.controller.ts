@@ -16,7 +16,6 @@ import type { Request } from 'express';
 import { z } from 'zod';
 import { ChildrenService } from './children.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { PinVerifiedGuard } from '../auth/guards/pin-verified.guard';
 import { ConsentRequiredGuard } from '../consent/guards/consent-required.guard';
 import { ZodValidationPipe } from '../common/zod/zod-validation.pipe';
 import { CreateChildSchema } from './dto/create-child.dto';
@@ -43,6 +42,8 @@ export class ChildrenController {
         id: c.id,
         name: c.name,
         dateOfBirth: c.dateOfBirth,
+        protectionEnabled: c.protectionEnabled,
+        protectionEnabledAt: c.protectionEnabledAt,
         device: c.device
           ? {
               id: c.device.id,
@@ -95,11 +96,7 @@ export class ChildrenController {
     return this.children.getProtection(req.user.familyId, childId);
   }
 
-  // enable/disable требует свежего PIN-verify (PinVerifiedGuard). На стороне
-  // клиента: сначала POST /me/pin/verify, затем в течение PIN_VERIFY_TTL_SECONDS
-  // можно дёргать PATCH без повторного ввода PIN.
   @Patch(':childId/protection')
-  @UseGuards(PinVerifiedGuard)
   async setProtection(
     @Req() req: AuthedRequest,
     @Param('childId') childId: string,

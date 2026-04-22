@@ -241,6 +241,7 @@ function MapArea({ child }: { child: Child }): ReactElement {
               }
             : null
         }
+        actions={<ChildActions child={child} showReset={true} />}
       />
     );
   }

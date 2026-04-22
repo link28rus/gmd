@@ -46,3 +46,9 @@ export function useCreateInvite() {
 export function useResetDevice() {
   return useInvalidating<unknown, string>(childrenApi.resetDevice);
 }
+
+export function useToggleProtection() {
+  return useInvalidating<unknown, { id: string; enabled: boolean }>(({ id, enabled }) =>
+    childrenApi.setProtection(id, enabled),
+  );
+}
