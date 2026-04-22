@@ -102,14 +102,170 @@ class _ProtectionBannerState extends ConsumerState<ProtectionBanner>
       return _Banner(
         color: Colors.orange,
         title: 'Остался один шаг',
-        subtitle: 'В настройках включи «GMD родительский контроль» для полной защиты.',
+        subtitle: 'Включи «GMD родительский контроль» в спец.возможностях.',
         buttonLabel: 'Открыть',
-        onTap: () =>
-            ref.read(deviceAdminChannelProvider).openAccessibilitySettings(),
+        onTap: () => _showAccessibilityWizard(context, ref),
       );
     }
 
     return const SizedBox.shrink();
+  }
+
+  Future<void> _showAccessibilityWizard(BuildContext context, WidgetRef ref) async {
+    final admin = ref.read(deviceAdminChannelProvider);
+    final manufacturer = await admin.deviceManufacturer();
+    final needsRestrictedUnlock = const ['xiaomi', 'redmi', 'poco'].contains(manufacturer);
+
+    if (!context.mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheet) => _AccessibilityWizard(
+        needsRestrictedUnlock: needsRestrictedUnlock,
+        onOpenAppDetails: () => admin.openAppDetailsSettings(),
+        onOpenAccessibility: () => admin.openAccessibilitySettings(),
+      ),
+    );
+  }
+}
+
+// Для Xiaomi/Redmi/POCO: первым шагом открываем карточку приложения, чтобы
+// пользователь в меню ⋮ нажал «Разрешить ограниченные настройки» (без этого
+// HyperOS блокирует включение Accessibility для sideload-APK). Вторым шагом —
+// Accessibility Settings. На stock-устройствах шаг «Разрешить» не нужен, но
+// его ненавязчивое наличие не ломает UX (скрываем через needsRestrictedUnlock).
+class _AccessibilityWizard extends StatelessWidget {
+  const _AccessibilityWizard({
+    required this.needsRestrictedUnlock,
+    required this.onOpenAppDetails,
+    required this.onOpenAccessibility,
+  });
+
+  final bool needsRestrictedUnlock;
+  final Future<void> Function() onOpenAppDetails;
+  final Future<void> Function() onOpenAccessibility;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Включение полной защиты',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              needsRestrictedUnlock
+                  ? 'На этом телефоне нужно два шага — MIUI/HyperOS блокирует спец.возможности для приложений не из Mi App Store.'
+                  : 'Открой спец.возможности и включи «GMD родительский контроль».',
+              style: const TextStyle(fontSize: 13, color: Colors.black54),
+            ),
+            const SizedBox(height: 24),
+            if (needsRestrictedUnlock) ...[
+              _Step(
+                n: 1,
+                title: 'Разрешить ограниченные настройки',
+                body:
+                    'Откроется карточка приложения → нажми ⋮ в правом верхнем углу → выбери «Разрешить ограниченные настройки».',
+                buttonLabel: 'Открыть карточку приложения',
+                onTap: onOpenAppDetails,
+              ),
+              const SizedBox(height: 16),
+              _Step(
+                n: 2,
+                title: 'Включить спец.возможности',
+                body:
+                    'Спец.возможности → Скачанные приложения → gmd_child → включи тумблер.',
+                buttonLabel: 'Открыть спец.возможности',
+                onTap: onOpenAccessibility,
+              ),
+            ] else
+              _Step(
+                n: 1,
+                title: 'Включить спец.возможности',
+                body:
+                    'Спец.возможности → Скачанные приложения → gmd_child → включи тумблер.',
+                buttonLabel: 'Открыть спец.возможности',
+                onTap: onOpenAccessibility,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Step extends StatelessWidget {
+  const _Step({
+    required this.n,
+    required this.title,
+    required this.body,
+    required this.buttonLabel,
+    required this.onTap,
+  });
+  final int n;
+  final String title;
+  final String body;
+  final String buttonLabel;
+  final Future<void> Function() onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 28,
+              height: 28,
+              alignment: Alignment.center,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.orange,
+              ),
+              child: Text(
+                '$n',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      style: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 4),
+                  Text(body,
+                      style:
+                          const TextStyle(fontSize: 13, color: Colors.black54)),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.centerRight,
+          child: FilledButton(
+            onPressed: () => onTap(),
+            child: Text(buttonLabel),
+          ),
+        ),
+      ],
+    );
   }
 }
 

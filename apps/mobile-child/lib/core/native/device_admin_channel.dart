@@ -33,6 +33,15 @@ class DeviceAdminChannel {
     await _channel.invokeMethod('openAccessibilitySettings');
   }
 
+  Future<void> openAppDetailsSettings() async {
+    await _channel.invokeMethod('openAppDetailsSettings');
+  }
+
+  Future<String> deviceManufacturer() async {
+    final m = await _channel.invokeMethod<String>('deviceManufacturer');
+    return (m ?? '').toLowerCase();
+  }
+
   Future<void> saveNativeCreds({
     required String deviceToken,
     required String apiBaseUrl,

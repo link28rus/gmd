@@ -9,6 +9,19 @@
 
 ---
 
+## v0.27.1 — 2026-04-22
+
+### Улучшения
+
+- **Онбординг Accessibility для Xiaomi/HyperOS** — MIUI/HyperOS блокирует включение «Спец.возможности» для sideload-APK (предупреждение «Контролируется настройками с ограниченным доступом»). Теперь по тапу на плашку «Остался один шаг» открывается bottom-sheet с двумя шагами: (1) открыть карточку приложения, чтобы в меню ⋮ выбрать «Разрешить ограниченные настройки»; (2) открыть спец.возможности и включить сервис. На других производителях показывается только один шаг. Определение OEM — по `Build.MANUFACTURER` (xiaomi/redmi/poco).
+
+### Инфраструктура
+
+- Новые MethodChannel-методы: `openAppDetailsSettings` (Intent `ACTION_APPLICATION_DETAILS_SETTINGS` с `package:…`), `deviceManufacturer`.
+- `DeviceAdminChannel.openAppDetailsSettings()` / `.deviceManufacturer()` в Dart.
+
+---
+
 ## v0.27.0 — 2026-04-22
 
 ### Новые возможности

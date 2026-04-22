@@ -123,6 +123,20 @@ class MainActivity : FlutterActivity() {
                         startActivity(intent)
                         result.success(null)
                     }
+                    "openAppDetailsSettings" -> {
+                        // Карточка приложения в Settings. На MIUI/HyperOS тут
+                        // в меню ⋮ лежит «Разрешить ограниченные настройки»,
+                        // без которого sideload-APK не может включить
+                        // Accessibility. На stock Android этот экран — просто
+                        // App info.
+                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                            .setData(android.net.Uri.parse("package:$packageName"))
+                        startActivity(intent)
+                        result.success(null)
+                    }
+                    "deviceManufacturer" -> result.success(
+                        android.os.Build.MANUFACTURER.lowercase()
+                    )
                     "saveNativeCreds" -> {
                         val token = call.argument<String>("deviceToken")
                         val baseUrl = call.argument<String>("apiBaseUrl")
