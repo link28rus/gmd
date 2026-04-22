@@ -128,6 +128,18 @@ export class ChildDeviceService {
     };
   }
 
+  // Короткий запрос protection-state для mobile-child: возвращает только
+  // флаг, без истории. Mobile-child опрашивает при старте и далее периодически
+  // (heartbeat 2 мин) — по результату решает активировать/деактивировать
+  // DeviceAdmin.
+  async getProtection(childId: string): Promise<{ enabled: boolean }> {
+    const child = await this.prisma.child.findFirst({
+      where: { id: childId, deletedAt: null },
+      select: { protectionEnabled: true },
+    });
+    return { enabled: child?.protectionEnabled ?? false };
+  }
+
   async verifyToken(token: string): Promise<ChildAuthContext | null> {
     const tokenHash = sha256(token);
     const device = await this.prisma.childDevice.findFirst({

@@ -223,6 +223,22 @@ class ChildApi {
     }
   }
 
+  // Protection-state: нужен ли Device Admin. Вызывается при старте home-экрана
+   // и перед heartbeat (в background-изоляте не нужен — protection UI только в
+   // foreground). Ошибки сети → null, UI тогда оставляет статус как есть.
+  Future<bool?> getProtection({required String deviceToken}) async {
+    try {
+      final resp = await _dio.get(
+        '/child/protection',
+        options: Options(headers: {'X-Child-Token': deviceToken}),
+      );
+      final data = resp.data as Map<String, dynamic>;
+      return data['enabled'] as bool;
+    } on DioException catch (_) {
+      return null;
+    }
+  }
+
   Future<SosResponse> sendSos({
     required String deviceToken,
     required double lat,

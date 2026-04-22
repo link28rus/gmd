@@ -63,4 +63,15 @@ export class ChildDeviceController {
       device: { id: req.childDevice.deviceId },
     };
   }
+
+  // Ребёнок опрашивает protection-state с устройства по device-token
+  // (без участия родителя в auth-flow). Если enabled=true и Device Admin
+  // не активен — приложение показывает экран активации. Отдельно от
+  // /family/children/:id/protection (который требует родительский JWT).
+  @Get('protection')
+  @UseGuards(ChildAuthGuard)
+  @Throttle({ default: { ttl: 60_000, limit: 60 } })
+  async protection(@Req() req: ChildRequest): Promise<{ enabled: boolean }> {
+    return this.svc.getProtection(req.childDevice.childId);
+  }
 }

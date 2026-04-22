@@ -101,6 +101,22 @@
             android:name=".HeartbeatReceiver"
             android:enabled="true"
             android:exported="false"/>
+        <!-- L1-защита от удаления приложения. Пока Device Admin активен,
+             Android блокирует стандартный Uninstall из Settings → Apps →
+             gmd_child — вместо этого показывается «Deactivate device
+             administrator». Активация через ACTION_ADD_DEVICE_ADMIN
+             (см. MainActivity.protection channel). -->
+        <receiver
+            android:name=".ChildDeviceAdminReceiver"
+            android:permission="android.permission.BIND_DEVICE_ADMIN"
+            android:exported="true">
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/device_admin_policies" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+            </intent-filter>
+        </receiver>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

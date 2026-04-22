@@ -9,6 +9,26 @@
 
 ---
 
+## v0.26.0 — 2026-04-22
+
+### Новые возможности
+
+- **Защита от удаления на устройстве ребёнка (L1 Device Admin)** — mobile-child теперь умеет активировать себя как Device Administrator в Android. Пока режим активен, системные настройки заменяют кнопку «Удалить» на «Отключить администратора устройства» — ребёнок не может снести приложение одним тапом. На главном экране появилась янтарная плашка «Защита приложения не включена» — показывается только если защита включена родителем через кабинет, но на устройстве ещё не активирована; тап по плашке открывает системный диалог подтверждения. После возврата из диалога статус перечитывается автоматически.
+
+### Инфраструктура
+
+- Android: новый `ChildDeviceAdminReceiver` + `res/xml/device_admin_policies.xml` (минимальный набор policies — достаточно для блокировки Uninstall). `AndroidManifest.xml`: receiver с `BIND_DEVICE_ADMIN` и intent-filter на `DEVICE_ADMIN_ENABLED`.
+- `MainActivity`: новый MethodChannel `ru.link28rus.gmd.child/protection` — методы `isActive`, `requestActivation` (ACTION_ADD_DEVICE_ADMIN с русским explanation), `openSettings`.
+- Flutter: `DeviceAdminChannel` + `ProtectionBanner` (watcher через `WidgetsBindingObserver.didChangeAppLifecycleState`, invalidate провайдера при возврате в foreground).
+- Новый backend-эндпоинт `GET /child/protection` под `ChildAuthGuard` — отдаёт `{enabled: boolean}` для текущего устройства по device-token (без участия родителя в auth-flow).
+
+### Что следующее
+
+- PIN-интеграция в Device Admin deactivation (L2 AccessibilityService overlay) — сейчас `onDisableRequested` возвращает только текст-предупреждение, но не блокирует. Решение — отдельной итерацией.
+- Web UI в кабинете родителя: страница PIN-кода (задать/сменить) + toggle «Защита от удаления» на карточке ребёнка. Backend для обоих уже готов (v0.25.0).
+
+---
+
 ## v0.25.0 — 2026-04-22
 
 ### Новые возможности

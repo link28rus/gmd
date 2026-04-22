@@ -5,6 +5,7 @@ import '../../core/version/app_version.dart';
 import '../sos/sos_controller.dart';
 import 'home_controller.dart';
 import 'permission_health_banner.dart';
+import 'protection_banner.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -69,6 +70,7 @@ class HomeScreen extends ConsumerWidget {
       ),
       body: Column(
         children: [
+          const ProtectionBanner(),
           const PermissionHealthBanner(),
           Expanded(
             child: Padding(
