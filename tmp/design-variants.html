@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <title>/admin/settings — варианты</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,700&family=Instrument+Serif:ital@0;1&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      html { font-family: 'Geist', system-ui, sans-serif; }
+      .font-display-serif { font-family: 'Fraunces', serif; }
+      .font-serif-editorial { font-family: 'Instrument Serif', serif; }
+      .font-mono { font-family: 'Geist Mono', ui-monospace, monospace; }
+      .variant-frame {
+        box-shadow: 0 40px 80px -40px rgba(0,0,0,0.25), 0 8px 24px -12px rgba(0,0,0,0.1);
+      }
+    </style>
+  </head>
+  <body class="bg-zinc-100 text-zinc-900">
+    <div class="mx-auto max-w-[1120px] px-8 py-12 space-y-20">
+
+      <!-- HEADER -->
+      <div>
+        <p class="font-mono text-[11px] uppercase tracking-[0.22em] text-zinc-500 mb-2">design exploration</p>
+        <h1 class="text-3xl font-semibold tracking-tight">/admin/settings — 5 направлений</h1>
+        <p class="mt-2 max-w-2xl text-sm text-zinc-600">Один и тот же набор данных (секция trip.* + секция smtp.* + блок теста SMTP) в пяти стилистиках. Фон базовой страницы zinc-50 во всех вариантах.</p>
+      </div>
+
+      <!-- =========== VARIANT A =========== -->
+      <section class="space-y-4">
+        <div class="flex items-baseline gap-3">
+          <span class="font-mono text-[11px] uppercase tracking-[0.22em] text-sky-700">Variant A</span>
+          <h2 class="text-xl font-semibold tracking-tight">Engineering log · terminal</h2>
+          <span class="text-sm text-zinc-500">— текущий задеплоенный v0.24.1</span>
+        </div>
+        <div class="variant-frame rounded-xl overflow-hidden border border-zinc-200 bg-zinc-50">
+          <!-- admin header -->
+          <div class="bg-slate-900 text-slate-100 px-6 py-2 text-[11px] uppercase tracking-[0.22em] flex items-center gap-2 border-b border-black/40">
+            <span class="h-2 w-2 rounded-full bg-sky-400"></span>
+            Режим администратора · Настройки
+          </div>
+          <div class="px-10 pt-8 pb-10">
+            <p class="font-mono text-[11px] uppercase tracking-[0.18em] text-zinc-500 mb-6">Админка › Параметры</p>
+            <div class="flex justify-between items-end border-b border-zinc-200 pb-6 mb-10">
+              <div>
+                <p class="font-mono text-[11px] uppercase tracking-[0.22em] text-sky-700 mb-2">System configuration</p>
+                <h3 class="text-3xl font-semibold tracking-tight">Параметры системы</h3>
+              </div>
+              <dl class="text-right font-mono text-[11px] uppercase tracking-[0.18em] text-zinc-500 space-y-1">
+                <div><dt class="inline">Версия </dt><dd class="inline text-zinc-900">v0.24.1</dd></div>
+                <div><dt class="inline">Шифрование </dt><dd class="inline text-zinc-900">AES-256-GCM</dd></div>
+              </dl>
+            </div>
+            <div class="grid grid-cols-[180px_1fr] gap-10">
+              <aside>
+                <p class="font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-400 mb-3">Содержание</p>
+                <ol class="space-y-1 text-[13px]">
+                  <li class="flex gap-3 border-l-2 border-zinc-900 pl-3 py-1.5"><span class="font-mono text-[10px] text-sky-600">01</span><span>Сохранение маршрутов</span></li>
+                  <li class="flex gap-3 border-l-2 border-transparent pl-3 py-1.5 text-zinc-500"><span class="font-mono text-[10px] text-zinc-400">02</span><span>Почтовый сервер</span></li>
+                </ol>
+              </aside>
+              <div class="space-y-10">
+                <div>
+                  <div class="flex items-center gap-3 mb-2">
+                    <span class="font-mono text-xs tracking-[0.22em] text-zinc-400">§ 01</span>
+                    <span class="h-px flex-1 bg-zinc-200"></span>
+                    <span class="font-mono text-[11px] uppercase tracking-[0.18em] text-sky-700">Routes</span>
+                  </div>
+                  <h4 class="text-2xl font-semibold tracking-tight mb-4">Сохранение маршрутов</h4>
+                  <div class="border-y border-zinc-200 divide-y divide-zinc-200">
+                    <div class="grid grid-cols-[280px_1fr] gap-8 py-5">
+                      <div>
+                        <div class="text-[15px] font-semibold">Минут без движения</div>
+                        <code class="font-mono text-[11px] text-zinc-500">trip.idle_minutes</code>
+                        <p class="mt-2 text-[13px] text-zinc-600">После скольких минут без движения считаем остановку концом поездки.</p>
+                      </div>
+                      <div class="flex gap-2 items-start">
+                        <div class="relative flex-1">
+                          <input value="30" class="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 pr-14 font-mono text-sm" />
+                          <span class="absolute inset-y-0 right-3 flex items-center font-mono text-[11px] uppercase tracking-wider text-zinc-400">мин</span>
+                        </div>
+                        <button class="px-4 py-2 text-sm font-medium border border-zinc-200 text-zinc-400 rounded-md">Сохранить</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <div class="flex items-center gap-3 mb-2">
+                    <span class="font-mono text-xs tracking-[0.22em] text-zinc-400">§ 02</span>
+                    <span class="h-px flex-1 bg-zinc-200"></span>
+                    <span class="font-mono text-[11px] uppercase tracking-[0.18em] text-sky-700">Mail · SMTP</span>
+                  </div>
+                  <h4 class="text-2xl font-semibold tracking-tight mb-4">Почтовый сервер</h4>
+                  <div class="border-y border-zinc-200 divide-y divide-zinc-200">
+                    <div class="grid grid-cols-[280px_1fr] gap-8 py-5">
+                      <div>
+                        <div class="flex items-center gap-2 text-[15px] font-semibold">Пароль
+                          <span class="inline-flex items-center rounded-sm border border-amber-300/70 bg-amber-50 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-amber-800">encrypted</span>
+                        </div>
+                        <code class="font-mono text-[11px] text-zinc-500">smtp.pass</code>
+                      </div>
+                      <div class="flex gap-2 items-start">
+                        <input type="password" placeholder="•••••••• — оставьте пустым чтобы не менять" class="flex-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 font-mono text-sm placeholder:font-sans placeholder:text-zinc-400" />
+                        <button class="px-4 py-2 text-sm font-medium border border-zinc-200 text-zinc-400 rounded-md">Сохранить</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="mt-8 overflow-hidden rounded-lg border border-zinc-900 bg-zinc-950 text-zinc-100">
+                    <div class="flex items-center gap-3 border-b border-zinc-800 bg-zinc-900/60 px-4 py-2.5">
+                      <span class="font-mono text-[11px] uppercase tracking-[0.22em] text-zinc-400">smtp · диагностика</span>
+                      <span class="ml-auto font-mono text-[10px] tracking-wider text-zinc-500">gmd-mailer · v1</span>
+                    </div>
+                    <div class="px-5 py-6">
+                      <div class="flex gap-2">
+                        <div class="flex flex-1 items-center gap-2 rounded-md border border-zinc-800 bg-zinc-900 px-3 font-mono text-sm">
+                          <span class="text-emerald-400">▸</span>
+                          <span class="py-2 text-zinc-100">link28rus@ya.ru</span>
+                        </div>
+                        <button class="inline-flex items-center gap-2 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 font-mono text-[11px] uppercase tracking-[0.2em] text-emerald-300">probe</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =========== VARIANT B =========== -->
+      <section class="space-y-4">
+        <div class="flex items-baseline gap-3">
+          <span class="font-mono text-[11px] uppercase tracking-[0.22em] text-sky-700">Variant B</span>
+          <h2 class="text-xl font-semibold tracking-tight">Editorial · журнал</h2>
+        </div>
+        <div class="variant-frame rounded-xl overflow-hidden border border-zinc-200 bg-zinc-50">
+          <div class="bg-slate-900 text-slate-100 px-6 py-2 text-[11px] uppercase tracking-[0.22em] flex items-center gap-2">
+            <span class="h-2 w-2 rounded-full bg-sky-400"></span> Режим администратора · Настройки
+          </div>
+          <div class="px-16 pt-16 pb-14">
+            <p class="text-xs uppercase tracking-[0.3em] text-zinc-500 mb-8">System · Configuration</p>
+            <h3 class="font-display-serif text-[64px] leading-[1.05] tracking-tight text-zinc-900 font-normal">Параметры<br><em class="italic font-serif-editorial text-zinc-500">системы.</em></h3>
+            <p class="mt-8 max-w-xl text-[17px] leading-relaxed text-zinc-600">Глобальные настройки, действующие на все семьи. Значения кэшируются на&nbsp;минуту — изменения применяются&nbsp;к&nbsp;следующим&nbsp;запросам.</p>
+
+            <div class="mt-20 grid grid-cols-[96px_1fr] gap-10">
+              <div class="font-display-serif text-[72px] leading-none text-zinc-300 font-normal">I</div>
+              <div>
+                <h4 class="font-display-serif text-3xl text-zinc-900 mb-1 font-normal">Сохранение маршрутов</h4>
+                <p class="text-[15px] text-zinc-600 mb-8 italic font-serif-editorial text-lg">Как движение ребёнка разбивается на поездки.</p>
+                <div class="space-y-6 max-w-xl">
+                  <div>
+                    <div class="flex justify-between items-end mb-2">
+                      <label class="text-[15px] text-zinc-900">Минут без движения</label>
+                      <span class="font-mono text-[11px] text-zinc-400">trip.idle_minutes</span>
+                    </div>
+                    <div class="flex items-center gap-4 border-b-2 border-zinc-900 pb-1">
+                      <input value="30" class="flex-1 bg-transparent text-2xl font-display-serif focus:outline-none" />
+                      <span class="text-sm text-zinc-500 italic font-serif-editorial text-lg">минут</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-20 grid grid-cols-[96px_1fr] gap-10">
+              <div class="font-display-serif text-[72px] leading-none text-zinc-300 font-normal">II</div>
+              <div>
+                <h4 class="font-display-serif text-3xl text-zinc-900 mb-1 font-normal">Почтовый сервер</h4>
+                <p class="text-[15px] text-zinc-600 mb-8 italic font-serif-editorial text-lg">Подтверждение email, сброс пароля, уведомления.</p>
+                <div class="space-y-6 max-w-xl">
+                  <div>
+                    <div class="flex justify-between items-end mb-2">
+                      <label class="text-[15px] text-zinc-900">Пароль <span class="text-zinc-400 font-normal italic font-serif-editorial ml-1">— шифруется</span></label>
+                      <span class="font-mono text-[11px] text-zinc-400">smtp.pass</span>
+                    </div>
+                    <div class="flex items-center gap-4 border-b-2 border-zinc-900 pb-1">
+                      <input type="password" placeholder="••••••••" class="flex-1 bg-transparent text-2xl font-mono focus:outline-none placeholder:text-zinc-300" />
+                    </div>
+                  </div>
+                  <div class="pt-8 border-t border-zinc-200">
+                    <div class="flex items-end justify-between mb-3">
+                      <p class="italic font-serif-editorial text-xl text-zinc-700">Проверить отправку —</p>
+                      <span class="font-mono text-[10px] uppercase tracking-[0.22em] text-zinc-400">diagnostic</span>
+                    </div>
+                    <div class="flex items-center gap-4 border-b-2 border-zinc-900 pb-1">
+                      <input value="link28rus@ya.ru" class="flex-1 bg-transparent text-xl font-mono focus:outline-none" />
+                      <button class="text-sm font-serif-editorial italic text-zinc-900 hover:text-sky-700">отправить →</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =========== VARIANT C =========== -->
+      <section class="space-y-4">
+        <div class="flex items-baseline gap-3">
+          <span class="font-mono text-[11px] uppercase tracking-[0.22em] text-sky-700">Variant C</span>
+          <h2 class="text-xl font-semibold tracking-tight">Linear · utility</h2>
+        </div>
+        <div class="variant-frame rounded-xl overflow-hidden border border-zinc-200 bg-zinc-50">
+          <div class="bg-slate-900 text-slate-100 px-6 py-2 text-[11px] uppercase tracking-[0.22em] flex items-center gap-2">
+            <span class="h-2 w-2 rounded-full bg-sky-400"></span> Режим администратора · Настройки
+          </div>
+          <div class="mx-auto max-w-[720px] px-6 pt-8 pb-12">
+            <h3 class="text-xl font-semibold tracking-tight">Параметры системы</h3>
+            <p class="text-sm text-zinc-500">Глобальные настройки, кэшируются на минуту.</p>
+
+            <div class="mt-10">
+              <div class="flex items-center gap-2 mb-3">
+                <span class="h-1.5 w-1.5 rounded-full bg-sky-500"></span>
+                <h4 class="text-[13px] font-semibold uppercase tracking-wider text-zinc-700">Сохранение маршрутов</h4>
+              </div>
+              <div class="border border-zinc-200 rounded-lg bg-white divide-y divide-zinc-200">
+                <div class="flex items-center gap-4 px-4 py-3 hover:bg-zinc-50">
+                  <div class="flex-1 min-w-0">
+                    <div class="text-[13px] font-medium text-zinc-900">Минут без движения</div>
+                    <code class="text-[11px] font-mono text-zinc-400">trip.idle_minutes</code>
+                  </div>
+                  <div class="relative w-32">
+                    <input value="30" class="w-full rounded-md border border-zinc-300 px-2.5 py-1 text-sm bg-white font-mono" />
+                    <span class="absolute inset-y-0 right-2 flex items-center text-[10px] text-zinc-400">мин</span>
+                  </div>
+                  <button class="text-xs text-zinc-400">—</button>
+                </div>
+                <div class="flex items-center gap-4 px-4 py-3 hover:bg-zinc-50">
+                  <div class="flex-1 min-w-0">
+                    <div class="text-[13px] font-medium text-zinc-900">Радиус «остановки»</div>
+                    <code class="text-[11px] font-mono text-zinc-400">trip.idle_radius_m</code>
+                  </div>
+                  <div class="relative w-32">
+                    <input value="100" class="w-full rounded-md border border-zinc-300 px-2.5 py-1 text-sm bg-white font-mono" />
+                    <span class="absolute inset-y-0 right-2 flex items-center text-[10px] text-zinc-400">м</span>
+                  </div>
+                  <button class="text-xs text-zinc-400">—</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-8">
+              <div class="flex items-center gap-2 mb-3">
+                <span class="h-1.5 w-1.5 rounded-full bg-sky-500"></span>
+                <h4 class="text-[13px] font-semibold uppercase tracking-wider text-zinc-700">Почтовый сервер</h4>
+                <span class="ml-auto text-[11px] text-emerald-600 flex items-center gap-1"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>encrypted</span>
+              </div>
+              <div class="border border-zinc-200 rounded-lg bg-white divide-y divide-zinc-200">
+                <div class="flex items-center gap-4 px-4 py-3">
+                  <div class="flex-1 min-w-0">
+                    <div class="text-[13px] font-medium">Хост</div>
+                    <code class="text-[11px] font-mono text-zinc-400">smtp.host</code>
+                  </div>
+                  <input value="smtp.yandex.ru" class="w-48 rounded-md border border-zinc-300 px-2.5 py-1 text-sm font-mono" />
+                </div>
+                <div class="flex items-center gap-4 px-4 py-3">
+                  <div class="flex-1 min-w-0">
+                    <div class="text-[13px] font-medium flex items-center gap-2">Пароль <span class="h-1 w-1 rounded-full bg-amber-500" title="encrypted"></span></div>
+                    <code class="text-[11px] font-mono text-zinc-400">smtp.pass</code>
+                  </div>
+                  <input type="password" placeholder="••••••" class="w-48 rounded-md border border-zinc-300 px-2.5 py-1 text-sm font-mono" />
+                </div>
+                <div class="flex items-center gap-4 px-4 py-3 bg-zinc-50/50">
+                  <div class="flex-1 min-w-0">
+                    <div class="text-[13px] font-medium">Проверка</div>
+                    <p class="text-[11px] text-zinc-500">Отправит тестовое письмо через текущие настройки</p>
+                  </div>
+                  <input value="link28rus@ya.ru" class="w-48 rounded-md border border-zinc-300 px-2.5 py-1 text-sm font-mono" />
+                  <button class="rounded-md bg-zinc-900 px-3 py-1 text-xs font-medium text-white">Отправить</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =========== VARIANT D =========== -->
+      <section class="space-y-4">
+        <div class="flex items-baseline gap-3">
+          <span class="font-mono text-[11px] uppercase tracking-[0.22em] text-sky-700">Variant D</span>
+          <h2 class="text-xl font-semibold tracking-tight">Dashboard cards · Vercel/Stripe</h2>
+        </div>
+        <div class="variant-frame rounded-xl overflow-hidden border border-zinc-200 bg-zinc-50">
+          <div class="bg-slate-900 text-slate-100 px-6 py-2 text-[11px] uppercase tracking-[0.22em] flex items-center gap-2">
+            <span class="h-2 w-2 rounded-full bg-sky-400"></span> Режим администратора · Настройки
+          </div>
+          <div class="px-10 pt-10 pb-12">
+            <div class="flex justify-between items-baseline mb-8">
+              <div>
+                <h3 class="text-2xl font-semibold tracking-tight">Параметры системы</h3>
+                <p class="mt-1 text-sm text-zinc-500">Глобальные настройки, применяются ко всем семьям.</p>
+              </div>
+              <span class="text-[11px] text-zinc-400 font-mono">v0.24.1 · AES-256-GCM</span>
+            </div>
+
+            <h4 class="text-[13px] font-semibold tracking-wider uppercase text-zinc-500 mb-3">Сохранение маршрутов</h4>
+            <div class="grid grid-cols-2 gap-4 mb-10">
+              <div class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm hover:shadow-md transition">
+                <div class="flex items-start justify-between mb-3">
+                  <div>
+                    <div class="text-sm font-semibold">Минут без движения</div>
+                    <code class="text-[11px] font-mono text-zinc-400">trip.idle_minutes</code>
+                  </div>
+                  <span class="text-[10px] text-zinc-400 font-mono uppercase tracking-wider">мин</span>
+                </div>
+                <p class="text-xs text-zinc-600 mb-4">После скольких минут простоя поездка считается завершённой.</p>
+                <div class="flex gap-2">
+                  <input value="30" class="flex-1 rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-mono" />
+                  <button class="rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white">Save</button>
+                </div>
+              </div>
+              <div class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm hover:shadow-md transition">
+                <div class="flex items-start justify-between mb-3">
+                  <div>
+                    <div class="text-sm font-semibold">Радиус «остановки»</div>
+                    <code class="text-[11px] font-mono text-zinc-400">trip.idle_radius_m</code>
+                  </div>
+                  <span class="text-[10px] text-zinc-400 font-mono uppercase tracking-wider">м</span>
+                </div>
+                <p class="text-xs text-zinc-600 mb-4">Точки в этом радиусе считаются одной «остановкой».</p>
+                <div class="flex gap-2">
+                  <input value="100" class="flex-1 rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-mono" />
+                  <button class="rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white">Save</button>
+                </div>
+              </div>
+            </div>
+
+            <h4 class="text-[13px] font-semibold tracking-wider uppercase text-zinc-500 mb-3">Почтовый сервер · SMTP</h4>
+            <div class="grid grid-cols-2 gap-4">
+              <div class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
+                <div class="text-sm font-semibold">Хост</div>
+                <code class="text-[11px] font-mono text-zinc-400">smtp.host</code>
+                <input value="smtp.yandex.ru" class="mt-3 w-full rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-mono" />
+              </div>
+              <div class="rounded-xl border border-amber-200 bg-amber-50/40 p-5 shadow-sm">
+                <div class="flex items-center gap-2 text-sm font-semibold">Пароль
+                  <span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider text-amber-800">encrypted</span>
+                </div>
+                <code class="text-[11px] font-mono text-zinc-400">smtp.pass</code>
+                <input type="password" placeholder="••••••" class="mt-3 w-full rounded-md border border-amber-200 bg-white px-3 py-1.5 text-sm font-mono" />
+              </div>
+              <div class="col-span-2 rounded-xl border border-sky-200 bg-sky-50/40 p-5 shadow-sm">
+                <div class="flex items-center justify-between mb-3">
+                  <div>
+                    <div class="text-sm font-semibold">Проверка отправки</div>
+                    <p class="text-xs text-zinc-600">Отправим тестовое письмо с текущей конфигурацией.</p>
+                  </div>
+                  <span class="text-[10px] font-mono uppercase tracking-wider text-sky-700">diagnostic</span>
+                </div>
+                <div class="flex gap-2">
+                  <input value="link28rus@ya.ru" class="flex-1 rounded-md border border-sky-200 bg-white px-3 py-1.5 text-sm font-mono" />
+                  <button class="rounded-md bg-sky-600 px-4 py-1.5 text-xs font-medium text-white">Отправить тест</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =========== VARIANT E =========== -->
+      <section class="space-y-4">
+        <div class="flex items-baseline gap-3">
+          <span class="font-mono text-[11px] uppercase tracking-[0.22em] text-sky-700">Variant E</span>
+          <h2 class="text-xl font-semibold tracking-tight">Form-first · Apple Settings</h2>
+        </div>
+        <div class="variant-frame rounded-xl overflow-hidden border border-zinc-200 bg-zinc-50">
+          <div class="bg-slate-900 text-slate-100 px-6 py-2 text-[11px] uppercase tracking-[0.22em] flex items-center gap-2">
+            <span class="h-2 w-2 rounded-full bg-sky-400"></span> Режим администратора · Настройки
+          </div>
+          <div class="mx-auto max-w-[680px] px-6 pt-10 pb-28 relative">
+            <h3 class="text-2xl font-semibold tracking-tight mb-1">Параметры системы</h3>
+            <p class="text-sm text-zinc-500 mb-10">Глобальные настройки. Изменения сохраняются одной кнопкой внизу страницы.</p>
+
+            <div class="mb-8">
+              <h4 class="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500 mb-3 px-4">Сохранение маршрутов</h4>
+              <div class="rounded-xl bg-white border border-zinc-200 divide-y divide-zinc-100 overflow-hidden">
+                <div class="px-4 py-3 flex items-center justify-between gap-4">
+                  <div class="min-w-0">
+                    <div class="text-[14px] text-zinc-900">Минут без движения</div>
+                    <p class="text-[12px] text-zinc-500">После скольких минут остановка = конец поездки.</p>
+                  </div>
+                  <div class="flex items-center gap-1 shrink-0">
+                    <input value="30" class="w-16 text-right rounded-md border border-zinc-200 px-2 py-1 text-sm font-mono" />
+                    <span class="text-xs text-zinc-400">мин</span>
+                  </div>
+                </div>
+                <div class="px-4 py-3 flex items-center justify-between gap-4">
+                  <div class="min-w-0">
+                    <div class="text-[14px] text-zinc-900">Радиус «остановки»</div>
+                    <p class="text-[12px] text-zinc-500">Точки в этом радиусе — одна остановка.</p>
+                  </div>
+                  <div class="flex items-center gap-1 shrink-0">
+                    <input value="100" class="w-16 text-right rounded-md border border-zinc-200 px-2 py-1 text-sm font-mono" />
+                    <span class="text-xs text-zinc-400">м</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="mb-8">
+              <h4 class="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500 mb-3 px-4">Почтовый сервер</h4>
+              <div class="rounded-xl bg-white border border-zinc-200 divide-y divide-zinc-100 overflow-hidden">
+                <div class="px-4 py-3 flex items-center gap-4">
+                  <div class="w-40 text-[14px] text-zinc-900">Хост</div>
+                  <input value="smtp.yandex.ru" class="flex-1 rounded-md border border-zinc-200 px-2.5 py-1 text-sm font-mono" />
+                </div>
+                <div class="px-4 py-3 flex items-center gap-4">
+                  <div class="w-40 text-[14px] text-zinc-900 flex items-center gap-2">
+                    Пароль
+                    <span class="text-[10px] text-amber-600">🔒</span>
+                  </div>
+                  <input type="password" placeholder="••••••" class="flex-1 rounded-md border border-zinc-200 px-2.5 py-1 text-sm font-mono" />
+                </div>
+              </div>
+              <p class="text-[11px] text-zinc-500 mt-2 px-4">Пароль хранится зашифрованным (AES-256-GCM). Оставьте поле пустым, чтобы не менять.</p>
+            </div>
+
+            <div class="mb-8">
+              <h4 class="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500 mb-3 px-4">Проверка</h4>
+              <div class="rounded-xl bg-white border border-zinc-200 overflow-hidden p-4 flex items-center gap-3">
+                <input value="link28rus@ya.ru" class="flex-1 rounded-md border border-zinc-200 px-2.5 py-1 text-sm font-mono" />
+                <button class="rounded-md bg-zinc-900 px-4 py-1.5 text-xs font-medium text-white">Отправить тест</button>
+              </div>
+            </div>
+
+            <!-- sticky footer bar -->
+            <div class="absolute bottom-0 inset-x-6 bg-zinc-50/95 backdrop-blur border-t border-zinc-200 py-3 flex items-center justify-between">
+              <span class="text-xs text-zinc-500">Есть несохранённые изменения (2)</span>
+              <div class="flex gap-2">
+                <button class="px-3 py-1.5 text-xs text-zinc-500">Отменить</button>
+                <button class="rounded-md bg-sky-600 px-4 py-1.5 text-xs font-medium text-white">Сохранить всё</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="pb-20"></div>
+    </div>
+  </body>
+</html>

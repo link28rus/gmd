@@ -1,0 +1,24 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web (Next.js :3003)",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@gmd/web", "dev"],
+      "port": 3003
+    },
+    {
+      "name": "backend (NestJS :3001)",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@gmd/backend", "dev"],
+      "port": 3001
+    },
+    {
+      "name": "design-variants preview",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8766", "--directory", "tmp"],
+      "port": 8766,
+      "autoPort": false
+    }
+  ]
+}
