@@ -38,12 +38,27 @@ tar_send "packages"      "${REMOTE_DIR}/packages"      "node_modules"
 tar -cz package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json | \
   ssh "${SERVER}" "tar -xzf - -C ${REMOTE_DIR}"
 
-say "3) docker compose build + up -d (из /opt/gmd/docker/)"
+say "3) docker compose build (из /opt/gmd/docker/)"
 ssh "${SERVER}" "cd ${REMOTE_DOCKER} && \
-  docker compose --env-file ${REMOTE_DIR}/.env.prod -f docker-compose.prod.yml build --pull && \
+  docker compose --env-file ${REMOTE_DIR}/.env.prod -f docker-compose.prod.yml build --pull"
+
+say "4) Prisma migrate deploy — через одноразовый контейнер, ДО старта backend"
+# Важно: миграция должна пройти до того, как NestJS поднимется. Если backend
+# стартует со старой БД и при onModuleInit пишет в ещё не существующую колонку,
+# health-check падает и блокирует depends_on для web/caddy.
+# --no-deps + --rm: не трогаем другие сервисы, контейнер удаляется после
+# завершения миграции. Postgres уже должен быть healthy на этот момент.
+ssh "${SERVER}" "cd ${REMOTE_DOCKER} && \
+  docker compose --env-file ${REMOTE_DIR}/.env.prod -f docker-compose.prod.yml up -d postgres redis && \
+  docker compose --env-file ${REMOTE_DIR}/.env.prod -f docker-compose.prod.yml run --rm --no-deps \
+    --entrypoint sh backend -c \
+    'node apps/backend/node_modules/prisma/build/index.js migrate deploy --schema apps/backend/prisma/schema.prisma'"
+
+say "5) docker compose up -d (backend + web + остальные)"
+ssh "${SERVER}" "cd ${REMOTE_DOCKER} && \
   docker compose --env-file ${REMOTE_DIR}/.env.prod -f docker-compose.prod.yml up -d --remove-orphans"
 
-say "4) Ждём healthy (polling, timeout 5 мин)"
+say "6) Ждём healthy (polling, timeout 5 мин)"
 ssh "${SERVER}" "cd ${REMOTE_DOCKER} && for i in \$(seq 1 60); do
   unhealthy=\$(docker compose --env-file ${REMOTE_DIR}/.env.prod -f docker-compose.prod.yml ps --format '{{.Service}} {{.Health}}' | awk '\$2!=\"healthy\" && \$2!=\"\" {print \$1}' | wc -l)
   starting=\$(docker compose --env-file ${REMOTE_DIR}/.env.prod -f docker-compose.prod.yml ps --format '{{.Service}} {{.Health}}' | awk '\$2==\"starting\" {print \$1}' | wc -l)
@@ -55,12 +70,5 @@ ssh "${SERVER}" "cd ${REMOTE_DOCKER} && for i in \$(seq 1 60); do
   sleep 5
 done
 docker compose --env-file ${REMOTE_DIR}/.env.prod -f docker-compose.prod.yml ps"
-
-say "5) Prisma migrate deploy (ок если миграций ещё нет)"
-# Вызываем через прямой путь к index.js: .bin/prisma — bash-shim с нерабочим на Node шебангом.
-ssh "${SERVER}" "cd ${REMOTE_DOCKER} && \
-  docker compose --env-file ${REMOTE_DIR}/.env.prod -f docker-compose.prod.yml exec -T backend \
-    node apps/backend/node_modules/prisma/build/index.js migrate deploy --schema apps/backend/prisma/schema.prisma" \
-  || echo "(migrate skipped — нормально для Phase 0.3; prod-миграции появятся в Phase 1)"
 
 say "Done. Проверь: curl http://192.168.1.23/api/readyz"

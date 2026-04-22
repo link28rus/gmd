@@ -221,6 +221,7 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
       SMTP_FROM: ${SMTP_FROM:-GMD <no-reply@gmd.link28rus.ru>}
+      SMTP_SECRET_KEY: ${SMTP_SECRET_KEY:-}
       OTP_LOG_DEV: ${OTP_LOG_DEV:-false}
       OTP_FIXED_DEV: ${OTP_FIXED_DEV:-}
       INVITE_TTL_SECONDS: ${INVITE_TTL_SECONDS:-600}
