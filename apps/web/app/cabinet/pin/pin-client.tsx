@@ -21,8 +21,6 @@ const PIN_MIN = 4;
 const PIN_MAX = 8;
 const PIN_RE = /^\d{4,8}$/;
 
-type Mode = 'set' | 'change' | 'delete';
-
 export default function PinClient(): ReactElement {
   const router = useRouter();
   const accessToken = useAuthStore((s) => s.accessToken);
@@ -32,11 +30,16 @@ export default function PinClient(): ReactElement {
 
   const [bootstrapping, setBootstrapping] = useState(accessToken === null);
   const [status, setStatus] = useState<PinStatus | null>(null);
-  const [mode, setMode] = useState<Mode>('set');
+  const [statusLoaded, setStatusLoaded] = useState(false);
   const [currentPin, setCurrentPin] = useState('');
   const [newPin, setNewPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  // mode всегда выводится из status — без отдельного useState, который мог
+  // отставать от реального состояния на сервере и приводил к 400
+  // currentPin_required при отправке без текущего PIN.
+  const mode: 'set' | 'change' = status?.isSet ? 'change' : 'set';
 
   useEffect(() => {
     if (accessToken !== null && user !== null) {
@@ -88,11 +91,12 @@ export default function PinClient(): ReactElement {
       if (res.ok) {
         const data = (await res.json()) as PinStatus;
         setStatus(data);
-        setMode(data.isSet ? 'change' : 'set');
         patchUser({ hasPin: data.isSet });
       }
     } catch {
       /* ignore */
+    } finally {
+      setStatusLoaded(true);
     }
   }
 
@@ -130,13 +134,13 @@ export default function PinClient(): ReactElement {
         message?: string;
       } | null;
       if (res.ok && data?.isSet) {
+        const wasSet = status?.isSet ?? false;
         setStatus({ isSet: true, updatedAt: data.updatedAt ?? new Date().toISOString() });
-        setMode('change');
         setCurrentPin('');
         setNewPin('');
         setConfirmPin('');
         patchUser({ hasPin: true });
-        toast.success(mode === 'set' ? 'PIN установлен' : 'PIN обновлён');
+        toast.success(wasSet ? 'PIN обновлён' : 'PIN установлен');
         return;
       }
       if (res.status === 401) {
@@ -177,7 +181,6 @@ export default function PinClient(): ReactElement {
       });
       if (res.status === 204) {
         setStatus({ isSet: false, updatedAt: null });
-        setMode('set');
         setCurrentPin('');
         setNewPin('');
         setConfirmPin('');
@@ -206,7 +209,7 @@ export default function PinClient(): ReactElement {
     }
   }
 
-  if (bootstrapping) {
+  if (bootstrapping || !statusLoaded) {
     return (
       <div className="flex min-h-[400px] items-center justify-center">
         <p className="text-sm text-zinc-500">Загружаем…</p>
