@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger } from '@nestjs/common';
 import type { OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SecretsService } from '../common/secrets/secrets.service';
@@ -7,6 +7,12 @@ import { SecretsService } from '../common/secrets/secrets.service';
 export const SETTINGS_KEYS = {
   TRIP_IDLE_MINUTES: 'trip.idle_minutes',
   TRIP_IDLE_RADIUS_M: 'trip.idle_radius_m',
+  // v0.31.3 — backend-фильтрация GPS-шума (Этап 1 вынесения mobile-порогов в
+  // админку). Mobile-клиент эти ключи пока не читает — только backend при
+  // ingest'е.
+  LOCATION_ACCURACY_FLOOR_M: 'location.accuracy_floor_m',
+  LOCATION_JITTER_WINDOW_MS: 'location.jitter_window_ms',
+  LOCATION_JITTER_MIN_DIST_M: 'location.jitter_min_dist_m',
   SMTP_HOST: 'smtp.host',
   SMTP_PORT: 'smtp.port',
   SMTP_USER: 'smtp.user',
@@ -18,6 +24,19 @@ export type SettingsKey = (typeof SETTINGS_KEYS)[keyof typeof SETTINGS_KEYS];
 
 // Ключи, которые при обновлении должны шифроваться. Пароли, токены.
 const SECRET_KEYS: ReadonlySet<string> = new Set<string>([SETTINGS_KEYS.SMTP_PASS]);
+
+// Диапазоны допустимых значений для числовых ключей. Проверяются в update()
+// — чтобы админ случайным вводом не положил прод (например accuracy_floor_m=1
+// отсеял бы всё, ingest перестал бы писать, родители увидели пустые карты).
+// Диапазоны намеренно широкие — даём инструмент, но защищаем от явных крайностей.
+const KEY_BOUNDS: Record<string, { min: number; max: number }> = {
+  [SETTINGS_KEYS.TRIP_IDLE_MINUTES]: { min: 1, max: 180 },
+  [SETTINGS_KEYS.TRIP_IDLE_RADIUS_M]: { min: 10, max: 1000 },
+  [SETTINGS_KEYS.LOCATION_ACCURACY_FLOOR_M]: { min: 50, max: 500 },
+  [SETTINGS_KEYS.LOCATION_JITTER_WINDOW_MS]: { min: 0, max: 300_000 },
+  [SETTINGS_KEYS.LOCATION_JITTER_MIN_DIST_M]: { min: 0, max: 200 },
+  [SETTINGS_KEYS.SMTP_PORT]: { min: 1, max: 65535 },
+};
 
 interface CacheEntry {
   value: string;
@@ -48,6 +67,70 @@ export class AppSettingsService implements OnModuleInit {
 
   async onModuleInit(): Promise<void> {
     await this.seedSmtpFromEnvIfEmpty();
+    await this.seedLocationFiltersIfEmpty();
+  }
+
+  /**
+   * v0.31.3 — seed backend-фильтрации GPS-шума. Значения совпадают с хардкодом
+   * из предыдущих версий `LocationsService.ingestBatch`, чтобы обновление
+   * не меняло поведение. Идемпотентно.
+   */
+  private async seedLocationFiltersIfEmpty(): Promise<void> {
+    const existing = await this.prisma.appSetting.count({
+      where: { key: { startsWith: 'location.' } },
+    });
+    if (existing > 0) return;
+
+    const rows: Array<{ key: string; value: string; description: string }> = [
+      {
+        key: SETTINGS_KEYS.LOCATION_ACCURACY_FLOOR_M,
+        value: '100',
+        description:
+          'Максимальная погрешность точки, которую сервер сохраняет (в метрах). ' +
+          'Телефон ребёнка вместе с каждой точкой присылает оценку точности GPS ' +
+          '(например, «±40 м»). Точки с оценкой хуже этого порога считаются шумом ' +
+          'от многократного отражения сигнала в помещении и не сохраняются. ' +
+          'Пример: если выставить 100 — точки «±150 м» будут отбрасываться, ' +
+          '«±30 м» (нормальный outdoor GPS) сохраняются. Слишком маленькое значение ' +
+          '(например 30) потеряет точки от детей, сидящих дома; слишком большое ' +
+          '(500) вернёт прежний «звёздный» шум на картах. Диапазон: 50-500.',
+      },
+      {
+        key: SETTINGS_KEYS.LOCATION_JITTER_WINDOW_MS,
+        value: '60000',
+        description:
+          'Окно группировки «стоячих» точек в миллисекундах. Если ребёнок физически ' +
+          'не двигается (сидит дома, в школе), GPS может присылать слегка разные ' +
+          'координаты каждые 10 секунд — это и есть «дрожь». Внутри этого окна ' +
+          'близкие точки (см. следующий параметр) считаются одной и той же стоянкой ' +
+          'и не сохраняются. Пример: 60000 = 1 минута, значит за минуту оставляем ' +
+          'только одну точку если ребёнок стоит; 0 = фильтр выключен (сохраняем всё, ' +
+          'как в v0.30). 300000 = 5 минут — очень агрессивная фильтрация, ' +
+          'трек будет редким даже при ходьбе по комнате. Диапазон: 0-300000.',
+      },
+      {
+        key: SETTINGS_KEYS.LOCATION_JITTER_MIN_DIST_M,
+        value: '30',
+        description:
+          'Минимальное расстояние (в метрах), на которое ребёнок должен сдвинуться, ' +
+          'чтобы новая точка считалась «движением», а не «дрожью». Работает вместе ' +
+          'с окном выше. Фактический порог = max(значение_тут, 2 × accuracy_точки), ' +
+          'поэтому плохие GPS-точки (±40 м) автоматически требуют бóльшего сдвига. ' +
+          'Пример: 30 метров — типичная двухэтажка, дрожь ±20 м внутри не считается ' +
+          'движением; 10 метров — чувствительнее, засчитает даже переход из комнаты ' +
+          'в комнату; 100 метров — только явные выходы из дома попадут в трек. ' +
+          'Диапазон: 0-200.',
+      },
+    ];
+
+    await this.prisma.$transaction(
+      rows.map((r) =>
+        this.prisma.appSetting.create({
+          data: { ...r, isSecret: false, updatedBy: 'system:seed' },
+        }),
+      ),
+    );
+    this.logger.log(`Seeded ${rows.length} location.* settings with defaults`);
   }
 
   /**
@@ -154,6 +237,21 @@ export class AppSettingsService implements OnModuleInit {
     // Для секретов пустое value трактуется как «не менять» — иначе невозможно
     // редактировать остальные поля, не перевводя пароль каждый раз.
     if (isSecret && value.length === 0) return;
+
+    // v0.31.3 — валидация диапазонов для числовых ключей. Защищает от случайного
+    // ввода значений, которые сломают прод (accuracy_floor=1 → ingest отрезает всё).
+    const bounds = KEY_BOUNDS[key];
+    if (bounds) {
+      const n = Number(value);
+      if (!Number.isFinite(n) || n < bounds.min || n > bounds.max) {
+        throw new BadRequestException({
+          code: 'value_out_of_range',
+          message: `Значение должно быть числом от ${bounds.min} до ${bounds.max}`,
+          min: bounds.min,
+          max: bounds.max,
+        });
+      }
+    }
 
     const storedValue = isSecret ? this.secrets.encrypt(value) : value;
 

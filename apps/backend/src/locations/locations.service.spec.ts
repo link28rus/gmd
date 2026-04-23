@@ -70,7 +70,16 @@ function makeService(
   const trips: any = {
     recomputeForChild: jest.fn().mockResolvedValue(undefined),
   };
-  return new LocationsService(prisma, consent, zoneDetection, trips);
+  // v0.31.3 — AppSettingsService. По умолчанию возвращает fallback
+  // (те же значения, что и раньше были захардкожены: accuracy_floor=100,
+  // jitter_window=60s, jitter_min_dist=30m). Тесты могут переопределить
+  // поведение через (svc as any).settings.getNumber.mockImplementation(...).
+  const settings: any = {
+    getNumber: jest
+      .fn()
+      .mockImplementation((_key: string, fallback: number) => Promise.resolve(fallback)),
+  };
+  return new LocationsService(prisma, consent, zoneDetection, trips, settings);
 }
 
 describe('LocationsService.ingestBatch', () => {

@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { toast } from 'sonner';
-import { Check } from 'lucide-react';
+import { Check, Info } from 'lucide-react';
 import { adminApi, type AppSettingRow } from '@/lib/api/admin';
 import { useAuthStore } from '@/lib/auth-store';
 
@@ -17,6 +17,14 @@ interface Section {
 }
 
 const SECTIONS: Section[] = [
+  {
+    id: 'gps-filter',
+    title: 'Фильтрация GPS-шума',
+    description:
+      'Защита от «звёздного» дрожания GPS в помещениях. Сохраняется только то, что похоже на реальное движение.',
+    keys: ['location.accuracy_floor_m', 'location.jitter_window_ms', 'location.jitter_min_dist_m'],
+    accent: 'sky',
+  },
   {
     id: 'routes',
     title: 'Сохранение маршрутов',
@@ -52,6 +60,24 @@ const KEY_META: Record<
   },
   'trip.idle_radius_m': {
     label: 'Радиус «остановки»',
+    unit: 'м',
+    inputMode: 'numeric',
+    width: 'w-32',
+  },
+  'location.accuracy_floor_m': {
+    label: 'Порог точности (accuracy)',
+    unit: 'м',
+    inputMode: 'numeric',
+    width: 'w-32',
+  },
+  'location.jitter_window_ms': {
+    label: 'Окно dedup-а',
+    unit: 'мс',
+    inputMode: 'numeric',
+    width: 'w-32',
+  },
+  'location.jitter_min_dist_m': {
+    label: 'Мин. сдвиг',
     unit: 'м',
     inputMode: 'numeric',
     width: 'w-32',
@@ -183,6 +209,7 @@ function ListCard({ children }: { children: ReactNode }): ReactElement {
 function SettingRow({ row, onSaved }: { row: AppSettingRow; onSaved: () => void }): ReactElement {
   const [value, setValue] = useState(row.value ?? '');
   const [justSaved, setJustSaved] = useState(false);
+  const [descOpen, setDescOpen] = useState(false);
   const timeoutRef = useRef<number | null>(null);
 
   useEffect(() => setValue(row.value ?? ''), [row.value]);
@@ -216,69 +243,96 @@ function SettingRow({ row, onSaved }: { row: AppSettingRow; onSaved: () => void 
   const placeholder = isSecret ? (row.hasValue ? '••••••••' : 'Введите пароль') : undefined;
   const inputWidth = meta?.width ?? 'w-48';
 
+  const hasDescription = Boolean(row.description && row.description.trim().length > 0);
+
   return (
-    <div className="group flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-muted/80">
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5">
-          <span className="truncate text-[13px] font-medium text-foreground">{label}</span>
-          {isSecret && (
+    <div className="transition-colors hover:bg-muted/80">
+      <div className="group flex items-center gap-3 px-4 py-2.5">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <span className="truncate text-[13px] font-medium text-foreground">{label}</span>
+            {isSecret && (
+              <span
+                className="inline-flex h-1.5 w-1.5 rounded-full bg-amber-500"
+                title="Зашифровано (AES-256-GCM)"
+                aria-label="Зашифровано"
+              />
+            )}
+            {hasDescription && (
+              <button
+                type="button"
+                onClick={() => setDescOpen((v) => !v)}
+                className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full transition-colors ${
+                  descOpen
+                    ? 'bg-sky-100 text-sky-700'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                }`}
+                aria-label={descOpen ? 'Скрыть описание' : 'Показать описание'}
+                aria-expanded={descOpen}
+              >
+                <Info className="h-3 w-3" strokeWidth={2.5} />
+              </button>
+            )}
+          </div>
+          <code className="block truncate font-mono text-[11px] text-muted-foreground">
+            {row.key}
+          </code>
+        </div>
+
+        <div className={`relative shrink-0 ${inputWidth}`}>
+          <input
+            type={inputType}
+            value={value}
+            placeholder={placeholder}
+            inputMode={meta?.inputMode as React.InputHTMLAttributes<HTMLInputElement>['inputMode']}
+            autoComplete={isSecret ? 'new-password' : undefined}
+            onChange={(e) => setValue(e.target.value)}
+            className="w-full rounded-md border border-border bg-card px-2.5 py-1 pr-7 font-mono text-[13px] text-foreground transition-colors placeholder:font-sans placeholder:text-muted-foreground focus:border-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-200"
+          />
+          {meta?.unit && !isSecret && (
             <span
-              className="inline-flex h-1.5 w-1.5 rounded-full bg-amber-500"
-              title="Зашифровано (AES-256-GCM)"
-              aria-label="Зашифровано"
-            />
+              aria-hidden
+              className="pointer-events-none absolute inset-y-0 right-2 flex items-center font-mono text-[10px] uppercase tracking-wider text-muted-foreground"
+            >
+              {meta.unit}
+            </span>
           )}
         </div>
-        <code className="block truncate font-mono text-[11px] text-muted-foreground">
-          {row.key}
-        </code>
-      </div>
 
-      <div className={`relative shrink-0 ${inputWidth}`}>
-        <input
-          type={inputType}
-          value={value}
-          placeholder={placeholder}
-          inputMode={meta?.inputMode as React.InputHTMLAttributes<HTMLInputElement>['inputMode']}
-          autoComplete={isSecret ? 'new-password' : undefined}
-          onChange={(e) => setValue(e.target.value)}
-          className="w-full rounded-md border border-border bg-card px-2.5 py-1 pr-7 font-mono text-[13px] text-foreground transition-colors placeholder:font-sans placeholder:text-muted-foreground focus:border-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-200"
-        />
-        {meta?.unit && !isSecret && (
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-y-0 right-2 flex items-center font-mono text-[10px] uppercase tracking-wider text-muted-foreground"
-          >
-            {meta.unit}
+        {/* Save отрисовывается всегда, но видим только при dirty — освободит
+            место в layout, не даст строкам скакать. Иконка-галка появляется
+            на 1.5с после успешного сохранения. */}
+        <button
+          type="button"
+          disabled={!dirty || m.isPending}
+          onClick={() => m.mutate(value)}
+          aria-label="Сохранить"
+          className={`shrink-0 rounded-md px-2.5 py-1 text-[11px] font-medium transition-all ${
+            dirty
+              ? 'bg-foreground text-white hover:bg-zinc-800'
+              : justSaved
+                ? 'bg-emerald-50 text-emerald-600'
+                : 'bg-transparent text-transparent'
+          } disabled:cursor-not-allowed`}
+        >
+          <span className="inline-flex items-center gap-1">
+            {m.isPending ? (
+              <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/50 border-t-white" />
+            ) : justSaved ? (
+              <Check className="h-3 w-3" strokeWidth={3} />
+            ) : null}
+            {m.isPending ? '…' : justSaved ? 'OK' : 'Сохранить'}
           </span>
-        )}
+        </button>
       </div>
 
-      {/* Save отрисовывается всегда, но видим только при dirty — освободит
-          место в layout, не даст строкам скакать. Иконка-галка появляется
-          на 1.5с после успешного сохранения. */}
-      <button
-        type="button"
-        disabled={!dirty || m.isPending}
-        onClick={() => m.mutate(value)}
-        aria-label="Сохранить"
-        className={`shrink-0 rounded-md px-2.5 py-1 text-[11px] font-medium transition-all ${
-          dirty
-            ? 'bg-foreground text-white hover:bg-zinc-800'
-            : justSaved
-              ? 'bg-emerald-50 text-emerald-600'
-              : 'bg-transparent text-transparent'
-        } disabled:cursor-not-allowed`}
-      >
-        <span className="inline-flex items-center gap-1">
-          {m.isPending ? (
-            <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/50 border-t-white" />
-          ) : justSaved ? (
-            <Check className="h-3 w-3" strokeWidth={3} />
-          ) : null}
-          {m.isPending ? '…' : justSaved ? 'OK' : 'Сохранить'}
-        </span>
-      </button>
+      {/* Раскрываемое описание. Показывается только когда админ нажал ⓘ.
+          Поддерживает длинный текст с примерами — формат «что делает / когда менять». */}
+      {hasDescription && descOpen && (
+        <div className="border-t border-border bg-muted/40 px-4 py-3 text-[12.5px] leading-relaxed text-muted-foreground">
+          {row.description}
+        </div>
+      )}
     </div>
   );
 }

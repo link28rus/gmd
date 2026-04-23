@@ -14,6 +14,7 @@ import { ConsentService } from '../consent/consent.service';
 import { ZoneDetectionService } from '../zones/zone-detection.service';
 import { TripsService } from './trips.service';
 import { distanceMeters } from '../common/geo-distance';
+import { AppSettingsService, SETTINGS_KEYS } from '../app-settings/app-settings.service';
 import type { ChildAuthContext } from '../child-device/child-device.service';
 import type { LocationPoint } from './dto/ingest-locations.dto';
 import type { ListLocationsQuery } from './dto/list-locations.dto';
@@ -83,9 +84,16 @@ const CONSENT_CACHE_TTL_MS = 60 * 1000;
 // Mobile-child >= v0.31.0 уже сам отбрасывает точки с accuracy > 75м и
 // дубликаты-стояки, но старые APK (0.30.x) продолжат слать мусор —
 // бэкенд защищается сам.
-const ACCURACY_FLOOR_M = 100; // точки с accuracy > 100м не сохраняем
-const JITTER_DEDUP_WINDOW_MS = 60 * 1000; // окно stationary-dedup
-const JITTER_DEDUP_MIN_DIST_M = 30; // минимальное перемещение в окне
+//
+// v0.31.3 — значения вынесены в AppSettings (ключи location.*):
+//   location.accuracy_floor_m    (default 100)
+//   location.jitter_window_ms    (default 60000)
+//   location.jitter_min_dist_m   (default 30)
+// Константы ниже — только defaults на случай если AppSettings не вернул
+// значение (миграция не применилась, БД недоступна).
+const DEFAULT_ACCURACY_FLOOR_M = 100;
+const DEFAULT_JITTER_DEDUP_WINDOW_MS = 60 * 1000;
+const DEFAULT_JITTER_DEDUP_MIN_DIST_M = 30;
 
 interface ConsentCacheEntry {
   expiresAt: number;
@@ -104,6 +112,7 @@ export class LocationsService {
     @Inject(ConsentService) private readonly consent: ConsentService,
     @Inject(ZoneDetectionService) private readonly zoneDetection: ZoneDetectionService,
     @Inject(TripsService) private readonly trips: TripsService,
+    @Inject(AppSettingsService) private readonly settings: AppSettingsService,
   ) {}
 
   async ingestBatch(ctx: ChildAuthContext, points: LocationPoint[]): Promise<IngestResult> {
@@ -140,6 +149,21 @@ export class LocationsService {
     const validPoints: LocationPoint[] = [];
     const validRows: Prisma.Sql[] = [];
 
+    // v0.31.3 — пороги фильтрации читаются из AppSettings (управляются в
+    // админке). Берём один раз на батч — значения кешируются в сервисе 60с,
+    // т.е. почти бесплатно, но прозрачно обновляются после изменения в админке.
+    const [accuracyFloorM, jitterWindowMs, jitterMinDistM] = await Promise.all([
+      this.settings.getNumber(SETTINGS_KEYS.LOCATION_ACCURACY_FLOOR_M, DEFAULT_ACCURACY_FLOOR_M),
+      this.settings.getNumber(
+        SETTINGS_KEYS.LOCATION_JITTER_WINDOW_MS,
+        DEFAULT_JITTER_DEDUP_WINDOW_MS,
+      ),
+      this.settings.getNumber(
+        SETTINGS_KEYS.LOCATION_JITTER_MIN_DIST_M,
+        DEFAULT_JITTER_DEDUP_MIN_DIST_M,
+      ),
+    ]);
+
     // Последняя записанная точка этого девайса — для jitter-dedup.
     // Достаточно одного запроса на весь батч: точки батча обычно 1-5 штук
     // с короткой разницей во времени, и мы в цикле обновляем "виртуальную"
@@ -168,17 +192,17 @@ export class LocationsService {
       // v0.31.0 accuracy floor — точки с плохой точностью не сохраняем.
       // Старые APK (<=0.30.x) с INDOOR GPS-дрожанием обычно дают accuracy
       // 40-100м; порог 100м пропускает outdoor GPS (10-30м) + более-менее
-      // приличный indoor cell/wifi (50-100м).
-      if (p.accuracy !== undefined && p.accuracy > ACCURACY_FLOOR_M) {
+      // приличный indoor cell/wifi (50-100м). Значение читается из AppSettings.
+      if (p.accuracy !== undefined && p.accuracy > accuracyFloorM) {
         rejectedReasons.low_accuracy = (rejectedReasons.low_accuracy ?? 0) + 1;
         continue;
       }
 
       // v0.31.0 jitter-dedup — если точка близко к предыдущей за короткое
       // время, считаем дрожанием GPS при стоянке.
-      if (lastKnown !== null && ts - lastKnown.ts < JITTER_DEDUP_WINDOW_MS) {
+      if (lastKnown !== null && ts - lastKnown.ts < jitterWindowMs) {
         const dist = distanceMeters(lastKnown.lat, lastKnown.lon, p.lat, p.lon);
-        const threshold = Math.max(JITTER_DEDUP_MIN_DIST_M, (p.accuracy ?? 0) * 2);
+        const threshold = Math.max(jitterMinDistM, (p.accuracy ?? 0) * 2);
         if (dist < threshold) {
           rejectedReasons.jitter = (rejectedReasons.jitter ?? 0) + 1;
           continue;
