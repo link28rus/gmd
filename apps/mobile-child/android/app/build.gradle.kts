@@ -19,7 +19,7 @@ val keystoreProperties = Properties().apply {
 
 android {
     namespace = "ru.link28rus.gmd.child"
-    compileSdk = 34
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
