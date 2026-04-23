@@ -269,6 +269,107 @@ export class AudioService {
   }
 
   /**
+   * Parent прислал SDP-answer → переход READY → ACTIVE.
+   * Запускает auto-stop таймер на durationSec секунд.
+   */
+  async parentAnswer(p: {
+    sessionId: string;
+    userId: string;
+    familyId: string;
+    sdpAnswer: string;
+  }): Promise<void> {
+    const session = await this.prisma.audioSession.findUnique({ where: { id: p.sessionId } });
+    if (!session || session.requestedById !== p.userId) {
+      throw new ForbiddenException({ code: 'forbidden' });
+    }
+    if (session.state !== 'READY') {
+      throw new ConflictException({ code: 'invalid_state', state: session.state });
+    }
+    await this.prisma.audioSession.update({
+      where: { id: p.sessionId },
+      data: { state: 'ACTIVE', activeAt: new Date(), sdpAnswer: p.sdpAnswer },
+    });
+    await this.prisma.audioAuditLog.create({
+      data: { sessionId: p.sessionId, event: 'STARTED', actorUserId: p.userId },
+    });
+    this.events.emitState(p.sessionId, 'ACTIVE');
+
+    // Auto-stop через durationSec
+    // ⚠ MVP-ограничение: setTimeout живёт в памяти процесса (см. expireIfStuck).
+    // pg_cron-fallback в Task 13.
+    setTimeout(() => {
+      this.autoStopIfActive(p.sessionId, p.userId).catch((err) =>
+        this.logger.error(`autoStopIfActive failed for ${p.sessionId}: ${String(err)}`),
+      );
+    }, session.durationSec * 1000);
+  }
+
+  async parentIce(p: { sessionId: string; userId: string; candidate: string }): Promise<void> {
+    const session = await this.prisma.audioSession.findUnique({ where: { id: p.sessionId } });
+    if (!session || session.requestedById !== p.userId) {
+      throw new ForbiddenException({ code: 'forbidden' });
+    }
+    if (!['READY', 'ACTIVE'].includes(session.state)) {
+      throw new ConflictException({ code: 'invalid_state', state: session.state });
+    }
+    await this.prisma.audioIceCandidate.create({
+      data: { sessionId: p.sessionId, side: 'parent', candidate: p.candidate },
+    });
+    this.events.emitState(p.sessionId, 'ICE', { side: 'parent', candidate: p.candidate });
+  }
+
+  async parentStop(p: { sessionId: string; userId: string; familyId: string }): Promise<void> {
+    // Forbidden check здесь — endSession его не делает (вызывается также из watchdog).
+    const session = await this.prisma.audioSession.findUnique({ where: { id: p.sessionId } });
+    if (!session) return; // идемпотентно
+    if (session.requestedById !== p.userId) {
+      throw new ForbiddenException({ code: 'forbidden' });
+    }
+    await this.endSession(p.sessionId, p.userId, 'ENDED');
+  }
+
+  /**
+   * Общий helper для terminal-state transitions (ENDED / FAILED / EXPIRED).
+   * Идемпотентно: если уже terminal — no-op.
+   * Сообщает child через STOP_AUDIO команду + audit + emit.
+   */
+  private async endSession(
+    sessionId: string,
+    actorUserId: string,
+    finalState: 'ENDED' | 'FAILED' | 'EXPIRED',
+  ): Promise<void> {
+    const session = await this.prisma.audioSession.findUnique({ where: { id: sessionId } });
+    if (!session) return;
+    if (['ENDED', 'FAILED', 'EXPIRED'].includes(session.state)) return;
+
+    const actualSec = session.activeAt
+      ? Math.floor((Date.now() - session.activeAt.getTime()) / 1000)
+      : 0;
+    await this.prisma.audioSession.update({
+      where: { id: sessionId },
+      data: { state: finalState, endedAt: new Date(), actualSec },
+    });
+    await this.prisma.audioAuditLog.create({
+      data: {
+        sessionId,
+        event: finalState === 'ENDED' ? 'STOPPED' : 'EXPIRED',
+        actorUserId,
+      },
+    });
+    if (session.childDeviceId) {
+      await this.commands.enqueueAudioStop(session.childDeviceId, sessionId, actorUserId);
+    }
+    this.events.emitState(sessionId, finalState);
+  }
+
+  private async autoStopIfActive(sessionId: string, userId: string): Promise<void> {
+    const s = await this.prisma.audioSession.findUnique({ where: { id: sessionId } });
+    if (s && s.state === 'ACTIVE') {
+      await this.endSession(sessionId, userId, 'ENDED');
+    }
+  }
+
+  /**
    * Watchdog: если PENDING сессия не дошла до READY за timeout — помечаем EXPIRED.
    * Идемпотентно: если уже не PENDING (READY/ACTIVE/ENDED/FAILED), ничего не делаем.
    *

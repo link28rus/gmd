@@ -486,3 +486,248 @@ describe('AudioService child-side', () => {
     });
   });
 });
+
+interface ParentSidePrisma {
+  audioSession: {
+    findUnique: jest.Mock;
+    update: jest.Mock;
+  };
+  audioAuditLog: { create: jest.Mock };
+  audioIceCandidate: { create: jest.Mock };
+}
+
+interface ParentSideCommands {
+  enqueueAudioStart: jest.Mock;
+  enqueueAudioStop: jest.Mock;
+}
+
+describe('AudioService parent-side', () => {
+  let svc: AudioService;
+  let prisma: ParentSidePrisma;
+  let events: ChildSideEvents;
+  let commands: ParentSideCommands;
+  const ORIGINAL_ENV = { ...process.env };
+
+  beforeAll(() => {
+    process.env.TURN_SHARED_SECRET = 'test-secret';
+    process.env.TURN_PUBLIC_HOST = 'turn.example.com';
+  });
+
+  afterAll(() => {
+    process.env = ORIGINAL_ENV;
+  });
+
+  beforeEach(async () => {
+    jest.useFakeTimers();
+    prisma = {
+      audioSession: {
+        findUnique: jest.fn(),
+        update: jest
+          .fn()
+          .mockImplementation(({ where, data }) => Promise.resolve({ id: where.id, ...data })),
+      },
+      audioAuditLog: { create: jest.fn() },
+      audioIceCandidate: { create: jest.fn() },
+    };
+    events = { emitState: jest.fn(), subscribe: jest.fn() };
+    commands = { enqueueAudioStart: jest.fn(), enqueueAudioStop: jest.fn() };
+
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        AudioService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: AppSettingsService, useValue: { getNumber: jest.fn(), getBool: jest.fn() } },
+        { provide: DeviceCommandsService, useValue: commands },
+        { provide: AudioEvents, useValue: events },
+      ],
+    }).compile();
+    svc = moduleRef.get(AudioService);
+  });
+
+  afterEach(() => {
+    jest.runOnlyPendingTimers();
+    jest.useRealTimers();
+  });
+
+  describe('parentAnswer', () => {
+    it('READY → ACTIVE, stores answer, audits STARTED, emits ACTIVE, schedules autostop', async () => {
+      prisma.audioSession.findUnique.mockResolvedValue({
+        id: 's1',
+        requestedById: 'u1',
+        childId: 'c1',
+        state: 'READY',
+        durationSec: 60,
+      });
+
+      await svc.parentAnswer({
+        sessionId: 's1',
+        userId: 'u1',
+        familyId: 'fam1',
+        sdpAnswer: 'v=0\r\n...',
+      });
+
+      expect(prisma.audioSession.update).toHaveBeenCalledWith({
+        where: { id: 's1' },
+        data: { state: 'ACTIVE', activeAt: expect.any(Date), sdpAnswer: 'v=0\r\n...' },
+      });
+      expect(prisma.audioAuditLog.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ event: 'STARTED', actorUserId: 'u1' }),
+        }),
+      );
+      expect(events.emitState).toHaveBeenCalledWith('s1', 'ACTIVE');
+    });
+
+    it('rejects (Conflict) if state != READY', async () => {
+      prisma.audioSession.findUnique.mockResolvedValue({
+        id: 's1',
+        requestedById: 'u1',
+        state: 'PENDING',
+        durationSec: 60,
+      });
+      await expect(
+        svc.parentAnswer({ sessionId: 's1', userId: 'u1', familyId: 'fam1', sdpAnswer: '...' }),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('rejects (Forbidden) if userId != requestedById', async () => {
+      prisma.audioSession.findUnique.mockResolvedValue({
+        id: 's1',
+        requestedById: 'u_other',
+        state: 'READY',
+        durationSec: 60,
+      });
+      await expect(
+        svc.parentAnswer({ sessionId: 's1', userId: 'u1', familyId: 'fam1', sdpAnswer: '...' }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  describe('parentIce', () => {
+    it('persists candidate (side=parent), emits ICE event', async () => {
+      prisma.audioSession.findUnique.mockResolvedValue({
+        id: 's1',
+        requestedById: 'u1',
+        state: 'READY',
+      });
+      await svc.parentIce({ sessionId: 's1', userId: 'u1', candidate: 'candidate:1 1 UDP ...' });
+      expect(prisma.audioIceCandidate.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          sessionId: 's1',
+          side: 'parent',
+          candidate: 'candidate:1 1 UDP ...',
+        }),
+      });
+      expect(events.emitState).toHaveBeenCalledWith('s1', 'ICE', {
+        side: 'parent',
+        candidate: 'candidate:1 1 UDP ...',
+      });
+    });
+
+    it('rejects (Forbidden) if userId mismatch', async () => {
+      prisma.audioSession.findUnique.mockResolvedValue({
+        id: 's1',
+        requestedById: 'u_other',
+        state: 'READY',
+      });
+      await expect(
+        svc.parentIce({ sessionId: 's1', userId: 'u1', candidate: '...' }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('rejects (Conflict) if state not in [READY, ACTIVE]', async () => {
+      prisma.audioSession.findUnique.mockResolvedValue({
+        id: 's1',
+        requestedById: 'u1',
+        state: 'PENDING',
+      });
+      await expect(
+        svc.parentIce({ sessionId: 's1', userId: 'u1', candidate: '...' }),
+      ).rejects.toThrow(ConflictException);
+    });
+  });
+
+  describe('parentStop', () => {
+    it('ACTIVE → ENDED, computes actualSec, enqueues STOP_AUDIO, audits STOPPED, emits', async () => {
+      const startedAt = new Date(Date.now() - 30_000);
+      prisma.audioSession.findUnique.mockResolvedValue({
+        id: 's1',
+        requestedById: 'u1',
+        childDeviceId: 'd1',
+        state: 'ACTIVE',
+        activeAt: startedAt,
+        durationSec: 60,
+      });
+      await svc.parentStop({ sessionId: 's1', userId: 'u1', familyId: 'fam1' });
+
+      expect(prisma.audioSession.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            state: 'ENDED',
+            actualSec: expect.any(Number),
+            endedAt: expect.any(Date),
+          }),
+        }),
+      );
+      expect(commands.enqueueAudioStop).toHaveBeenCalledWith('d1', 's1', 'u1');
+      expect(events.emitState).toHaveBeenCalledWith('s1', 'ENDED');
+    });
+
+    it('idempotent: no-op if already ENDED/FAILED/EXPIRED', async () => {
+      prisma.audioSession.findUnique.mockResolvedValue({
+        id: 's1',
+        requestedById: 'u1',
+        childDeviceId: 'd1',
+        state: 'ENDED',
+      });
+      await svc.parentStop({ sessionId: 's1', userId: 'u1', familyId: 'fam1' });
+      expect(prisma.audioSession.update).not.toHaveBeenCalled();
+      expect(commands.enqueueAudioStop).not.toHaveBeenCalled();
+    });
+
+    it('rejects (Forbidden) if userId mismatch', async () => {
+      prisma.audioSession.findUnique.mockResolvedValue({
+        id: 's1',
+        requestedById: 'u_other',
+        state: 'ACTIVE',
+      });
+      await expect(
+        svc.parentStop({ sessionId: 's1', userId: 'u1', familyId: 'fam1' }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  describe('auto-stop', () => {
+    it('autoStopIfActive marks ENDED после durationSec timeout', async () => {
+      const session = {
+        id: 's1',
+        requestedById: 'u1',
+        childDeviceId: 'd1',
+        state: 'ACTIVE',
+        activeAt: new Date(),
+        durationSec: 60,
+      };
+      // 1) parentAnswer запустит setTimeout(durationSec * 1000)
+      prisma.audioSession.findUnique.mockResolvedValue({
+        ...session,
+        state: 'READY',
+      });
+      await svc.parentAnswer({ sessionId: 's1', userId: 'u1', familyId: 'fam1', sdpAnswer: '...' });
+
+      // Между параметрами session обновился — теперь ACTIVE
+      prisma.audioSession.findUnique.mockResolvedValue(session);
+
+      // 2) Прокручиваем время на 60s
+      jest.advanceTimersByTime(60_000);
+      // Дать событийному циклу выполнить async-callbacks
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(prisma.audioSession.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ state: 'ENDED' }),
+        }),
+      );
+    });
+  });
+});
