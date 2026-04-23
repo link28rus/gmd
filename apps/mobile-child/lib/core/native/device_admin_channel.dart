@@ -16,6 +16,20 @@ class DeviceAdminChannel {
     return result ?? false;
   }
 
+  // Сам себя отзывает из DeviceAdmin (removeActiveAdmin). Вызывается когда
+  // родитель выключил тумблер защиты в кабинете — после этого приложение
+  // можно удалить обычным способом.
+  Future<void> deactivate() async {
+    await _channel.invokeMethod('deactivate');
+  }
+
+  // Обновляет native-кеш protection-флага: GmdAccessibilityService читает
+  // его при каждом onAccessibilityEvent и ранним return отключает L2, если
+  // защита выключена на backend.
+  Future<void> setProtectionCache(bool enabled) async {
+    await _channel.invokeMethod('setProtectionCache', {'enabled': enabled});
+  }
+
   Future<void> requestActivation() async {
     await _channel.invokeMethod('requestActivation');
   }

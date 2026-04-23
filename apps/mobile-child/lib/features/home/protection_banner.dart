@@ -40,7 +40,19 @@ final protectionStateProvider = FutureProvider<ProtectionState?>((ref) async {
   final enabled = await api.getProtection(deviceToken: token);
   if (enabled == null) return null;
 
-  final active = await admin.isActive();
+  // Синхронизируем native-кеш — AccessibilityService читает его на каждом
+  // window-state event'е и ранним return отключает L2 при enabled=false.
+  await admin.setProtectionCache(enabled);
+
+  var active = await admin.isActive();
+
+  // Родитель выключил тумблер в кабинете — сами отзываем admin, чтобы
+  // ребёнок мог удалить приложение через стандартный Settings → Apps.
+  if (!enabled && active) {
+    await admin.deactivate();
+    active = false;
+  }
+
   final a11y = await admin.isAccessibilityEnabled();
   return ProtectionState(
     enabled: enabled,

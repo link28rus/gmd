@@ -20,6 +20,11 @@ class GmdAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null || event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
 
+        // Родитель мог выключить тумблер в кабинете — в этом случае L2
+        // пропускает любые экраны без перехвата. Кеш обновляется каждый раз
+        // когда UI дёргает GET /child/protection.
+        if (!NativeCreds.isProtectionEnabled(this)) return
+
         val root = rootInActiveWindow ?: return
         val texts = collectTexts(root, maxDepth = 8)
         if (texts.isEmpty()) return

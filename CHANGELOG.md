@@ -9,6 +9,22 @@
 
 ---
 
+## v0.29.1 — 2026-04-23
+
+### Исправления
+
+- **Тумблер защиты теперь реально снимает защиту с устройства** — раньше `PATCH /family/children/:id/protection` переключал только серверный флаг, а на устройстве ребёнка Device Admin и AccessibilityService оставались активными (при попытке удалить приложение всё равно требовался PIN). Теперь при `enabled=false` на mobile-child приложение само отзывает себя из Device Admin (`removeActiveAdmin`), а `GmdAccessibilityService` делает early-return — перехват «опасных» экранов отключается. Срабатывает при следующем resume home-экрана ребёнка (обычно через несколько секунд).
+
+### Инфраструктура
+
+- mobile-child (Kotlin): `NativeCreds.setProtectionEnabled/isProtectionEnabled` — кеш флага в SharedPreferences (default=true).
+- mobile-child (Kotlin): новые MethodChannel-методы `deactivate` и `setProtectionCache` в `MainActivity`.
+- mobile-child (Kotlin): `GmdAccessibilityService.onAccessibilityEvent` читает кеш и ранним return выходит при `enabled=false`.
+- mobile-child (Dart): `protectionStateProvider` после получения state с backend вызывает `setProtectionCache(enabled)` и, если `enabled=false && adminActive`, автоматически дёргает `deactivate()`.
+- mobile-child build number: `+30 → +31` (обязательно для RuStore versionCode).
+
+---
+
 ## v0.29.0 — 2026-04-23
 
 ### Новые возможности

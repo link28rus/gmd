@@ -81,6 +81,22 @@ class MainActivity : FlutterActivity() {
                 val admin = ChildDeviceAdminReceiver.componentName(this)
                 when (call.method) {
                     "isActive" -> result.success(dpm.isAdminActive(admin))
+                    "deactivate" -> {
+                        // Ребёнок сам не может снять admin, но приложение-admin
+                        // может отозвать себя (Android 2.2+). Вызывается когда
+                        // родитель выключил тумблер защиты в кабинете.
+                        if (dpm.isAdminActive(admin)) {
+                            dpm.removeActiveAdmin(admin)
+                            DiagLog.write(this, "admin", "deactivate: removeActiveAdmin() called")
+                        }
+                        result.success(null)
+                    }
+                    "setProtectionCache" -> {
+                        val enabled = call.argument<Boolean>("enabled") ?: true
+                        NativeCreds.setProtectionEnabled(this, enabled)
+                        DiagLog.write(this, "native", "setProtectionCache: $enabled")
+                        result.success(null)
+                    }
                     "requestActivation" -> {
                         // Системный диалог подтверждения: «Разрешить этому приложению
                         // управлять устройством». Важно — НЕ ставим FLAG_ACTIVITY_NEW_TASK,
