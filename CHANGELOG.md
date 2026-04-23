@@ -9,6 +9,27 @@
 
 ---
 
+## v0.33.0 — 2026-04-23
+
+### Новые возможности
+
+- **«Звук вокруг ребёнка» — mobile-child Android** — реализована Android-сторона аудиомониторинга. Native `SoundAroundService` (FGS типа `microphone`, требование Android 14+) поднимается по `START_AUDIO` команде из существующего poll'а DeviceCommand'ов. Headless FlutterEngine в сервисе через `flutter_webrtc` создаёт `RTCPeerConnection` (force-relay TURN), захватывает микрофон с echo-cancellation/noise-suppression/AGC, отправляет SDP-offer через `/child/audio/sessions/:id/ready`, обменивается ICE-кандидатами через `/ice`. SDP-answer от parent доставляется через новую `AUDIO_ANSWER` команду (v0.32.1) и применяется через bridge foreground→native→background engine. Auto-stop по `durationSec` или явной `STOP_AUDIO` команде. Hidden-mode по умолчанию: ребёнку не показываются push/баннеры, но system-level privacy indicator Android (зелёная точка) появляется автоматически и не может быть скрыт. Permission-wizard расширен шагом для `RECORD_AUDIO` с OEM-инструкциями для Xiaomi/HyperOS, Honor MagicOS, Samsung. OEM-инструкции в battery_step также упоминают микрофон.
+
+### Изменения
+
+- chore: добавлен `flutter_webrtc ^1.4.1` в pubspec mobile-child (вместо устаревшей 0.11.x с V1 embedding)
+- chore: compileSdk 34 → 36 (требование транзитивных зависимостей)
+- chore: новые файлы — `lib/features/sound_around/` (entry, controller, command_handler), `lib/core/native/sound_around_channel.dart`, `lib/core/api/audio_api.dart`, native `SoundAroundService.kt`
+- chore: AndroidManifest — `RECORD_AUDIO` + `FOREGROUND_SERVICE_MICROPHONE` permissions, declare сервис с `foregroundServiceType="microphone"`
+
+### Известные ограничения
+
+- iOS не поддерживается (mobile-child Android-only на MVP).
+- Smoke-test на реальном устройстве не проводился в CI session — требует authorized adb device для финальной верификации end-to-end handshake.
+- OEM (Xiaomi/HyperOS, Honor) могут убить FGS микрофона при экономии батареи — mitigation через OEM-wizard инструкции, но не 100% надёжно.
+
+---
+
 ## v0.32.1 — 2026-04-23
 
 ### Исправления

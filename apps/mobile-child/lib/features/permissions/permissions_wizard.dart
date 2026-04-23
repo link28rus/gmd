@@ -36,7 +36,7 @@ class PermissionsWizardScaffold extends StatelessWidget {
           ),
         ],
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -47,7 +47,7 @@ class PermissionsWizardScaffold extends StatelessWidget {
             const SizedBox(height: 12),
             Text(description, style: const TextStyle(fontSize: 16)),
             if (footer != null) ...[const SizedBox(height: 16), footer!],
-            const Spacer(),
+            const SizedBox(height: 32),
             FilledButton(
               onPressed: onRequest,
               child: Padding(
