@@ -15,14 +15,14 @@ class ActivityRecognitionStep extends StatelessWidget {
 
   Future<void> _request(BuildContext context) async {
     await Permission.activityRecognition.request();
-    if (context.mounted) context.go('/permissions/devadmin');
+    if (context.mounted) context.go('/permissions/microphone');
   }
 
   @override
   Widget build(BuildContext context) {
     return PermissionsWizardScaffold(
       stepIndex: 3,
-      totalSteps: 5,
+      totalSteps: 6,
       title: 'Экономия батареи',
       description:
           'Разреши распознавание физической активности (сидишь / идёшь / едешь), '
@@ -30,7 +30,7 @@ class ActivityRecognitionStep extends StatelessWidget {
           'Телефон будет дольше держать заряд.\n\n'
           'Можно пропустить — всё будет работать, но чуть быстрее сядет батарея.',
       onRequest: () => _request(context),
-      onSkip: () => context.go('/permissions/devadmin'),
+      onSkip: () => context.go('/permissions/microphone'),
     );
   }
 }

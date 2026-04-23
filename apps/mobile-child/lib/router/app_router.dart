@@ -8,6 +8,7 @@ import '../features/onboarding/onboarding_screen.dart';
 import '../features/permissions/activity_recognition_step.dart';
 import '../features/permissions/battery_step.dart';
 import '../features/permissions/location_step.dart';
+import '../features/permissions/microphone_step.dart';
 import '../features/permissions/notifications_step.dart';
 
 class AppRouter {
@@ -47,6 +48,10 @@ class AppRouter {
     GoRoute(
       path: '/permissions/activity',
       builder: (_, _) => const ActivityRecognitionStep(),
+    ),
+    GoRoute(
+      path: '/permissions/microphone',
+      builder: (_, _) => const MicrophoneStep(),
     ),
     GoRoute(
       path: '/permissions/devadmin',
