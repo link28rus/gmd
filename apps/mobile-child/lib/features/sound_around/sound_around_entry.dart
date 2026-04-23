@@ -66,6 +66,16 @@ void soundAroundEntryPoint() {
         diagLog('sound_around', 'forceStop from native');
         await controller.stop(reason: 'native_force_stop');
         return null;
+      case 'applyAnswer':
+        try {
+          final args = (call.arguments as Map).cast<String, dynamic>();
+          final sdp = args['sdp'] as String;
+          diagLog('sound_around', 'applyAnswer received len=${sdp.length}');
+          await controller.applyAnswer(sdp);
+        } catch (e, st) {
+          diagLog('sound_around', 'applyAnswer failed: $e\n$st');
+        }
+        return null;
       default:
         throw MissingPluginException('Unknown method: ${call.method}');
     }

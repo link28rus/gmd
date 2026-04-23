@@ -213,6 +213,32 @@ class MainActivity : FlutterActivity() {
                         startService(intent)
                         result.success(null)
                     }
+                    "deliverAnswer" -> {
+                        val sessionId = call.argument<String>("sessionId") ?: ""
+                        val sdp = call.argument<String>("sdp") ?: ""
+                        val bg = SoundAroundService.sActiveBgChannel
+                        if (bg != null) {
+                            DiagLog.write(
+                                this,
+                                "sound_around",
+                                "deliverAnswer → bgChannel: sessionId=${sessionId.take(8)}…",
+                            )
+                            bg.invokeMethod(
+                                "applyAnswer",
+                                mapOf("sessionId" to sessionId, "sdp" to sdp),
+                            )
+                            result.success(null)
+                        } else {
+                            // FGS не активен — answer бесполезен
+                            // (сессия уже закрыта или не стартовала)
+                            DiagLog.write(
+                                this,
+                                "sound_around",
+                                "deliverAnswer: NO_ACTIVE_FGS — ignoring answer",
+                            )
+                            result.error("NO_ACTIVE_FGS", "SoundAroundService not running", null)
+                        }
+                    }
                     else -> result.notImplemented()
                 }
             }

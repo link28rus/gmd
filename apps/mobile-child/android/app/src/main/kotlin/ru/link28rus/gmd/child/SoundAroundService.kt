@@ -48,6 +48,19 @@ class SoundAroundService : Service() {
             "package:gmd_child/features/sound_around/sound_around_entry.dart"
         private const val DART_ENTRYPOINT = "soundAroundEntryPoint"
         private const val BG_CHANNEL = "gmd.child/sound_around_bg"
+
+        /**
+         * Volatile reference на background MethodChannel активного
+         * headless FlutterEngine. Устанавливается в [startFlutterEngine]
+         * после создания канала и обнуляется в [onDestroy].
+         *
+         * Используется из MainActivity.deliverAnswer для передачи
+         * SDP-answer в background isolate без дополнительного IPC.
+         * Volatile — гарантия видимости между UI-потоком и Binder-потоком.
+         */
+        @Volatile
+        var sActiveBgChannel: MethodChannel? = null
+            private set
     }
 
     private var flutterEngine: FlutterEngine? = null
@@ -97,6 +110,7 @@ class SoundAroundService : Service() {
 
     override fun onDestroy() {
         log("onDestroy")
+        sActiveBgChannel = null
         flutterEngine?.destroy()
         flutterEngine = null
         bgChannel = null
@@ -164,6 +178,7 @@ class SoundAroundService : Service() {
 
             flutterEngine = engine
             bgChannel = channel
+            sActiveBgChannel = channel
             log("startFlutterEngine OK")
         } catch (e: Throwable) {
             logErr("startFlutterEngine FAILED", e)

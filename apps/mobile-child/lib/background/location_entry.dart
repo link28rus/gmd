@@ -12,6 +12,7 @@ import '../core/native/signal_channel.dart';
 import '../core/storage/secure_storage_service.dart';
 import '../data/database.dart';
 import '../data/location_queue_repository.dart';
+import '../features/sound_around/audio_command_handler.dart';
 import '../ingestor/location_ingestor.dart';
 
 // Headless Dart entrypoint для фонового изолята, запускаемого из
@@ -40,6 +41,7 @@ Future<void> _bootstrap() async {
     final api = ChildApi(buildDio(baseUrl: apiBaseUrl));
     final storage = SecureStorageService();
     final signalChannel = SignalChannel();
+    final audioHandler = AudioCommandHandler();
     final ingestor = LocationIngestor(
       repo: repo,
       api: api,
@@ -55,8 +57,18 @@ Future<void> _bootstrap() async {
         diagLog('bg', 'command received: ${cmd.type} id=${cmd.id}');
         if (cmd.type == 'PLAY_SIGNAL') {
           await signalChannel.play();
-        } else {
-          diagLog('bg', 'unknown command type ${cmd.type} — ignoring');
+          return; // ack
+        }
+        final handled = await audioHandler.handle(cmd);
+        if (!handled) {
+          // Неизвестный тип — ack, чтобы сервер не гонял команду бесконечно.
+          diagLog('bg', 'unknown command type ${cmd.type} — acked to drop');
+        }
+        // handled=false для START_AUDIO-failure: handler уже вернул false,
+        // но onCommand возвращает void — бросим исключение чтобы ingestor
+        // пропустил ack и сервер переотдал команду при следующем poll.
+        if (cmd.type == 'START_AUDIO' && !handled) {
+          throw Exception('START_AUDIO failed — skip ack for retry');
         }
       },
     );

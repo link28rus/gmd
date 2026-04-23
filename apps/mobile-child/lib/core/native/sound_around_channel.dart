@@ -36,4 +36,28 @@ class SoundAroundChannel {
   Future<void> stop() async {
     await _channel.invokeMethod('stop');
   }
+
+  /// Передать SDP-answer от parent в background engine controller.
+  ///
+  /// Вызывается из [AudioCommandHandler] при получении AUDIO_ANSWER команды.
+  /// Маршрут: foreground poll → [AudioCommandHandler] → [deliverAnswer] →
+  ///   MainActivity.deliverAnswer → SoundAroundService.sActiveBgChannel →
+  ///   sound_around_entry applyAnswer → SoundAroundController.applyAnswer.
+  ///
+  /// Если FGS не активен (сессия уже закрыта), native вернёт NO_ACTIVE_FGS —
+  /// тихо игнорируем (answer одноразовый, ретрай не имеет смысла).
+  Future<void> deliverAnswer({
+    required String sessionId,
+    required String sdp,
+  }) async {
+    try {
+      await _channel.invokeMethod('deliverAnswer', {
+        'sessionId': sessionId,
+        'sdp': sdp,
+      });
+    } on PlatformException catch (e) {
+      if (e.code == 'NO_ACTIVE_FGS') return; // тихо игнорируем
+      rethrow;
+    }
+  }
 }
