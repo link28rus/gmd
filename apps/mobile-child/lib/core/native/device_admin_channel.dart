@@ -1,12 +1,14 @@
 import 'package:flutter/services.dart';
 
-// Канал L1/L2-защиты от удаления.
+// Канал L1 Device Admin: активация/деактивация + синхронизация
+// protection-флага в native кеш.
 //
-// L1 — Device Admin: isActive / requestActivation / openSettings.
-// L2 — AccessibilityService + PIN-lock:
-//   isAccessibilityEnabled / openAccessibilitySettings.
-// saveNativeCreds — кладёт deviceToken + apiBaseUrl в plain SharedPreferences,
-// чтобы нативная PinLockActivity могла делать HTTP-запрос без Flutter engine.
+// L2 PIN-lock (AccessibilityService + PinLockActivity) удалён в v0.29.2 —
+// больше нет вызовов isAccessibilityEnabled / openAccessibilitySettings.
+// Защита от удаления держится ТОЛЬКО на Device Admin; родитель управляет
+// тумблером в кабинете, при OFF приложение само отзывает admin.
+// saveNativeCreds остаётся — deviceToken+apiBaseUrl нужны background
+// сервису и potential native-компонентам без Flutter engine.
 class DeviceAdminChannel {
   static const MethodChannel _channel =
       MethodChannel('ru.link28rus.gmd.child/protection');
@@ -23,9 +25,9 @@ class DeviceAdminChannel {
     await _channel.invokeMethod('deactivate');
   }
 
-  // Обновляет native-кеш protection-флага: GmdAccessibilityService читает
-  // его при каждом onAccessibilityEvent и ранним return отключает L2, если
-  // защита выключена на backend.
+  // Обновляет native-кеш protection-флага. В v0.29.2 он больше не читается
+  // AccessibilityService (тот стал no-op), но оставлен для будущих native-
+  // компонентов и чтобы downgrade на v0.29.1 работал корректно.
   Future<void> setProtectionCache(bool enabled) async {
     await _channel.invokeMethod('setProtectionCache', {'enabled': enabled});
   }
@@ -36,24 +38,6 @@ class DeviceAdminChannel {
 
   Future<void> openSettings() async {
     await _channel.invokeMethod('openSettings');
-  }
-
-  Future<bool> isAccessibilityEnabled() async {
-    final result = await _channel.invokeMethod<bool>('isAccessibilityEnabled');
-    return result ?? false;
-  }
-
-  Future<void> openAccessibilitySettings() async {
-    await _channel.invokeMethod('openAccessibilitySettings');
-  }
-
-  Future<void> openAppDetailsSettings() async {
-    await _channel.invokeMethod('openAppDetailsSettings');
-  }
-
-  Future<String> deviceManufacturer() async {
-    final m = await _channel.invokeMethod<String>('deviceManufacturer');
-    return (m ?? '').toLowerCase();
   }
 
   Future<void> saveNativeCreds({

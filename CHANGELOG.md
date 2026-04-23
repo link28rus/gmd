@@ -9,6 +9,23 @@
 
 ---
 
+## v0.29.2 — 2026-04-23
+
+### Исправления
+
+- **Убран PIN-запрос при удалении приложения** — в v0.29.1 даже при выключенном тумблере защиты, если у ребёнка в настройках был активирован `GmdAccessibilityService`, системный экран «Отключить администратора устройства» перехватывался и показывалась модалка ввода PIN. Теперь PIN-lock (L2) удалён полностью: защита держится только на Device Admin L1, как у конкурентов («Где мои дети», «Пинго»). Родитель выключает тумблер в кабинете → приложение само отзывает admin → ребёнок удаляет обычным способом. Без PIN.
+
+### Изменения
+
+- mobile-child (Android): `GmdAccessibilityService` превращён в пустой no-op (onAccessibilityEvent ничего не делает). Класс оставлен в коде, но запись `<service>` в манифесте удалена — у уже включивших a11y-сервис пользователей Android автоматически пометит его как недоступный.
+- mobile-child (Android): удалены `PinLockActivity.kt` + `activity_pin_lock.xml` + `xml/gmd_accessibility_service.xml` + строки `gmd_pin_lock_*` в `strings.xml` + permission `USE_FULL_SCREEN_INTENT`.
+- mobile-child (Android): `MainActivity` очищен от MethodChannel-хендлеров `isAccessibilityEnabled`/`openAccessibilitySettings`/`openAppDetailsSettings`/`deviceManufacturer` и приватного `isAccessibilityServiceEnabled()`.
+- mobile-child (Dart): `ProtectionState` упрощён (`enabled` + `adminActive`, без `accessibilityActive`). Удалён `_AccessibilityWizard` bottom-sheet с шагами Xiaomi restricted-settings → a11y. Банер показывается только когда `enabled && !adminActive`.
+- mobile-child (Dart): `DeviceAdminChannel` очищен от `isAccessibilityEnabled`/`openAccessibilitySettings`/`openAppDetailsSettings`/`deviceManufacturer`.
+- mobile-child build number: `+31 → +32` (обязательно для RuStore versionCode).
+
+---
+
 ## v0.29.1 — 2026-04-23
 
 ### Исправления

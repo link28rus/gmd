@@ -1,12 +1,8 @@
 package ru.link28rus.gmd.child
 
 import android.app.admin.DevicePolicyManager
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.provider.Settings
-import android.text.TextUtils
-import android.view.accessibility.AccessibilityManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -133,26 +129,6 @@ class MainActivity : FlutterActivity() {
                         startActivity(settings)
                         result.success(null)
                     }
-                    "isAccessibilityEnabled" -> result.success(isAccessibilityServiceEnabled())
-                    "openAccessibilitySettings" -> {
-                        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-                        startActivity(intent)
-                        result.success(null)
-                    }
-                    "openAppDetailsSettings" -> {
-                        // Карточка приложения в Settings. На MIUI/HyperOS тут
-                        // в меню ⋮ лежит «Разрешить ограниченные настройки»,
-                        // без которого sideload-APK не может включить
-                        // Accessibility. На stock Android этот экран — просто
-                        // App info.
-                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-                            .setData(android.net.Uri.parse("package:$packageName"))
-                        startActivity(intent)
-                        result.success(null)
-                    }
-                    "deviceManufacturer" -> result.success(
-                        android.os.Build.MANUFACTURER.lowercase()
-                    )
                     "saveNativeCreds" -> {
                         val token = call.argument<String>("deviceToken")
                         val baseUrl = call.argument<String>("apiBaseUrl")
@@ -167,23 +143,5 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
-    }
-
-    private fun isAccessibilityServiceEnabled(): Boolean {
-        val expected = ComponentName(this, GmdAccessibilityService::class.java)
-            .flattenToString()
-        val enabledStr = Settings.Secure.getString(
-            contentResolver,
-            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
-        ) ?: return false
-        val splitter = TextUtils.SimpleStringSplitter(':').also { it.setString(enabledStr) }
-        while (splitter.hasNext()) {
-            if (splitter.next().equals(expected, ignoreCase = true)) return true
-        }
-        // Fallback: сверить через AccessibilityManager, на случай OEM-разметки.
-        val am = getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
-        if (!am.isEnabled) return false
-        val list = am.getEnabledAccessibilityServiceList(0) ?: return false
-        return list.any { it.resolveInfo.serviceInfo.packageName == packageName }
     }
 }
