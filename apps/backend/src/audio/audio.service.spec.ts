@@ -499,6 +499,7 @@ interface ParentSidePrisma {
 interface ParentSideCommands {
   enqueueAudioStart: jest.Mock;
   enqueueAudioStop: jest.Mock;
+  enqueueAudioAnswer: jest.Mock;
 }
 
 describe('AudioService parent-side', () => {
@@ -530,7 +531,11 @@ describe('AudioService parent-side', () => {
       audioIceCandidate: { create: jest.fn() },
     };
     events = { emitState: jest.fn(), subscribe: jest.fn() };
-    commands = { enqueueAudioStart: jest.fn(), enqueueAudioStop: jest.fn() };
+    commands = {
+      enqueueAudioStart: jest.fn(),
+      enqueueAudioStop: jest.fn(),
+      enqueueAudioAnswer: jest.fn(),
+    };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -555,6 +560,7 @@ describe('AudioService parent-side', () => {
         id: 's1',
         requestedById: 'u1',
         childId: 'c1',
+        childDeviceId: 'd1',
         state: 'READY',
         durationSec: 60,
       });
@@ -574,6 +580,13 @@ describe('AudioService parent-side', () => {
         expect.objectContaining({
           data: expect.objectContaining({ event: 'STARTED', actorUserId: 'u1' }),
         }),
+      );
+      // v0.32.1: SDP-answer must be delivered to child via DeviceCommand before SSE emit
+      expect(commands.enqueueAudioAnswer).toHaveBeenCalledWith(
+        'd1', // childDeviceId from mock session
+        's1', // sessionId
+        'v=0\r\n...', // sdpAnswer from test input
+        'u1', // userId
       );
       expect(events.emitState).toHaveBeenCalledWith('s1', 'ACTIVE');
     });

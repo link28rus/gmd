@@ -292,6 +292,14 @@ export class AudioService {
     await this.prisma.audioAuditLog.create({
       data: { sessionId: p.sessionId, event: 'STARTED', actorUserId: p.userId },
     });
+    // Доставить SDP-answer на child через DeviceCommand (v0.32.1).
+    // Без этого child не завершит WebRTC handshake (setRemoteDescription).
+    await this.commands.enqueueAudioAnswer(
+      session.childDeviceId,
+      p.sessionId,
+      p.sdpAnswer,
+      p.userId,
+    );
     this.events.emitState(p.sessionId, 'ACTIVE');
 
     // Auto-stop через durationSec

@@ -9,6 +9,14 @@
 
 ---
 
+## v0.32.1 — 2026-04-23
+
+### Исправления
+
+- fix(audio): доставка SDP-answer на child через новый DeviceCommand тип `AUDIO_ANSWER` — без этого child-устройство не завершало WebRTC-handshake, фича end-to-end не работала (обнаружено при написании Plan B mobile-child)
+
+---
+
 ## v0.32.0 — 2026-04-23
 
 ### Новые возможности

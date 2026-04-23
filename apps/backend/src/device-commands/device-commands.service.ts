@@ -153,4 +153,26 @@ export class DeviceCommandsService {
       },
     });
   }
+
+  // Доставить SDP-answer родителя на child-устройство через DeviceCommand poll (v0.32.1).
+  // Child заберёт AUDIO_ANSWER при следующем /child/commands/pending запросе и завершит
+  // WebRTC handshake (setRemoteDescription). TTL 60s — достаточно для одного poll-цикла.
+  async enqueueAudioAnswer(
+    childDeviceId: string,
+    sessionId: string,
+    sdp: string,
+    createdByUserId: string,
+  ): Promise<void> {
+    const expiresAt = new Date(Date.now() + 60_000);
+    await this.prisma.deviceCommand.create({
+      data: {
+        childDeviceId,
+        type: 'AUDIO_ANSWER',
+        status: 'pending',
+        createdByUserId,
+        expiresAt,
+        payload: { sessionId, sdp } as Prisma.InputJsonValue,
+      },
+    });
+  }
 }

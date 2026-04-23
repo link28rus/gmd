@@ -259,6 +259,7 @@ enum DeviceCommandType {
   PLAY_SIGNAL
   START_AUDIO
   STOP_AUDIO
+  AUDIO_ANSWER
 }
 
 enum DeviceCommandStatus {
