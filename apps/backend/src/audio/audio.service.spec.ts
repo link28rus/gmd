@@ -78,7 +78,12 @@ describe('AudioService.startSession', () => {
   let prisma: {
     child: { findFirst: jest.Mock };
     childDevice: { findFirst: jest.Mock };
-    audioSession: { findFirst: jest.Mock; create: jest.Mock };
+    audioSession: {
+      findFirst: jest.Mock;
+      findUnique: jest.Mock;
+      create: jest.Mock;
+      update: jest.Mock;
+    };
     audioAuditLog: { create: jest.Mock };
   };
   let settings: { getNumber: jest.Mock; getBool: jest.Mock };
@@ -97,16 +102,20 @@ describe('AudioService.startSession', () => {
   });
 
   beforeEach(async () => {
+    jest.useFakeTimers();
+
     prisma = {
       child: { findFirst: jest.fn() },
       childDevice: { findFirst: jest.fn() },
       audioSession: {
         findFirst: jest.fn().mockResolvedValue(null),
+        findUnique: jest.fn().mockResolvedValue(null),
         create: jest
           .fn()
           .mockImplementation(({ data }) =>
             Promise.resolve({ id: 'sess_new', ...data, startedAt: new Date() }),
           ),
+        update: jest.fn().mockResolvedValue({}),
       },
       audioAuditLog: { create: jest.fn() },
     };
@@ -135,6 +144,11 @@ describe('AudioService.startSession', () => {
       ],
     }).compile();
     svc = moduleRef.get(AudioService);
+  });
+
+  afterEach(() => {
+    jest.runOnlyPendingTimers();
+    jest.useRealTimers();
   });
 
   it('throws NotFoundException if child not in family', async () => {

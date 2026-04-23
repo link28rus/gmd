@@ -1,5 +1,6 @@
 import { ConflictException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { createHmac } from 'node:crypto';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AppSettingsService, SETTINGS_KEYS } from '../app-settings/app-settings.service';
 import { DeviceCommandsService } from '../device-commands/device-commands.service';
@@ -107,6 +108,13 @@ export class AudioService {
 
     const min = await this.settings.getNumber(SETTINGS_KEYS.AUDIO_MIN_DURATION_SEC, 30);
     const max = await this.settings.getNumber(SETTINGS_KEYS.AUDIO_MAX_DURATION_SEC, 1800);
+
+    if (min > max) {
+      this.logger.warn(
+        `audio.min_duration_sec (${min}) > audio.max_duration_sec (${max}) — settings inverted, clamp result will be unpredictable. Admin should fix in /admin/settings/audio.`,
+      );
+    }
+
     const def = await this.settings.getNumber(SETTINGS_KEYS.AUDIO_DEFAULT_DURATION_SEC, 300);
     const requested = p.durationSec ?? def;
     const durationSec = Math.max(min, Math.min(max, requested));
@@ -122,16 +130,29 @@ export class AudioService {
       45,
     );
 
-    const session = await this.prisma.audioSession.create({
-      data: {
-        childId: p.childId,
-        childDeviceId: device.id,
-        requestedById: p.userId,
-        state: 'PENDING',
-        hiddenMode,
-        durationSec,
-      },
-    });
+    let session;
+    try {
+      session = await this.prisma.audioSession.create({
+        data: {
+          childId: p.childId,
+          childDeviceId: device.id,
+          requestedById: p.userId,
+          state: 'PENDING',
+          hiddenMode,
+          durationSec,
+        },
+      });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        // Гонка с другим запросом: уникальный partial index пресёк дубль.
+        // Возвращаем 409 как если бы findFirst поймал.
+        throw new ConflictException({
+          code: 'session_already_active',
+          message: 'Another audio session is already in progress for this child',
+        });
+      }
+      throw err;
+    }
 
     const ttl = readyTimeoutSec + durationSec + 60;
     const turnCreds = this.generateTurnCreds(session.id, ttl);
@@ -175,6 +196,12 @@ export class AudioService {
   /**
    * Watchdog: если PENDING сессия не дошла до READY за timeout — помечаем EXPIRED.
    * Идемпотентно: если уже не PENDING (READY/ACTIVE/ENDED/FAILED), ничего не делаем.
+   *
+   * ⚠ MVP-ограничение: setTimeout живёт в памяти процесса. При рестарте сервера
+   * watchdog теряется — застрявшие в PENDING сессии не будут отмечены EXPIRED.
+   * Решение в Task 13: pg_cron-задача, которая раз в минуту выполняет
+   * UPDATE audio_sessions SET state='EXPIRED' WHERE state='PENDING' AND started_at < NOW()-...
+   * (см. spec §11 Risks).
    */
   private async expireIfStuck(sessionId: string): Promise<void> {
     const session = await this.prisma.audioSession.findUnique({ where: { id: sessionId } });
