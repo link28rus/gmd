@@ -3,7 +3,6 @@ import { TextEncoder, TextDecoder } from 'node:util';
 import { ReadableStream } from 'node:stream/web';
 
 if (typeof global.TextEncoder === 'undefined') {
-  // @ts-expect-error — jsdom polyfill
   global.TextEncoder = TextEncoder;
 }
 if (typeof global.TextDecoder === 'undefined') {
