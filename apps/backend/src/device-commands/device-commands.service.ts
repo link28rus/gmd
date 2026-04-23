@@ -1,6 +1,8 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import type { DeviceCommand } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import type { TurnCreds } from '../audio/dto/audio.dto';
 
 // TTL на команду: если child не забрал её за это время, помечаем как
 // expired при следующем pending-запросе. 5 минут — щедрый запас поверх
@@ -109,5 +111,46 @@ export class DeviceCommandsService {
         data: { status: 'executed', executedAt: new Date() },
       });
     }
+  }
+
+  // Enqueue START_AUDIO для child-устройства. payload содержит sessionId
+  // и TURN-креды. Child заберёт через next /child/commands/pending poll.
+  async enqueueAudioStart(
+    childDeviceId: string,
+    sessionId: string,
+    turnCreds: TurnCreds,
+    durationSec: number,
+    createdByUserId: string,
+    ttlMs = 60_000,
+  ): Promise<void> {
+    const expiresAt = new Date(Date.now() + ttlMs);
+    await this.prisma.deviceCommand.create({
+      data: {
+        childDeviceId,
+        type: 'START_AUDIO',
+        status: 'pending',
+        createdByUserId,
+        expiresAt,
+        payload: { sessionId, turnCreds, durationSec } as unknown as Prisma.InputJsonValue,
+      },
+    });
+  }
+
+  async enqueueAudioStop(
+    childDeviceId: string,
+    sessionId: string,
+    createdByUserId: string,
+  ): Promise<void> {
+    const expiresAt = new Date(Date.now() + 30_000);
+    await this.prisma.deviceCommand.create({
+      data: {
+        childDeviceId,
+        type: 'STOP_AUDIO',
+        status: 'pending',
+        createdByUserId,
+        expiresAt,
+        payload: { sessionId } as Prisma.InputJsonValue,
+      },
+    });
   }
 }
