@@ -264,6 +264,9 @@ services:
       PASSWORD_LOCK_TTL_SECONDS: ${PASSWORD_LOCK_TTL_SECONDS:-900}
       SENTRY_DSN: ${SENTRY_DSN_BACKEND}
       PORT: '3001'
+      TURN_SHARED_SECRET: ${TURN_SHARED_SECRET}
+      TURN_PUBLIC_HOST: ${TURN_PUBLIC_HOST}
+      TURN_PUBLIC_PORT: ${TURN_PUBLIC_PORT:-3478}
     volumes:
       - /opt/gmd/secrets/jwt-private.pem:/run/secrets/jwt-private.pem:ro
       - /opt/gmd/secrets/jwt-public.pem:/run/secrets/jwt-public.pem:ro
