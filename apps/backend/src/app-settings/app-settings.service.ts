@@ -188,11 +188,13 @@ export class AppSettingsService implements OnModuleInit {
       },
       {
         key: SETTINGS_KEYS.AUDIO_CHILD_READY_TIMEOUT_SEC,
-        value: '15',
+        value: '45',
         description:
           'Таймаут ожидания ответа от child-устройства (в секундах). Если за это время ' +
-          'child не прислал SDP-offer — сессия → EXPIRED. Учитывает worst-case для ' +
-          'short-poll интервала child (≈ 30 сек) + WebRTC setup (1-3 сек). Диапазон: 5-120.',
+          'child не прислал SDP-offer — сессия → EXPIRED. На MVP без FCM child-app узнаёт о ' +
+          'новой сессии через short-poll DeviceCommand (worst-case ≈ 30 сек), плюс ~3 сек ' +
+          'на WebRTC setup, плюс buffer. Default 45 сек консервативно. После внедрения FCM ' +
+          '(post-MVP) можно уменьшить до 5-10 сек. Диапазон: 5-120.',
       },
     ];
 
@@ -283,6 +285,12 @@ export class AppSettingsService implements OnModuleInit {
     const raw = await this.getString(key, String(fallback));
     const n = Number(raw);
     return Number.isFinite(n) ? n : fallback;
+  }
+
+  async getBool(key: string, fallback: boolean): Promise<boolean> {
+    const raw = await this.getString(key, String(fallback));
+    // Принимаем строки, которые админ мог ввести: 'true', '1', 'yes', 'on'
+    return ['true', '1', 'yes', 'on'].includes(raw.toLowerCase().trim());
   }
 
   /**

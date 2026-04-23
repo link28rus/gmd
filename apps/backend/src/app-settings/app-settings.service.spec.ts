@@ -97,7 +97,7 @@ describe('AppSettingsService — seedAudioIfEmpty', () => {
     expect(byKey['audio.max_duration_sec']).toBe('1800');
     expect(byKey['audio.min_duration_sec']).toBe('30');
     expect(byKey['audio.hidden_mode_allowed']).toBe('true');
-    expect(byKey['audio.child_ready_timeout_sec']).toBe('15');
+    expect(byKey['audio.child_ready_timeout_sec']).toBe('45');
   });
 
   it('all seeded audio.* rows have isSecret=false and updatedBy=system:seed', async () => {
@@ -217,5 +217,50 @@ describe('AppSettingsService — KEY_BOUNDS for audio.*', () => {
     await expect(
       service.update(SETTINGS_KEYS.AUDIO_HIDDEN_MODE_ALLOWED, 'false', 'test'),
     ).resolves.not.toThrow();
+  });
+});
+
+describe('AppSettingsService — getBool', () => {
+  let prisma: ReturnType<typeof makePrisma>;
+  let service: AppSettingsService;
+
+  beforeEach(async () => {
+    prisma = makePrisma();
+    service = new AppSettingsService(prisma, makeSecrets());
+    await service.onModuleInit();
+    service.clearCache();
+  });
+
+  it('returns true for "true"', async () => {
+    await service.update('audio.hidden_mode_allowed', 'true', 'test');
+    service.clearCache();
+    expect(await service.getBool('audio.hidden_mode_allowed', false)).toBe(true);
+  });
+
+  it('returns false for "false"', async () => {
+    await service.update('audio.hidden_mode_allowed', 'false', 'test');
+    service.clearCache();
+    expect(await service.getBool('audio.hidden_mode_allowed', true)).toBe(false);
+  });
+
+  it('returns fallback when key missing', async () => {
+    expect(await service.getBool('nonexistent.key', true)).toBe(true);
+    // Очищаем кеш перед второй проверкой: getString кеширует первый fallback
+    service.clearCache();
+    expect(await service.getBool('nonexistent.key', false)).toBe(false);
+  });
+
+  it('accepts truthy synonyms', async () => {
+    for (const v of ['1', 'yes', 'on', 'TRUE', 'True ']) {
+      await service.update('audio.hidden_mode_allowed', v, 'test');
+      service.clearCache();
+      expect(await service.getBool('audio.hidden_mode_allowed', false)).toBe(true);
+    }
+  });
+
+  it('treats unknown strings as false', async () => {
+    await service.update('audio.hidden_mode_allowed', 'maybe', 'test');
+    service.clearCache();
+    expect(await service.getBool('audio.hidden_mode_allowed', true)).toBe(false);
   });
 });
