@@ -8,6 +8,7 @@ import { DeviceCommandsModule } from '../device-commands/device-commands.module'
 import { AudioService } from './audio.service';
 import { AudioEvents } from './audio.events';
 import { ParentAudioController } from './parent-audio.controller';
+import { ChildAudioController } from './child-audio.controller';
 
 @Module({
   imports: [
@@ -18,7 +19,7 @@ import { ParentAudioController } from './parent-audio.controller';
     ConsentModule,
     DeviceCommandsModule,
   ],
-  controllers: [ParentAudioController],
+  controllers: [ParentAudioController, ChildAudioController],
   providers: [AudioService, AudioEvents],
   exports: [AudioService, AudioEvents],
 })
