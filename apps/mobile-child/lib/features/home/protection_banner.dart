@@ -109,6 +109,7 @@ class _ProtectionBannerState extends ConsumerState<ProtectionBanner>
         // приложение можно удалить launcher'ом. Чтоб ребёнок/родитель
         // точно обратил внимание.
         color: Colors.red,
+        icon: Icons.lock_open,
         title: 'Защита НЕ активна',
         subtitle:
             'Устройство можно удалить. Нажми чтобы включить Device Admin.',
@@ -117,7 +118,14 @@ class _ProtectionBannerState extends ConsumerState<ProtectionBanner>
       );
     }
 
-    return const SizedBox.shrink();
+    // Persistent status indicator (v0.29.4): всегда видимый замок + подпись,
+    // чтобы ребёнок/родитель понимали текущее состояние защиты без
+    // копания в логах. Закрытый зелёный замок = защита работает;
+    // открытый серый = выключена в кабинете.
+    return _StatusTile(
+      enabled: state.enabled,
+      adminActive: state.adminActive,
+    );
   }
 
   Future<void> _showAdminWizard(BuildContext context) async {
@@ -373,12 +381,14 @@ class _Step extends StatelessWidget {
 class _Banner extends StatelessWidget {
   const _Banner({
     required this.color,
+    required this.icon,
     required this.title,
     required this.subtitle,
     required this.buttonLabel,
     required this.onTap,
   });
   final MaterialColor color;
+  final IconData icon;
   final String title;
   final String subtitle;
   final String buttonLabel;
@@ -394,7 +404,7 @@ class _Banner extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Row(
             children: [
-              Icon(Icons.shield_outlined, color: color.shade900),
+              Icon(icon, color: color.shade900),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -417,6 +427,58 @@ class _Banner extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+// Компактный always-visible статус-индикатор для home-экрана.
+// Показывается когда защита «в консистентном» состоянии (нет red alert).
+//   enabled=true  & adminActive=true  → зелёный 🔒 «Защита от удаления активна»
+//   enabled=false & adminActive=*     → серый 🔓 «Защита от удаления выключена»
+// Случай enabled=true & adminActive=false уже обрабатывается красной
+// плашкой в ProtectionBanner.build выше (needAdmin flow).
+class _StatusTile extends StatelessWidget {
+  const _StatusTile({required this.enabled, required this.adminActive});
+  final bool enabled;
+  final bool adminActive;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = enabled && adminActive;
+    final color = active ? Colors.green : Colors.grey;
+    final icon = active ? Icons.lock : Icons.lock_open;
+    final subtitle =
+        active ? 'Включена' : 'Выключена в кабинете родителя';
+
+    return Container(
+      color: color.shade50,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
+        children: [
+          Icon(icon, color: color.shade700, size: 22),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Защита от удаления',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: color.shade900,
+                  ),
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  subtitle,
+                  style: TextStyle(fontSize: 12, color: color.shade700),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
