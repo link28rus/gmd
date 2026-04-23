@@ -374,6 +374,11 @@ enum AudioAuditEvent {
   CONSENT_REVOKED
 }
 
+enum AudioIceSide {
+  parent
+  child
+}
+
 // Сессия аудиомониторинга «Звук вокруг ребёнка». Состояния:
 // PENDING — родитель создал, child ещё не подтвердил готовность
 // READY   — child прислал SDP-offer, ждём parent answer
@@ -421,12 +426,12 @@ model AudioSession {
 // ICE candidates — буфер на случай, если parent SSE дисконнектнулся.
 // Прямо отдаём через SSE и параллельно сохраняем; child poll'ит /ice.
 model AudioIceCandidate {
-  id        String   @id @default(cuid())
+  id        String       @id @default(cuid())
   sessionId String
-  side      String   // 'parent' | 'child'
+  side      AudioIceSide
   candidate String
-  createdAt DateTime @default(now())
-  consumed  Boolean  @default(false)
+  createdAt DateTime     @default(now())
+  consumed  Boolean      @default(false)
 
   session AudioSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
@@ -436,17 +441,20 @@ model AudioIceCandidate {
 
 // Аудит для compliance. Retention 1 год (pg_cron). Не CASCADE-удаляется
 // вместе с сессией — нужен для последующих юр.запросов.
+// sessionId nullable: когда pg_cron удаляет session старше 90д, audit-записи
+// остаются с sessionId=NULL (SET NULL). Сам audit self-contained в event +
+// metadata + actorUserId, достаточно для compliance.
 model AudioAuditLog {
   id          BigInt          @id @default(autoincrement())
-  sessionId   String
+  sessionId   String?
   event       AudioAuditEvent
   actorUserId String?
   actorIp     String?
   userAgent   String?         @db.VarChar(500)
-  metadata    Json?           // failureReason, etc.
+  metadata    Json?           // failureReason, originalSessionId, etc.
   createdAt   DateTime        @default(now())
 
-  session AudioSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  session AudioSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
 
   @@index([sessionId, createdAt])
   @@map("audio_audit_log")
