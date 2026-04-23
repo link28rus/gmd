@@ -4,6 +4,7 @@ import {
   HttpCode,
   HttpStatus,
   Inject,
+  NotFoundException,
   Param,
   Post,
   Req,
@@ -16,6 +17,7 @@ import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ConsentRequiredGuard } from '../consent/guards/consent-required.guard';
 import { ZodValidationPipe } from '../common/zod/zod-validation.pipe';
+import { PrismaService } from '../prisma/prisma.service';
 import { AudioService } from './audio.service';
 import { AudioEvents, type AudioStateEvent } from './audio.events';
 import {
@@ -42,6 +44,7 @@ export class ParentAudioController {
   constructor(
     @Inject(AudioService) private readonly svc: AudioService,
     @Inject(AudioEvents) private readonly events: AudioEvents,
+    @Inject(PrismaService) private readonly prisma: PrismaService,
   ) {}
 
   // 6 запусков в минуту — разумный потолок UX и защита от случайных циклов.
@@ -104,16 +107,27 @@ export class ParentAudioController {
 
   /**
    * SSE-стрим состояния сессии. Parent держит соединение открытым,
-   * получает state-changes (READY/ACTIVE/ENDED/FAILED/EXPIRED), SDP-offer (с child),
+   * получает state-changes (READY/ACTIVE/ENDED/FAILED/EXPIRED), SDP-offer (от child),
    * и ICE-candidates от child.
    *
-   * ⚠ Нет проверки доступа к sessionId — любой parent с JWT может слушать.
-   * SSE-events содержат только state-changes, без sensitive data, кроме SDP-offer.
-   * Полная авторизация выполняется в момент создания сессии (POST /audio/sessions).
-   * Для строгой защиты в post-MVP — добавить sessionId-token в URL.
+   * Authorization: проверяется владение сессией (requestedById). Любая попытка
+   * слушать чужую сессию → 404. SDP/ICE содержат публичные IP child-устройства,
+   * утечка недопустима.
    */
   @Sse(':id/events')
-  events$(@Param('id') id: string): Observable<SseMessage> {
+  async events$(
+    @Req() req: AuthedRequest,
+    @Param('id') id: string,
+  ): Promise<Observable<SseMessage>> {
+    // Auth check: parent владеет этой сессией
+    const session = await this.prisma.audioSession.findFirst({
+      where: { id, requestedById: req.user.userId },
+      select: { id: true },
+    });
+    if (!session) {
+      throw new NotFoundException({ code: 'session_not_found' });
+    }
+
     return fromEventPattern<AudioStateEvent>(
       (handler) => this.events.subscribe(id, handler as (e: AudioStateEvent) => void),
       (_handler, unsub: () => void) => unsub(),

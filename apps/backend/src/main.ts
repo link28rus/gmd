@@ -8,6 +8,11 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
+  // За Caddy reverse-proxy: доверяем X-Forwarded-For из docker-сети.
+  // Без этого req.ip всегда будет docker-internal IP Caddy-контейнера, что
+  // делает audit-log бесполезным для compliance/Роскомнадзора.
+  const expressApp = app.getHttpAdapter().getInstance();
+  expressApp.set('trust proxy', 'loopback, linklocal, uniquelocal');
   app.use(cookieParser());
   app.useGlobalFilters(new HttpExceptionFilter());
   const port = Number(process.env.PORT ?? 3001);

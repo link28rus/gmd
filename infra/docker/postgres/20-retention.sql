@@ -62,38 +62,71 @@ BEGIN
     -- 3. Watchdog для застрявших сессий — fix для MVP-ограничения setTimeout
     --    в AudioService.expireIfStuck / autoStopIfActive (см. комментарии там).
     --    Запускается каждую минуту:
-    --    - PENDING сессии старше 5 минут → EXPIRED (с большим запасом сверх
-    --      audio.child_ready_timeout_sec=45)
-    --    - READY сессии старше 5 минут → EXPIRED (parent не прислал answer)
+    --    - PENDING сессии старше 5 минут → EXPIRED + audit
+    --    - READY сессии старше 5 минут → EXPIRED + audit
     --    - ACTIVE сессии где (activeAt + durationSec + 60s buffer) уже прошло → ENDED
-    --      (auto-stop таймер потерян после рестарта)
+    --      + INSERT STOP_AUDIO в device_commands + audit
+    --      (auto-stop таймер потерян после рестарта; child-устройство должно
+    --       получить команду STOP_AUDIO чтобы остановить FGS с микрофоном)
     PERFORM cron.schedule(
       'audio_sessions_watchdog',
       '* * * * *',  -- каждую минуту
       $job$
-        -- PENDING > 5 мин → EXPIRED
-        UPDATE audio_sessions
-        SET state = 'EXPIRED',
-            "endedAt" = now(),
-            "failureReason" = 'PARENT_TIMEOUT'
-        WHERE state = 'PENDING'
-          AND "startedAt" < now() - interval '5 minutes';
+        -- 1) PENDING > 5 мин → EXPIRED + audit
+        WITH expired_pending AS (
+          UPDATE audio_sessions
+          SET state = 'EXPIRED',
+              "endedAt" = now(),
+              "failureReason" = 'PARENT_TIMEOUT'
+          WHERE state = 'PENDING'
+            AND "startedAt" < now() - interval '5 minutes'
+          RETURNING id, "childDeviceId"
+        )
+        INSERT INTO audio_audit_log ("sessionId", event, metadata, "createdAt")
+        SELECT id, 'EXPIRED', '{"source":"watchdog","reason":"pending_timeout"}'::jsonb, now()
+        FROM expired_pending;
 
-        -- READY > 5 мин → EXPIRED
-        UPDATE audio_sessions
-        SET state = 'EXPIRED',
-            "endedAt" = now(),
-            "failureReason" = 'PARENT_TIMEOUT'
-        WHERE state = 'READY'
-          AND "readyAt" < now() - interval '5 minutes';
+        -- 2) READY > 5 мин → EXPIRED + audit
+        WITH expired_ready AS (
+          UPDATE audio_sessions
+          SET state = 'EXPIRED',
+              "endedAt" = now(),
+              "failureReason" = 'PARENT_TIMEOUT'
+          WHERE state = 'READY'
+            AND "readyAt" < now() - interval '5 minutes'
+          RETURNING id, "childDeviceId"
+        )
+        INSERT INTO audio_audit_log ("sessionId", event, metadata, "createdAt")
+        SELECT id, 'EXPIRED', '{"source":"watchdog","reason":"ready_timeout"}'::jsonb, now()
+        FROM expired_ready;
 
-        -- ACTIVE: проверить что (activeAt + durationSec + 60s buffer) ещё не прошло
-        UPDATE audio_sessions
-        SET state = 'ENDED',
-            "endedAt" = now(),
-            "actualSec" = EXTRACT(EPOCH FROM (now() - "activeAt"))::int
-        WHERE state = 'ACTIVE'
-          AND "activeAt" + ("durationSec" + 60) * interval '1 second' < now();
+        -- 3) ACTIVE с истёкшим duration → ENDED + STOP_AUDIO команда + audit
+        WITH ended_active AS (
+          UPDATE audio_sessions
+          SET state = 'ENDED',
+              "endedAt" = now(),
+              "actualSec" = EXTRACT(EPOCH FROM (now() - "activeAt"))::int
+          WHERE state = 'ACTIVE'
+            AND "activeAt" + ("durationSec" + 60) * interval '1 second' < now()
+          RETURNING id, "childDeviceId", "requestedById"
+        ),
+        audit_inserted AS (
+          INSERT INTO audio_audit_log ("sessionId", event, metadata, "createdAt")
+          SELECT id, 'STOPPED', '{"source":"watchdog","reason":"duration_exceeded"}'::jsonb, now()
+          FROM ended_active
+          RETURNING "sessionId"
+        )
+        INSERT INTO device_commands (id, "childDeviceId", type, status, "createdByUserId", "expiresAt", payload, "createdAt")
+        SELECT
+          'wdog_' || id,
+          "childDeviceId",
+          'STOP_AUDIO',
+          'pending',
+          "requestedById",
+          now() + interval '30 seconds',
+          jsonb_build_object('sessionId', id, 'source', 'watchdog'),
+          now()
+        FROM ended_active;
       $job$
     );
     RAISE NOTICE 'Scheduled pg_cron job: audio_sessions_watchdog';
