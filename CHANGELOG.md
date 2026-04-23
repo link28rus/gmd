@@ -9,6 +9,22 @@
 
 ---
 
+## v0.32.0 — 2026-04-23
+
+### Новые возможности
+
+- **«Звук вокруг ребёнка» — backend и infra** — добавлен TURN-сервер coturn в docker-compose (dev + prod) с SSRF-hardening и узким relay-port range; Prisma-схема `audio_sessions` + `audio_audit_log` + `audio_ice_candidates` с UNIQUE partial index для предотвращения race condition; REST API для родителя (`POST /audio/sessions`, `/answer`, `/ice`, `/stop`, SSE `/events`), для ребёнка (`/ready`, `/ice`, `/error`) и админки (settings GET/PATCH + sessions list); HMAC-SHA1 TURN-credentials генератор (RFC 5766); state-machine `PENDING→READY→ACTIVE→ENDED|FAILED|EXPIRED`; hidden-mode (без push/баннера ребёнку, system privacy indicator Android всё равно появится); 5 минут default + админ-настройки `audio.*`; pg_cron retention 90д для сессий и 365д для audit + watchdog для застрявших сессий. Mobile-клиенты ещё не реализованы — ждут Plans B/C.
+
+### Изменения
+
+- chore: новый модуль `apps/backend/src/audio/`, Prisma migrations `audio_sessions` + `audio_schema_fixes` + `audio_sessions_unique_active`
+- chore: расширен `DeviceCommandType` enum (`+START_AUDIO`, `+STOP_AUDIO`)
+- chore: dev-postgres переключён на кастомный Dockerfile с pg_cron extension
+- chore: AppSettingsService расширен `getBool` helper и audio.\* keys
+- docs: новый файл `docs/audio-api.md` (1100+ строк) — полная документация API для будущих mobile-разработчиков
+
+---
+
 ## v0.31.3 — 2026-04-23
 
 ### Новые возможности

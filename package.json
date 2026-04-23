@@ -1,6 +1,6 @@
 {
   "name": "gmd",
-  "version": "0.31.3",
+  "version": "0.32.0",
   "private": true,
   "description": "GMD — сервис родительского контроля и геолокации детей",
   "packageManager": "pnpm@9.15.0",
