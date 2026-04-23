@@ -28,6 +28,10 @@
         android:usesPermissionFlags="neverForLocation"
         tools:targetApi="s"/>
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
+    <!-- «Звук вокруг ребёнка» (Phase 5.3) — захват микрофона по запросу родителя.
+         FOREGROUND_SERVICE_MICROPHONE обязателен с Android 14 (API 34). -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
     <!-- Защита от свайпа из recents: onTaskRemoved ставит AlarmManager-alarm
          через 3 сек, RestartReceiver поднимает сервис обратно. USE_EXACT_ALARM
@@ -80,6 +84,16 @@
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback"/>
+        <!-- SoundAroundService — FGS для аудиомониторинга «Звук вокруг ребёнка».
+             Стартует по START_AUDIO команде из poll'а /child/commands/pending.
+             Держит headless FlutterEngine, который через flutter_webrtc создаёт
+             RTCPeerConnection и шлёт mic-stream на parent через TURN-сервер.
+             Останавливается по STOP_AUDIO команде или durationSec timeout. -->
+        <service
+            android:name=".SoundAroundService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="microphone"/>
         <receiver
             android:name=".BootReceiver"
             android:enabled="true"
