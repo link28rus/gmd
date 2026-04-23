@@ -18,22 +18,24 @@
 ## 2. Scope MVP
 
 ### В MVP входит
+
 - Регистрация родителя (email/phone + пароль)
 - Добавление ребёнка по QR-коду приглашения
 - GPS-геолокация ребёнка (Android), история 30 дней
 - Геозоны с уведомлениями о входе/выходе
 - SOS-кнопка (ребёнок → родитель)
 - Read-only статистика экранного времени (Android, через `UsageStatsManager`)
+- **«Звук вокруг ребёнка»** — аудиомониторинг окружения по запросу родителя (Android only, видимое уведомление ребёнку, foreground service `microphone`). Детальный дизайн — в отдельном spec'е (TBD).
 - Push-уведомления (FCM + RuStore Push fallback)
 - Web-кабинет родителя (Next.js)
 - Mobile-приложение родителя (Flutter, Android + iOS)
 - Mobile-приложение ребёнка (Flutter, **только Android** на MVP)
 
 ### Явно НЕ входит в MVP
+
 - Чат родитель↔ребёнок
 - GPS-часы (интеграция по MQTT)
 - Мобильное приложение ребёнка на iOS (ScreenTime API требует Apple entitlement)
-- Прослушивание окружения
 - Мониторинг соцсетей
 - Платные подписки и эквайринг
 - Партнёрская программа
@@ -41,17 +43,17 @@
 
 ## 3. Нефункциональные требования
 
-| Параметр | Требование |
-|---|---|
-| Регион данных | РФ (152-ФЗ) |
-| Хостинг | Self-hosted, сервер 192.168.1.23, домен `gmd.link28rus.ru` |
-| Внешний доступ | Проброс портов с 85.15.75.126 |
-| История локаций | 30 дней, автоматическая очистка через `pg_cron` |
-| Push-провайдеры | FCM + RuStore Push |
-| Карты | Яндекс.Карты |
-| Монетизация на MVP | Отсутствует (бесплатно, сбор аудитории) |
-| TLS | Caddy + Let's Encrypt |
-| Команда | Соло-разработчик + Claude Code как реализатор |
+| Параметр           | Требование                                                 |
+| ------------------ | ---------------------------------------------------------- |
+| Регион данных      | РФ (152-ФЗ)                                                |
+| Хостинг            | Self-hosted, сервер 192.168.1.23, домен `gmd.link28rus.ru` |
+| Внешний доступ     | Проброс портов с 85.15.75.126                              |
+| История локаций    | 30 дней, автоматическая очистка через `pg_cron`            |
+| Push-провайдеры    | FCM + RuStore Push                                         |
+| Карты              | Яндекс.Карты                                               |
+| Монетизация на MVP | Отсутствует (бесплатно, сбор аудитории)                    |
+| TLS                | Caddy + Let's Encrypt                                      |
+| Команда            | Соло-разработчик + Claude Code как реализатор              |
 
 ## 4. Юридический слой (152-ФЗ)
 
@@ -64,6 +66,7 @@
 ## 5. Технологический стек
 
 ### Mobile
+
 - **Flutter 3.x** (Dart 3) — одна кодовая база на обе платформы
 - `yandex_mapkit` — карты (РФ-аудитория)
 - `riverpod` — state management (рекомендация; финально фиксируется в plan)
@@ -73,12 +76,14 @@
 - Android: foreground service + `FusedLocationProviderClient`, `UsageStatsManager`
 
 ### Web
+
 - **Next.js 15** (App Router, Server Actions) + TypeScript
 - Tailwind CSS + **shadcn/ui**
 - Zod + react-hook-form
 - Playwright (e2e smoke)
 
 ### Backend
+
 - **NestJS** (TypeScript) — модульный монолит
 - **PostgreSQL 16** + **PostGIS** + **pg_cron**
 - **Redis** — сессии, rate-limit, короткий кеш локации
@@ -87,6 +92,7 @@
 - JWT access (15 мин) + refresh (30 дней); device-token для детских устройств (long-lived)
 
 ### Инфраструктура
+
 - Docker + Docker Compose
 - Caddy (reverse proxy + TLS)
 - GlitchTip (self-hosted Sentry-совместимый)
@@ -226,26 +232,26 @@ DELETE /devices/push-tokens/:id
 
 ## 16. Roadmap (16 недель MVP)
 
-| Фаза | Неделя | Что |
-|---|---|---|
-| 0. Фундамент | 1-2 | Server hardening, domain, docker-compose, monorepo, CI, полит.конфиденц |
-| 1. Backend core | 3-5 | Auth, Family, ChildDevice, Location, OpenAPI codegen |
-| 2. Geofence + SOS | 6-7 | PostGIS-триггеры, push, RuStore fallback |
-| 3. Mobile-child | 8-10 | QR-claim, foreground service, SOS, UsageStats, release в RuStore |
-| 4. Mobile-parent | 11-13 | Map, history, geofence CRUD, push, release в RuStore + Play + TestFlight |
-| 5. Web-кабинет | 14-15 | Лендинг SEO, кабинет, Playwright smoke |
-| 6. Релиз | 16 | РКН-уведомление, закрытая бета, публичный запуск |
+| Фаза              | Неделя | Что                                                                      |
+| ----------------- | ------ | ------------------------------------------------------------------------ |
+| 0. Фундамент      | 1-2    | Server hardening, domain, docker-compose, monorepo, CI, полит.конфиденц  |
+| 1. Backend core   | 3-5    | Auth, Family, ChildDevice, Location, OpenAPI codegen                     |
+| 2. Geofence + SOS | 6-7    | PostGIS-триггеры, push, RuStore fallback                                 |
+| 3. Mobile-child   | 8-10   | QR-claim, foreground service, SOS, UsageStats, release в RuStore         |
+| 4. Mobile-parent  | 11-13  | Map, history, geofence CRUD, push, release в RuStore + Play + TestFlight |
+| 5. Web-кабинет    | 14-15  | Лендинг SEO, кабинет, Playwright smoke                                   |
+| 6. Релиз          | 16     | РКН-уведомление, закрытая бета, публичный запуск                         |
 
 ## 17. Риски и митигации
 
-| Риск | Митигация |
-|---|---|
-| Google Play отклонит из-за политики accessibility/usage stats | На MVP только read-only UsageStats (без блокировки) — в правилах |
-| Apple ScreenTime entitlement не выдадут | iOS-ребёнок не в MVP, фаза 7+ |
-| FCM нестабилен на Android без GMS | RuStore Push fallback |
-| Фоновая геолокация убивает батарею | Interval 30-60 сек, батч раз в 3-5 мин, foreground service с видимой нотификацией |
-| Проброс портов с домашнего роутера — нестабильный IP | Динамический DNS на `gmd.link28rus.ru`, в будущем — перенос на VPS |
-| 152-ФЗ проверки | Политика + согласие + уведомление РКН + хостинг в РФ ✓ |
+| Риск                                                          | Митигация                                                                         |
+| ------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Google Play отклонит из-за политики accessibility/usage stats | На MVP только read-only UsageStats (без блокировки) — в правилах                  |
+| Apple ScreenTime entitlement не выдадут                       | iOS-ребёнок не в MVP, фаза 7+                                                     |
+| FCM нестабилен на Android без GMS                             | RuStore Push fallback                                                             |
+| Фоновая геолокация убивает батарею                            | Interval 30-60 сек, батч раз в 3-5 мин, foreground service с видимой нотификацией |
+| Проброс портов с домашнего роутера — нестабильный IP          | Динамический DNS на `gmd.link28rus.ru`, в будущем — перенос на VPS                |
+| 152-ФЗ проверки                                               | Политика + согласие + уведомление РКН + хостинг в РФ ✓                            |
 
 ## 18. Открытые вопросы (к обсуждению при planning)
 

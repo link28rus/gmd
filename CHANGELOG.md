@@ -9,6 +9,26 @@
 
 ---
 
+## v0.34.0 — 2026-04-24
+
+### Новые возможности
+
+- **«Звук вокруг ребёнка» — web-кабинет родителя** — в меню действий ребёнка появилась кнопка «Звук вокруг». По клику открывается модалка с live-аудио через WebRTC (TURN-relay, force-relay для защиты parent IP), таймером обратного отсчёта 5 минут, индикатором уровня звука (VU-meter через Web Audio API) и понятными ошибками для каждой причины FAILED/EXPIRED. Реализована на нативном WebRTC API + custom SSE-хуке через `fetch`+`ReadableStream` (поддержка `Authorization: Bearer` — `EventSource` не умеет headers). Модулярная архитектура: `AudioSessionController` (plain TS state-machine, unit-тестируется без браузера), `useAudioSse` и `useAudioSession` React-хуки, `AudioListenDialog` UI-компонент. Вместе с v0.32.x backend и v0.33.x mobile-child даёт end-to-end фичу на web.
+
+### Изменения
+
+- chore(web): новые файлы — `app/api/audio/sessions/**` (proxy routes), `lib/api/audio.ts`, `lib/hooks/use-audio-sse.ts`, `lib/hooks/use-audio-session.ts`, `lib/webrtc/{audio-session-controller,vu-meter}.ts`, `components/children/audio-listen-dialog.tsx`
+- chore(web): `jest.setup.ts` полифилы `TextDecoder`/`ReadableStream` для SSE-тестов под jsdom
+- docs: Plan C — web-parent UI (SSE + WebRTC) добавлен в `docs/superpowers/plans/`
+
+### Известные ограничения
+
+- Mobile-parent (Flutter) остаётся заглушкой — отдельный план после того как появятся базовые экраны (auth/children/map).
+- EULA + claim-invite consent UI для аудиомониторинга (152-ФЗ) — отдельный Plan D перед публичным запуском.
+- Autoplay audio может быть заблокирован браузером при первом использовании — пользователь должен кликнуть где-то на странице (dialog открывается по клику, обычно это уже достаточно).
+
+---
+
 ## v0.33.1 — 2026-04-23
 
 ### Исправления
