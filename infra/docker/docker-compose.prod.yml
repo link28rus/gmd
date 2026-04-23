@@ -198,6 +198,31 @@ services:
       retries: 5
       start_period: 30s
 
+  coturn:
+    <<: *restart
+    image: coturn/coturn:4.6
+    container_name: gmd-coturn
+    environment:
+      TURN_SHARED_SECRET: ${TURN_SHARED_SECRET}
+      TURN_REALM: ${TURN_REALM:-gmd.link28rus.ru}
+      TURN_EXTERNAL_IP: ${TURN_EXTERNAL_IP}
+    volumes:
+      - ./coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
+    command:
+      - turnserver
+      - -c
+      - /etc/coturn/turnserver.conf
+      - --static-auth-secret=${TURN_SHARED_SECRET}
+      - --realm=${TURN_REALM:-gmd.link28rus.ru}
+      - --external-ip=${TURN_EXTERNAL_IP}
+    ports:
+      - '${TURN_PORT:-3478}:3478/tcp'
+      - '${TURN_PORT:-3478}:3478/udp'
+      # ⚠ Range синхронизирован с min-port/max-port в infra/docker/coturn/turnserver.conf
+      - '49152-49200:49152-49200/udp'
+    networks: [gmd_net]
+    # --verbose НЕ передаём в prod (иначе логи забиваются STUN/TURN binding-сообщениями)
+
   backend:
     <<: *restart
     build:

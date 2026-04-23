@@ -21,8 +21,9 @@ Runbook по развёртыванию production-стека GMD на серв�
   glitchtip-web:8000         (error tracking UI + API)
   glitchtip-worker           (celery)
   uptime-kuma:3001           (uptime-мониторинг + алерты)
+  coturn:3478                (TURN-сервер для «Звук вокруг», relay UDP 49152-49200)
 
-Наружу только 80/443 + 22 (SSH). Админ-панели GlitchTip/Kuma — через SSH-туннель (см. docs/monitoring.md).
+Наружу только 80/443 + 22 (SSH) + 3478 TCP/UDP + 49152-49200 UDP (coturn). Админ-панели GlitchTip/Kuma — через SSH-туннель (см. docs/monitoring.md).
 ```
 
 ## Prerequisites
@@ -87,6 +88,47 @@ ssh gmd-prod 'docker ps --format "table {{.Names}}\t{{.Status}}"'
 ## Мониторинг
 
 После деплоя stack включает GlitchTip (error tracking) и Uptime Kuma (uptime). Доступ: `ssh -N gmd-prod-tunnels` → `http://localhost:3010` и `http://localhost:3011`. Детали — [docs/monitoring.md](monitoring.md).
+
+## coturn (TURN для «Звук вокруг»)
+
+coturn слушает на хосте через docker port-mapping (НЕ `network_mode: host`):
+
+- TCP/UDP **3478** — основной listener (STUN binding + TURN allocate)
+- UDP **49152-49200** — relay range для media-сессий (узкий, чтобы пробрасывался через NAT провайдера)
+
+Никакого TLS (5349) на MVP — родительские клиенты подключаются через `turn:` без шифрования signalling. WebRTC media сама по себе шифруется через DTLS-SRTP.
+
+### Проброс портов на роутере 95.104.240.99 → 192.168.1.23
+
+- `3478` TCP+UDP
+- `49152-49200` UDP (большой range — без него relay-сессии не установятся за CGNAT клиентов)
+
+### UFW на сервере
+
+```bash
+sudo ufw allow 3478/tcp
+sudo ufw allow 3478/udp
+sudo ufw allow 49152:65535/udp  # запас сверх 49200 на будущее, узкий 49200 для прода
+```
+
+(Реально пробрасывается только 49152-49200, но UFW лучше открыть с запасом, чтобы потом расширение range'а не требовало re-config'а ufw.)
+
+### TURN_SHARED_SECRET — генерация
+
+```bash
+openssl rand -hex 32
+```
+
+Записать значение в `/opt/gmd/.env.prod` (`TURN_SHARED_SECRET=...`). Не коммитить!
+
+### Проверка после деплоя
+
+```bash
+ssh gmd-prod 'docker logs gmd-coturn | head -30'
+# Ожидаем: 'IPv4. UDP listener opened on: 0.0.0.0:3478'
+# 'IPv4. TCP listener opened on: 0.0.0.0:3478'
+# Никаких ERROR.
+```
 
 ## Обновление `.env.prod`
 
