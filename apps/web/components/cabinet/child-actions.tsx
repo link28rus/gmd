@@ -2,12 +2,13 @@
 
 import { useState, type ReactElement } from 'react';
 import Link from 'next/link';
-import { Bell, Clock, RotateCcw, Shield, Trash2 } from 'lucide-react';
+import { Bell, Clock, Ear, RotateCcw, Shield, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Child } from '@/lib/api/children';
 import { ResetDeviceDialog } from '@/components/children/reset-device-dialog';
 import { DeleteChildDialog } from '@/components/children/delete-child-dialog';
 import { SendSignalDialog } from '@/components/children/send-signal-dialog';
+import { AudioListenDialog } from '@/components/children/audio-listen-dialog';
 import { useToggleProtection } from '@/lib/hooks/use-children';
 
 interface Props {
@@ -20,6 +21,7 @@ export function ChildActions({ child, showReset }: Props): ReactElement {
   const [resetOpen, setResetOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [signalOpen, setSignalOpen] = useState(false);
+  const [audioOpen, setAudioOpen] = useState(false);
   const toggleProtection = useToggleProtection();
 
   // «Отправить сигнал» и «Защита от удаления» доступны только если
@@ -95,6 +97,16 @@ export function ChildActions({ child, showReset }: Props): ReactElement {
             Отправить сигнал
           </button>
         )}
+        {canSignal && (
+          <button
+            type="button"
+            onClick={() => setAudioOpen(true)}
+            className="flex w-full items-center gap-2 border-t border-border px-3 py-2 text-left text-sm text-foreground hover:bg-muted"
+          >
+            <Ear className="h-4 w-4 text-muted-foreground" />
+            Звук вокруг
+          </button>
+        )}
         {showReset && (
           <button
             type="button"
@@ -121,6 +133,9 @@ export function ChildActions({ child, showReset }: Props): ReactElement {
       )}
       {canSignal && (
         <SendSignalDialog child={child} open={signalOpen} onOpenChange={setSignalOpen} />
+      )}
+      {canSignal && (
+        <AudioListenDialog child={child} open={audioOpen} onOpenChange={setAudioOpen} />
       )}
       <DeleteChildDialog child={child} open={deleteOpen} onOpenChange={setDeleteOpen} />
     </>
