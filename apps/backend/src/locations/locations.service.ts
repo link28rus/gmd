@@ -13,6 +13,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ConsentService } from '../consent/consent.service';
 import { ZoneDetectionService } from '../zones/zone-detection.service';
 import { TripsService } from './trips.service';
+import { distanceMeters } from '../common/geo-distance';
 import type { ChildAuthContext } from '../child-device/child-device.service';
 import type { LocationPoint } from './dto/ingest-locations.dto';
 import type { ListLocationsQuery } from './dto/list-locations.dto';
@@ -78,6 +79,14 @@ const OUT_OF_WINDOW_PAST_MS = 24 * 60 * 60 * 1000; // 24h
 const OUT_OF_WINDOW_FUTURE_MS = 2 * 60 * 1000; // 2min
 const CONSENT_CACHE_TTL_MS = 60 * 1000;
 
+// v0.31.0 GPS-шум фильтрация (safety net поверх mobile-фильтра).
+// Mobile-child >= v0.31.0 уже сам отбрасывает точки с accuracy > 75м и
+// дубликаты-стояки, но старые APK (0.30.x) продолжат слать мусор —
+// бэкенд защищается сам.
+const ACCURACY_FLOOR_M = 100; // точки с accuracy > 100м не сохраняем
+const JITTER_DEDUP_WINDOW_MS = 60 * 1000; // окно stationary-dedup
+const JITTER_DEDUP_MIN_DIST_M = 30; // минимальное перемещение в окне
+
 interface ConsentCacheEntry {
   expiresAt: number;
   ok: boolean;
@@ -131,12 +140,55 @@ export class LocationsService {
     const validPoints: LocationPoint[] = [];
     const validRows: Prisma.Sql[] = [];
 
-    for (const p of points) {
+    // Последняя записанная точка этого девайса — для jitter-dedup.
+    // Достаточно одного запроса на весь батч: точки батча обычно 1-5 штук
+    // с короткой разницей во времени, и мы в цикле обновляем "виртуальную"
+    // последнюю точку для сравнения со следующей.
+    let lastKnown: { lat: number; lon: number; ts: number } | null = await this.prisma.location
+      .findFirst({
+        where: { childDeviceId: ctx.deviceId },
+        orderBy: { recordedAt: 'desc' },
+        select: { lat: true, lon: true, recordedAt: true },
+      })
+      .then((r) => (r ? { lat: r.lat, lon: r.lon, ts: r.recordedAt.getTime() } : null));
+
+    // Сортируем точки по времени, чтобы jitter-dedup сравнивал в хронологическом
+    // порядке (клиент может слать батч в произвольном порядке).
+    const sortedPoints = [...points].sort(
+      (a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime(),
+    );
+
+    for (const p of sortedPoints) {
       const ts = new Date(p.recordedAt).getTime();
       if (ts < now - OUT_OF_WINDOW_PAST_MS || ts > now + OUT_OF_WINDOW_FUTURE_MS) {
         rejectedReasons.out_of_window = (rejectedReasons.out_of_window ?? 0) + 1;
         continue;
       }
+
+      // v0.31.0 accuracy floor — точки с плохой точностью не сохраняем.
+      // Старые APK (<=0.30.x) с INDOOR GPS-дрожанием обычно дают accuracy
+      // 40-100м; порог 100м пропускает outdoor GPS (10-30м) + более-менее
+      // приличный indoor cell/wifi (50-100м).
+      if (p.accuracy !== undefined && p.accuracy > ACCURACY_FLOOR_M) {
+        rejectedReasons.low_accuracy = (rejectedReasons.low_accuracy ?? 0) + 1;
+        continue;
+      }
+
+      // v0.31.0 jitter-dedup — если точка близко к предыдущей за короткое
+      // время, считаем дрожанием GPS при стоянке.
+      if (lastKnown !== null && ts - lastKnown.ts < JITTER_DEDUP_WINDOW_MS) {
+        const dist = distanceMeters(lastKnown.lat, lastKnown.lon, p.lat, p.lon);
+        const threshold = Math.max(JITTER_DEDUP_MIN_DIST_M, (p.accuracy ?? 0) * 2);
+        if (dist < threshold) {
+          rejectedReasons.jitter = (rejectedReasons.jitter ?? 0) + 1;
+          continue;
+        }
+      }
+
+      // Точка прошла все фильтры — обновляем "виртуальный" lastKnown,
+      // чтобы следующая точка в том же батче сравнивалась с ней, а не с БД.
+      lastKnown = { lat: p.lat, lon: p.lon, ts };
+
       validPoints.push(p);
       validRows.push(Prisma.sql`(
         ${createId()},

@@ -41,8 +41,13 @@ describe('day-bounds', () => {
   });
 
   it('daysAgoIso: сдвиг на N дней в локальной TZ', () => {
-    freezeDate('2026-04-19T12:00:00.000Z');
-    const expected = new realDate(realDate.now() - 86_400_000);
+    const frozenIso = '2026-04-19T12:00:00.000Z';
+    freezeDate(frozenIso);
+    // Важно: expected считаем от ЗАМОРОЖЕННОГО времени, а не от realDate.now() —
+    // внутри daysAgoIso вызывается `new Date()` без аргументов, т.е. MockDate,
+    // т.е. frozenIso. Если сравнивать с real-системным временем, тест сломается
+    // в любой день, кроме 2026-04-19.
+    const expected = new realDate(new realDate(frozenIso).getTime() - 86_400_000);
     const yyyy = expected.getFullYear();
     const mm = String(expected.getMonth() + 1).padStart(2, '0');
     const dd = String(expected.getDate()).padStart(2, '0');

@@ -8,14 +8,14 @@ class BatteryPermissionsStep extends StatelessWidget {
 
   Future<void> _request(BuildContext context) async {
     await Permission.ignoreBatteryOptimizations.request();
-    if (context.mounted) context.go('/permissions/devadmin');
+    if (context.mounted) context.go('/permissions/activity');
   }
 
   @override
   Widget build(BuildContext context) {
     return PermissionsWizardScaffold(
       stepIndex: 2,
-      totalSteps: 4,
+      totalSteps: 5,
       title: 'Не засыпать',
       description:
           'Разреши приложению работать в фоне, чтобы мама и папа видели где ты даже при '
@@ -26,7 +26,7 @@ class BatteryPermissionsStep extends StatelessWidget {
           '• «Контроль активности» → «Нет ограничений»\n'
           '• «Экономия энергии» → «Без ограничений»',
       onRequest: () => _request(context),
-      onSkip: () => context.go('/permissions/devadmin'),
+      onSkip: () => context.go('/permissions/activity'),
       footer: Center(
         child: TextButton.icon(
           onPressed: openAppSettings,

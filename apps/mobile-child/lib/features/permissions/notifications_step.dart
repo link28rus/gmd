@@ -15,7 +15,7 @@ class NotificationsPermissionsStep extends StatelessWidget {
   Widget build(BuildContext context) {
     return PermissionsWizardScaffold(
       stepIndex: 0,
-      totalSteps: 4,
+      totalSteps: 5,
       title: 'Уведомления',
       description:
           'Маме/папе нужно знать, если что-то случится. Мы будем показывать уведомления от GMD.',

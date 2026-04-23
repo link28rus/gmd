@@ -51,7 +51,9 @@ function makeService(
       }),
     },
     location: {
-      findFirst: jest.fn(),
+      // Default: нет предыдущих точек у devices → jitter-dedup не срабатывает.
+      // Тесты могут переопределить через (svc as any).prisma.location.findFirst.mockResolvedValue(...)
+      findFirst: jest.fn().mockResolvedValue(null),
       findMany: jest.fn(),
     },
     $executeRaw: tx.$executeRaw,
@@ -130,9 +132,11 @@ describe('LocationsService.ingestBatch', () => {
   it('counts duplicates when ON CONFLICT returns fewer rows than expected', async () => {
     const svc = makeService({ insertResult: 1 });
     const now = new Date();
+    // Разнесём точки в пространстве на ~1 км, чтобы обе прошли jitter-dedup
+    // и дошли до БД — только тогда ON CONFLICT может сыграть.
     const res = await svc.ingestBatch(ctx, [
-      { lat: 55, lon: 37, recordedAt: new Date(now.getTime() - 60_000).toISOString() },
-      { lat: 55, lon: 37, recordedAt: new Date(now.getTime() - 30_000).toISOString() },
+      { lat: 55.0, lon: 37.0, recordedAt: new Date(now.getTime() - 60_000).toISOString() },
+      { lat: 55.01, lon: 37.01, recordedAt: new Date(now.getTime() - 30_000).toISOString() },
     ]);
     expect(res.accepted).toBe(1);
     expect(res.rejected).toBe(1);
@@ -174,6 +178,135 @@ describe('LocationsService.ingestBatch', () => {
     svc.clearConsentCache();
     await svc.ingestBatch(ctx, [{ ...p, recordedAt: new Date(Date.now() - 1000).toISOString() }]);
     expect(true).toBe(true);
+  });
+
+  // v0.31.0 — фильтрация GPS-шума (safety net для старых APK).
+  it('rejects points with accuracy > 100m as low_accuracy', async () => {
+    const svc = makeService({ insertResult: 1 });
+    const now = new Date();
+    const res = await svc.ingestBatch(ctx, [
+      {
+        lat: 55,
+        lon: 37,
+        accuracy: 150, // too fuzzy — indoor multipath
+        recordedAt: new Date(now.getTime() - 60_000).toISOString(),
+      },
+      {
+        lat: 55.1,
+        lon: 37.1,
+        accuracy: 20, // good outdoor
+        recordedAt: new Date(now.getTime() - 30_000).toISOString(),
+      },
+    ]);
+    expect(res.accepted).toBe(1);
+    expect(res.rejected).toBe(1);
+    expect(res.rejectedReasons.low_accuracy).toBe(1);
+  });
+
+  it('accepts point without accuracy (undefined) — legacy clients without GPS accuracy', async () => {
+    const svc = makeService({ insertResult: 1 });
+    const now = new Date();
+    const res = await svc.ingestBatch(ctx, [
+      {
+        lat: 55,
+        lon: 37,
+        // accuracy: undefined — DTO позволяет optional
+        recordedAt: new Date(now.getTime() - 60_000).toISOString(),
+      },
+    ]);
+    expect(res.accepted).toBe(1);
+    expect(res.rejectedReasons.low_accuracy ?? 0).toBe(0);
+  });
+
+  it('rejects stationary jitter: close to last known point within 1 min', async () => {
+    const svc = makeService({ insertResult: 0 });
+    const now = Date.now();
+    // "Предыдущая" точка из БД — 55.0, 37.0, 30 сек назад.
+    (svc as any).prisma.location.findFirst.mockResolvedValue({
+      lat: 55.0,
+      lon: 37.0,
+      recordedAt: new Date(now - 30_000),
+    });
+    const res = await svc.ingestBatch(ctx, [
+      {
+        // Дрожание GPS — точка на 10м смещена, accuracy=30м,
+        // порог = max(30, 30*2=60) = 60м → 10м < 60м → jitter reject.
+        lat: 55.00009, // ~10 метров на север
+        lon: 37.0,
+        accuracy: 30,
+        recordedAt: new Date(now - 10_000).toISOString(),
+      },
+    ]);
+    expect(res.accepted).toBe(0);
+    expect(res.rejected).toBe(1);
+    expect(res.rejectedReasons.jitter).toBe(1);
+  });
+
+  it('accepts point far enough from last known even within dedup window', async () => {
+    const svc = makeService({ insertResult: 1 });
+    const now = Date.now();
+    (svc as any).prisma.location.findFirst.mockResolvedValue({
+      lat: 55.0,
+      lon: 37.0,
+      recordedAt: new Date(now - 30_000),
+    });
+    const res = await svc.ingestBatch(ctx, [
+      {
+        // 55.001 ≈ 111м от 55.0 — заведомо больше порога (max(30, accuracy*2=20))
+        lat: 55.001,
+        lon: 37.0,
+        accuracy: 10,
+        recordedAt: new Date(now - 10_000).toISOString(),
+      },
+    ]);
+    expect(res.accepted).toBe(1);
+    expect(res.rejectedReasons.jitter ?? 0).toBe(0);
+  });
+
+  it('does not apply jitter-dedup when last known point is older than 1 min', async () => {
+    const svc = makeService({ insertResult: 1 });
+    const now = Date.now();
+    // Последняя точка — 2 минуты назад. Dedup НЕ должен срабатывать,
+    // даже если новая точка близко (ребёнок мог вернуться в то же место).
+    (svc as any).prisma.location.findFirst.mockResolvedValue({
+      lat: 55.0,
+      lon: 37.0,
+      recordedAt: new Date(now - 2 * 60_000),
+    });
+    const res = await svc.ingestBatch(ctx, [
+      {
+        lat: 55.00009, // 10 м — впритирку
+        lon: 37.0,
+        accuracy: 30,
+        recordedAt: new Date(now - 10_000).toISOString(),
+      },
+    ]);
+    expect(res.accepted).toBe(1);
+    expect(res.rejectedReasons.jitter ?? 0).toBe(0);
+  });
+
+  it('applies jitter-dedup within the same batch (batch-internal stationary)', async () => {
+    const svc = makeService({ insertResult: 1 });
+    const now = Date.now();
+    // Нет lastKnown в БД. Первая точка батча пройдёт, вторая должна быть
+    // отброшена как jitter относительно первой.
+    const res = await svc.ingestBatch(ctx, [
+      {
+        lat: 55.0,
+        lon: 37.0,
+        accuracy: 30,
+        recordedAt: new Date(now - 30_000).toISOString(),
+      },
+      {
+        lat: 55.00009, // ~10м от первой → дрожь
+        lon: 37.0,
+        accuracy: 30,
+        recordedAt: new Date(now - 10_000).toISOString(),
+      },
+    ]);
+    expect(res.accepted).toBe(1);
+    expect(res.rejected).toBe(1);
+    expect(res.rejectedReasons.jitter).toBe(1);
   });
 });
 

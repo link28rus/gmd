@@ -8,6 +8,7 @@ import { useAuthStore, type AuthUser, type AuthFamily } from '@/lib/auth-store';
 import { useChildren } from '@/lib/hooks/use-children';
 import { useLatestLocation } from '@/lib/hooks/use-latest-location';
 import { useLocationHistory } from '@/lib/hooks/use-location-history';
+import { useTripsList } from '@/lib/hooks/use-trips-list';
 import { ChildMap } from '@/components/locations/child-map';
 import { ChildStatusCard } from '@/components/locations/child-status-card';
 import { DateSelector } from '@/components/locations/date-selector';
@@ -70,6 +71,7 @@ export default function MapClient({ childId }: Props): ReactElement {
 
   const latestQ = useLatestLocation(bootstrapping ? '' : childId);
   const { query: historyQ, isTruncated } = useLocationHistory(bootstrapping ? '' : childId, date);
+  const tripsQ = useTripsList(bootstrapping ? '' : childId, date);
 
   useEffect(() => {
     const err = latestQ.error ?? historyQ.error;
@@ -135,6 +137,7 @@ export default function MapClient({ childId }: Props): ReactElement {
               childName={child.name}
               latest={latest}
               track={track}
+              stops={tripsQ.data?.trips}
               onMapError={() => setMapFailed(true)}
             />
             {latest && (

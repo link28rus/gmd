@@ -5,6 +5,7 @@ import '../features/claim/claim_screen.dart';
 import '../features/debug/debug_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
+import '../features/permissions/activity_recognition_step.dart';
 import '../features/permissions/battery_step.dart';
 import '../features/permissions/location_step.dart';
 import '../features/permissions/notifications_step.dart';
@@ -42,6 +43,10 @@ class AppRouter {
     GoRoute(
       path: '/permissions/battery',
       builder: (_, _) => const BatteryPermissionsStep(),
+    ),
+    GoRoute(
+      path: '/permissions/activity',
+      builder: (_, _) => const ActivityRecognitionStep(),
     ),
     GoRoute(
       path: '/permissions/devadmin',

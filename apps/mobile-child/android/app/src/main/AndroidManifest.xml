@@ -34,6 +34,11 @@
          (Android 13+) granted автоматически для task-management приложений;
          на Android 12 fallback на setAndAllowWhileIdle. -->
     <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
+    <!-- v0.31.0 Activity Recognition (Android 10+, Google Play Services).
+         Используется LocationForegroundService чтобы при STILL-состоянии
+         переключать FLP в режим 5-мин интервала и экономить батарею ребёнка.
+         Permission optional: при отказе сервис работает в active-only режиме. -->
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION"/>
     <application
         android:label="gmd_child"
         android:name="${applicationName}"
@@ -99,6 +104,14 @@
              который заморачивается MIUI после свайпа. -->
         <receiver
             android:name=".HeartbeatReceiver"
+            android:enabled="true"
+            android:exported="false"/>
+        <!-- v0.31.0 Activity Recognition transitions: Play Services шлёт
+             broadcast'ы при смене активности (STILL/WALKING/IN_VEHICLE/…).
+             Ресивер конвертирует их в intent-ы сервису, переключая профиль
+             FLP (active 10с ↔ still 5мин) для экономии батареи. -->
+        <receiver
+            android:name=".ActivityTransitionReceiver"
             android:enabled="true"
             android:exported="false"/>
         <!-- L1-защита от удаления приложения. Пока Device Admin активен,

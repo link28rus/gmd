@@ -10,7 +10,7 @@ import {
   YMapControlButton,
   YMapZoomControl,
 } from 'ymap3-components';
-import type { LatestLocationDto, LocationDto } from '@/lib/api/locations';
+import type { LatestLocationDto, LocationDto, TripDto } from '@/lib/api/locations';
 import { LatestMarker } from './latest-marker';
 import { TrackPolyline } from './track-polyline';
 import { useTheme } from '@/components/theme/theme-provider';
@@ -21,6 +21,12 @@ export interface ChildMapInnerProps {
   latest: LatestLocationDto | null;
   track: LocationDto[];
   onMapError: () => void;
+  /**
+   * v0.31.0 — завершённые поездки за показываемый период. Если передано,
+   * TrackPolyline нарисует stop-маркеры в точках конца поездок вместо
+   * пучка точек. Без stops — старое поведение.
+   */
+  stops?: TripDto[];
 }
 
 const DEFAULT_CENTER: [number, number] = [37.6173, 55.7558];
@@ -52,6 +58,7 @@ export function ChildMapInner({
   latest,
   track,
   onMapError,
+  stops,
 }: ChildMapInnerProps): ReactElement {
   const apiKey = process.env.NEXT_PUBLIC_YANDEX_MAPS_API_KEY ?? '';
   const { theme } = useTheme();
@@ -129,7 +136,7 @@ export function ChildMapInner({
             ageSec={latest.ageSec}
           />
         )}
-        <TrackPolyline items={track} />
+        <TrackPolyline items={track} stops={stops} />
       </YMap>
     </YMapComponentsProvider>
   );

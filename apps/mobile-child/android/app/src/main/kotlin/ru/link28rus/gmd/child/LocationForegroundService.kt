@@ -37,14 +37,44 @@ class LocationForegroundService : Service() {
         const val ACTION_START = "ACTION_START"
         const val ACTION_STOP = "ACTION_STOP"
         const val ACTION_HEARTBEAT = "ACTION_HEARTBEAT"
+        // Activity Recognition transitions — шлются ActivityTransitionReceiver'ом
+        // в этот сервис через startForegroundService(intent).
+        const val ACTION_ACTIVITY_STILL = "ACTION_ACTIVITY_STILL"
+        const val ACTION_ACTIVITY_MOVING = "ACTION_ACTIVITY_MOVING"
         private const val WAKE_LOCK_TAG = "gmd:LocationForegroundService"
         // Heartbeat — гарантированная точка раз в 2 минуты, даже если телефон
-        // неподвижен и fused с distance-filter 5м не присылает обновлений.
+        // неподвижен и fused с distance-filter 20м не присылает обновлений.
         // Родитель в web видит "Был тут только что" независимо от движения.
         // Реализовано через AlarmManager (не Handler), чтобы MIUI не замораживал
         // тики после свайпа — см. HeartbeatReceiver.
         private const val HEARTBEAT_INTERVAL_MS = 2 * 60 * 1000L
         private const val HEARTBEAT_ALARM_REQUEST = 0x48
+        private const val ACTIVITY_REQUEST_CODE = 0x49
+
+        // v0.31.0 — фильтрация GPS-шума. Пороги подобраны под типичный
+        // indoor-multipath (accuracy 30-80м при физически неподвижном телефоне):
+        //
+        //   ACCURACY_GATE_M        — жёсткий фильтр при обычных апдейтах.
+        //                            Точки с worse accuracy не доходят до Dart.
+        //   ACCURACY_GATE_HEARTBEAT_M — более мягкий для heartbeat (раз в 2 мин).
+        //                               Приоритет «жив» > чистоты трека.
+        //   DEDUP_MIN_DIST_M       — минимальное перемещение от прошлой точки.
+        //   DEDUP_WINDOW_MS        — окно, в рамках которого работает dedup.
+        //                            Старше — всегда пропускаем (чтобы heartbeat
+        //                            не глушил реально свежую точку после паузы).
+        private const val ACCURACY_GATE_M = 75f
+        private const val ACCURACY_GATE_HEARTBEAT_M = 100f
+        private const val DEDUP_MIN_DIST_M = 30f
+        private const val DEDUP_WINDOW_MS = 60_000L
+
+        // Два профиля апдейтов FLP:
+        //   ACTIVE — ребёнок движется (или Activity Recognition не дал STILL-сигнала).
+        //   STILL  — Activity Recognition сообщил STILL. Снижаем частоту до 5 мин;
+        //            heartbeat раз в 2 мин всё равно обеспечивает свежесть.
+        private const val ACTIVE_INTERVAL_MS = 10_000L
+        private const val ACTIVE_MIN_DIST_M = 20f
+        private const val STILL_INTERVAL_MS = 5 * 60_000L
+        private const val STILL_MIN_DIST_M = 50f
     }
 
     private lateinit var fused: FusedLocationProviderClient
@@ -52,6 +82,20 @@ class LocationForegroundService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var bgEngine: FlutterEngine? = null
     private var bgChannel: MethodChannel? = null
+
+    // Профиль апдейтов FLP. Переключается intent-ами от ActivityTransitionReceiver.
+    // Default=ACTIVE: если permission ACTIVITY_RECOGNITION не дан, сервис никогда
+    // не получит STILL-сигнал и будет жить в active-профиле — это ок, accuracy-gate
+    // всё равно отфильтрует indoor-мусор.
+    private enum class Profile { ACTIVE, STILL }
+    private var profile: Profile = Profile.ACTIVE
+
+    // Последняя реально отправленная в Dart точка — для stationary-dedup.
+    // Не путать с fused.lastLocation (FLP-cache) — тут только то, что прошло
+    // наши фильтры.
+    private var lastSentLat: Double? = null
+    private var lastSentLon: Double? = null
+    private var lastSentTimeMs: Long = 0L
 
     private fun log(msg: String) = DiagLog.write(this, "svc", msg)
     private fun logErr(msg: String, e: Throwable) =
@@ -70,6 +114,7 @@ class LocationForegroundService : Service() {
         when (intent?.action) {
             ACTION_STOP -> {
                 cancelHeartbeatAlarm()
+                unregisterActivityTransitions()
                 releaseWakeLock()
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
@@ -86,6 +131,18 @@ class LocationForegroundService : Service() {
                 // после ошибок lastLocation, иначе цепочка оборвётся.
                 scheduleHeartbeatAlarm()
             }
+            ACTION_ACTIVITY_STILL -> {
+                // Activity Recognition сигналит «ребёнок неподвижен» →
+                // переключаем FLP в still-профиль (interval=5мин, minDist=50м).
+                // Сервис может быть ещё не started — promote в foreground
+                // безопасен и идемпотентен.
+                startForeground(NOTIF_ID, buildNotification())
+                switchProfile(Profile.STILL)
+            }
+            ACTION_ACTIVITY_MOVING -> {
+                startForeground(NOTIF_ID, buildNotification())
+                switchProfile(Profile.ACTIVE)
+            }
             else -> start()
         }
         return START_STICKY
@@ -99,8 +156,8 @@ class LocationForegroundService : Service() {
             fused.lastLocation
                 .addOnSuccessListener { loc ->
                     if (loc != null) {
-                        log("heartbeat: got last location, sending")
-                        sendToDart(loc)
+                        log("heartbeat: got last location, sending (heartbeat-mode)")
+                        sendToDart(loc, heartbeat = true)
                     } else {
                         log("heartbeat: lastLocation is null — provider has no cached fix yet")
                     }
@@ -255,40 +312,158 @@ class LocationForegroundService : Service() {
             log("start: callback already subscribed, skip requestLocationUpdates")
             return
         }
-        val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 10_000L)
-            .setMinUpdateDistanceMeters(5f)
-            .setMinUpdateIntervalMillis(5_000L)
+        subscribeLocationUpdates(profile)
+        // Heartbeat: шлём текущую точку раз в 2 минуты через AlarmManager.
+        // Ставим даже если повторный start() — PendingIntent с одним requestCode
+        // идемпотентен (replace-semantics), лишнего alarm'а не будет.
+        scheduleHeartbeatAlarm()
+        // Активируем Activity Recognition. Если permission не дан — тихо логируем
+        // и живём без адаптивности (accuracy-gate работает всегда).
+        registerActivityTransitions()
+    }
+
+    // Подписка на FLP с профилем-параметром. Переиспользуется при switchProfile.
+    private fun subscribeLocationUpdates(p: Profile) {
+        val (interval, minDist) = when (p) {
+            Profile.ACTIVE -> Pair(ACTIVE_INTERVAL_MS, ACTIVE_MIN_DIST_M)
+            Profile.STILL -> Pair(STILL_INTERVAL_MS, STILL_MIN_DIST_M)
+        }
+        // BALANCED_POWER_ACCURACY вместо HIGH — в помещении FLP меньше ломится
+        // в GPS (который даёт multipath-мусор) и больше опирается на Wi-Fi/cell.
+        // Outdoor FLP автоматически переключается на GPS, так что точность
+        // на улице не деградирует.
+        val request = LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, interval)
+            .setMinUpdateDistanceMeters(minDist)
+            .setMinUpdateIntervalMillis(interval / 2)
             .build()
         val cb = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
-                log("onLocationResult size=${result.locations.size}")
+                log("onLocationResult size=${result.locations.size} profile=$p")
                 for (loc in result.locations) {
-                    sendToDart(loc)
+                    sendToDart(loc, heartbeat = false)
                 }
             }
         }
         callback = cb
         try {
             fused.requestLocationUpdates(request, cb, Looper.getMainLooper())
-            log("requestLocationUpdates OK")
+            log("requestLocationUpdates OK profile=$p interval=${interval}ms minDist=${minDist}m")
         } catch (e: SecurityException) {
             logErr("requestLocationUpdates SecurityException", e)
             stopSelf()
-            return
         }
-        // Heartbeat: шлём текущую точку раз в 2 минуты через AlarmManager.
-        // Ставим даже если повторный start() — PendingIntent с одним requestCode
-        // идемпотентен (replace-semantics), лишнего alarm'а не будет.
-        scheduleHeartbeatAlarm()
     }
 
-    private fun sendToDart(loc: android.location.Location) {
+    private fun switchProfile(newProfile: Profile) {
+        if (profile == newProfile) {
+            log("switchProfile: already $newProfile, skip")
+            return
+        }
+        log("switchProfile: $profile → $newProfile")
+        profile = newProfile
+        // Снимаем текущий callback и подписываемся заново с новыми параметрами.
+        // FLP не даёт менять interval/minDistance на лету — только re-request.
+        callback?.let { fused.removeLocationUpdates(it) }
+        callback = null
+        subscribeLocationUpdates(newProfile)
+    }
+
+    // Activity Recognition (Play Services). Требует runtime-permission
+    // ACTIVITY_RECOGNITION (Android 10+). Без permission requestActivityTransitionUpdates
+    // бросит SecurityException — тихо игнорируем и работаем в active-only режиме.
+    private fun registerActivityTransitions() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val granted = checkSelfPermission(android.Manifest.permission.ACTIVITY_RECOGNITION) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED
+            if (!granted) {
+                log("activity transitions: ACTIVITY_RECOGNITION not granted, skipping (active-only)")
+                return
+            }
+        }
+        try {
+            val transitions = listOf(
+                DetectedActivity.STILL to ActivityTransition.ACTIVITY_TRANSITION_ENTER,
+                DetectedActivity.STILL to ActivityTransition.ACTIVITY_TRANSITION_EXIT,
+                DetectedActivity.IN_VEHICLE to ActivityTransition.ACTIVITY_TRANSITION_ENTER,
+                DetectedActivity.ON_FOOT to ActivityTransition.ACTIVITY_TRANSITION_ENTER,
+                DetectedActivity.ON_BICYCLE to ActivityTransition.ACTIVITY_TRANSITION_ENTER,
+            ).map { (type, transition) ->
+                ActivityTransition.Builder()
+                    .setActivityType(type)
+                    .setActivityTransition(transition)
+                    .build()
+            }
+            val request = ActivityTransitionRequest(transitions)
+            val client = ActivityRecognition.getClient(this)
+            client.requestActivityTransitionUpdates(request, activityPendingIntent())
+                .addOnSuccessListener { log("activity transitions: registered OK") }
+                .addOnFailureListener { e -> logErr("activity transitions: register failed", e) }
+        } catch (e: SecurityException) {
+            logErr("activity transitions: SecurityException (no permission)", e)
+        } catch (e: Throwable) {
+            logErr("activity transitions: unexpected failure", e)
+        }
+    }
+
+    private fun unregisterActivityTransitions() {
+        try {
+            ActivityRecognition.getClient(this)
+                .removeActivityTransitionUpdates(activityPendingIntent())
+                .addOnSuccessListener { log("activity transitions: unregistered") }
+                .addOnFailureListener { e -> logErr("activity transitions: unregister failed", e) }
+        } catch (_: Throwable) {
+            // ignore
+        }
+    }
+
+    private fun activityPendingIntent(): PendingIntent {
+        return PendingIntent.getBroadcast(
+            this,
+            ACTIVITY_REQUEST_CODE,
+            Intent(this, ActivityTransitionReceiver::class.java)
+                .setAction(ActivityTransitionReceiver.ACTION_ACTIVITY_TRANSITION),
+            PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+    }
+
+    private fun sendToDart(loc: android.location.Location, heartbeat: Boolean) {
         val channel = bgChannel
         if (channel == null) {
             log("sendToDart: bgChannel is null — engine not ready, point DROPPED")
             return
         }
-        log("sendToDart lat=${loc.latitude} lon=${loc.longitude} acc=${loc.accuracy}")
+
+        // v0.31.0 accuracy gate: отфильтровываем точки с плохой точностью.
+        // Heartbeat'у разрешаем порог помягче — лучше показать родителю
+        // "был тут 2 мин назад ±100м", чем молчать.
+        val gate = if (heartbeat) ACCURACY_GATE_HEARTBEAT_M else ACCURACY_GATE_M
+        if (loc.hasAccuracy() && loc.accuracy > gate) {
+            log("sendToDart: DROPPED (accuracy=${loc.accuracy} > $gate, heartbeat=$heartbeat)")
+            return
+        }
+
+        // Stationary dedup: если новая точка близко к предыдущей отправленной
+        // и прошло меньше DEDUP_WINDOW — считаем это GPS-дрожанием при
+        // стоянке на месте. Heartbeat'у dedup НЕ применяем: его задача —
+        // гарантированная доставка "жив" каждые 2 минуты.
+        if (!heartbeat) {
+            val lastLat = lastSentLat
+            val lastLon = lastSentLon
+            val now = System.currentTimeMillis()
+            if (lastLat != null && lastLon != null && now - lastSentTimeMs < DEDUP_WINDOW_MS) {
+                val dist = haversineMeters(lastLat, lastLon, loc.latitude, loc.longitude)
+                val threshold = maxOf(DEDUP_MIN_DIST_M, (loc.accuracy.takeIf { loc.hasAccuracy() } ?: 0f) * 2f)
+                if (dist < threshold) {
+                    log("sendToDart: DROPPED (stationary dedup, dist=${"%.1f".format(dist)}m < ${"%.1f".format(threshold)}m)")
+                    return
+                }
+            }
+        }
+
+        lastSentLat = loc.latitude
+        lastSentLon = loc.longitude
+        lastSentTimeMs = System.currentTimeMillis()
+        log("sendToDart lat=${loc.latitude} lon=${loc.longitude} acc=${loc.accuracy} hb=$heartbeat")
         val (batteryLevel, isCharging) = batterySnapshot()
         val payload = mapOf(
             "lat" to loc.latitude,
@@ -440,6 +615,8 @@ class LocationForegroundService : Service() {
         // Alarm НЕ отменяем в onDestroy — если система прибила service, но
         // потом перезапустит его по START_STICKY/RestartReceiver, alarm-цепочка
         // сохранит heartbeat. Отменяем только при явном ACTION_STOP.
+        // Activity transitions тоже оставляем подписанными — ресивер умеет
+        // стартануть service при надобности, пере-подписка при ACTION_STOP.
         callback?.let { fused.removeLocationUpdates(it) }
         callback = null
         releaseWakeLock()
@@ -449,4 +626,17 @@ class LocationForegroundService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    // Haversine (метры). Используется в stationary-dedup для сравнения
+    // расстояния между соседними точками. Точность ±0.5% на дистанциях
+    // до 100м — нам сверх достаточно.
+    private fun haversineMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+        val r = 6_371_000.0
+        val dLat = Math.toRadians(lat2 - lat1)
+        val dLon = Math.toRadians(lon2 - lon1)
+        val a = Math.sin(dLat / 2).let { it * it } +
+            Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) *
+            Math.sin(dLon / 2).let { it * it }
+        return r * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+    }
 }
