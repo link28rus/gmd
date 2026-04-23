@@ -50,6 +50,20 @@ class MainActivity : FlutterActivity() {
                         startService(intent)
                         result.success(null)
                     }
+                    "getCurrentProfile" -> {
+                        // v0.31.2 — UI-индикатор текущего профиля (STILL/ACTIVE).
+                        // Читаем из SharedPreferences, куда сервис пишет при каждом
+                        // switchProfile. Если сервис ещё не стартовал — вернём UNKNOWN.
+                        val prefs = getSharedPreferences(
+                            LocationForegroundService.PREFS_NAME,
+                            Context.MODE_PRIVATE,
+                        )
+                        val profile = prefs.getString(
+                            LocationForegroundService.PREF_CURRENT_PROFILE,
+                            LocationForegroundService.PROFILE_UNKNOWN,
+                        )
+                        result.success(profile)
+                    }
                     else -> result.notImplemented()
                 }
             }

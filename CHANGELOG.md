@@ -9,6 +9,23 @@
 
 ---
 
+## v0.31.2 — 2026-04-23
+
+### Улучшения
+
+- **Экономия батареи начинается с первой секунды после старта** — если разрешение «Физическая активность» уже дано, GPS-сервис стартует сразу в STILL-режиме (5-минутный интервал) вместо того, чтобы полторы минуты работать вхолостую на 10-секундных апдейтах, пока Activity Recognition вычислит, что ребёнок неподвижен. Экономия заметна особенно после перезагрузок телефона.
+- **Индикатор режима GPS на главном экране ребёнка** — в шапке появился небольшой чип «💤 Экономия» (зелёный, режим STILL) или «📡 Активно» (синий, режим ACTIVE). Обновляется раз в 3 секунды. Ребёнок и родитель могут сами видеть, в каком режиме работает сервис.
+
+### Изменения
+
+- mobile-child: `LocationForegroundService.start()` определяет initial profile по результату `checkSelfPermission(ACTIVITY_RECOGNITION)` — granted → STILL, denied или Android <10 → ACTIVE.
+- mobile-child: safety net `ensureActiveFallback()` — если регистрация Activity Recognition завалилась (Play Services отсутствуют / SecurityException / unexpected), а сервис уже в STILL, автоматически переключаемся на ACTIVE. Иначе без MOVING_ENTER-событий ребёнок застрял бы в 5-минутном режиме навсегда.
+- mobile-child: профиль персистится в `SharedPreferences("gmd_location_state").current_profile` при каждом `switchProfile()`. Dart-сторона читает через новый `MethodChannel` method `getCurrentProfile` в `MainActivity`.
+- mobile-child: новый виджет `apps/mobile-child/lib/features/home/location_profile_indicator.dart` (Riverpod `StreamProvider` с 3-секундным поллингом), встроен в `AppBar.actions` home-экрана слева от версии.
+- mobile-child: новый enum `LocationProfile { unknown, active, still }` в `LocationServiceChannel` + метод `getCurrentProfile()` через тот же `ru.link28rus.gmd.child/location` канал.
+
+---
+
 ## v0.31.1 — 2026-04-23
 
 ### Улучшения

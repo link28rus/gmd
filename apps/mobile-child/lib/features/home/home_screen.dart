@@ -5,6 +5,7 @@ import '../../core/version/app_version.dart';
 import '../sos/sos_controller.dart';
 import 'activity_recognition_banner.dart';
 import 'home_controller.dart';
+import 'location_profile_indicator.dart';
 import 'permission_health_banner.dart';
 import 'protection_banner.dart';
 
@@ -60,6 +61,7 @@ class HomeScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('GMD'),
         actions: [
+          const LocationProfileIndicator(),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: GestureDetector(

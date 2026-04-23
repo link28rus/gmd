@@ -75,6 +75,15 @@ class LocationForegroundService : Service() {
         private const val ACTIVE_MIN_DIST_M = 20f
         private const val STILL_INTERVAL_MS = 5 * 60_000L
         private const val STILL_MIN_DIST_M = 50f
+
+        // v0.31.2 — текущий профиль экспозится Dart-стороне через SharedPreferences.
+        // UI-engine читает эти prefs через MainActivity MethodChannel и рендерит
+        // chip-индикатор на home-экране ребёнка.
+        const val PREFS_NAME = "gmd_location_state"
+        const val PREF_CURRENT_PROFILE = "current_profile"
+        const val PROFILE_ACTIVE = "ACTIVE"
+        const val PROFILE_STILL = "STILL"
+        const val PROFILE_UNKNOWN = "UNKNOWN"
     }
 
     private lateinit var fused: FusedLocationProviderClient
@@ -312,14 +321,42 @@ class LocationForegroundService : Service() {
             log("start: callback already subscribed, skip requestLocationUpdates")
             return
         }
-        subscribeLocationUpdates(profile)
+        // v0.31.2 — STILL-default: если permission granted, стартуем
+        // сразу в экономичном режиме. Если permission нет, AR никогда не
+        // пришлёт MOVING_ENTER и мы застрянем в STILL → стартуем в ACTIVE.
+        val initial = if (hasActivityRecognitionPermission()) Profile.STILL else Profile.ACTIVE
+        log("start: initial profile = $initial (AR permission = ${hasActivityRecognitionPermission()})")
+        profile = initial
+        persistProfile(initial)
+        subscribeLocationUpdates(initial)
         // Heartbeat: шлём текущую точку раз в 2 минуты через AlarmManager.
         // Ставим даже если повторный start() — PendingIntent с одним requestCode
         // идемпотентен (replace-semantics), лишнего alarm'а не будет.
         scheduleHeartbeatAlarm()
         // Активируем Activity Recognition. Если permission не дан — тихо логируем
-        // и живём без адаптивности (accuracy-gate работает всегда).
+        // и живём в ACTIVE-режиме (accuracy-gate работает всегда).
         registerActivityTransitions()
+    }
+
+    private fun hasActivityRecognitionPermission(): Boolean {
+        // Pre-Android-10 permission не существует в runtime-модели, считаем granted.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return true
+        return checkSelfPermission(android.Manifest.permission.ACTIVITY_RECOGNITION) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun persistProfile(p: Profile) {
+        try {
+            getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .putString(PREF_CURRENT_PROFILE, when (p) {
+                    Profile.ACTIVE -> PROFILE_ACTIVE
+                    Profile.STILL -> PROFILE_STILL
+                })
+                .apply()
+        } catch (e: Throwable) {
+            logErr("persistProfile failed", e)
+        }
     }
 
     // Подписка на FLP с профилем-параметром. Переиспользуется при switchProfile.
@@ -361,6 +398,7 @@ class LocationForegroundService : Service() {
         }
         log("switchProfile: $profile → $newProfile")
         profile = newProfile
+        persistProfile(newProfile)
         // Снимаем текущий callback и подписываемся заново с новыми параметрами.
         // FLP не даёт менять interval/minDistance на лету — только re-request.
         callback?.let { fused.removeLocationUpdates(it) }
@@ -371,14 +409,15 @@ class LocationForegroundService : Service() {
     // Activity Recognition (Play Services). Требует runtime-permission
     // ACTIVITY_RECOGNITION (Android 10+). Без permission requestActivityTransitionUpdates
     // бросит SecurityException — тихо игнорируем и работаем в active-only режиме.
+    //
+    // v0.31.2: если регистрация завалилась (Play Services отсутствуют, SecurityException
+    // не по permission'у, и т.п.), но мы уже в STILL-default — принудительно откатываемся
+    // на ACTIVE, чтобы не застрять в "тихом" режиме без MOVING_ENTER-событий.
     private fun registerActivityTransitions() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val granted = checkSelfPermission(android.Manifest.permission.ACTIVITY_RECOGNITION) ==
-                android.content.pm.PackageManager.PERMISSION_GRANTED
-            if (!granted) {
-                log("activity transitions: ACTIVITY_RECOGNITION not granted, skipping (active-only)")
-                return
-            }
+        if (!hasActivityRecognitionPermission()) {
+            log("activity transitions: ACTIVITY_RECOGNITION not granted, skipping (active-only)")
+            ensureActiveFallback("no_permission")
+            return
         }
         try {
             val transitions = listOf(
@@ -397,11 +436,27 @@ class LocationForegroundService : Service() {
             val client = ActivityRecognition.getClient(this)
             client.requestActivityTransitionUpdates(request, activityPendingIntent())
                 .addOnSuccessListener { log("activity transitions: registered OK") }
-                .addOnFailureListener { e -> logErr("activity transitions: register failed", e) }
+                .addOnFailureListener { e ->
+                    logErr("activity transitions: register failed", e)
+                    ensureActiveFallback("register_failed")
+                }
         } catch (e: SecurityException) {
             logErr("activity transitions: SecurityException (no permission)", e)
+            ensureActiveFallback("security_exception")
         } catch (e: Throwable) {
             logErr("activity transitions: unexpected failure", e)
+            ensureActiveFallback("unexpected")
+        }
+    }
+
+    // Safety net для v0.31.2 STILL-default: если по какой-то причине AR
+    // не заработал (permission нет / Play Services fail / etc.), а мы
+    // сейчас в STILL — ребёнок застрянет в 5-мин интервале без выхода,
+    // потому что MOVING_ENTER-сигнал никогда не придёт. Переводим в ACTIVE.
+    private fun ensureActiveFallback(reason: String) {
+        if (profile == Profile.STILL) {
+            log("ensureActiveFallback ($reason): STILL → ACTIVE")
+            switchProfile(Profile.ACTIVE)
         }
     }
 
