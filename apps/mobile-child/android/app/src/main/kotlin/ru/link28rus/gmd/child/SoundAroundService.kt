@@ -86,6 +86,13 @@ class SoundAroundService : Service() {
             return START_NOT_STICKY
         }
 
+        // Защита от double-start: если FGS уже активен — log + early return.
+        // (Может случиться при race в backend, swipe-свайпе recents и т.п.)
+        if (flutterEngine != null) {
+            log("onStartCommand while engine already active — ignoring duplicate start")
+            return START_NOT_STICKY
+        }
+
         startForegroundCompat()
 
         val sessionId = intent?.getStringExtra(EXTRA_SESSION_ID).orEmpty()

@@ -21,8 +21,18 @@ object DiagLog {
 
     fun file(context: Context): File = File(context.filesDir, FILE_NAME)
 
+    private fun redactTurnCreds(msg: String): String {
+        // Замаскировать password/credential из JSON-подобных строк.
+        return msg
+            .replace(Regex("\"password\"\\s*:\\s*\"[^\"]*\""), "\"password\":\"***\"")
+            .replace(Regex("\"credential\"\\s*:\\s*\"[^\"]*\""), "\"credential\":\"***\"")
+            .replace(Regex("password=[^,\\s}]+"), "password=***")
+            .replace(Regex("credential=[^,\\s}]+"), "credential=***")
+    }
+
     fun write(context: Context, tag: String, msg: String) {
-        val line = "${timeFmt.format(Date())} [$tag] $msg\n"
+        val safeMsg = redactTurnCreds(msg)
+        val line = "${timeFmt.format(Date())} [$tag] $safeMsg\n"
         Log.i(TAG, line.trimEnd())
         synchronized(lock) {
             try {

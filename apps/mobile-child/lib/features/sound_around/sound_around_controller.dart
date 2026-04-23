@@ -77,6 +77,14 @@ class SoundAroundController {
       _pc = await createPeerConnection(config);
 
       // 2) ICE-candidate listener — отправляем на backend.
+      // ICE-candidate transport — backend хранит только candidate.candidate (string).
+      // Parent (Plan C) при addIceCandidate реконструирует sdpMid='0', sdpMLineIndex=0
+      // для audio-only-single-m-line сессии. Если будущий рефактор введёт несколько
+      // m-line (multi-track audio+video или stereo) — нужно расширить schema +
+      // передавать sdpMid/sdpMLineIndex через backend тоже. Тогда обновить:
+      //   - apps/backend/src/audio/dto/audio.dto.ts (IceCandidateSchema)
+      //   - backend БД (добавить sdpMid/sdpMLineIndex в AudioIceCandidate)
+      //   - обе стороны mobile.
       _pc!.onIceCandidate = (cand) {
         if (cand.candidate == null || _stopped) return;
         unawaited(
@@ -117,24 +125,30 @@ class SoundAroundController {
       // 4) Создать SDP-offer и отправить.
       final offer = await _pc!.createOffer({'offerToReceiveAudio': false});
       await _pc!.setLocalDescription(offer);
+
+      // 5) Auto-stop таймер (durationSec + 5с буфер) — запускаем ДО sendReady,
+      // чтобы медленная сеть не расширяла реальное время записи сверх durationSec.
+      _autoStopTimer = Timer(Duration(seconds: durationSec + 5), () {
+        unawaited(diagLog(_tag, 'auto-stop по durationSec timeout'));
+        unawaited(stop(reason: 'duration_timeout'));
+      });
+
       await _audioApi.sendReady(
         sessionId: sessionId,
         deviceToken: _deviceToken!,
         sdp: offer.sdp!,
       );
 
-      // 5) Auto-stop таймер (durationSec + 5с буфер).
-      _autoStopTimer = Timer(Duration(seconds: durationSec + 5), () {
-        unawaited(diagLog(_tag, 'auto-stop по durationSec timeout'));
-        unawaited(stop(reason: 'duration_timeout'));
-      });
-
       unawaited(diagLog(_tag, 'READY отправлен, ждём AUDIO_ANSWER + ICE'));
     } on Exception catch (e) {
       unawaited(diagLog(_tag, 'start failed: $e'));
       String code = 'UNKNOWN';
       final msg = e.toString().toLowerCase();
-      if (msg.contains('notallowed') || msg.contains('permission')) {
+      if (msg.contains('notallowed') ||
+          msg.contains('permission') ||
+          msg.contains('record_audio') ||
+          msg.contains('user denied') ||
+          msg.contains('отказано')) {
         code = 'PERMISSION_DENIED';
       } else if (msg.contains('busy') || msg.contains('in use')) {
         code = 'MIC_BUSY';

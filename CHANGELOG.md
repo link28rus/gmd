@@ -9,6 +9,19 @@
 
 ---
 
+## v0.33.1 — 2026-04-23
+
+### Исправления
+
+- **fix(mobile-child):** `?message` experimental Dart-syntax заменён на safe collection-if в `audio_api.dart` — сборка на других Flutter-каналах теперь безопасна
+- **fix(mobile-child):** double-engine guard в `SoundAroundService.onStartCommand` — защита от race при повторной START_AUDIO команде во время активной сессии
+- **fix(mobile-child):** auto-stop Timer запускается ДО `sendReady` POST — медленная сеть больше не расширяет реальное время записи сверх заявленного durationSec (privacy fix)
+- **fix(mobile-child):** PERMISSION_DENIED detection — расширены substring-проверки (русские сообщения, `record_audio`, `отказано`)
+- **fix(mobile-child):** `DiagLog.redactTurnCreds` — TURN password/credential маскируются в diag-логах (защита от утечки при shoulder-surfing)
+- **docs:** документирован assumption ICE-candidate single-m-line audio-only для Plan C reconstruction
+
+---
+
 ## v0.33.0 — 2026-04-23
 
 ### Новые возможности

@@ -47,10 +47,9 @@ class AudioApi {
     required String code,
     String? message,
   }) async {
-    await _post('/child/audio/sessions/$sessionId/error', deviceToken, {
-      'code': code,
-      'message': ?message,
-    });
+    final body = <String, dynamic>{'code': code};
+    if (message != null) body['message'] = message;
+    await _post('/child/audio/sessions/$sessionId/error', deviceToken, body);
   }
 
   Future<void> _post(
