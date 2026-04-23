@@ -222,6 +222,12 @@ services:
       - '49152-49200:49152-49200/udp'
     networks: [gmd_net]
     # --verbose НЕ передаём в prod (иначе логи забиваются STUN/TURN binding-сообщениями)
+    healthcheck:
+      test: ['CMD-SHELL', 'kill -0 1 > /dev/null 2>&1']
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   backend:
     <<: *restart
