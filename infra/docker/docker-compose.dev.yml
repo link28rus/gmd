@@ -86,6 +86,29 @@ services:
       - '${MAILHOG_SMTP_PORT:-1025}:1025'
       - '${MAILHOG_UI_PORT:-8025}:8025'
 
+  coturn:
+    image: coturn/coturn:4.6
+    container_name: gmd-coturn-dev
+    restart: unless-stopped
+    environment:
+      TURN_SHARED_SECRET: ${TURN_SHARED_SECRET:-dev-secret-change-me}
+      TURN_REALM: ${TURN_REALM:-gmd.local}
+      TURN_EXTERNAL_IP: ${TURN_EXTERNAL_IP:-127.0.0.1}
+    volumes:
+      - ./coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
+    command:
+      - turnserver
+      - -c
+      - /etc/coturn/turnserver.conf
+      - --no-cli
+      - --static-auth-secret=${TURN_SHARED_SECRET:-dev-secret-change-me}
+      - --realm=${TURN_REALM:-gmd.local}
+      - --external-ip=${TURN_EXTERNAL_IP:-127.0.0.1}
+    ports:
+      - '3478:3478/tcp'
+      - '3478:3478/udp'
+      - '49152-49200:49152-49200/udp'
+
 volumes:
   postgres_data:
   redis_data:
