@@ -9,6 +9,19 @@
 
 ---
 
+## v0.31.1 — 2026-04-23
+
+### Улучшения
+
+- **Баннер «Включи экономию батареи» на главном экране ребёнка** — пользователи, обновившиеся с v0.30.x/0.31.0 без переустановки, не проходили новый шаг онбординга «Физическая активность» и не могли дать permission `ACTIVITY_RECOGNITION`, без которого STILL-режим GPS не включается. Теперь на `/home` показывается ненавязчивый амбер-баннер со ссылкой на системный диалог выдачи разрешения. После grant'а сервис перезапускается автоматически и подписывается на Activity Recognition transitions.
+
+### Изменения
+
+- mobile-child: новый виджет `apps/mobile-child/lib/features/home/activity_recognition_banner.dart` — stateful-баннер, реагирующий на `AppLifecycleState.resumed` (чтобы перечекать permission при возврате из системных настроек). На Android < 10 permission_handler возвращает `isGranted` автоматически, баннер не показывается. Встроен в `home_screen.dart` после `PermissionHealthBanner`.
+- mobile-child: после `Permission.activityRecognition.request()` внутри баннера вызывается `LocationServiceChannel.stopService()` + `startService()`, чтобы `LocationForegroundService.registerActivityTransitions()` перерегистрировал подписку с учётом нового granted-статуса. Без рестарта сервис остался бы в active-only режиме до следующего boot'а.
+
+---
+
 ## v0.31.0 — 2026-04-23
 
 ### Новые возможности

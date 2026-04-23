@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/version/app_version.dart';
 import '../sos/sos_controller.dart';
+import 'activity_recognition_banner.dart';
 import 'home_controller.dart';
 import 'permission_health_banner.dart';
 import 'protection_banner.dart';
@@ -72,6 +73,7 @@ class HomeScreen extends ConsumerWidget {
         children: [
           const ProtectionBanner(),
           const PermissionHealthBanner(),
+          const ActivityRecognitionBanner(),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.all(24),
