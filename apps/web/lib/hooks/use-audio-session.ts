@@ -87,6 +87,9 @@ export function useAudioSession({ childId, durationSec }: Params): UseAudioSessi
   stopRef.current = stop;
 
   const start = useCallback(async () => {
+    // Re-open диалога для того же ребёнка: подчистить возможный stale controller/timer
+    // до старта новой сессии.
+    cleanup();
     setState('starting');
     setError(null);
     setErrorReason(null);
@@ -102,7 +105,7 @@ export function useAudioSession({ childId, durationSec }: Params): UseAudioSessi
       setError(e instanceof Error ? e.message : 'Не удалось создать сессию');
       setState('failed');
     }
-  }, [childId, durationSec]);
+  }, [childId, durationSec, cleanup]);
 
   useEffect(() => {
     return () => {
@@ -110,6 +113,9 @@ export function useAudioSession({ childId, durationSec }: Params): UseAudioSessi
     };
   }, [cleanup]);
 
+  // SSE активен только пока сессия "живая". В терминальных состояниях
+  // (ended/failed/expired) enabled=false → useAudioSse делает controller.abort()
+  // через свой cleanup, закрывая fetch-стрим.
   useAudioSse({
     sessionId,
     enabled: sessionId !== null && state !== 'ended' && state !== 'failed' && state !== 'expired',

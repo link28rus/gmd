@@ -72,6 +72,7 @@ function failReasonLabel(reason: string | null): string {
 
 export function AudioListenDialog({ child, open, onOpenChange }: Props): ReactElement {
   const session = useAudioSession({ childId: child.id, durationSec: DURATION_SEC });
+  const { state: sessionState, start: sessionStart } = session;
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [level, setLevel] = useState(0);
 
@@ -99,12 +100,13 @@ export function AudioListenDialog({ child, open, onOpenChange }: Props): ReactEl
     return stop;
   }, [session.mediaStream]);
 
-  // Автостарт при открытии
+  // Автостарт при открытии. Зависим только от sessionState/sessionStart (стабильные
+  // ссылки), не от всего объекта `session` — тот пересоздаётся каждый рендер.
   useEffect(() => {
-    if (open && session.state === 'idle') {
-      void session.start();
+    if (open && sessionState === 'idle') {
+      void sessionStart();
     }
-  }, [open, session.state, session]);
+  }, [open, sessionState, sessionStart]);
 
   // Toast на FAILED/EXPIRED
   useEffect(() => {

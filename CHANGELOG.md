@@ -9,6 +9,19 @@
 
 ---
 
+## v0.34.1 — 2026-04-24
+
+### Исправления
+
+- **fix(web):** `useAudioSession.start()` вызывает `cleanup()` до создания новой сессии — защита от stale `controllerRef` при re-open диалога того же ребёнка
+- **fix(web):** `AudioListenDialog` useEffect автостарта зависит от `sessionState/sessionStart`, не от всего объекта `session` — убраны лишние перезапуски эффекта на каждом рендере
+- **fix(web):** `AudioSessionController` больше не маппит `RTCPeerConnection.connectionState='disconnected'` в `failed` — `disconnected` часто транзиентный (recovery до `connected`); failed трактуется только для терминальных `failed`/`closed`
+- **docs:** комментарий к enabled-гейту `useAudioSse` в `useAudioSession` — явно описан цикл abort fetch-стрима в терминальных состояниях
+
+Post-code-review фиксы Plan C (см. финальный ревью v0.34.0).
+
+---
+
 ## v0.34.0 — 2026-04-24
 
 ### Новые возможности

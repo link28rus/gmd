@@ -70,8 +70,10 @@ export class AudioSessionController {
 
     this.pc.onconnectionstatechange = () => {
       const s = this.pc?.connectionState;
+      // 'disconnected' часто транзиентный (краткая потеря ICE, затем recovery до
+      // 'connected'). Считаем провалом только терминальные 'failed'/'closed'.
       if (s === 'connected') this.params.onStateChange('active');
-      else if (s === 'failed' || s === 'disconnected') this.params.onStateChange('failed');
+      else if (s === 'failed') this.params.onStateChange('failed');
       else if (s === 'closed') this.params.onStateChange('ended');
     };
 
