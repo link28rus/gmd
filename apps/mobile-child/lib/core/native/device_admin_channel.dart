@@ -40,6 +40,18 @@ class DeviceAdminChannel {
     await _channel.invokeMethod('openSettings');
   }
 
+  // На MIUI/HyperOS пункт «Разрешить ограниченные настройки» в карточке
+  // приложения → ⋮ — без него sideload-APK не может активировать Device
+  // Admin (начиная с HyperOS 2 / MIUI 14+). Нужно для Xiaomi-wizard.
+  Future<void> openAppDetailsSettings() async {
+    await _channel.invokeMethod('openAppDetailsSettings');
+  }
+
+  Future<String> deviceManufacturer() async {
+    final m = await _channel.invokeMethod<String>('deviceManufacturer');
+    return (m ?? '').toLowerCase();
+  }
+
   Future<void> saveNativeCreds({
     required String deviceToken,
     required String apiBaseUrl,

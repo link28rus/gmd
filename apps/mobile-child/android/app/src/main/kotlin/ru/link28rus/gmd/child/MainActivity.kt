@@ -3,6 +3,7 @@ package ru.link28rus.gmd.child
 import android.app.admin.DevicePolicyManager
 import android.content.Context
 import android.content.Intent
+import android.provider.Settings
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -129,6 +130,20 @@ class MainActivity : FlutterActivity() {
                         startActivity(settings)
                         result.success(null)
                     }
+                    "openAppDetailsSettings" -> {
+                        // Карточка приложения в Settings. На MIUI/HyperOS тут
+                        // в меню ⋮ лежит «Разрешить ограниченные настройки»,
+                        // без которого sideload-APK не может активировать
+                        // Device Admin (начиная с HyperOS 2 / MIUI 14+). На
+                        // stock Android — просто App info.
+                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                            .setData(android.net.Uri.parse("package:$packageName"))
+                        startActivity(intent)
+                        result.success(null)
+                    }
+                    "deviceManufacturer" -> result.success(
+                        android.os.Build.MANUFACTURER.lowercase()
+                    )
                     "saveNativeCreds" -> {
                         val token = call.argument<String>("deviceToken")
                         val baseUrl = call.argument<String>("apiBaseUrl")

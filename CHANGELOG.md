@@ -9,6 +9,27 @@
 
 ---
 
+## v0.29.3 — 2026-04-23
+
+### Исправления
+
+- **Защита от удаления на Xiaomi/MIUI теперь реально работает** — в v0.29.2 тумблер защиты мог быть ON в кабинете, но на телефонах Xiaomi/Redmi/Poco (MIUI 14+/HyperOS) Device Admin не активировался из-за «Ограниченных настроек» (Restricted Settings) для sideload-APK. Ребёнок мог спокойно удалить приложение через launcher → long-press → trash. Теперь mobile-child показывает пошаговый wizard: шаг 1 — «Разрешить ограниченные настройки» в карточке приложения; шаг 2 — активация Device Admin через системный диалог. Автозакрытие wizard'а после успешной активации.
+
+### Улучшения
+
+- **Красная плашка «Защита НЕ активна»** — вместо жёлтой «Защита приложения не включена». Ребёнок/родитель не пропустит критическое состояние: если backend `enabled=true`, но Device Admin на устройстве не активирован — плашка красная с явным предупреждением «Устройство можно удалить».
+- **Автопоказ wizard при первом появлении** — при заходе на home ребёнка с активной защитой в кабинете, но неактивным admin на телефоне, wizard открывается автоматически (не нужно тапать по banner).
+- **Банер не скрывается при сетевой ошибке** — если `GET /child/protection` недоступен, полагаемся на локальный кеш (`enabled=true` по умолчанию). Раньше баннер исчезал при любой ошибке сети — невидимая защита.
+
+### Изменения
+
+- mobile-child (Android): возвращены MethodChannel-хендлеры `deviceManufacturer` и `openAppDetailsSettings` — нужны для Xiaomi-wizard (в v0.29.2 были удалены вместе с a11y wizard ошибочно).
+- mobile-child (Dart): `_AdminWizard` bottom-sheet — аналог `_AccessibilityWizard` из v0.28.0, но для Device Admin flow. На Xiaomi/Redmi/Poco — 2 шага (restricted settings + activation), на остальных — 1 шаг.
+- mobile-child (Dart): `DeviceAdminChannel` вернулись `openAppDetailsSettings()` и `deviceManufacturer()`.
+- mobile-child build number: `+32 → +33` (RuStore versionCode).
+
+---
+
 ## v0.29.2 — 2026-04-23
 
 ### Исправления
