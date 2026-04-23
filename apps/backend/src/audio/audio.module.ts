@@ -5,10 +5,12 @@ import { AppSettingsModule } from '../app-settings/app-settings.module';
 import { ChildDeviceModule } from '../child-device/child-device.module';
 import { ConsentModule } from '../consent/consent.module';
 import { DeviceCommandsModule } from '../device-commands/device-commands.module';
+import { AdminModule } from '../admin/admin.module';
 import { AudioService } from './audio.service';
 import { AudioEvents } from './audio.events';
 import { ParentAudioController } from './parent-audio.controller';
 import { ChildAudioController } from './child-audio.controller';
+import { AudioAdminController } from './audio-admin.controller';
 
 @Module({
   imports: [
@@ -18,8 +20,9 @@ import { ChildAudioController } from './child-audio.controller';
     ChildDeviceModule,
     ConsentModule,
     DeviceCommandsModule,
+    AdminModule,
   ],
-  controllers: [ParentAudioController, ChildAudioController],
+  controllers: [ParentAudioController, ChildAudioController, AudioAdminController],
   providers: [AudioService, AudioEvents],
   exports: [AudioService, AudioEvents],
 })

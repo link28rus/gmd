@@ -26,6 +26,6 @@ import { ADMIN_CONFIG } from './admin.tokens';
     AdminGuard,
     AdminService,
   ],
-  exports: [ADMIN_CONFIG],
+  exports: [ADMIN_CONFIG, AdminGuard],
 })
 export class AdminModule {}
