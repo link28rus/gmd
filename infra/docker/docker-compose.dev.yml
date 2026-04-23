@@ -2,18 +2,27 @@ name: gmd-dev
 
 services:
   postgres:
-    image: postgis/postgis:16-3.4
+    build:
+      context: ./postgres
+    image: gmd-postgres:16-postgis-pgcron
     container_name: gmd-postgres-dev
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-gmd}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gmd_dev_password}
       POSTGRES_DB: ${POSTGRES_DB:-gmd_dev}
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_cron
+      - -c
+      - cron.database_name=${POSTGRES_DB:-gmd_dev}
     ports:
       - '${POSTGRES_PORT:-5432}:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./postgres/init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+      - ./postgres/10-init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+      - ./postgres/20-retention.sql:/docker-entrypoint-initdb.d/20-retention.sql:ro
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-gmd} -d ${POSTGRES_DB:-gmd_dev}']
       interval: 5s
