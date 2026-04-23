@@ -18,6 +18,7 @@ import { LocationsModule } from './locations/locations.module';
 import { SosModule } from './sos/sos.module';
 import { ZonesModule } from './zones/zones.module';
 import { DeviceCommandsModule } from './device-commands/device-commands.module';
+import { AudioModule } from './audio/audio.module';
 import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storage';
 import { SecretsModule } from './common/secrets/secrets.module';
 
@@ -47,6 +48,7 @@ import { SecretsModule } from './common/secrets/secrets.module';
     SosModule,
     ZonesModule,
     DeviceCommandsModule,
+    AudioModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
