@@ -69,7 +69,7 @@ export function AdminClient({ children }: Props) {
   if (bootstrapping) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-sm text-zinc-500">Загружаем…</p>
+        <p className="text-sm text-muted-foreground">Загружаем…</p>
       </div>
     );
   }

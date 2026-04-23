@@ -147,7 +147,7 @@ export function ZoneEditorDialog({ open, onOpenChange, kids, initial, onSaved }:
                   <label key={c.id} className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
-                      className="h-4 w-4 rounded border-zinc-300"
+                      className="h-4 w-4 rounded border-border"
                       checked={childIds.includes(c.id)}
                       onChange={(e) => {
                         setChildIds((prev) =>

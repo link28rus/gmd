@@ -4,6 +4,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ArrowLeft, LayoutDashboard, Users, Home, Baby, Ticket, Settings2 } from 'lucide-react';
+import { ThemeSwitcher } from '@/components/theme/theme-switcher';
 
 const NAV_ITEMS = [
   { href: '/admin', label: 'Обзор', icon: LayoutDashboard },
@@ -69,6 +70,12 @@ export function AdminHeader() {
             </span>
           </Link>
         </nav>
+
+        {/* Переключатель темы. Встроен в header, поэтому прокручивается
+            вместе с ним (не fixed). Светлый chip на тёмном slate-фоне. */}
+        <div className="ml-auto shrink-0 self-start sm:self-center">
+          <ThemeSwitcher />
+        </div>
       </div>
     </header>
   );

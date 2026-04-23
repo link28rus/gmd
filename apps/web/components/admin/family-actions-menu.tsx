@@ -83,7 +83,7 @@ export function FamilyActionsMenu({ row }: Props): ReactElement | null {
     onError: (e: Error) => toast.error(e.message || 'Не удалось удалить'),
   });
 
-  if (isDeleted) return <span className="text-xs text-zinc-400">—</span>;
+  if (isDeleted) return <span className="text-xs text-muted-foreground">—</span>;
 
   const menu =
     open && menuPos && typeof document !== 'undefined'
@@ -91,7 +91,7 @@ export function FamilyActionsMenu({ row }: Props): ReactElement | null {
           <div
             ref={menuRef}
             style={{ position: 'fixed', top: menuPos.top, left: menuPos.left, width: MENU_WIDTH }}
-            className="z-50 overflow-hidden rounded-md border border-zinc-200 bg-white shadow-lg"
+            className="z-50 overflow-hidden rounded-md border border-border bg-card shadow-lg"
           >
             <button
               type="button"
@@ -116,7 +116,7 @@ export function FamilyActionsMenu({ row }: Props): ReactElement | null {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-label="Действия"
-        className="rounded-md p-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900"
+        className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
       >
         <MoreVertical className="h-4 w-4" />
       </button>

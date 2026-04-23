@@ -38,11 +38,11 @@ export function ChildCard({ child }: Props) {
   const age = ageYears(child.dateOfBirth);
 
   return (
-    <article className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+    <article className="rounded-lg border border-border bg-card p-5 shadow-sm">
       <header className="flex items-start justify-between gap-4">
         <div>
-          <h3 className="text-lg font-semibold text-zinc-900">{child.name}</h3>
-          {age && <p className="text-sm text-zinc-500">{age}</p>}
+          <h3 className="text-lg font-semibold text-foreground">{child.name}</h3>
+          {age && <p className="text-sm text-muted-foreground">{age}</p>}
           <div className="mt-2">
             <DeviceStatusBadge device={child.device} />
           </div>
@@ -53,11 +53,11 @@ export function ChildCard({ child }: Props) {
           </Button>
           {menu && (
             <div
-              className="absolute right-0 top-full z-10 mt-1 w-40 rounded-md border border-zinc-200 bg-white shadow-md"
+              className="absolute right-0 top-full z-10 mt-1 w-40 rounded-md border border-border bg-card shadow-md"
               onMouseLeave={() => setMenu(false)}
             >
               <button
-                className="w-full px-3 py-2 text-left text-sm hover:bg-zinc-50"
+                className="w-full px-3 py-2 text-left text-sm hover:bg-muted"
                 onClick={() => {
                   setMenu(false);
                   setEditOpen(true);
@@ -91,7 +91,7 @@ export function ChildCard({ child }: Props) {
         {hasActiveDevice && (
           <Link
             href={`/cabinet/children/${child.id}/map`}
-            className="inline-flex items-center gap-1 rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50"
+            className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-3 py-1.5 text-sm text-foreground hover:bg-muted"
           >
             <MapPin className="h-4 w-4" />
             На карту

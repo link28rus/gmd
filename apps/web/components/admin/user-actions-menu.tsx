@@ -144,7 +144,7 @@ export function UserActionsMenu({ row, currentUserId }: Props): ReactElement | n
 
   // Для уже удалённых юзеров меню не показываем — действия над удалённым
   // аккаунтом не имеют смысла до того, как он вернётся из soft-delete.
-  if (isDeleted) return <span className="text-xs text-zinc-400">—</span>;
+  if (isDeleted) return <span className="text-xs text-muted-foreground">—</span>;
 
   const makeAdmin = row.role !== 'admin';
   const isBlocked = row.blockedAt !== null;
@@ -155,7 +155,7 @@ export function UserActionsMenu({ row, currentUserId }: Props): ReactElement | n
           <div
             ref={menuRef}
             style={{ position: 'fixed', top: menuPos.top, left: menuPos.left, width: MENU_WIDTH }}
-            className="z-50 overflow-hidden rounded-md border border-zinc-200 bg-white shadow-lg"
+            className="z-50 overflow-hidden rounded-md border border-border bg-card shadow-lg"
           >
             <MenuItem
               disabled={isSelf && !makeAdmin}
@@ -221,7 +221,7 @@ export function UserActionsMenu({ row, currentUserId }: Props): ReactElement | n
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-label="Действия"
-        className="rounded-md p-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900"
+        className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
       >
         <MoreVertical className="h-4 w-4" />
       </button>
@@ -334,7 +334,7 @@ function MenuItem({
       disabled={disabled}
       onClick={onClick}
       className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-        danger ? 'text-red-600 hover:bg-red-50' : 'text-zinc-800 hover:bg-zinc-50'
+        danger ? 'text-red-600 hover:bg-red-50' : 'text-foreground hover:bg-muted'
       }`}
     >
       <Icon className="h-4 w-4" />

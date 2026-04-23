@@ -19,14 +19,14 @@ export function DataTable<T extends Record<string, unknown>>({
   empty = 'Нет данных',
 }: DataTableProps<T>) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-zinc-200">
+    <div className="overflow-x-auto rounded-lg border border-border">
       <table className="w-full text-sm">
         <thead>
-          <tr className="bg-zinc-50 text-left">
+          <tr className="bg-muted text-left">
             {columns.map((col) => (
               <th
                 key={col.key}
-                className="border-b border-zinc-200 px-4 py-2.5 font-medium text-zinc-700"
+                className="border-b border-border px-4 py-2.5 font-medium text-foreground"
               >
                 {col.header}
               </th>
@@ -36,15 +36,15 @@ export function DataTable<T extends Record<string, unknown>>({
         <tbody>
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={columns.length} className="px-4 py-6 text-center text-zinc-400">
+              <td colSpan={columns.length} className="px-4 py-6 text-center text-muted-foreground">
                 {empty}
               </td>
             </tr>
           ) : (
             rows.map((row, i) => (
-              <tr key={i} className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50">
+              <tr key={i} className="border-b border-border last:border-0 hover:bg-muted">
                 {columns.map((col) => (
-                  <td key={col.key} className="px-4 py-2.5 text-zinc-800">
+                  <td key={col.key} className="px-4 py-2.5 text-foreground">
                     {col.render ? col.render(row) : String(row[col.key] ?? '')}
                   </td>
                 ))}

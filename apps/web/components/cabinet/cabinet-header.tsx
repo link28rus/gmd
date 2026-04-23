@@ -6,6 +6,7 @@ import { useState, type ReactElement } from 'react';
 import { Download, Shield, ChevronDown, LogOut } from 'lucide-react';
 import { useAuthStore } from '@/lib/auth-store';
 import { avatarColor, avatarInitial } from '@/lib/color/avatar-color';
+import { ThemeSwitcher } from '@/components/theme/theme-switcher';
 
 const APP_VERSION = process.env.APP_VERSION ?? '';
 
@@ -33,7 +34,9 @@ export function CabinetHeader(): ReactElement {
       <Link
         href={href}
         className={`rounded-md px-3 py-1.5 text-sm transition ${
-          active ? 'bg-zinc-900 text-white' : 'text-zinc-700 hover:bg-zinc-100'
+          active
+            ? 'bg-foreground text-background'
+            : 'text-muted-foreground hover:bg-muted hover:text-foreground'
         }`}
       >
         {label}
@@ -46,7 +49,7 @@ export function CabinetHeader(): ReactElement {
   const color = avatarColor(displayName);
 
   return (
-    <header className="relative z-20 border-b bg-white">
+    <header className="relative z-20 border-b border-border bg-card text-foreground">
       <div className="flex items-center justify-between gap-2 px-3 py-2 sm:px-4">
         {/* Лого + основной nav */}
         <div className="flex min-w-0 items-center gap-3 sm:gap-6">
@@ -56,8 +59,8 @@ export function CabinetHeader(): ReactElement {
             </div>
             {/* Текст лого скрыт на узких экранах — место уходит под nav. */}
             <div className="hidden flex-col leading-tight sm:flex">
-              <span className="text-sm font-semibold text-zinc-900">Где мои дети</span>
-              <span className="text-[10px] text-zinc-400">v{APP_VERSION}</span>
+              <span className="text-sm font-semibold text-foreground">Где мои дети</span>
+              <span className="text-[10px] text-muted-foreground">v{APP_VERSION}</span>
             </div>
           </Link>
           <nav className="flex items-center gap-1">
@@ -72,11 +75,16 @@ export function CabinetHeader(): ReactElement {
               доступен из profile-меню. */}
           <Link
             href="/cabinet/download"
-            className="hidden items-center gap-1.5 rounded-md px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-100 md:inline-flex"
+            className="hidden items-center gap-1.5 rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground md:inline-flex"
           >
             <Download className="h-4 w-4" />
             Скачать приложение
           </Link>
+          {/* Переключатель темы — между Download и Админкой. Скрыт на очень
+              узких экранах, чтобы не ломать мобильный header. */}
+          <div className="hidden sm:block">
+            <ThemeSwitcher />
+          </div>
           {isAdmin && (
             <Link
               href="/admin"
@@ -93,7 +101,7 @@ export function CabinetHeader(): ReactElement {
               type="button"
               onClick={() => setMenuOpen((v) => !v)}
               onBlur={() => setTimeout(() => setMenuOpen(false), 150)}
-              className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-zinc-100"
+              className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-muted"
               aria-haspopup="menu"
               aria-expanded={menuOpen}
             >
@@ -103,32 +111,42 @@ export function CabinetHeader(): ReactElement {
               >
                 <span className="text-xs font-semibold">{initial}</span>
               </div>
-              <ChevronDown className="h-4 w-4 text-zinc-400" />
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
             </button>
             {menuOpen && user && (
               <div
                 role="menu"
-                className="absolute right-0 top-full mt-1 w-56 overflow-hidden rounded-md border border-zinc-200 bg-white shadow-lg"
+                className="absolute right-0 top-full mt-1 w-56 overflow-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-lg"
               >
-                <div className="border-b border-zinc-100 px-3 py-2">
-                  <div className="truncate text-sm font-medium text-zinc-900">
+                <div className="border-b border-border px-3 py-2">
+                  <div className="truncate text-sm font-medium text-foreground">
                     {user.name ?? user.email}
                   </div>
-                  {user.name && <div className="truncate text-xs text-zinc-500">{user.email}</div>}
-                  <div className="mt-1 text-[10px] text-zinc-400">GMD v{APP_VERSION}</div>
+                  {user.name && (
+                    <div className="truncate text-xs text-muted-foreground">{user.email}</div>
+                  )}
+                  <div className="mt-1 text-[10px] text-muted-foreground">GMD v{APP_VERSION}</div>
+                </div>
+                {/* На мобильном показываем «Скачать приложение» тут, плюс
+                    переключатель темы (на sm: он уже есть в header'е). */}
+                <div className="sm:hidden">
+                  <Link
+                    href="/cabinet/download"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+                    role="menuitem"
+                    onMouseDown={(e) => e.preventDefault()}
+                  >
+                    <Download className="h-4 w-4" />
+                    Скачать приложение
+                  </Link>
+                  <div className="flex items-center justify-between px-3 py-2">
+                    <span className="text-sm text-muted-foreground">Тема</span>
+                    <ThemeSwitcher />
+                  </div>
                 </div>
                 <Link
-                  href="/cabinet/download"
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 md:hidden"
-                  role="menuitem"
-                  onMouseDown={(e) => e.preventDefault()}
-                >
-                  <Download className="h-4 w-4" />
-                  Скачать приложение
-                </Link>
-                <Link
                   href="/cabinet/password"
-                  className="block px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50"
+                  className="block px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
                   role="menuitem"
                   onMouseDown={(e) => e.preventDefault()}
                 >
@@ -136,7 +154,7 @@ export function CabinetHeader(): ReactElement {
                 </Link>
                 <Link
                   href="/cabinet/pin"
-                  className="block px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50"
+                  className="block px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
                   role="menuitem"
                   onMouseDown={(e) => e.preventDefault()}
                 >
@@ -146,7 +164,7 @@ export function CabinetHeader(): ReactElement {
                   type="button"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={logout}
-                  className="flex w-full items-center gap-2 border-t border-zinc-100 px-3 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50"
+                  className="flex w-full items-center gap-2 border-t border-border px-3 py-2 text-left text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
                   role="menuitem"
                 >
                   <LogOut className="h-4 w-4" />

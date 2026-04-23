@@ -6,6 +6,6 @@ export const ChildMap = dynamic<ChildMapInnerProps>(
   () => import('./child-map-inner').then((m) => m.ChildMapInner),
   {
     ssr: false,
-    loading: () => <div className="h-full animate-pulse bg-zinc-100" />,
+    loading: () => <div className="h-full animate-pulse bg-muted" />,
   },
 );

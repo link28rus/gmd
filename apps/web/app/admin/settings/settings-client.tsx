@@ -138,7 +138,7 @@ function LoadingState(): ReactElement {
       {[0, 1, 2].map((i) => (
         <div
           key={i}
-          className="h-16 animate-pulse rounded-lg border border-zinc-200 bg-white"
+          className="h-16 animate-pulse rounded-lg border border-border bg-card"
           style={{ animationDelay: `${i * 80}ms` }}
         />
       ))}
@@ -158,11 +158,13 @@ function SectionBlock({
     <section id={section.id}>
       <header className="mb-3 flex items-baseline gap-2 px-1">
         <span className={`mt-[3px] h-1.5 w-1.5 shrink-0 rounded-full ${dot}`} aria-hidden />
-        <h2 className="text-[13px] font-semibold uppercase tracking-[0.08em] text-zinc-700">
+        <h2 className="text-[13px] font-semibold uppercase tracking-[0.08em] text-foreground">
           {section.title}
         </h2>
         {section.description && (
-          <span className="ml-auto truncate text-[12px] text-zinc-500">{section.description}</span>
+          <span className="ml-auto truncate text-[12px] text-muted-foreground">
+            {section.description}
+          </span>
         )}
       </header>
       {children}
@@ -172,7 +174,7 @@ function SectionBlock({
 
 function ListCard({ children }: { children: ReactNode }): ReactElement {
   return (
-    <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white divide-y divide-zinc-100">
+    <div className="overflow-hidden rounded-lg border border-border bg-card divide-y divide-zinc-100">
       {children}
     </div>
   );
@@ -215,10 +217,10 @@ function SettingRow({ row, onSaved }: { row: AppSettingRow; onSaved: () => void 
   const inputWidth = meta?.width ?? 'w-48';
 
   return (
-    <div className="group flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-zinc-50/80">
+    <div className="group flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-muted/80">
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
-          <span className="truncate text-[13px] font-medium text-zinc-900">{label}</span>
+          <span className="truncate text-[13px] font-medium text-foreground">{label}</span>
           {isSecret && (
             <span
               className="inline-flex h-1.5 w-1.5 rounded-full bg-amber-500"
@@ -227,7 +229,9 @@ function SettingRow({ row, onSaved }: { row: AppSettingRow; onSaved: () => void 
             />
           )}
         </div>
-        <code className="block truncate font-mono text-[11px] text-zinc-400">{row.key}</code>
+        <code className="block truncate font-mono text-[11px] text-muted-foreground">
+          {row.key}
+        </code>
       </div>
 
       <div className={`relative shrink-0 ${inputWidth}`}>
@@ -238,12 +242,12 @@ function SettingRow({ row, onSaved }: { row: AppSettingRow; onSaved: () => void 
           inputMode={meta?.inputMode as React.InputHTMLAttributes<HTMLInputElement>['inputMode']}
           autoComplete={isSecret ? 'new-password' : undefined}
           onChange={(e) => setValue(e.target.value)}
-          className="w-full rounded-md border border-zinc-200 bg-white px-2.5 py-1 pr-7 font-mono text-[13px] text-zinc-900 transition-colors placeholder:font-sans placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-200"
+          className="w-full rounded-md border border-border bg-card px-2.5 py-1 pr-7 font-mono text-[13px] text-foreground transition-colors placeholder:font-sans placeholder:text-muted-foreground focus:border-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-200"
         />
         {meta?.unit && !isSecret && (
           <span
             aria-hidden
-            className="pointer-events-none absolute inset-y-0 right-2 flex items-center font-mono text-[10px] uppercase tracking-wider text-zinc-400"
+            className="pointer-events-none absolute inset-y-0 right-2 flex items-center font-mono text-[10px] uppercase tracking-wider text-muted-foreground"
           >
             {meta.unit}
           </span>
@@ -260,7 +264,7 @@ function SettingRow({ row, onSaved }: { row: AppSettingRow; onSaved: () => void 
         aria-label="Сохранить"
         className={`shrink-0 rounded-md px-2.5 py-1 text-[11px] font-medium transition-all ${
           dirty
-            ? 'bg-zinc-900 text-white hover:bg-zinc-800'
+            ? 'bg-foreground text-white hover:bg-zinc-800'
             : justSaved
               ? 'bg-emerald-50 text-emerald-600'
               : 'bg-transparent text-transparent'
@@ -311,10 +315,10 @@ function SmtpTestRow(): ReactElement {
   const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to.trim());
 
   return (
-    <div className="flex items-center gap-3 bg-zinc-50/70 px-4 py-2.5">
+    <div className="flex items-center gap-3 bg-muted/70 px-4 py-2.5">
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
-          <span className="truncate text-[13px] font-medium text-zinc-900">Проверка</span>
+          <span className="truncate text-[13px] font-medium text-foreground">Проверка</span>
           {lastResult?.kind === 'ok' && (
             <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
           )}
@@ -322,7 +326,7 @@ function SmtpTestRow(): ReactElement {
             <span className="inline-flex h-1.5 w-1.5 rounded-full bg-rose-500" />
           )}
         </div>
-        <span className="block truncate font-mono text-[11px] text-zinc-400">
+        <span className="block truncate font-mono text-[11px] text-muted-foreground">
           {lastResult
             ? lastResult.kind === 'ok'
               ? `✓ delivered${lastResult.messageId ? ` · ${lastResult.messageId}` : ''}`
@@ -335,13 +339,13 @@ function SmtpTestRow(): ReactElement {
         value={to}
         onChange={(e) => setTo(e.target.value)}
         placeholder="recipient@example.com"
-        className="w-56 shrink-0 rounded-md border border-zinc-200 bg-white px-2.5 py-1 font-mono text-[13px] text-zinc-900 focus:border-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-200"
+        className="w-56 shrink-0 rounded-md border border-border bg-card px-2.5 py-1 font-mono text-[13px] text-foreground focus:border-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-200"
       />
       <button
         type="button"
         disabled={!emailValid || m.isPending}
         onClick={() => m.mutate(to.trim())}
-        className="shrink-0 rounded-md bg-zinc-900 px-3 py-1 text-[11px] font-medium text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-300"
+        className="shrink-0 rounded-md bg-foreground px-3 py-1 text-[11px] font-medium text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-300"
       >
         {m.isPending ? 'Шлём…' : 'Отправить'}
       </button>

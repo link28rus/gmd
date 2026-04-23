@@ -11,8 +11,10 @@ export default async function AdminSettingsPage() {
     <AdminClient>
       <div className="mx-auto w-full max-w-[720px] px-6 pb-16 pt-10">
         <header className="mb-8">
-          <h1 className="text-xl font-semibold tracking-tight text-zinc-900">Параметры системы</h1>
-          <p className="mt-1 text-sm text-zinc-500">
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">
+            Параметры системы
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             Глобальные настройки. Кэшируются на&nbsp;минуту — изменения применяются
             к&nbsp;следующим&nbsp;запросам.
           </p>

@@ -8,6 +8,6 @@ export const ZonesMap = dynamic<ZonesMapInnerProps>(
   () => import('./zones-map-inner').then((m) => m.ZonesMapInner),
   {
     ssr: false,
-    loading: () => <div className="h-full animate-pulse bg-zinc-100" />,
+    loading: () => <div className="h-full animate-pulse bg-muted" />,
   },
 );

@@ -106,7 +106,7 @@ export function ChildrenClient() {
         {data && <span className="text-sm text-slate-500">Всего: {data.total}</span>}
       </div>
 
-      {isLoading && <p className="text-sm text-zinc-400">Загружаем…</p>}
+      {isLoading && <p className="text-sm text-muted-foreground">Загружаем…</p>}
       {error && <p className="text-sm text-red-600">Ошибка загрузки детей.</p>}
 
       {data && (
@@ -125,7 +125,7 @@ export function ChildrenClient() {
             >
               Назад
             </Button>
-            <span className="text-sm text-zinc-600">
+            <span className="text-sm text-muted-foreground">
               Страница {page} из {totalPages}
             </span>
             <Button

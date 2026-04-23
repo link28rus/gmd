@@ -64,7 +64,9 @@ export default function DownloadClient(): ReactElement {
   }
 
   if (loading) {
-    return <div className="mx-auto max-w-2xl px-6 py-8 text-sm text-zinc-500">Загрузка…</div>;
+    return (
+      <div className="mx-auto max-w-2xl px-6 py-8 text-sm text-muted-foreground">Загрузка…</div>
+    );
   }
 
   if (error) {
@@ -79,14 +81,14 @@ export default function DownloadClient(): ReactElement {
 
   return (
     <div className="mx-auto max-w-2xl px-6 py-8">
-      <h1 className="mb-2 text-2xl font-semibold text-zinc-900">Приложение ребёнка</h1>
-      <p className="mb-6 text-sm text-zinc-600">
+      <h1 className="mb-2 text-2xl font-semibold text-foreground">Приложение ребёнка</h1>
+      <p className="mb-6 text-sm text-muted-foreground">
         Скачайте APK-файл и установите его на телефон ребёнка. Разрешите установку из неизвестных
         источников, если Android попросит.
       </p>
 
       {grouped.length === 0 && (
-        <div className="rounded-md border border-zinc-200 bg-zinc-50 p-6 text-sm text-zinc-600">
+        <div className="rounded-md border border-border bg-muted p-6 text-sm text-muted-foreground">
           Релизов пока нет.
         </div>
       )}
@@ -94,10 +96,10 @@ export default function DownloadClient(): ReactElement {
       {grouped.map((g) => (
         <section key={`${g.app}-${g.version}`} className="mb-6">
           <div className="mb-2 flex items-baseline justify-between">
-            <h2 className="text-lg font-medium text-zinc-900">
+            <h2 className="text-lg font-medium text-foreground">
               {appTitle(g.app)} — v{g.version}
             </h2>
-            <span className="text-xs text-zinc-500">
+            <span className="text-xs text-muted-foreground">
               {new Date(g.files[0].uploadedAt).toLocaleString('ru')}
             </span>
           </div>
@@ -106,16 +108,16 @@ export default function DownloadClient(): ReactElement {
               <a
                 key={f.filename}
                 href={`/api/download/${encodeURIComponent(f.filename)}`}
-                className="flex items-center justify-between rounded-md border border-zinc-200 bg-white px-4 py-3 hover:border-zinc-400 hover:bg-zinc-50"
+                className="flex items-center justify-between rounded-md border border-border bg-card px-4 py-3 hover:border-zinc-400 hover:bg-muted"
               >
                 <div>
-                  <div className="font-medium text-zinc-900">
+                  <div className="font-medium text-foreground">
                     {f.abi}
-                    <span className="ml-2 text-sm font-normal text-zinc-500">
+                    <span className="ml-2 text-sm font-normal text-muted-foreground">
                       {formatBytes(f.size)}
                     </span>
                   </div>
-                  <div className="text-xs text-zinc-500">{abiHint(f.abi)}</div>
+                  <div className="text-xs text-muted-foreground">{abiHint(f.abi)}</div>
                 </div>
                 <span className="text-sm font-medium text-blue-600">Скачать</span>
               </a>
@@ -124,8 +126,8 @@ export default function DownloadClient(): ReactElement {
         </section>
       ))}
 
-      <div className="mt-8 rounded-md border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600">
-        <div className="mb-1 font-medium text-zinc-800">Как установить на телефон ребёнка</div>
+      <div className="mt-8 rounded-md border border-border bg-muted p-4 text-sm text-muted-foreground">
+        <div className="mb-1 font-medium text-foreground">Как установить на телефон ребёнка</div>
         <ol className="list-decimal space-y-1 pl-5">
           <li>Скачайте APK на ПК или в браузере телефона.</li>
           <li>Перенесите файл на телефон (кабель, Telegram, облако).</li>

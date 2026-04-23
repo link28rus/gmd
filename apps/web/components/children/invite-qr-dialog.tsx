@@ -105,14 +105,14 @@ export function InviteQrDialog({ child, open, onOpenChange }: Props) {
 
         <div className="flex flex-col items-center gap-4 py-4">
           {create.isPending && !invite ? (
-            <p className="text-sm text-zinc-500">Генерируем код…</p>
+            <p className="text-sm text-muted-foreground">Генерируем код…</p>
           ) : invite ? (
             <>
-              <div className="rounded-md border bg-white p-2">
+              <div className="rounded-md border bg-card p-2">
                 <QRCodeSVG value={invite.qrUrl} size={240} includeMargin />
               </div>
               <p className="font-mono text-2xl tracking-widest">{formatCode(invite.code)}</p>
-              <p className="text-sm text-zinc-500">
+              <p className="text-sm text-muted-foreground">
                 {timer.expired ? 'Код истёк' : `Код действителен ${timer.formatted}`}
               </p>
             </>

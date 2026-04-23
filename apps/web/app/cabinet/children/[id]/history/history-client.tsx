@@ -55,22 +55,22 @@ export default function HistoryClient({ childId }: { childId: string }): ReactEl
 
   return (
     <div className="flex h-[calc(100vh-49px)]">
-      <aside className="w-96 overflow-y-auto border-r border-zinc-200 bg-white">
-        <div className="flex items-center gap-3 border-b border-zinc-200 px-4 py-3">
+      <aside className="w-96 overflow-y-auto border-r border-border bg-card">
+        <div className="flex items-center gap-3 border-b border-border px-4 py-3">
           <Link
             href="/cabinet"
-            className="flex h-8 w-8 items-center justify-center rounded-md border border-zinc-200 text-zinc-600 hover:bg-zinc-50"
+            className="flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-muted"
             title="Назад к карте"
           >
             <ArrowLeft className="h-4 w-4" />
           </Link>
-          <h1 className="text-base font-semibold text-zinc-900">История передвижений</h1>
+          <h1 className="text-base font-semibold text-foreground">История передвижений</h1>
         </div>
 
         {tripsQ.isPending ? (
-          <div className="px-4 py-6 text-sm text-zinc-500">Загрузка…</div>
+          <div className="px-4 py-6 text-sm text-muted-foreground">Загрузка…</div>
         ) : trips.length === 0 ? (
-          <div className="px-4 py-6 text-sm text-zinc-500">
+          <div className="px-4 py-6 text-sm text-muted-foreground">
             Завершённых поездок пока нет. Поездка попадёт сюда, когда ребёнок остановится на месте
             дольше 30 минут.
           </div>
@@ -81,12 +81,12 @@ export default function HistoryClient({ childId }: { childId: string }): ReactEl
                 <button
                   type="button"
                   onClick={() => setSelectedTrip(t)}
-                  className={`flex w-full flex-col gap-1 px-4 py-3 text-left hover:bg-zinc-50 ${
-                    selectedTrip?.id === t.id ? 'bg-blue-50' : ''
+                  className={`flex w-full flex-col gap-1 px-4 py-3 text-left hover:bg-muted ${
+                    selectedTrip?.id === t.id ? 'bg-accent/30' : ''
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-zinc-900">
+                    <span className="text-sm font-medium text-foreground">
                       {fmtDate(t.startedAt)}
                       {t.endedAt && ` → ${fmtDate(t.endedAt)}`}
                     </span>
@@ -96,7 +96,7 @@ export default function HistoryClient({ childId }: { childId: string }): ReactEl
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-3 text-xs text-zinc-500">
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
                     <span className="flex items-center gap-1">
                       <Clock className="h-3 w-3" />
                       {fmtDuration(t.startedAt, t.endedAt)}
@@ -114,7 +114,7 @@ export default function HistoryClient({ childId }: { childId: string }): ReactEl
         )}
       </aside>
 
-      <div className="relative flex-1 overflow-hidden bg-zinc-50">
+      <div className="relative flex-1 overflow-hidden bg-muted">
         {selectedTrip ? (
           <TripMapPreview
             points={pointsQ.data?.points ?? []}
@@ -122,7 +122,7 @@ export default function HistoryClient({ childId }: { childId: string }): ReactEl
             trip={selectedTrip}
           />
         ) : (
-          <div className="flex h-full items-center justify-center p-6 text-center text-zinc-500">
+          <div className="flex h-full items-center justify-center p-6 text-center text-muted-foreground">
             Выберите поездку слева, чтобы увидеть её маршрут.
           </div>
         )}
@@ -142,14 +142,14 @@ function TripMapPreview({
 }): ReactElement {
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-zinc-500">
+      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
         Загружаем маршрут…
       </div>
     );
   }
   if (points.length === 0) {
     return (
-      <div className="flex h-full items-center justify-center p-6 text-center text-sm text-zinc-500">
+      <div className="flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground">
         В этой поездке не сохранилось точек координат.
       </div>
     );

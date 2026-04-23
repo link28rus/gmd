@@ -59,7 +59,7 @@ export default function ZonesClient(): ReactElement {
   if (bootstrapping) {
     return (
       <div className="flex min-h-[400px] items-center justify-center">
-        <p className="text-sm text-zinc-500">Загружаем…</p>
+        <p className="text-sm text-muted-foreground">Загружаем…</p>
       </div>
     );
   }
@@ -96,9 +96,9 @@ function ZonesContent(): ReactElement {
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-8">
-      <h1 className="mb-6 text-2xl font-semibold text-zinc-900">Геозоны</h1>
+      <h1 className="mb-6 text-2xl font-semibold text-foreground">Геозоны</h1>
 
-      {isLoading && <p className="text-sm text-zinc-500">Загрузка…</p>}
+      {isLoading && <p className="text-sm text-muted-foreground">Загрузка…</p>}
 
       {isError && (
         <div className="rounded-md border border-red-200 bg-red-50 p-4">
@@ -129,8 +129,8 @@ function ZonesContent(): ReactElement {
       )}
 
       <div className="mt-8">
-        <h2 className="mb-3 text-lg font-semibold text-zinc-900">Последние события</h2>
-        <div className="rounded-md border border-zinc-200 bg-white p-4">
+        <h2 className="mb-3 text-lg font-semibold text-foreground">Последние события</h2>
+        <div className="rounded-md border border-border bg-card p-4">
           <ZoneEventsFeed />
         </div>
       </div>

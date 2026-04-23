@@ -216,7 +216,7 @@ export default function PinClient(): ReactElement {
   if (bootstrapping || !statusLoaded) {
     return (
       <div className="flex min-h-[400px] items-center justify-center">
-        <p className="text-sm text-zinc-500">Загружаем…</p>
+        <p className="text-sm text-muted-foreground">Загружаем…</p>
       </div>
     );
   }
@@ -224,7 +224,7 @@ export default function PinClient(): ReactElement {
   if (!user) {
     return (
       <div className="flex min-h-[400px] items-center justify-center">
-        <p className="text-sm text-zinc-500">Сессия не активна</p>
+        <p className="text-sm text-muted-foreground">Сессия не активна</p>
       </div>
     );
   }
@@ -234,14 +234,14 @@ export default function PinClient(): ReactElement {
   return (
     <div className="mx-auto max-w-md p-6">
       <div className="mb-4 text-sm">
-        <Link href="/cabinet" className="text-zinc-500 hover:text-zinc-900">
+        <Link href="/cabinet" className="text-muted-foreground hover:text-foreground">
           ← В кабинет
         </Link>
       </div>
 
-      <div className="rounded-lg border border-zinc-200 bg-white p-8 shadow-sm">
-        <h1 className="mb-1 text-2xl font-semibold text-zinc-900">PIN родителя</h1>
-        <p className="mb-6 text-sm text-zinc-600">
+      <div className="rounded-lg border border-border bg-card p-8 shadow-sm">
+        <h1 className="mb-1 text-2xl font-semibold text-foreground">PIN родителя</h1>
+        <p className="mb-6 text-sm text-muted-foreground">
           Один PIN для всех защищённых действий: подтверждение отключения защиты на устройстве
           ребёнка, блокировка приложения родителя, снятие отвязки устройства. 4–8 цифр.
         </p>
@@ -256,7 +256,7 @@ export default function PinClient(): ReactElement {
           <form onSubmit={onSetOrChange} className="space-y-4">
             {mode === 'change' && (
               <div>
-                <label htmlFor="cur" className="mb-1 block text-sm font-medium text-zinc-700">
+                <label htmlFor="cur" className="mb-1 block text-sm font-medium text-foreground">
                   Текущий PIN
                 </label>
                 <input
@@ -270,13 +270,13 @@ export default function PinClient(): ReactElement {
                   onChange={(e) => setCurrentPin(e.target.value.replace(/\D/g, ''))}
                   disabled={submitting}
                   autoComplete="current-password"
-                  className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm tracking-widest text-zinc-900 focus:border-zinc-900 focus:outline-none disabled:bg-zinc-100"
+                  className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm tracking-widest text-foreground focus:border-zinc-900 focus:outline-none disabled:bg-muted"
                   required
                 />
               </div>
             )}
             <div>
-              <label htmlFor="new" className="mb-1 block text-sm font-medium text-zinc-700">
+              <label htmlFor="new" className="mb-1 block text-sm font-medium text-foreground">
                 {mode === 'set' ? 'Новый PIN' : 'Новый PIN'}
               </label>
               <input
@@ -290,15 +290,15 @@ export default function PinClient(): ReactElement {
                 onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
                 disabled={submitting}
                 autoComplete="new-password"
-                className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm tracking-widest text-zinc-900 focus:border-zinc-900 focus:outline-none disabled:bg-zinc-100"
+                className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm tracking-widest text-foreground focus:border-zinc-900 focus:outline-none disabled:bg-muted"
                 required
               />
-              <p className="mt-1 text-xs text-zinc-500">
+              <p className="mt-1 text-xs text-muted-foreground">
                 От {PIN_MIN} до {PIN_MAX} цифр.
               </p>
             </div>
             <div>
-              <label htmlFor="confirm" className="mb-1 block text-sm font-medium text-zinc-700">
+              <label htmlFor="confirm" className="mb-1 block text-sm font-medium text-foreground">
                 Повторите PIN
               </label>
               <input
@@ -312,14 +312,14 @@ export default function PinClient(): ReactElement {
                 onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ''))}
                 disabled={submitting}
                 autoComplete="new-password"
-                className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm tracking-widest text-zinc-900 focus:border-zinc-900 focus:outline-none disabled:bg-zinc-100"
+                className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm tracking-widest text-foreground focus:border-zinc-900 focus:outline-none disabled:bg-muted"
                 required
               />
             </div>
             <button
               type="submit"
               disabled={submitting}
-              className="w-full rounded-md bg-zinc-900 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50"
+              className="w-full rounded-md bg-foreground py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50"
             >
               {submitting ? 'Сохраняем…' : mode === 'set' ? 'Установить PIN' : 'Сменить PIN'}
             </button>
@@ -327,9 +327,9 @@ export default function PinClient(): ReactElement {
         )}
 
         {isSet && (
-          <div className="mt-6 border-t border-zinc-200 pt-6">
-            <h2 className="mb-2 text-sm font-semibold text-zinc-900">Удаление PIN</h2>
-            <p className="mb-3 text-xs text-zinc-600">
+          <div className="mt-6 border-t border-border pt-6">
+            <h2 className="mb-2 text-sm font-semibold text-foreground">Удаление PIN</h2>
+            <p className="mb-3 text-xs text-muted-foreground">
               Отключит защиту на всех устройствах детей. Введите текущий PIN для подтверждения.
             </p>
             <div className="flex gap-2">
@@ -344,7 +344,7 @@ export default function PinClient(): ReactElement {
                 onChange={(e) => setCurrentPin(e.target.value.replace(/\D/g, ''))}
                 disabled={submitting}
                 autoComplete="current-password"
-                className="flex-1 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm tracking-widest text-zinc-900 focus:border-zinc-900 focus:outline-none disabled:bg-zinc-100"
+                className="flex-1 rounded-md border border-border bg-card px-3 py-2 text-sm tracking-widest text-foreground focus:border-zinc-900 focus:outline-none disabled:bg-muted"
               />
               <button
                 type="button"

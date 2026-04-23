@@ -52,7 +52,7 @@ export function LatestMarker({ lat, lon, accuracy, childName, ageSec }: Props): 
             <span className="text-base font-semibold">{initial}</span>
           </div>
           {/* Плашка с именем под аватаром */}
-          <div className="mt-0.5 whitespace-nowrap rounded-md bg-white/95 px-2 py-0.5 text-xs font-medium text-zinc-800 shadow">
+          <div className="mt-0.5 whitespace-nowrap rounded-md bg-card/95 px-2 py-0.5 text-xs font-medium text-foreground shadow">
             {childName}
           </div>
         </div>

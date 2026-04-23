@@ -33,8 +33,8 @@ export function ChildStatusCard({
   const color = avatarColor(childName);
 
   return (
-    <div className="w-full rounded-lg border border-zinc-200 bg-white shadow-md md:w-[280px]">
-      <div className="flex items-center gap-3 border-b border-zinc-100 px-3 py-2.5">
+    <div className="w-full rounded-lg border border-border bg-card shadow-md md:w-[280px]">
+      <div className="flex items-center gap-3 border-b border-border px-3 py-2.5">
         <div
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white"
           style={{ backgroundColor: color }}
@@ -42,11 +42,13 @@ export function ChildStatusCard({
           <span className="text-base font-semibold">{initial}</span>
         </div>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-semibold text-zinc-900">{childName}</div>
-          <div className="truncate text-xs text-zinc-500">Был тут {formatAgeShort(ageSec)}</div>
+          <div className="truncate text-sm font-semibold text-foreground">{childName}</div>
+          <div className="truncate text-xs text-muted-foreground">
+            Был тут {formatAgeShort(ageSec)}
+          </div>
         </div>
       </div>
-      <div className="grid grid-cols-4 gap-1 px-3 py-2.5 text-center text-[11px] text-zinc-600">
+      <div className="grid grid-cols-4 gap-1 px-3 py-2.5 text-center text-[11px] text-muted-foreground">
         <Metric
           label={batteryLabel(isCharging)}
           value={batteryLevel !== null ? `${batteryLevel}%` : '—'}
@@ -67,7 +69,7 @@ export function ChildStatusCard({
         <Metric label="источник" value={providerLabel(provider)} icon="📡" />
       </div>
       {accuracy !== null && (
-        <div className="border-t border-zinc-100 px-3 py-1.5 text-[11px] text-zinc-500">
+        <div className="border-t border-border px-3 py-1.5 text-[11px] text-muted-foreground">
           Точность координат {accuracyQuality(accuracy)} ({Math.round(accuracy)} метров)
         </div>
       )}
@@ -98,13 +100,13 @@ function Metric({
         )}
       </div>
       <div
-        className="max-w-full truncate font-semibold text-zinc-900"
+        className="max-w-full truncate font-semibold text-foreground"
         style={valueColor ? { color: valueColor } : undefined}
         title={value}
       >
         {value}
       </div>
-      <div className="text-[10px] uppercase tracking-wide text-zinc-400">{label}</div>
+      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
     </div>
   );
 }

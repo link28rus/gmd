@@ -28,14 +28,14 @@ export function ChildrenSidebar({
 }: Props): ReactElement {
   const sidebar = (
     <>
-      <div className="flex items-center justify-between border-b border-zinc-200 px-3 py-2 md:hidden">
-        <span className="text-sm font-semibold text-zinc-900">Мои дети</span>
+      <div className="flex items-center justify-between border-b border-border px-3 py-2 md:hidden">
+        <span className="text-sm font-semibold text-foreground">Мои дети</span>
         {onCloseMobile && (
           <button
             type="button"
             onClick={onCloseMobile}
             aria-label="Закрыть"
-            className="rounded-md p-1.5 text-zinc-500 hover:bg-zinc-100"
+            className="rounded-md p-1.5 text-muted-foreground hover:bg-muted"
           >
             <X className="h-5 w-5" />
           </button>
@@ -51,7 +51,7 @@ export function ChildrenSidebar({
               onCloseMobile?.();
             }}
             className={`mb-1 flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left transition ${
-              selectedId === c.id ? 'bg-blue-50 ring-1 ring-blue-200' : 'hover:bg-zinc-50'
+              selectedId === c.id ? 'bg-accent/30 ring-1 ring-accent' : 'hover:bg-muted'
             }`}
           >
             <div
@@ -61,23 +61,23 @@ export function ChildrenSidebar({
               <span className="text-sm font-semibold">{avatarInitial(c.name)}</span>
             </div>
             <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-medium text-zinc-900">{c.name}</div>
-              <div className="truncate text-xs text-zinc-500">
+              <div className="truncate text-sm font-medium text-foreground">{c.name}</div>
+              <div className="truncate text-xs text-muted-foreground">
                 {c.device && c.device.revokedAt === null ? 'привязан' : 'не привязан'}
               </div>
             </div>
           </button>
         ))}
         {children.length === 0 && (
-          <div className="px-3 py-6 text-center text-sm text-zinc-500">Детей пока нет</div>
+          <div className="px-3 py-6 text-center text-sm text-muted-foreground">Детей пока нет</div>
         )}
       </div>
-      <div className="border-t border-zinc-200 p-2">
+      <div className="border-t border-border p-2">
         <CreateChildDialog
           trigger={
             <button
               type="button"
-              className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-sm text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900"
+              className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
             >
               <UserPlus className="h-4 w-4" />
               Добавить ребёнка
@@ -91,7 +91,7 @@ export function ChildrenSidebar({
   return (
     <>
       {/* Desktop: постоянная колонка */}
-      <aside className="hidden w-[260px] shrink-0 flex-col border-r border-zinc-200 bg-white md:flex">
+      <aside className="hidden w-[260px] shrink-0 flex-col border-r border-border bg-card md:flex">
         {sidebar}
       </aside>
       {/* Mobile: drawer с backdrop */}
@@ -106,7 +106,7 @@ export function ChildrenSidebar({
           onClick={onCloseMobile}
         />
         <aside
-          className={`absolute left-0 top-0 flex h-full w-[min(280px,85vw)] flex-col border-r border-zinc-200 bg-white shadow-xl transition-transform ${
+          className={`absolute left-0 top-0 flex h-full w-[min(280px,85vw)] flex-col border-r border-border bg-card shadow-xl transition-transform ${
             mobileOpen ? 'translate-x-0' : '-translate-x-full'
           }`}
         >

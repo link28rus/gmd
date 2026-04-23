@@ -50,7 +50,7 @@ export function TrackPolyline({ items }: Props): ReactElement | null {
         return (
           <YMapMarker key={`${p.recordedAt}-${i}`} coordinates={[p.lon, p.lat]}>
             <div
-              className="h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[#2563eb] bg-white"
+              className="h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[#2563eb] bg-card"
               title={hhmm(p.recordedAt)}
             />
           </YMapMarker>

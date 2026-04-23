@@ -19,7 +19,7 @@ const columns = [
     key: 'code',
     header: 'Код',
     render: (row: InviteRow) => (
-      <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs font-mono">{row.code}</code>
+      <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">{row.code}</code>
     ),
   },
   { key: 'childName', header: 'Ребёнок' },
@@ -42,12 +42,14 @@ export function InvitesClient() {
 
   return (
     <div>
-      {isLoading && <p className="text-sm text-zinc-400">Загружаем…</p>}
+      {isLoading && <p className="text-sm text-muted-foreground">Загружаем…</p>}
       {error && <p className="text-sm text-red-600">Ошибка загрузки инвайтов.</p>}
 
       {data && (
         <>
-          <p className="mb-3 text-sm text-zinc-500">Активных инвайтов: {data.items.length}</p>
+          <p className="mb-3 text-sm text-muted-foreground">
+            Активных инвайтов: {data.items.length}
+          </p>
           <DataTable
             columns={columns as unknown as Parameters<typeof DataTable>[0]['columns']}
             rows={data.items as unknown as Record<string, unknown>[]}

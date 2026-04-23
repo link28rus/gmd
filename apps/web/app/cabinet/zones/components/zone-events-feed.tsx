@@ -21,7 +21,7 @@ function formatTime(iso: string): string {
 export function ZoneEventsFeed() {
   const { data, isLoading, isError, error } = useZoneEvents({ limit: 50 });
 
-  if (isLoading) return <div className="text-sm text-zinc-500">Загружаем…</div>;
+  if (isLoading) return <div className="text-sm text-muted-foreground">Загружаем…</div>;
   if (isError)
     return (
       <div className="text-sm text-red-600">
@@ -32,7 +32,7 @@ export function ZoneEventsFeed() {
   const events = data?.items ?? [];
   if (events.length === 0) {
     return (
-      <div className="text-sm text-zinc-500 text-center py-8">
+      <div className="text-sm text-muted-foreground text-center py-8">
         Событий пока нет — зоны активируются при следующей точке от устройства ребёнка.
       </div>
     );
@@ -42,7 +42,9 @@ export function ZoneEventsFeed() {
     <ul className="divide-y divide-zinc-200">
       {events.map((e) => (
         <li key={e.id} className="py-2 flex items-center gap-2 text-sm">
-          <span className="text-zinc-500 tabular-nums min-w-[44px]">{formatTime(e.createdAt)}</span>
+          <span className="text-muted-foreground tabular-nums min-w-[44px]">
+            {formatTime(e.createdAt)}
+          </span>
           <span className="text-lg" aria-hidden>
             {ICON_EMOJI[e.zoneIcon] ?? '📍'}
           </span>

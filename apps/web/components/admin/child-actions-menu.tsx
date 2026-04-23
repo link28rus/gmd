@@ -100,7 +100,7 @@ export function ChildActionsMenu({ row }: Props): ReactElement | null {
     onError: (e: Error) => toast.error(e.message || 'Не удалось отозвать устройство'),
   });
 
-  if (isDeleted) return <span className="text-xs text-zinc-400">—</span>;
+  if (isDeleted) return <span className="text-xs text-muted-foreground">—</span>;
 
   const menu =
     open && menuPos && typeof document !== 'undefined'
@@ -108,7 +108,7 @@ export function ChildActionsMenu({ row }: Props): ReactElement | null {
           <div
             ref={menuRef}
             style={{ position: 'fixed', top: menuPos.top, left: menuPos.left, width: MENU_WIDTH }}
-            className="z-50 overflow-hidden rounded-md border border-zinc-200 bg-white shadow-lg"
+            className="z-50 overflow-hidden rounded-md border border-border bg-card shadow-lg"
           >
             <button
               type="button"
@@ -117,7 +117,7 @@ export function ChildActionsMenu({ row }: Props): ReactElement | null {
                 setOpen(false);
                 setModal('reset');
               }}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-zinc-800 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
             >
               <RotateCcw className="h-4 w-4" />
               <span>Отозвать устройство</span>
@@ -145,7 +145,7 @@ export function ChildActionsMenu({ row }: Props): ReactElement | null {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-label="Действия"
-        className="rounded-md p-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900"
+        className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
       >
         <MoreVertical className="h-4 w-4" />
       </button>

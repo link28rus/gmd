@@ -36,7 +36,7 @@ export function ZoneEditorMapInner({
 
   if (!apiKey) {
     return (
-      <div className="h-[400px] rounded-md flex items-center justify-center bg-zinc-100 text-zinc-500 text-sm">
+      <div className="h-[400px] rounded-md flex items-center justify-center bg-muted text-muted-foreground text-sm">
         Карта недоступна (нет API-ключа)
       </div>
     );
@@ -83,7 +83,7 @@ export function ZoneEditorMapInner({
             } as any)}
           >
             <div
-              className="w-4 h-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white border-2"
+              className="w-4 h-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-card border-2"
               style={{ borderColor: color, cursor: 'move' }}
             />
           </YMapMarker>
@@ -102,7 +102,7 @@ export function ZoneEditorMapInner({
             } as any)}
           >
             <div
-              className="w-3 h-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white border-2"
+              className="w-3 h-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-card border-2"
               style={{ borderColor: color, cursor: 'ew-resize' }}
             />
           </YMapMarker>

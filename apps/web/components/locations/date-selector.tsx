@@ -17,7 +17,7 @@ export function DateSelector({ value, onChange }: Props): ReactElement {
   const today = todayIso();
   const thirtyAgo = daysAgoIso(30);
   return (
-    <div className="flex flex-wrap items-center gap-2 border-b border-zinc-200 bg-white px-4 py-3">
+    <div className="flex flex-wrap items-center gap-2 border-b border-border bg-card px-4 py-3">
       {CHIPS.map((c) => {
         const v = c.get();
         const active = v === value;
@@ -29,15 +29,15 @@ export function DateSelector({ value, onChange }: Props): ReactElement {
             onClick={() => onChange(v)}
             className={`rounded-full border px-3 py-1 text-sm transition ${
               active
-                ? 'border-blue-600 bg-blue-50 text-blue-900'
-                : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50'
+                ? 'border-blue-600 bg-accent/30 text-blue-900'
+                : 'border-border bg-card text-foreground hover:bg-muted'
             }`}
           >
             {c.label}
           </button>
         );
       })}
-      <label className="flex items-center gap-2 text-sm text-zinc-600">
+      <label className="flex items-center gap-2 text-sm text-muted-foreground">
         <span className="sr-only">Дата трека</span>
         <input
           type="date"
@@ -46,7 +46,7 @@ export function DateSelector({ value, onChange }: Props): ReactElement {
           min={thirtyAgo}
           max={today}
           onChange={(e) => onChange(e.target.value)}
-          className="rounded-md border border-zinc-200 px-2 py-1 text-sm"
+          className="rounded-md border border-border px-2 py-1 text-sm"
         />
       </label>
     </div>

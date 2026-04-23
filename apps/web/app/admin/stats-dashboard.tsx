@@ -12,7 +12,7 @@ interface StatCardProps {
 
 function StatCard({ title, icon: Icon, primary, secondary = [] }: StatCardProps) {
   return (
-    <div className="group relative overflow-hidden rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-sky-200 hover:shadow-md">
+    <div className="group relative overflow-hidden rounded-xl border border-slate-200 bg-card p-5 shadow-sm transition hover:border-sky-200 hover:shadow-md">
       <div className="mb-4 flex items-center gap-2.5">
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-50 text-sky-600 ring-1 ring-inset ring-sky-100">
           <Icon className="h-[18px] w-[18px]" strokeWidth={2} />

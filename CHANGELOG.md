@@ -9,6 +9,24 @@
 
 ---
 
+## v0.30.0 — 2026-04-23
+
+### Новые возможности
+
+- **Светлая, средняя и тёмная темы** — в веб-кабинете и админке появился переключатель темы (три кнопки: ☀️ светлая / ☁️ средняя / 🌙 тёмная). В админке он встроен в верхний бар справа, в кабинете — рядом с кнопкой «Админка» и аватаром (на мобильном — в выпадающем меню профиля). Выбор сохраняется между сессиями (localStorage `gmd-theme`). Публичный лендинг, страницы входа/регистрации и политика конфиденциальности остаются в исходном оформлении.
+
+### Изменения
+
+- web: новый client-context `ThemeProvider` (`apps/web/components/theme/theme-provider.tsx`) — ставит на `<html>` атрибут `data-admin-theme` и класс `.dark` для совместимости с `dark:` вариантами Tailwind.
+- web: новый компонент `ThemeSwitcher` (`apps/web/components/theme/theme-switcher.tsx`) — сегментный radiogroup из трёх кнопок с иконками lucide-react, `backdrop-blur` для читаемости.
+- web: `apps/web/app/globals.css` — добавлены блоки CSS-переменных `[data-admin-theme='light'|'dim'|'dark']` и правило для `<body>` под темой (включая `color-scheme` для нативных контролов браузера).
+- web: `apps/web/app/admin/layout.tsx` и `apps/web/app/cabinet/layout.tsx` — обёртки `<ThemeProvider>`, хардкод `bg-zinc-50` заменён на `bg-background text-foreground`.
+- web: `apps/web/components/admin/admin-header.tsx` — `ThemeSwitcher` встроен в хэдер справа (после ссылки «Кабинет»).
+- web: `apps/web/components/cabinet/cabinet-header.tsx` — `ThemeSwitcher` между «Скачать приложение» и «Админка» на десктопе, в профиль-меню на мобильном. Хардкод `bg-white`, `text-zinc-*`, `border-zinc-*` заменён на токены (`bg-card`, `text-foreground`, `text-muted-foreground`, `border-border`, `bg-popover`) — хэдер теперь реагирует на смену темы.
+- web: массовая замена хардкод-цветов на токены в 37 файлах (кабинет + админка) — 251 замена. Темизированы: home-экран кабинета (sidebar, карточки детей, статус-карточка, меню действий, empty-state), `/cabinet/zones` (карта геозон, список, редактор, лента событий), `/cabinet/pin`, `/cabinet/password`, `/cabinet/download`, `/cabinet/children` и `/cabinet/children/[id]/{map,history}`, весь `/admin` (дашборд, пользователи + детали, семьи, дети, приглашения, настройки), `data-table`, dropdown-меню админа, dialog привязки по QR. Семантические цвета сохранены (amber consent-banner, emerald protection toggle, red destructive, slate-900 admin-brand).
+
+---
+
 ## v0.29.4 — 2026-04-23
 
 ### Новые возможности

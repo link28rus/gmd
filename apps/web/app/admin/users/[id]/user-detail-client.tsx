@@ -10,17 +10,19 @@ interface Props {
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex gap-4 border-b border-zinc-100 py-2 last:border-0">
-      <dt className="w-48 shrink-0 text-sm font-medium text-zinc-500">{label}</dt>
-      <dd className="text-sm text-zinc-900">{value}</dd>
+    <div className="flex gap-4 border-b border-border py-2 last:border-0">
+      <dt className="w-48 shrink-0 text-sm font-medium text-muted-foreground">{label}</dt>
+      <dd className="text-sm text-foreground">{value}</dd>
     </div>
   );
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="mb-6 rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
-      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500">{title}</h3>
+    <div className="mb-6 rounded-lg border border-border bg-card p-5 shadow-sm">
+      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+        {title}
+      </h3>
       <dl>{children}</dl>
     </div>
   );
@@ -29,7 +31,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function UserDetailInner({ id }: Props) {
   const { data, isLoading, error } = useAdminUser(id);
 
-  if (isLoading) return <p className="text-sm text-zinc-400">Загружаем…</p>;
+  if (isLoading) return <p className="text-sm text-muted-foreground">Загружаем…</p>;
   if (error || !data)
     return <p className="text-sm text-red-600">Пользователь не найден или ошибка сервера.</p>;
 
@@ -74,7 +76,7 @@ function UserDetailInner({ id }: Props) {
             <Row
               key={m.familyId}
               label={m.familyName}
-              value={<span className="rounded bg-zinc-100 px-2 py-0.5 text-xs">{m.role}</span>}
+              value={<span className="rounded bg-muted px-2 py-0.5 text-xs">{m.role}</span>}
             />
           ))}
         </Section>
@@ -87,7 +89,7 @@ function UserDetailInner({ id }: Props) {
               key={c.id}
               label={c.name}
               value={
-                <span className="text-sm text-zinc-600">
+                <span className="text-sm text-muted-foreground">
                   {c.dateOfBirth ? new Date(c.dateOfBirth).toLocaleDateString('ru') : '—'} •{' '}
                   {c.hasDevice ? 'устройство привязано' : 'устройства нет'}
                   {c.deviceLastSeenAt
@@ -107,7 +109,7 @@ export function UserDetailClient({ id }: Props) {
   return (
     <AdminClient>
       <div className="mx-auto max-w-3xl px-6 py-8">
-        <h1 className="mb-6 text-2xl font-semibold text-zinc-900">Пользователь</h1>
+        <h1 className="mb-6 text-2xl font-semibold text-foreground">Пользователь</h1>
         <UserDetailInner id={id} />
       </div>
     </AdminClient>

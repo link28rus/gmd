@@ -19,9 +19,9 @@ export function ZonesList({ zones, selectedId, onSelect, onCreate, onEdit }: Pro
   const canCreate = zones.length < MAX_ZONES;
 
   return (
-    <div className="flex h-full flex-col rounded-md border border-zinc-200 bg-white">
-      <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
-        <h2 className="text-sm font-semibold text-zinc-900">
+    <div className="flex h-full flex-col rounded-md border border-border bg-card">
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <h2 className="text-sm font-semibold text-foreground">
           Зоны ({zones.length}/{MAX_ZONES})
         </h2>
         <Button
@@ -37,8 +37,8 @@ export function ZonesList({ zones, selectedId, onSelect, onCreate, onEdit }: Pro
 
       {zones.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 py-12 text-center">
-          <p className="text-sm text-zinc-600">У вас нет геозон.</p>
-          <p className="text-xs text-zinc-400">
+          <p className="text-sm text-muted-foreground">У вас нет геозон.</p>
+          <p className="text-xs text-muted-foreground">
             Создайте геозону, чтобы получать уведомления когда ребёнок входит или покидает её.
           </p>
           <Button
@@ -61,16 +61,18 @@ export function ZonesList({ zones, selectedId, onSelect, onCreate, onEdit }: Pro
                 onClick={() => onSelect?.(zone.id)}
                 className={[
                   'cursor-pointer px-4 py-3 transition-colors',
-                  isSelected ? 'bg-zinc-100' : 'bg-white hover:bg-zinc-50',
+                  isSelected ? 'bg-muted' : 'bg-card hover:bg-muted',
                 ].join(' ')}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-zinc-900">{zone.name}</p>
+                    <p className="truncate text-sm font-medium text-foreground">{zone.name}</p>
                     {zone.address && (
-                      <p className="mt-0.5 truncate text-xs text-zinc-500">{zone.address}</p>
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                        {zone.address}
+                      </p>
                     )}
-                    <p className="mt-0.5 text-xs text-zinc-400">
+                    <p className="mt-0.5 text-xs text-muted-foreground">
                       Радиус: {zone.radiusMeters ?? zone.radius} м
                     </p>
                   </div>
@@ -79,7 +81,9 @@ export function ZonesList({ zones, selectedId, onSelect, onCreate, onEdit }: Pro
                       <span
                         className={[
                           'rounded-full px-2 py-0.5 text-xs font-medium',
-                          zone.active ? 'bg-green-100 text-green-700' : 'bg-zinc-100 text-zinc-500',
+                          zone.active
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-muted text-muted-foreground',
                         ].join(' ')}
                       >
                         {zone.active ? 'Активна' : 'Отключена'}
@@ -88,7 +92,7 @@ export function ZonesList({ zones, selectedId, onSelect, onCreate, onEdit }: Pro
                     {isSelected && onEdit && (
                       <button
                         type="button"
-                        className="rounded px-2 py-0.5 text-xs text-zinc-500 hover:bg-zinc-200 hover:text-zinc-800 transition-colors"
+                        className="rounded px-2 py-0.5 text-xs text-muted-foreground hover:bg-zinc-200 hover:text-foreground transition-colors"
                         onClick={(e) => {
                           e.stopPropagation();
                           onEdit(zone);

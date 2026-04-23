@@ -70,7 +70,7 @@ export default function CabinetClient(): ReactElement {
   if (bootstrapping) {
     return (
       <div className="flex h-[calc(100vh-49px)] items-center justify-center">
-        <p className="text-sm text-zinc-500">Загружаем…</p>
+        <p className="text-sm text-muted-foreground">Загружаем…</p>
       </div>
     );
   }
@@ -128,7 +128,7 @@ function CabinetHome({ initialChildId }: { initialChildId: string | null }): Rea
   if (childrenQ.isPending) {
     return (
       <div className="flex h-[calc(100vh-49px)] items-center justify-center">
-        <p className="text-sm text-zinc-500">Загрузка…</p>
+        <p className="text-sm text-muted-foreground">Загрузка…</p>
       </div>
     );
   }
@@ -149,9 +149,9 @@ function CabinetHome({ initialChildId }: { initialChildId: string | null }): Rea
           type="button"
           onClick={() => setMobileSidebarOpen(true)}
           aria-label="Открыть список детей"
-          className="absolute left-3 top-3 z-10 flex h-11 w-11 items-center justify-center rounded-full border border-zinc-200 bg-white shadow-md hover:bg-zinc-50 md:hidden"
+          className="absolute left-3 top-3 z-10 flex h-11 w-11 items-center justify-center rounded-full border border-border bg-card shadow-md hover:bg-muted md:hidden"
         >
-          <Menu className="h-5 w-5 text-zinc-700" />
+          <Menu className="h-5 w-5 text-foreground" />
           {selected && (
             <span
               className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-white"
@@ -167,13 +167,13 @@ function CabinetHome({ initialChildId }: { initialChildId: string | null }): Rea
             <ChildNotAttachedView child={selected} />
           )
         ) : (
-          <div className="flex h-full items-center justify-center bg-zinc-50 p-6 text-center text-zinc-600">
+          <div className="flex h-full items-center justify-center bg-muted p-6 text-center text-muted-foreground">
             <div>
               <p className="mb-4">Добавьте первого ребёнка, чтобы увидеть карту.</p>
               <button
                 type="button"
                 onClick={() => setMobileSidebarOpen(true)}
-                className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white md:hidden"
+                className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background md:hidden"
               >
                 Открыть меню
               </button>
@@ -221,7 +221,7 @@ function MapArea({ child }: { child: Child }): ReactElement {
 
   if (emptyState) {
     return (
-      <div className="flex h-full items-center justify-center bg-zinc-50 p-6 text-center text-zinc-600">
+      <div className="flex h-full items-center justify-center bg-muted p-6 text-center text-muted-foreground">
         От устройства ребёнка ещё не приходили координаты. Убедитесь, что приложение установлено и
         открыто хотя бы раз.
       </div>

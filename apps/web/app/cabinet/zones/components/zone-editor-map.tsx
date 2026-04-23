@@ -7,7 +7,7 @@ export const ZoneEditorMap = dynamic<ZoneEditorMapInnerProps>(
   () => import('./zone-editor-map-inner').then((m) => m.ZoneEditorMapInner),
   {
     ssr: false,
-    loading: () => <div className="h-[400px] animate-pulse bg-zinc-100 rounded-md" />,
+    loading: () => <div className="h-[400px] animate-pulse bg-muted rounded-md" />,
   },
 );
 
