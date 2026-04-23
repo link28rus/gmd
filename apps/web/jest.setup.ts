@@ -1,4 +1,19 @@
 import '@testing-library/jest-dom';
+import { TextEncoder, TextDecoder } from 'node:util';
+import { ReadableStream } from 'node:stream/web';
+
+if (typeof global.TextEncoder === 'undefined') {
+  // @ts-expect-error — jsdom polyfill
+  global.TextEncoder = TextEncoder;
+}
+if (typeof global.TextDecoder === 'undefined') {
+  // @ts-expect-error — jsdom polyfill
+  global.TextDecoder = TextDecoder;
+}
+if (typeof global.ReadableStream === 'undefined') {
+  // @ts-expect-error — jsdom polyfill
+  global.ReadableStream = ReadableStream;
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 jest.mock('ymap3-components', () => {
