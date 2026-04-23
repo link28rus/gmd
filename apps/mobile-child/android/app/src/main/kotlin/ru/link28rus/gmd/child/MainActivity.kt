@@ -3,6 +3,7 @@ package ru.link28rus.gmd.child
 import android.app.admin.DevicePolicyManager
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.provider.Settings
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -15,6 +16,7 @@ import io.flutter.plugin.common.MethodChannel
 private const val UI_METHOD_CHANNEL = "ru.link28rus.gmd.child/location"
 private const val DIAG_METHOD_CHANNEL = "ru.link28rus.gmd.child/diag"
 private const val PROTECTION_METHOD_CHANNEL = "ru.link28rus.gmd.child/protection"
+private const val SOUND_AROUND_CHANNEL = "gmd.child/sound_around"
 
 private const val REQUEST_CODE_ADD_ADMIN = 8101
 
@@ -167,6 +169,48 @@ class MainActivity : FlutterActivity() {
                             "native",
                             "saveNativeCreds: token=${token?.take(6)}… base=$baseUrl",
                         )
+                        result.success(null)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SOUND_AROUND_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "start" -> {
+                        val sessionId = call.argument<String>("sessionId") ?: ""
+                        @Suppress("UNCHECKED_CAST")
+                        val turnCreds =
+                            call.argument<Map<String, Any?>>("turnCreds") ?: emptyMap()
+                        val durationSec = call.argument<Int>("durationSec") ?: 300
+
+                        DiagLog.write(
+                            this,
+                            "sound_around",
+                            "start: sessionId=${sessionId.take(8)}… durationSec=$durationSec",
+                        )
+                        val intent = Intent(this, SoundAroundService::class.java).apply {
+                            putExtra(SoundAroundService.EXTRA_SESSION_ID, sessionId)
+                            putExtra(
+                                SoundAroundService.EXTRA_TURN_CREDS_JSON,
+                                org.json.JSONObject(turnCreds).toString(),
+                            )
+                            putExtra(SoundAroundService.EXTRA_DURATION_SEC, durationSec)
+                        }
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            startForegroundService(intent)
+                        } else {
+                            startService(intent)
+                        }
+                        result.success(null)
+                    }
+                    "stop" -> {
+                        DiagLog.write(this, "sound_around", "stop requested from Dart")
+                        val intent = Intent(this, SoundAroundService::class.java).apply {
+                            action = SoundAroundService.ACTION_STOP
+                        }
+                        startService(intent)
                         result.success(null)
                     }
                     else -> result.notImplemented()
