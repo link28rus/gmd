@@ -13,6 +13,7 @@ import {
 import type { LatestLocationDto, LocationDto } from '@/lib/api/locations';
 import { LatestMarker } from './latest-marker';
 import { TrackPolyline } from './track-polyline';
+import { useTheme } from '@/components/theme/theme-provider';
 
 export interface ChildMapInnerProps {
   childId: string;
@@ -53,6 +54,10 @@ export function ChildMapInner({
   onMapError,
 }: ChildMapInnerProps): ReactElement {
   const apiKey = process.env.NEXT_PUBLIC_YANDEX_MAPS_API_KEY ?? '';
+  const { theme } = useTheme();
+  // Yandex Maps поддерживает только light/dark — dim-тему UI склеиваем с dark,
+  // чтобы карта не резала глаза светлыми тайлами на приглушённом интерфейсе.
+  const mapTheme: 'light' | 'dark' = theme === 'light' ? 'light' : 'dark';
 
   // Начальная позиция — track bounds / latest / дефолт. Дальше карта
   // управляется только вручную: перемещение пользователем или клик по кнопке
@@ -109,7 +114,7 @@ export function ChildMapInner({
   return (
     <YMapComponentsProvider apiKey={apiKey} lang="ru_RU" onError={() => onMapError()}>
       <YMap location={location as any} className="h-full w-full">
-        <YMapDefaultSchemeLayer />
+        <YMapDefaultSchemeLayer theme={mapTheme} />
         <YMapDefaultFeaturesLayer />
         <YMapControls position="right">
           <YMapZoomControl />

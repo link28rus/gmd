@@ -14,6 +14,7 @@ import {
 } from 'ymap3-components';
 import type { Zone } from '@/lib/api/zones';
 import { circlePolygon } from '@/lib/geo/circle-polygon';
+import { useTheme } from '@/components/theme/theme-provider';
 
 export interface ZonesMapInnerProps {
   zones: Zone[];
@@ -32,6 +33,8 @@ export function ZonesMapInner({
   onMapError,
 }: ZonesMapInnerProps): ReactElement {
   const apiKey = process.env.NEXT_PUBLIC_YANDEX_MAPS_API_KEY ?? '';
+  const { theme } = useTheme();
+  const mapTheme: 'light' | 'dark' = theme === 'light' ? 'light' : 'dark';
 
   const initialLocation = useMemo(() => {
     if (zones.length >= 2) {
@@ -59,7 +62,7 @@ export function ZonesMapInner({
   return (
     <YMapComponentsProvider apiKey={apiKey} lang="ru_RU" onError={() => onMapError?.()}>
       <YMap location={initialLocation as any} className="h-full w-full">
-        <YMapDefaultSchemeLayer />
+        <YMapDefaultSchemeLayer theme={mapTheme} />
         <YMapDefaultFeaturesLayer />
         <YMapControls position="right">
           <YMapZoomControl />

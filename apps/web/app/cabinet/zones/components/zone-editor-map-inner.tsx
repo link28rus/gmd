@@ -14,6 +14,7 @@ import {
   YMapMarker,
 } from 'ymap3-components';
 import { circlePolygon } from '@/lib/geo/circle-polygon';
+import { useTheme } from '@/components/theme/theme-provider';
 
 export interface ZoneEditorMapInnerProps {
   centerLat: number;
@@ -33,6 +34,8 @@ export function ZoneEditorMapInner({
   onRadiusChange,
 }: ZoneEditorMapInnerProps): ReactElement {
   const apiKey = process.env.NEXT_PUBLIC_YANDEX_MAPS_API_KEY ?? '';
+  const { theme } = useTheme();
+  const mapTheme: 'light' | 'dark' = theme === 'light' ? 'light' : 'dark';
 
   if (!apiKey) {
     return (
@@ -50,7 +53,7 @@ export function ZoneEditorMapInner({
     <YMapComponentsProvider apiKey={apiKey} lang="ru_RU">
       <div className="h-[400px] rounded-md overflow-hidden">
         <YMap location={{ center, zoom: 15 }} className="h-full w-full">
-          <YMapDefaultSchemeLayer />
+          <YMapDefaultSchemeLayer theme={mapTheme} />
           <YMapDefaultFeaturesLayer />
           <YMapControls position="right">
             <YMapZoomControl />
