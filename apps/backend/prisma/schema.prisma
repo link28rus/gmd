@@ -73,6 +73,7 @@ model User {
   createdZones             Zone[]
   emailVerificationTokens  EmailVerificationToken[]
   passwordResetTokens      PasswordResetToken[]
+  audioSessionsRequested   AudioSession[]
 
   @@index([email])
   @@index([role])
@@ -204,6 +205,7 @@ model Child {
   zoneAssignments ZoneChildAssignment[]
   zoneEvents      ZoneEvent[]
   zoneStates      ZoneState[]
+  audioSessions   AudioSession[]
 
   @@index([familyId])
   @@index([familyId, deletedAt])
@@ -248,12 +250,15 @@ model ChildDevice {
   locations Location[]
   sosEvents SosEvent[]
   commands  DeviceCommand[]
+  audioSessions AudioSession[]
 
   @@map("child_devices")
 }
 
 enum DeviceCommandType {
   PLAY_SIGNAL
+  START_AUDIO
+  STOP_AUDIO
 }
 
 enum DeviceCommandStatus {
@@ -337,6 +342,117 @@ model Trip {
   @@index([childId, startedAt(sort: Desc)])
   @@map("trips")
 }
+
+// ─── Audio Sessions ───────────────────────────────────────────────────────────
+
+enum AudioSessionState {
+  PENDING
+  READY
+  ACTIVE
+  ENDED
+  FAILED
+  EXPIRED
+}
+
+enum AudioFailureReason {
+  PERMISSION_DENIED
+  MIC_BUSY
+  OEM_BLOCKED
+  NETWORK_ERROR
+  CHILD_OFFLINE
+  PARENT_TIMEOUT
+  UNKNOWN
+}
+
+enum AudioAuditEvent {
+  REQUESTED
+  GRANTED
+  STARTED
+  STOPPED
+  FAILED
+  EXPIRED
+  CONSENT_REVOKED
+}
+
+// Сессия аудиомониторинга «Звук вокруг ребёнка». Состояния:
+// PENDING — родитель создал, child ещё не подтвердил готовность
+// READY   — child прислал SDP-offer, ждём parent answer
+// ACTIVE  — обмен ICE состоялся, аудио идёт
+// ENDED   — штатное завершение
+// FAILED  — ошибка (см. failureReason)
+// EXPIRED — child не успел ответить за TIMEOUT_SEC
+//
+// Аудио НЕ хранится — только метаданные сессии и audit-log. Под 152-ФЗ это
+// «обработка без накопления»; согласие фиксируется в ConsentRecord.
+model AudioSession {
+  id              String              @id @default(cuid())
+  childId         String
+  childDeviceId   String
+  requestedById   String              // userId родителя
+  state           AudioSessionState   @default(PENDING)
+  hiddenMode      Boolean             @default(true)
+  durationSec     Int                 // запрошенная длительность
+  actualSec       Int?                // реальная длительность (NULL пока не ENDED)
+  failureReason   AudioFailureReason?
+  // SDP offer от child / answer от parent — короткие, OK хранить inline.
+  sdpOffer        String?
+  sdpAnswer       String?
+  startedAt       DateTime            @default(now())
+  readyAt         DateTime?
+  activeAt        DateTime?
+  endedAt         DateTime?
+  // Billing-заготовка (post-MVP)
+  billableMinutes Decimal?            @db.Decimal(5, 2)
+  costKopecks     Int?
+
+  child         Child               @relation(fields: [childId], references: [id], onDelete: Cascade)
+  childDevice   ChildDevice         @relation(fields: [childDeviceId], references: [id], onDelete: Cascade)
+  requestedBy   User                @relation(fields: [requestedById], references: [id], onDelete: Restrict)
+  auditLog      AudioAuditLog[]
+  iceCandidates AudioIceCandidate[]
+
+  @@index([childId, startedAt(sort: Desc)])
+  @@index([requestedById, startedAt(sort: Desc)])
+  // Для concurrentSessionsPerChild=1: одна активная на child.
+  @@index([childId, state], map: "audio_sessions_child_active_idx")
+  @@map("audio_sessions")
+}
+
+// ICE candidates — буфер на случай, если parent SSE дисконнектнулся.
+// Прямо отдаём через SSE и параллельно сохраняем; child poll'ит /ice.
+model AudioIceCandidate {
+  id        String   @id @default(cuid())
+  sessionId String
+  side      String   // 'parent' | 'child'
+  candidate String
+  createdAt DateTime @default(now())
+  consumed  Boolean  @default(false)
+
+  session AudioSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, side, consumed])
+  @@map("audio_ice_candidates")
+}
+
+// Аудит для compliance. Retention 1 год (pg_cron). Не CASCADE-удаляется
+// вместе с сессией — нужен для последующих юр.запросов.
+model AudioAuditLog {
+  id          BigInt          @id @default(autoincrement())
+  sessionId   String
+  event       AudioAuditEvent
+  actorUserId String?
+  actorIp     String?
+  userAgent   String?         @db.VarChar(500)
+  metadata    Json?           // failureReason, etc.
+  createdAt   DateTime        @default(now())
+
+  session AudioSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+
+  @@index([sessionId, createdAt])
+  @@map("audio_audit_log")
+}
+
+// ─── App Settings ─────────────────────────────────────────────────────────────
 
 // Глобальные настройки приложения. key/value строкой — админка правит
 // через UI, backend читает с in-memory кэшем и инвалидацией на write.
