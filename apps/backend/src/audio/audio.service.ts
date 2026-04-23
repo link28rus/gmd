@@ -1,4 +1,11 @@
-import { ConflictException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { createHmac } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -191,6 +198,74 @@ export class AudioService {
       expiresAt: new Date(Date.now() + readyTimeoutSec * 1000).toISOString(),
       turnCreds,
     };
+  }
+
+  /**
+   * Child прислал SDP-offer → переход PENDING → READY.
+   * Безопасность: deviceId должен совпадать с childDeviceId сессии.
+   */
+  async childReady(p: { sessionId: string; deviceId: string; sdpOffer: string }): Promise<void> {
+    const session = await this.prisma.audioSession.findUnique({ where: { id: p.sessionId } });
+    if (!session || session.childDeviceId !== p.deviceId) {
+      throw new ForbiddenException({ code: 'forbidden' });
+    }
+    if (session.state !== 'PENDING') {
+      throw new ConflictException({ code: 'invalid_state', state: session.state });
+    }
+    await this.prisma.audioSession.update({
+      where: { id: p.sessionId },
+      data: { state: 'READY', readyAt: new Date(), sdpOffer: p.sdpOffer },
+    });
+    this.events.emitState(p.sessionId, 'READY', { sdp: p.sdpOffer });
+  }
+
+  /**
+   * Child прислал ICE-candidate. Сохраняем в буфер и emit для SSE-подписчиков.
+   * Допустимо в состояниях PENDING/READY/ACTIVE — candidate trickling.
+   */
+  async childIce(p: { sessionId: string; deviceId: string; candidate: string }): Promise<void> {
+    const session = await this.prisma.audioSession.findUnique({ where: { id: p.sessionId } });
+    if (!session || session.childDeviceId !== p.deviceId) {
+      throw new ForbiddenException({ code: 'forbidden' });
+    }
+    if (!['PENDING', 'READY', 'ACTIVE'].includes(session.state)) {
+      throw new ConflictException({ code: 'invalid_state', state: session.state });
+    }
+    await this.prisma.audioIceCandidate.create({
+      data: { sessionId: p.sessionId, side: 'child', candidate: p.candidate },
+    });
+    this.events.emitState(p.sessionId, 'ICE', { side: 'child', candidate: p.candidate });
+  }
+
+  /**
+   * Child сообщил об ошибке (микрофон отказан, занят, OEM-блок, etc.).
+   * Идемпотентно: если уже FAILED/ENDED/EXPIRED — no-op.
+   */
+  async childError(p: {
+    sessionId: string;
+    deviceId: string;
+    code: 'PERMISSION_DENIED' | 'MIC_BUSY' | 'OEM_BLOCKED' | 'NETWORK_ERROR' | 'UNKNOWN';
+    message?: string;
+  }): Promise<void> {
+    const session = await this.prisma.audioSession.findUnique({ where: { id: p.sessionId } });
+    if (!session || session.childDeviceId !== p.deviceId) {
+      throw new ForbiddenException({ code: 'forbidden' });
+    }
+    if (['ENDED', 'FAILED', 'EXPIRED'].includes(session.state)) {
+      return; // идемпотентно
+    }
+    await this.prisma.audioSession.update({
+      where: { id: p.sessionId },
+      data: { state: 'FAILED', failureReason: p.code, endedAt: new Date() },
+    });
+    await this.prisma.audioAuditLog.create({
+      data: {
+        sessionId: p.sessionId,
+        event: 'FAILED',
+        metadata: { code: p.code, message: p.message },
+      },
+    });
+    this.events.emitState(p.sessionId, 'FAILED', { reason: p.code });
   }
 
   /**

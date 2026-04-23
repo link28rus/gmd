@@ -1,4 +1,4 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { AudioService } from './audio.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -275,5 +275,214 @@ describe('AudioService.startSession', () => {
         data: expect.objectContaining({ hiddenMode: false }),
       }),
     );
+  });
+});
+
+interface ChildSidePrisma {
+  audioSession: {
+    findUnique: jest.Mock;
+    update: jest.Mock;
+  };
+  audioAuditLog: { create: jest.Mock };
+  audioIceCandidate: { create: jest.Mock };
+}
+
+interface ChildSideEvents {
+  emitState: jest.Mock;
+  subscribe: jest.Mock;
+}
+
+describe('AudioService child-side', () => {
+  let svc: AudioService;
+  let prisma: ChildSidePrisma;
+  let events: ChildSideEvents;
+  const ORIGINAL_ENV = { ...process.env };
+
+  beforeAll(() => {
+    process.env.TURN_SHARED_SECRET = 'test-secret';
+    process.env.TURN_PUBLIC_HOST = 'turn.example.com';
+  });
+
+  afterAll(() => {
+    process.env = ORIGINAL_ENV;
+  });
+
+  beforeEach(async () => {
+    jest.useFakeTimers();
+    prisma = {
+      audioSession: {
+        findUnique: jest.fn(),
+        update: jest
+          .fn()
+          .mockImplementation(({ where, data }) => Promise.resolve({ id: where.id, ...data })),
+      },
+      audioAuditLog: { create: jest.fn() },
+      audioIceCandidate: { create: jest.fn() },
+    };
+    events = { emitState: jest.fn(), subscribe: jest.fn() };
+
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        AudioService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: AppSettingsService, useValue: { getNumber: jest.fn(), getBool: jest.fn() } },
+        { provide: DeviceCommandsService, useValue: {} },
+        { provide: AudioEvents, useValue: events },
+      ],
+    }).compile();
+    svc = moduleRef.get(AudioService);
+  });
+
+  afterEach(() => {
+    jest.runOnlyPendingTimers();
+    jest.useRealTimers();
+  });
+
+  describe('childReady', () => {
+    it('PENDING → READY, stores SDP, emits READY event', async () => {
+      prisma.audioSession.findUnique.mockResolvedValue({
+        id: 's1',
+        childDeviceId: 'd1',
+        state: 'PENDING',
+      });
+      await svc.childReady({ sessionId: 's1', deviceId: 'd1', sdpOffer: 'v=0\r\no=- ...' });
+      expect(prisma.audioSession.update).toHaveBeenCalledWith({
+        where: { id: 's1' },
+        data: { state: 'READY', readyAt: expect.any(Date), sdpOffer: 'v=0\r\no=- ...' },
+      });
+      expect(events.emitState).toHaveBeenCalledWith('s1', 'READY', { sdp: 'v=0\r\no=- ...' });
+    });
+
+    it('rejects (Forbidden) if deviceId mismatch', async () => {
+      prisma.audioSession.findUnique.mockResolvedValue({
+        id: 's1',
+        childDeviceId: 'd_other',
+        state: 'PENDING',
+      });
+      await expect(
+        svc.childReady({ sessionId: 's1', deviceId: 'd1', sdpOffer: '...' }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('rejects (Conflict) if state != PENDING', async () => {
+      prisma.audioSession.findUnique.mockResolvedValue({
+        id: 's1',
+        childDeviceId: 'd1',
+        state: 'ACTIVE',
+      });
+      await expect(
+        svc.childReady({ sessionId: 's1', deviceId: 'd1', sdpOffer: '...' }),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('rejects if session not found', async () => {
+      prisma.audioSession.findUnique.mockResolvedValue(null);
+      await expect(
+        svc.childReady({ sessionId: 's_missing', deviceId: 'd1', sdpOffer: '...' }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  describe('childIce', () => {
+    it('persists candidate (side=child), emits ICE event', async () => {
+      prisma.audioSession.findUnique.mockResolvedValue({
+        id: 's1',
+        childDeviceId: 'd1',
+        state: 'READY',
+      });
+      await svc.childIce({ sessionId: 's1', deviceId: 'd1', candidate: 'candidate:1 1 UDP ...' });
+      expect(prisma.audioIceCandidate.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          sessionId: 's1',
+          side: 'child',
+          candidate: 'candidate:1 1 UDP ...',
+        }),
+      });
+      expect(events.emitState).toHaveBeenCalledWith('s1', 'ICE', {
+        side: 'child',
+        candidate: 'candidate:1 1 UDP ...',
+      });
+    });
+
+    it('rejects if state not in [PENDING, READY, ACTIVE]', async () => {
+      prisma.audioSession.findUnique.mockResolvedValue({
+        id: 's1',
+        childDeviceId: 'd1',
+        state: 'ENDED',
+      });
+      await expect(
+        svc.childIce({ sessionId: 's1', deviceId: 'd1', candidate: '...' }),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('rejects if deviceId mismatch', async () => {
+      prisma.audioSession.findUnique.mockResolvedValue({
+        id: 's1',
+        childDeviceId: 'd_other',
+        state: 'READY',
+      });
+      await expect(
+        svc.childIce({ sessionId: 's1', deviceId: 'd1', candidate: '...' }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  describe('childError', () => {
+    it('marks FAILED with reason, audits, emits FAILED', async () => {
+      prisma.audioSession.findUnique.mockResolvedValue({
+        id: 's1',
+        childDeviceId: 'd1',
+        state: 'PENDING',
+      });
+      await svc.childError({
+        sessionId: 's1',
+        deviceId: 'd1',
+        code: 'PERMISSION_DENIED',
+        message: 'mic denied',
+      });
+      expect(prisma.audioSession.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            state: 'FAILED',
+            failureReason: 'PERMISSION_DENIED',
+            endedAt: expect.any(Date),
+          }),
+        }),
+      );
+      expect(prisma.audioAuditLog.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            event: 'FAILED',
+            metadata: { code: 'PERMISSION_DENIED', message: 'mic denied' },
+          }),
+        }),
+      );
+      expect(events.emitState).toHaveBeenCalledWith('s1', 'FAILED', {
+        reason: 'PERMISSION_DENIED',
+      });
+    });
+
+    it('idempotent: no-op if already ENDED/FAILED/EXPIRED', async () => {
+      prisma.audioSession.findUnique.mockResolvedValue({
+        id: 's1',
+        childDeviceId: 'd1',
+        state: 'ENDED',
+      });
+      await svc.childError({ sessionId: 's1', deviceId: 'd1', code: 'UNKNOWN' });
+      expect(prisma.audioSession.update).not.toHaveBeenCalled();
+      expect(prisma.audioAuditLog.create).not.toHaveBeenCalled();
+      expect(events.emitState).not.toHaveBeenCalled();
+    });
+
+    it('rejects if deviceId mismatch', async () => {
+      prisma.audioSession.findUnique.mockResolvedValue({
+        id: 's1',
+        childDeviceId: 'd_other',
+        state: 'PENDING',
+      });
+      await expect(
+        svc.childError({ sessionId: 's1', deviceId: 'd1', code: 'UNKNOWN' }),
+      ).rejects.toThrow(ForbiddenException);
+    });
   });
 });
