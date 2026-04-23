@@ -18,6 +18,12 @@ export const SETTINGS_KEYS = {
   SMTP_USER: 'smtp.user',
   SMTP_PASS: 'smtp.pass',
   SMTP_FROM: 'smtp.from',
+  // Audio (Phase 5.2)
+  AUDIO_DEFAULT_DURATION_SEC: 'audio.default_duration_sec',
+  AUDIO_MAX_DURATION_SEC: 'audio.max_duration_sec',
+  AUDIO_MIN_DURATION_SEC: 'audio.min_duration_sec',
+  AUDIO_HIDDEN_MODE_ALLOWED: 'audio.hidden_mode_allowed',
+  AUDIO_CHILD_READY_TIMEOUT_SEC: 'audio.child_ready_timeout_sec',
 } as const;
 
 export type SettingsKey = (typeof SETTINGS_KEYS)[keyof typeof SETTINGS_KEYS];
@@ -36,6 +42,10 @@ const KEY_BOUNDS: Record<string, { min: number; max: number }> = {
   [SETTINGS_KEYS.LOCATION_JITTER_WINDOW_MS]: { min: 0, max: 300_000 },
   [SETTINGS_KEYS.LOCATION_JITTER_MIN_DIST_M]: { min: 0, max: 200 },
   [SETTINGS_KEYS.SMTP_PORT]: { min: 1, max: 65535 },
+  [SETTINGS_KEYS.AUDIO_DEFAULT_DURATION_SEC]: { min: 30, max: 1800 },
+  [SETTINGS_KEYS.AUDIO_MAX_DURATION_SEC]: { min: 60, max: 3600 },
+  [SETTINGS_KEYS.AUDIO_MIN_DURATION_SEC]: { min: 10, max: 600 },
+  [SETTINGS_KEYS.AUDIO_CHILD_READY_TIMEOUT_SEC]: { min: 5, max: 120 },
 };
 
 interface CacheEntry {
@@ -68,6 +78,7 @@ export class AppSettingsService implements OnModuleInit {
   async onModuleInit(): Promise<void> {
     await this.seedSmtpFromEnvIfEmpty();
     await this.seedLocationFiltersIfEmpty();
+    await this.seedAudioIfEmpty();
   }
 
   /**
@@ -131,6 +142,68 @@ export class AppSettingsService implements OnModuleInit {
       ),
     );
     this.logger.log(`Seeded ${rows.length} location.* settings with defaults`);
+  }
+
+  /**
+   * Phase 5.2 — seed аудио-мониторинга «Звук вокруг». Идемпотентно.
+   */
+  private async seedAudioIfEmpty(): Promise<void> {
+    const existing = await this.prisma.appSetting.count({
+      where: { key: { startsWith: 'audio.' } },
+    });
+    if (existing > 0) return;
+
+    const rows: Array<{ key: string; value: string; description: string }> = [
+      {
+        key: SETTINGS_KEYS.AUDIO_DEFAULT_DURATION_SEC,
+        value: '300',
+        description:
+          'Длительность одной сессии «Звук вокруг» по умолчанию (в секундах). ' +
+          '300 = 5 минут. Регулируется родителем при старте сессии в пределах ' +
+          '[audio.min_duration_sec, audio.max_duration_sec]. Чем больше — тем выше ' +
+          'риск убийства FGS на OEM (Xiaomi, Honor) при экономии батареи. Диапазон: 30-1800.',
+      },
+      {
+        key: SETTINGS_KEYS.AUDIO_MAX_DURATION_SEC,
+        value: '1800',
+        description:
+          'Максимальная длительность одной сессии (в секундах). 1800 = 30 минут. ' +
+          'Жёсткий потолок — даже если родитель попросит больше, backend обрежет. ' +
+          'Защищает от случайной «вечной» прослушки и экономит батарею ребёнка. Диапазон: 60-3600.',
+      },
+      {
+        key: SETTINGS_KEYS.AUDIO_MIN_DURATION_SEC,
+        value: '30',
+        description:
+          'Минимальная длительность одной сессии (в секундах). Смысла создавать сессию ' +
+          'короче нет — handshake WebRTC занимает 1-3 секунды. Диапазон: 10-600.',
+      },
+      {
+        key: SETTINGS_KEYS.AUDIO_HIDDEN_MODE_ALLOWED,
+        value: 'true',
+        description:
+          'Можно ли использовать скрытый режим (без push/баннера ребёнку). System-level ' +
+          'privacy indicator Android всё равно покажется (зелёная точка). Если false — ' +
+          'каждая сессия будет уведомлять ребёнка push-уведомлением.',
+      },
+      {
+        key: SETTINGS_KEYS.AUDIO_CHILD_READY_TIMEOUT_SEC,
+        value: '15',
+        description:
+          'Таймаут ожидания ответа от child-устройства (в секундах). Если за это время ' +
+          'child не прислал SDP-offer — сессия → EXPIRED. Учитывает worst-case для ' +
+          'short-poll интервала child (≈ 30 сек) + WebRTC setup (1-3 сек). Диапазон: 5-120.',
+      },
+    ];
+
+    await this.prisma.$transaction(
+      rows.map((r) =>
+        this.prisma.appSetting.create({
+          data: { ...r, isSecret: false, updatedBy: 'system:seed' },
+        }),
+      ),
+    );
+    this.logger.log(`Seeded ${rows.length} audio.* settings with defaults`);
   }
 
   /**
