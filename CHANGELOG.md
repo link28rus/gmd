@@ -9,6 +9,24 @@
 
 ---
 
+## v0.35.0-rc.2 — 2026-04-24
+
+### Изменения
+
+- **«Звук вокруг» — Phase 2: web parent listener на WebSocket + Opus.** Веб-кабинет родителя переписан под новый WebSocket-relay backend'а из v0.35.0-rc.1. Парент больше не делает SDP/ICE handshake — открывает один WebSocket и слушает поток Opus-кадров.
+- web: новый `WebAudioOpusPlayer` (`apps/web/lib/audio/opus-player.ts`). Цепочка `WebSocket(binary=arraybuffer) → opus-decoder (WASM, sampleRate=48kHz mono) → AudioWorkletNode("audio-player") → MediaStreamAudioDestinationNode → MediaStream`. Контракт `useAudioSession.mediaStream: MediaStream | null` сохранён, поэтому `<audio>` element и `createVuMeter` в `AudioListenDialog` не меняются.
+- web: `public/audio-player-worklet.js` — простой ring-buffer AudioWorkletProcessor, postMessage Float32Array без SharedArrayBuffer (чтобы не настраивать COOP/COEP заголовки и не ломать сторонние скрипты вроде Yandex Metrika).
+- web: переписан `lib/hooks/use-audio-session.ts` — убраны `useAudioSse` и `AudioSessionController`, добавлен mapping WebSocket close-кодов backend'а в UI-стейты (`4006/4002/4003 → expired`, `4008 → ended/expired`, `4401/4404/4400 → failed`).
+- web: `lib/api/audio.ts` адаптирован под новый response (`ws: {url, token, ttlSec}` вместо `turnCreds: TurnCreds`); удалены `sendAnswer` и `sendIce`.
+- web: добавлен npm-пакет `opus-decoder@^0.7` (Ethan Halsall, prod-tested WASM-декодер, не требует SharedArrayBuffer).
+- web: удалены файлы `lib/webrtc/` (audio-session-controller + spec) и `lib/hooks/use-audio-sse.ts` (+spec). `lib/webrtc/vu-meter.ts` перенесён в `lib/audio/vu-meter.ts`.
+- web: тесты `lib/api/audio.spec.ts` обновлены под новый API; всего 66/66 web-тестов passed (1 skipped — unrelated zone-editor).
+- env: dev-серверу нужен `AUDIO_WS_PUBLIC_URL=ws://localhost:3001/audio/ws` в backend'е (уже выставлен в `apps/backend/.env`).
+
+> ⚠ mobile-child всё ещё на WebRTC — Phase 3 ломает «Звук вокруг» end-to-end до завершения Phase 5. Не катить на prod до v0.35.0.
+
+---
+
 ## v0.35.0-rc.1 — 2026-04-24
 
 ### Изменения

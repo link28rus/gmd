@@ -14,7 +14,7 @@ import {
 import { Button } from '@/components/ui/button';
 import type { Child } from '@/lib/api/children';
 import { useAudioSession, type AudioUiState } from '@/lib/hooks/use-audio-session';
-import { createVuMeter } from '@/lib/webrtc/vu-meter';
+import { createVuMeter } from '@/lib/audio/vu-meter';
 
 interface Props {
   child: Child;

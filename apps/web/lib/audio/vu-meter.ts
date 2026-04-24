@@ -1,7 +1,9 @@
-// apps/web/lib/webrtc/vu-meter.ts
 /**
  * Запускает RAF-loop, считающий RMS-level (0..1) из MediaStream audio track.
  * Колбэк вызывается ~60 fps. Возвращает функцию для остановки.
+ *
+ * Используется с MediaStream от MediaStreamAudioDestinationNode (внутри opus-player),
+ * так что AnalyserNode подключается к chain'у уже после worklet'а.
  */
 export function createVuMeter(stream: MediaStream, onLevel: (level: number) => void): () => void {
   const audioCtx = new (

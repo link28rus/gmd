@@ -34,9 +34,12 @@ export function readPubspecVersion(filePath) {
 
 export function writePubspecVersion(filePath, newSemver) {
   const raw = readFileSync(filePath, 'utf8');
+  // SemVer 2.0: MAJOR.MINOR.PATCH с опциональным prerelease (-rc.1, -beta.0…)
+  // и опциональным build-номером Flutter (+N). Без поддержки prerelease pubspec
+  // не обновился бы, и check бы упал (как в v0.35.0-rc.1 → -rc.2 sync).
   const updated = raw.replace(
-    /^(version:[ \t]*)(\d+\.\d+\.\d+)(\+\d+)?[ \t]*$/m,
-    (_, prefix, _old, build) => `${prefix}${newSemver}${build ?? ''}`
+    /^(version:[ \t]*)(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)(\+\d+)?[ \t]*$/m,
+    (_, prefix, _old, build) => `${prefix}${newSemver}${build ?? ''}`,
   );
   writeFileSync(filePath, updated);
 }

@@ -3,13 +3,14 @@
   "configurations": [
     {
       "name": "web (Next.js :3003)",
-      "runtimeExecutable": "pnpm",
+      "runtimeExecutable": "C:\\Users\\link2\\AppData\\Roaming\\npm\\pnpm.cmd",
       "runtimeArgs": ["--filter", "@gmd/web", "dev"],
-      "port": 3003
+      "port": 3003,
+      "autoPort": true
     },
     {
       "name": "backend (NestJS :3001)",
-      "runtimeExecutable": "pnpm",
+      "runtimeExecutable": "C:\\Users\\link2\\AppData\\Roaming\\npm\\pnpm.cmd",
       "runtimeArgs": ["--filter", "@gmd/backend", "dev"],
       "port": 3001
     },

@@ -1,11 +1,15 @@
 // apps/web/lib/api/audio.ts
 import { apiFetch } from './client';
 
-export interface TurnCreds {
+/**
+ * Координаты для подключения к WebSocket-relay аудио-сессии (v0.35).
+ * Backend кладёт сюда parent'ский URL+JWT; URL уже содержит query (role, sessionId, token),
+ * клиент подключается напрямую через `new WebSocket(ws.url)`.
+ */
+export interface AudioWsConnInfo {
   url: string;
-  username: string;
-  password: string;
-  ttl: number;
+  token: string;
+  ttlSec: number;
 }
 
 export interface CreateAudioSessionInput {
@@ -18,28 +22,7 @@ export interface CreateAudioSessionResponse {
   id: string;
   state: 'PENDING';
   expiresAt: string;
-  turnCreds: TurnCreds;
-}
-
-export type AudioSseState =
-  | 'PENDING'
-  | 'READY'
-  | 'ACTIVE'
-  | 'ICE' // backend шлёт {side: 'child'|'parent', candidate}; клиент обрабатывает только side='child'
-  | 'ENDED'
-  | 'FAILED'
-  | 'EXPIRED';
-
-export type AudioSsePayload =
-  | null
-  | { sdp: string }
-  | { candidate: string }
-  | { actualSec: number }
-  | { reason: string };
-
-export interface AudioSseEvent {
-  state: AudioSseState;
-  payload: AudioSsePayload;
+  ws: AudioWsConnInfo;
 }
 
 export const audioApi = {
@@ -47,16 +30,6 @@ export const audioApi = {
     apiFetch<CreateAudioSessionResponse>('/api/audio/sessions', {
       method: 'POST',
       body: JSON.stringify(input),
-    }),
-  sendAnswer: (sessionId: string, sdp: string) =>
-    apiFetch<void>(`/api/audio/sessions/${sessionId}/answer`, {
-      method: 'POST',
-      body: JSON.stringify({ sdp }),
-    }),
-  sendIce: (sessionId: string, candidate: string) =>
-    apiFetch<void>(`/api/audio/sessions/${sessionId}/ice`, {
-      method: 'POST',
-      body: JSON.stringify({ candidate }),
     }),
   stopSession: (sessionId: string) =>
     apiFetch<void>(`/api/audio/sessions/${sessionId}/stop`, {

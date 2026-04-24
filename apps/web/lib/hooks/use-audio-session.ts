@@ -1,9 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { audioApi, type AudioSseEvent, type TurnCreds } from '@/lib/api/audio';
-import { AudioSessionController } from '@/lib/webrtc/audio-session-controller';
-import { useAudioSse } from './use-audio-sse';
+import { audioApi } from '@/lib/api/audio';
+import { WebAudioOpusPlayer, type OpusPlayerState } from '@/lib/audio/opus-player';
 
 export type AudioUiState =
   | 'idle'
@@ -33,17 +32,19 @@ interface Params {
 }
 
 /**
- * Оркестратор «Звук вокруг» для web-родителя.
+ * Оркестратор «Звук вокруг» для web-родителя (v0.35: WebSocket-relay).
  *
- * Склеивает audioApi + useAudioSse + AudioSessionController в один API для UI:
- *  - start()  → создаёт сессию, получает TURN creds, подписывается на SSE.
- *  - READY    → инициализирует WebRTC, отправляет answer.
- *  - ICE (side='child') → передаёт кандидата в PeerConnection.
- *  - ACTIVE   → запускает таймер elapsed, авто-stop при durationSec.
- *  - ENDED/FAILED/EXPIRED → чистка ресурсов + state.
- *  - stop()   → cleanup + POST /stop (best-effort).
+ * Поток:
+ *  - start() → POST /audio/sessions → получаем ws.url + token, переход 'starting' → 'waiting'.
+ *  - new WebAudioOpusPlayer(ws.url).start() → WS connect → 'negotiating'.
+ *  - Первый decoded Opus-фрейм → 'active', стартует elapsed timer и авто-stop при durationSec.
+ *  - WS close с известным code → mapping в 'ended'/'expired'/'failed'.
+ *  - Backend control 'error' (от child'а) → 'failed' с errorReason.
+ *  - stop() → player.stop() + POST /stop (best-effort).
  *
- * Интеграционно тестируется через AudioListenDialog (Task 11).
+ * Контракт `mediaStream: MediaStream | null` сохранён — opus-player отдаёт
+ * MediaStreamAudioDestinationNode.stream, привязывается к <audio> и vu-meter без
+ * изменений в UI.
  */
 export function useAudioSession({ childId, durationSec }: Params): UseAudioSessionResult {
   const [state, setState] = useState<AudioUiState>('idle');
@@ -53,22 +54,21 @@ export function useAudioSession({ childId, durationSec }: Params): UseAudioSessi
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
   const [elapsedSec, setElapsedSec] = useState(0);
 
-  const controllerRef = useRef<AudioSessionController | null>(null);
-  const turnCredsRef = useRef<TurnCreds | null>(null);
+  const playerRef = useRef<WebAudioOpusPlayer | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const activeStartRef = useRef<number | null>(null);
-  // stop() через ref, чтобы колбэк useAudioSse не перезапускал SSE-соединение
-  // при каждом изменении sessionId/state (deps у useAudioSse — только sessionId+enabled).
+  // stop через ref, чтобы коллбеки player'а не пересоздавали player при каждом перерендере.
   const stopRef = useRef<() => Promise<void>>(async () => {});
 
   const cleanup = useCallback(() => {
-    controllerRef.current?.stop();
-    controllerRef.current = null;
+    playerRef.current?.stop();
+    playerRef.current = null;
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
     activeStartRef.current = null;
+    setMediaStream(null);
   }, []);
 
   const stop = useCallback(async () => {
@@ -79,111 +79,137 @@ export function useAudioSession({ childId, durationSec }: Params): UseAudioSessi
       try {
         await audioApi.stopSession(id);
       } catch {
-        /* best-effort — backend может сам перевести в ENDED */
+        /* best-effort — backend сам перейдёт в ENDED по close WS */
       }
     }
   }, [sessionId, cleanup]);
 
   stopRef.current = stop;
 
+  const startElapsedTimer = useCallback(() => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    activeStartRef.current = Date.now();
+    timerRef.current = setInterval(() => {
+      if (activeStartRef.current) {
+        const sec = Math.floor((Date.now() - activeStartRef.current) / 1000);
+        setElapsedSec(sec);
+        if (sec >= durationSec) {
+          void stopRef.current();
+        }
+      }
+    }, 250);
+  }, [durationSec]);
+
+  /**
+   * Map WS close-code → UI state. Источник кодов: backend audio-ws.dto.ts.
+   *  4006 — idle_timeout / pending_timeout (child не подключился) → 'expired'
+   *  4008 — session_terminated (parent stop / endSession) → 'ended' (если уже не failed)
+   *  4404 — session_not_active → 'failed'
+   *  4401 — invalid_token / token_session_mismatch → 'failed' (auth)
+   *  4400 — bad query — клиентский баг, тоже 'failed'
+   *  4002/4003 — replaced_by_new_producer / producer_gone → 'expired'
+   *  1000 — нормальный close (parent_stop) → не меняем (stop() уже выставил 'ended')
+   *  1006 — abnormal close (network) → 'failed' если активной не было, иначе 'ended'
+   */
+  const handleCloseCode = useCallback(
+    (code: number, reason: string, currentState: AudioUiState) => {
+      if (code === 1000) return; // штатный stop, состояние уже выставлено
+      if (code === 4006 || code === 4002 || code === 4003) {
+        setState((prev) => (prev === 'active' ? 'ended' : 'expired'));
+        return;
+      }
+      if (code === 4008) {
+        setState((prev) => (prev === 'failed' ? prev : prev === 'active' ? 'ended' : 'expired'));
+        return;
+      }
+      if (code === 4401 || code === 4404 || code === 4400) {
+        setError(`Не удалось подключиться к серверу (code ${code})`);
+        setState('failed');
+        return;
+      }
+      // 1006 + прочее
+      if (currentState === 'active') {
+        setState('ended');
+      } else {
+        setError(reason || `Соединение разорвано (code ${code})`);
+        setState('failed');
+      }
+    },
+    [],
+  );
+
   const start = useCallback(async () => {
-    // Re-open диалога для того же ребёнка: подчистить возможный stale controller/timer
-    // до старта новой сессии.
     cleanup();
     setState('starting');
     setError(null);
     setErrorReason(null);
-    setMediaStream(null);
     setElapsedSec(0);
 
+    let createdSessionId: string | null = null;
+    let wsUrl: string | null = null;
     try {
       const res = await audioApi.createSession({ childId, durationSec, hiddenMode: true });
+      createdSessionId = res.id;
+      wsUrl = res.ws.url;
       setSessionId(res.id);
-      turnCredsRef.current = res.turnCreds;
       setState('waiting');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось создать сессию');
       setState('failed');
+      return;
     }
-  }, [childId, durationSec, cleanup]);
+
+    let stateAtClose: AudioUiState = 'waiting';
+    const player = new WebAudioOpusPlayer(wsUrl, {
+      onStateChange: (s: OpusPlayerState) => {
+        if (s === 'connected') {
+          setState((prev) => {
+            stateAtClose = prev === 'waiting' ? 'negotiating' : prev;
+            return prev === 'waiting' ? 'negotiating' : prev;
+          });
+        } else if (s === 'streaming') {
+          setState('active');
+          stateAtClose = 'active';
+          startElapsedTimer();
+        }
+      },
+      onCloseCode: (code, reason) => {
+        handleCloseCode(code, reason, stateAtClose);
+        cleanup();
+      },
+      onError: (err) => {
+        setError(err.message);
+        setState('failed');
+        cleanup();
+      },
+      onChildError: (code) => {
+        setErrorReason(code);
+        setState('failed');
+        cleanup();
+      },
+    });
+    playerRef.current = player;
+    try {
+      const stream = await player.start();
+      setMediaStream(stream);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось подключить аудио');
+      setState('failed');
+      cleanup();
+      // Best-effort stop сессии на backend, чтобы не висела в PENDING.
+      if (createdSessionId) {
+        audioApi.stopSession(createdSessionId).catch(() => {
+          /* ignore */
+        });
+      }
+    }
+  }, [childId, durationSec, cleanup, startElapsedTimer, handleCloseCode]);
 
   useEffect(() => {
     return () => {
       cleanup();
     };
   }, [cleanup]);
-
-  // SSE активен только пока сессия "живая". В терминальных состояниях
-  // (ended/failed/expired) enabled=false → useAudioSse делает controller.abort()
-  // через свой cleanup, закрывая fetch-стрим.
-  useAudioSse({
-    sessionId,
-    enabled: sessionId !== null && state !== 'ended' && state !== 'failed' && state !== 'expired',
-    onError: (err) => {
-      setError(err.message);
-      setState('failed');
-      cleanup();
-    },
-    onEvent: (event: AudioSseEvent) => {
-      if (event.state === 'PENDING') {
-        setState((prev) => (prev === 'starting' ? 'waiting' : prev));
-      } else if (event.state === 'READY') {
-        const payload = event.payload as { sdp: string };
-        if (!turnCredsRef.current || !sessionId) return;
-        if (!controllerRef.current) {
-          controllerRef.current = new AudioSessionController({
-            sessionId,
-            turnCreds: turnCredsRef.current,
-            sendAnswer: audioApi.sendAnswer,
-            sendIce: audioApi.sendIce,
-            onStateChange: () => {
-              /* UI-статус ведётся через backend-side события (ACTIVE/ENDED/FAILED) */
-            },
-            onRemoteStream: (stream) => setMediaStream(stream),
-          });
-          controllerRef.current.init();
-        }
-        setState('negotiating');
-        void controllerRef.current.handleReadyOffer(payload.sdp).catch((e: unknown) => {
-          setError(e instanceof Error ? e.message : 'Ошибка WebRTC');
-          setState('failed');
-          cleanup();
-        });
-      } else if (event.state === 'ICE') {
-        // Backend шлёт ICE events для обеих сторон (side: 'child'|'parent'). Parent
-        // игнорирует свои (это его собственные candidates — он их сам отправлял
-        // через POST /ice). Добавляем в pc только candidates от child.
-        const payload = event.payload as { side: 'child' | 'parent'; candidate: string };
-        if (payload.side === 'child') {
-          void controllerRef.current?.handleIceFromChild(payload.candidate);
-        }
-      } else if (event.state === 'ACTIVE') {
-        activeStartRef.current = Date.now();
-        setState('active');
-        if (timerRef.current) clearInterval(timerRef.current);
-        timerRef.current = setInterval(() => {
-          if (activeStartRef.current) {
-            const sec = Math.floor((Date.now() - activeStartRef.current) / 1000);
-            setElapsedSec(sec);
-            if (sec >= durationSec) {
-              void stopRef.current();
-            }
-          }
-        }, 250);
-      } else if (event.state === 'ENDED') {
-        setState('ended');
-        cleanup();
-      } else if (event.state === 'FAILED') {
-        const reason = (event.payload as { reason?: string } | null)?.reason ?? 'UNKNOWN';
-        setErrorReason(reason);
-        setState('failed');
-        cleanup();
-      } else if (event.state === 'EXPIRED') {
-        setState('expired');
-        cleanup();
-      }
-    },
-  });
 
   return {
     state,
