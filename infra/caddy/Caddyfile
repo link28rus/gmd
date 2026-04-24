@@ -1,10 +1,18 @@
 {
 	admin off
-	auto_https off
+	# auto_https default — Caddy сам выпускает Let's Encrypt cert через ACME http-01
+	# challenge на :80. Раньше был auto_https off (TLS делал внешний nginx 1.24.0
+	# на 95.104.240.99), но v0.35.0-rc.4 переехал на direct prod IP 95.104.240.111
+	# (ens192) — TLS теперь делает Caddy.
+	# HTTP/3 (QUIC) отключён: prod не пробрасывает UDP 443, и Alt-Svc: h3 в headers
+	# заставлял Chrome пытаться QUIC и кэшировать недоступный endpoint.
+	servers {
+		protocols h1 h2
+	}
 }
 
-# --- Основной кабинет + API (HTTP-режим, TLS терминирует внешний nginx) ---
-:80 {
+# --- Основной кабинет + API ---
+gmd.link28rus.ru {
 	encode zstd gzip
 
 	# /healthz — edge liveness (должен идти до всех handle-матчеров)

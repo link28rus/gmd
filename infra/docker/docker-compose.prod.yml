@@ -292,6 +292,11 @@ services:
     container_name: gmd-caddy
     ports:
       - '80:80'
+      # v0.35.0-rc.4: Caddy сам терминирует TLS на 95.104.240.111:443 (ACME через :80).
+      # До этого TLS делал внешний nginx 1.24.0 на 95.104.240.99 (через router),
+      # после Plan E DNS gmd.link28rus.ru → 95.104.240.111 (ens192 direct), нужен
+      # отдельный TLS-listener.
+      - '443:443'
     environment:
       CADDY_ACME_EMAIL: ${CADDY_ACME_EMAIL}
       CADDY_BASIC_AUTH_HASH: ${CADDY_BASIC_AUTH_HASH}
