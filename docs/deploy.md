@@ -89,45 +89,38 @@ ssh gmd-prod 'docker ps --format "table {{.Names}}\t{{.Status}}"'
 
 После деплоя stack включает GlitchTip (error tracking) и Uptime Kuma (uptime). Доступ: `ssh -N gmd-prod-tunnels` → `http://localhost:3010` и `http://localhost:3011`. Детали — [docs/monitoring.md](monitoring.md).
 
-## coturn (TURN для «Звук вокруг»)
+## «Звук вокруг» — WebSocket-relay (v0.35)
 
-coturn слушает на хосте через docker port-mapping (НЕ `network_mode: host`):
+В v0.35 «Звук вокруг» переведён с WebRTC/coturn на серверный WebSocket-relay.
+coturn полностью удалён из стека (Phase 4 Plan E pivot, см. CHANGELOG v0.35.0-rc.4).
 
-- TCP/UDP **3478** — основной listener (STUN binding + TURN allocate)
-- UDP **49152-49200** — relay range для media-сессий (узкий, чтобы пробрасывался через NAT провайдера)
+Backend поднимает WS-эндпоинт на `/audio/ws` (тот же 3001-порт, что и REST API).
+Caddy уже проксирует `/audio/ws` через `reverse_proxy` (HTTP/1.1 Upgrade).
 
-Никакого TLS (5349) на MVP — родительские клиенты подключаются через `turn:` без шифрования signalling. WebRTC media сама по себе шифруется через DTLS-SRTP.
+### Переменные окружения
 
-### Проброс портов на роутере 95.104.240.99 → 192.168.1.23
-
-- `3478` TCP+UDP
-- `49152-49200` UDP (большой range — без него relay-сессии не установятся за CGNAT клиентов)
-
-### UFW на сервере
-
-```bash
-sudo ufw allow 3478/tcp
-sudo ufw allow 3478/udp
-sudo ufw allow 49152:65535/udp  # запас сверх 49200 на будущее, узкий 49200 для прода
+```
+AUDIO_WS_SECRET=<openssl rand -base64 48>  # ≥32 байт, JWT HS256-ключ
+AUDIO_WS_PUBLIC_URL=wss://gmd.link28rus.ru/audio/ws
 ```
 
-(Реально пробрасывается только 49152-49200, но UFW лучше открыть с запасом, чтобы потом расширение range'а не требовало re-config'а ufw.)
+Записать в `/opt/gmd/.env.prod`. Не коммитить.
 
-### TURN_SHARED_SECRET — генерация
-
-```bash
-openssl rand -hex 32
-```
-
-Записать значение в `/opt/gmd/.env.prod` (`TURN_SHARED_SECRET=...`). Не коммитить!
-
-### Проверка после деплоя
+### Снос coturn-инфраструктуры (одноразово при апгрейде до v0.35)
 
 ```bash
-ssh gmd-prod 'docker logs gmd-coturn | head -30'
-# Ожидаем: 'IPv4. UDP listener opened on: 0.0.0.0:3478'
-# 'IPv4. TCP listener opened on: 0.0.0.0:3478'
-# Никаких ERROR.
+ssh gmd-prod
+cd /opt/gmd
+docker compose -f docker-compose.prod.yml stop coturn
+docker compose -f docker-compose.prod.yml rm -f coturn
+docker rmi coturn/coturn:4.6
+sudo rm -rf /opt/gmd/coturn/                  # turnserver.conf
+sudo ufw delete allow 3478/tcp
+sudo ufw delete allow 3478/udp
+sudo ufw delete allow 49152:65535/udp
+# На роутере 95.104.240.99 → снять port-forward 3478 (TCP+UDP) и 49152-49200 (UDP).
+# На втором публичном IP 95.104.240.111 — удалить netplan policy routing
+# (/etc/netplan/60-public.yaml), вернуть ens192 в обычный mode.
 ```
 
 ## Обновление `.env.prod`

@@ -198,36 +198,11 @@ services:
       retries: 5
       start_period: 30s
 
-  coturn:
-    <<: *restart
-    image: coturn/coturn:4.6
-    container_name: gmd-coturn
-    environment:
-      TURN_SHARED_SECRET: ${TURN_SHARED_SECRET}
-      TURN_REALM: ${TURN_REALM:-gmd.link28rus.ru}
-      TURN_EXTERNAL_IP: ${TURN_EXTERNAL_IP}
-    volumes:
-      - ./coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
-    command:
-      - turnserver
-      - -c
-      - /etc/coturn/turnserver.conf
-      - --static-auth-secret=${TURN_SHARED_SECRET}
-      - --realm=${TURN_REALM:-gmd.link28rus.ru}
-      - --external-ip=${TURN_EXTERNAL_IP}
-    ports:
-      - '${TURN_PORT:-3478}:3478/tcp'
-      - '${TURN_PORT:-3478}:3478/udp'
-      # ⚠ Range синхронизирован с min-port/max-port в infra/docker/coturn/turnserver.conf
-      - '49152-49200:49152-49200/udp'
-    networks: [gmd_net]
-    # --verbose НЕ передаём в prod (иначе логи забиваются STUN/TURN binding-сообщениями)
-    healthcheck:
-      test: ['CMD-SHELL', 'kill -0 1 > /dev/null 2>&1']
-      interval: 30s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
+  # coturn удалён в v0.35.0-rc.4 (Phase 4 Plan E pivot). Ранее использовался для
+  # WebRTC TURN-relay в фиче «Звук вокруг ребёнка», но WebRTC заменён на серверный
+  # WebSocket-relay (см. CHANGELOG v0.35.0-rc.1..rc.3). При апдейте до v0.35.0:
+  # на prod обязательно сделать `docker compose down coturn && docker rmi coturn/coturn:4.6`,
+  # удалить /opt/gmd/coturn/, snять с UFW правила 3478/49152-49200.
 
   backend:
     <<: *restart
@@ -264,9 +239,8 @@ services:
       PASSWORD_LOCK_TTL_SECONDS: ${PASSWORD_LOCK_TTL_SECONDS:-900}
       SENTRY_DSN: ${SENTRY_DSN_BACKEND}
       PORT: '3001'
-      TURN_SHARED_SECRET: ${TURN_SHARED_SECRET}
-      TURN_PUBLIC_HOST: ${TURN_PUBLIC_HOST}
-      TURN_PUBLIC_PORT: ${TURN_PUBLIC_PORT:-3478}
+      AUDIO_WS_SECRET: ${AUDIO_WS_SECRET}
+      AUDIO_WS_PUBLIC_URL: ${AUDIO_WS_PUBLIC_URL:-wss://gmd.link28rus.ru/audio/ws}
     volumes:
       - /opt/gmd/secrets/jwt-private.pem:/run/secrets/jwt-private.pem:ro
       - /opt/gmd/secrets/jwt-public.pem:/run/secrets/jwt-public.pem:ro

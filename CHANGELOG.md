@@ -9,6 +9,22 @@
 
 ---
 
+## v0.35.0-rc.4 — 2026-04-24
+
+### Изменения
+
+- **«Звук вокруг» — Phase 4: cleanup coturn-инфраструктуры.** WebRTC/TURN-relay полностью изъят из стека после переезда на WebSocket-relay в v0.35.0-rc.1..rc.3.
+- infra: удалён `coturn` сервис из `docker-compose.dev.yml` и `docker-compose.prod.yml`. Удалена директория `infra/docker/coturn/` (turnserver.conf).
+- infra: переменные `TURN_SHARED_SECRET`, `TURN_REALM`, `TURN_PORT`, `TURN_EXTERNAL_IP`, `TURN_PUBLIC_HOST`, `TURN_PUBLIC_PORT` удалены из `infra/docker/.env.dev.example` и `.env.prod.example`. Заменены на `AUDIO_WS_SECRET` и `AUDIO_WS_PUBLIC_URL`.
+- infra: `docker-compose.prod.yml` — backend сервис теперь получает `AUDIO_WS_SECRET` и `AUDIO_WS_PUBLIC_URL` env вместо TURN_*.
+- infra: добавлен `handle /audio/ws` в `infra/caddy/Caddyfile` для проксирования WebSocket подключений к backend (Caddy v2 автоматически апгрейдит Connection: Upgrade; настроены `read_timeout 0s` и `flush_interval -1` для долгих стримов).
+- docs: `docs/deploy.md` раздел «coturn (TURN для Звук вокруг)» полностью переписан под WebSocket-relay. Добавлен runbook для одноразового сноса coturn-инфраструктуры с prod (docker rm + ufw delete + router port-forward removal).
+- НЕ ломает существующий dev-стек до тех пор пока локальный `.env.dev` не обновлён: docker-compose уже не пытается поднять coturn.
+
+> ⚠ Этот rc-тег готов к prod-деплою после Phase 5 (Playwright E2E + manual smoke на Xiaomi). Перед деплоем — runbook сноса coturn инфраструктуры в `docs/deploy.md`.
+
+---
+
 ## v0.35.0-rc.3 — 2026-04-24
 
 ### Изменения
