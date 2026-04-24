@@ -7,10 +7,6 @@ import 'package:mocktail/mocktail.dart';
 class _MockChannel extends Mock implements SoundAroundChannel {}
 
 void main() {
-  setUpAll(() {
-    registerFallbackValue(<String, dynamic>{});
-  });
-
   late _MockChannel channel;
   late AudioCommandHandler handler;
 
@@ -23,22 +19,23 @@ void main() {
 
   group('AudioCommandHandler.START_AUDIO', () {
     test('with full payload calls channel.start and returns true', () async {
-      when(() => channel.start(
-            sessionId: any(named: 'sessionId'),
-            turnCreds: any(named: 'turnCreds'),
-            durationSec: any(named: 'durationSec'),
-          )).thenAnswer((_) async {});
+      when(
+        () => channel.start(
+          sessionId: any(named: 'sessionId'),
+          wsUrl: any(named: 'wsUrl'),
+          durationSec: any(named: 'durationSec'),
+        ),
+      ).thenAnswer((_) async {});
 
       final cmd = DeviceCommand(
         id: 'c1',
         type: 'START_AUDIO',
         payload: {
           'sessionId': 's1',
-          'turnCreds': {
-            'url': 'turn:x',
-            'username': 'u',
-            'password': 'p',
-            'ttl': 600,
+          'ws': {
+            'url': 'wss://gmd.test/audio/ws?role=child&sessionId=s1&token=xxx',
+            'token': 'xxx',
+            'ttlSec': 360,
           },
           'durationSec': 60,
         },
@@ -47,59 +44,86 @@ void main() {
       final ok = await handler.handle(cmd);
 
       expect(ok, isTrue);
-      verify(() => channel.start(
-            sessionId: 's1',
-            turnCreds: any(named: 'turnCreds'),
-            durationSec: 60,
-          )).called(1);
+      verify(
+        () => channel.start(
+          sessionId: 's1',
+          wsUrl: 'wss://gmd.test/audio/ws?role=child&sessionId=s1&token=xxx',
+          durationSec: 60,
+        ),
+      ).called(1);
     });
 
-    test('without payload returns true (ack to drop), no channel call',
-        () async {
+    test('without payload returns true (ack to drop), no channel call', () async {
       final cmd = DeviceCommand(id: 'c1', type: 'START_AUDIO', payload: null);
 
       final ok = await handler.handle(cmd);
 
       expect(ok, isTrue);
-      verifyNever(() => channel.start(
-            sessionId: any(named: 'sessionId'),
-            turnCreds: any(named: 'turnCreds'),
-            durationSec: any(named: 'durationSec'),
-          ));
+      verifyNever(
+        () => channel.start(
+          sessionId: any(named: 'sessionId'),
+          wsUrl: any(named: 'wsUrl'),
+          durationSec: any(named: 'durationSec'),
+        ),
+      );
     });
 
-    test('with malformed payload (missing durationSec) returns true, no channel call',
-        () async {
+    test('with malformed payload (missing ws.url) returns true, no channel call', () async {
       final cmd = DeviceCommand(
         id: 'c1',
         type: 'START_AUDIO',
-        payload: {'sessionId': 's1', 'turnCreds': {}}, // durationSec отсутствует
+        payload: {'sessionId': 's1', 'ws': {}, 'durationSec': 60},
       );
 
       final ok = await handler.handle(cmd);
 
       expect(ok, isTrue);
-      verifyNever(() => channel.start(
-            sessionId: any(named: 'sessionId'),
-            turnCreds: any(named: 'turnCreds'),
-            durationSec: any(named: 'durationSec'),
-          ));
+      verifyNever(
+        () => channel.start(
+          sessionId: any(named: 'sessionId'),
+          wsUrl: any(named: 'wsUrl'),
+          durationSec: any(named: 'durationSec'),
+        ),
+      );
     });
 
-    test('when channel.start throws returns false (skip ack for retry)',
-        () async {
-      when(() => channel.start(
-            sessionId: any(named: 'sessionId'),
-            turnCreds: any(named: 'turnCreds'),
-            durationSec: any(named: 'durationSec'),
-          )).thenThrow(Exception('FGS start failed'));
+    test('with malformed payload (missing durationSec) returns true, no channel call', () async {
+      final cmd = DeviceCommand(
+        id: 'c1',
+        type: 'START_AUDIO',
+        payload: {
+          'sessionId': 's1',
+          'ws': {'url': 'wss://x', 'token': 't', 'ttlSec': 60},
+        },
+      );
+
+      final ok = await handler.handle(cmd);
+
+      expect(ok, isTrue);
+      verifyNever(
+        () => channel.start(
+          sessionId: any(named: 'sessionId'),
+          wsUrl: any(named: 'wsUrl'),
+          durationSec: any(named: 'durationSec'),
+        ),
+      );
+    });
+
+    test('when channel.start throws returns false (skip ack for retry)', () async {
+      when(
+        () => channel.start(
+          sessionId: any(named: 'sessionId'),
+          wsUrl: any(named: 'wsUrl'),
+          durationSec: any(named: 'durationSec'),
+        ),
+      ).thenThrow(Exception('FGS start failed'));
 
       final cmd = DeviceCommand(
         id: 'c1',
         type: 'START_AUDIO',
         payload: {
           'sessionId': 's1',
-          'turnCreds': {'url': 'turn:x', 'username': 'u', 'password': 'p'},
+          'ws': {'url': 'wss://x', 'token': 't', 'ttlSec': 60},
           'durationSec': 30,
         },
       );
@@ -128,69 +152,10 @@ void main() {
       verify(() => channel.stop()).called(1);
     });
 
-    test('returns true even when channel.stop throws (STOP идемпотентен)',
-        () async {
+    test('returns true even when channel.stop throws (STOP идемпотентен)', () async {
       when(() => channel.stop()).thenThrow(Exception('already stopped'));
 
-      final cmd =
-          DeviceCommand(id: 'c1', type: 'STOP_AUDIO', payload: null);
-
-      final ok = await handler.handle(cmd);
-
-      expect(ok, isTrue);
-    });
-  });
-
-  // ── AUDIO_ANSWER ─────────────────────────────────────────────────────────
-
-  group('AudioCommandHandler.AUDIO_ANSWER', () {
-    test('with full payload calls deliverAnswer and returns true', () async {
-      when(() => channel.deliverAnswer(
-            sessionId: any(named: 'sessionId'),
-            sdp: any(named: 'sdp'),
-          )).thenAnswer((_) async {});
-
-      final cmd = DeviceCommand(
-        id: 'c1',
-        type: 'AUDIO_ANSWER',
-        payload: {'sessionId': 's1', 'sdp': 'v=0\r\n...'},
-      );
-
-      final ok = await handler.handle(cmd);
-
-      expect(ok, isTrue);
-      verify(() => channel.deliverAnswer(
-            sessionId: 's1',
-            sdp: 'v=0\r\n...',
-          )).called(1);
-    });
-
-    test('without payload returns true (ack to drop), no channel call',
-        () async {
-      final cmd =
-          DeviceCommand(id: 'c1', type: 'AUDIO_ANSWER', payload: null);
-
-      final ok = await handler.handle(cmd);
-
-      expect(ok, isTrue);
-      verifyNever(() => channel.deliverAnswer(
-            sessionId: any(named: 'sessionId'),
-            sdp: any(named: 'sdp'),
-          ));
-    });
-
-    test('returns true even if deliverAnswer throws (answer одноразовый)',
-        () async {
-      when(() => channel.deliverAnswer(
-            sessionId: any(named: 'sessionId'),
-            sdp: any(named: 'sdp'),
-          )).thenThrow(Exception('FGS not active'));
-
-      final cmd = DeviceCommand(
-        id: 'c1',
-        type: 'AUDIO_ANSWER',
-        payload: {'sessionId': 's1', 'sdp': 'v=0'},
-      );
+      final cmd = DeviceCommand(id: 'c1', type: 'STOP_AUDIO', payload: null);
 
       final ok = await handler.handle(cmd);
 
@@ -200,8 +165,22 @@ void main() {
 
   // ── Unknown command ──────────────────────────────────────────────────────
 
-  test('unknown command type returns false', () async {
+  test('unknown command type returns false (\u043d\u0430\u043f\u0440\u0438\u043c\u0435\u0440 PLAY_SIGNAL — \u043d\u0435 \u043d\u0430\u0448 handler)', () async {
     final cmd = DeviceCommand(id: 'c1', type: 'PLAY_SIGNAL', payload: {});
+
+    final ok = await handler.handle(cmd);
+
+    expect(ok, isFalse);
+  });
+
+  // v0.35: AUDIO_ANSWER больше не пересылается backend'ом — handler возвращает
+  // false (unknown command) даже если кто-то старый его пришлёт.
+  test('AUDIO_ANSWER (legacy) treated as unknown — returns false', () async {
+    final cmd = DeviceCommand(
+      id: 'c1',
+      type: 'AUDIO_ANSWER',
+      payload: {'sessionId': 's1', 'sdp': 'v=0'},
+    );
 
     final ok = await handler.handle(cmd);
 

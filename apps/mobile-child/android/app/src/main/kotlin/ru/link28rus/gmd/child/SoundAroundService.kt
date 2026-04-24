@@ -40,7 +40,7 @@ class SoundAroundService : Service() {
         private const val NOTIFICATION_ID = 4711
         private const val NOTIFICATION_CHANNEL_ID = "gmd_sound_around"
         const val EXTRA_SESSION_ID = "sessionId"
-        const val EXTRA_TURN_CREDS_JSON = "turnCredsJson"
+        const val EXTRA_WS_URL = "wsUrl"
         const val EXTRA_DURATION_SEC = "durationSec"
         const val ACTION_STOP = "ru.link28rus.gmd.child.ACTION_SOUND_AROUND_STOP"
 
@@ -48,19 +48,6 @@ class SoundAroundService : Service() {
             "package:gmd_child/features/sound_around/sound_around_entry.dart"
         private const val DART_ENTRYPOINT = "soundAroundEntryPoint"
         private const val BG_CHANNEL = "gmd.child/sound_around_bg"
-
-        /**
-         * Volatile reference на background MethodChannel активного
-         * headless FlutterEngine. Устанавливается в [startFlutterEngine]
-         * после создания канала и обнуляется в [onDestroy].
-         *
-         * Используется из MainActivity.deliverAnswer для передачи
-         * SDP-answer в background isolate без дополнительного IPC.
-         * Volatile — гарантия видимости между UI-потоком и Binder-потоком.
-         */
-        @Volatile
-        var sActiveBgChannel: MethodChannel? = null
-            private set
     }
 
     private var flutterEngine: FlutterEngine? = null
@@ -96,16 +83,16 @@ class SoundAroundService : Service() {
         startForegroundCompat()
 
         val sessionId = intent?.getStringExtra(EXTRA_SESSION_ID).orEmpty()
-        val turnCredsJson = intent?.getStringExtra(EXTRA_TURN_CREDS_JSON).orEmpty()
+        val wsUrl = intent?.getStringExtra(EXTRA_WS_URL).orEmpty()
         val durationSec = intent?.getIntExtra(EXTRA_DURATION_SEC, 300) ?: 300
 
-        if (sessionId.isEmpty() || turnCredsJson.isEmpty()) {
-            log("start without sessionId/turnCreds — bail")
+        if (sessionId.isEmpty() || wsUrl.isEmpty()) {
+            log("start without sessionId/wsUrl — bail")
             stopServiceCleanup()
             return START_NOT_STICKY
         }
 
-        startFlutterEngine(sessionId, turnCredsJson, durationSec)
+        startFlutterEngine(sessionId, wsUrl, durationSec)
         return START_NOT_STICKY
     }
 
@@ -117,14 +104,13 @@ class SoundAroundService : Service() {
 
     override fun onDestroy() {
         log("onDestroy")
-        sActiveBgChannel = null
         flutterEngine?.destroy()
         flutterEngine = null
         bgChannel = null
         super.onDestroy()
     }
 
-    private fun startFlutterEngine(sessionId: String, turnCredsJson: String, durationSec: Int) {
+    private fun startFlutterEngine(sessionId: String, wsUrl: String, durationSec: Int) {
         log("startFlutterEngine sessionId=${sessionId.take(8)}… durationSec=$durationSec")
         try {
             val loader = FlutterInjector.instance().flutterLoader()
@@ -178,14 +164,13 @@ class SoundAroundService : Service() {
                 "init",
                 mapOf(
                     "sessionId" to sessionId,
-                    "turnCredsJson" to turnCredsJson,
+                    "wsUrl" to wsUrl,
                     "durationSec" to durationSec,
                 ),
             )
 
             flutterEngine = engine
             bgChannel = channel
-            sActiveBgChannel = channel
             log("startFlutterEngine OK")
         } catch (e: Throwable) {
             logErr("startFlutterEngine FAILED", e)

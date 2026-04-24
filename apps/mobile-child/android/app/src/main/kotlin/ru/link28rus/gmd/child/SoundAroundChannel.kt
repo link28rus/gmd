@@ -11,8 +11,7 @@ import io.flutter.plugin.common.MethodChannel
  *
  * Регистрируется в ДВУХ Flutter engine'ах:
  *   1. UI-engine (MainActivity.configureFlutterEngine) — когда приложение открыто
- *      пользователем. Плохо подходит для Plan B: команда START_AUDIO прилетает из
- *      background isolate при poll, UI-engine может даже не существовать.
+ *      пользователем.
  *   2. Background engine (LocationForegroundService.ensureBackgroundEngine) —
  *      headless Dart isolate с location_ingestor.dart. Именно он обрабатывает
  *      START_AUDIO команды в фоне. Без регистрации канала в этом engine — вызов
@@ -20,8 +19,13 @@ import io.flutter.plugin.common.MethodChannel
  *      из Dart падает с MissingPluginException и команда не доходит до
  *      нативного SoundAroundService.
  *
- * См. commit 04cdaee / Plan E E2E verification — MissingPluginException в
+ * См. commit 04cdaee / Plan E E2E v0.34.2 — MissingPluginException в
  * background poll обнаружился 2026-04-24 при первом реальном прогоне.
+ *
+ * v0.35: WebRTC-обёртка убрана. `start` теперь принимает sessionId + wsUrl
+ * (URL уже содержит query с role/sessionId/token, выданный backend'ом в
+ * payload START_AUDIO команды). `deliverAnswer` удалён — больше нет
+ * AUDIO_ANSWER device-команды.
  */
 object SoundAroundChannel {
     const val NAME = "gmd.child/sound_around"
@@ -32,9 +36,7 @@ object SoundAroundChannel {
             when (call.method) {
                 "start" -> {
                     val sessionId = call.argument<String>("sessionId") ?: ""
-                    @Suppress("UNCHECKED_CAST")
-                    val turnCreds =
-                        call.argument<Map<String, Any?>>("turnCreds") ?: emptyMap()
+                    val wsUrl = call.argument<String>("wsUrl") ?: ""
                     val durationSec = call.argument<Int>("durationSec") ?: 300
 
                     DiagLog.write(
@@ -44,10 +46,7 @@ object SoundAroundChannel {
                     )
                     val intent = Intent(appContext, SoundAroundService::class.java).apply {
                         putExtra(SoundAroundService.EXTRA_SESSION_ID, sessionId)
-                        putExtra(
-                            SoundAroundService.EXTRA_TURN_CREDS_JSON,
-                            org.json.JSONObject(turnCreds).toString(),
-                        )
+                        putExtra(SoundAroundService.EXTRA_WS_URL, wsUrl)
                         putExtra(SoundAroundService.EXTRA_DURATION_SEC, durationSec)
                     }
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -64,30 +63,6 @@ object SoundAroundChannel {
                     }
                     appContext.startService(intent)
                     result.success(null)
-                }
-                "deliverAnswer" -> {
-                    val sessionId = call.argument<String>("sessionId") ?: ""
-                    val sdp = call.argument<String>("sdp") ?: ""
-                    val bg = SoundAroundService.sActiveBgChannel
-                    if (bg != null) {
-                        DiagLog.write(
-                            appContext,
-                            "sound_around",
-                            "deliverAnswer → bgChannel: sessionId=${sessionId.take(8)}…",
-                        )
-                        bg.invokeMethod(
-                            "applyAnswer",
-                            mapOf("sessionId" to sessionId, "sdp" to sdp),
-                        )
-                        result.success(null)
-                    } else {
-                        DiagLog.write(
-                            appContext,
-                            "sound_around",
-                            "deliverAnswer: NO_ACTIVE_FGS — ignoring answer",
-                        )
-                        result.error("NO_ACTIVE_FGS", "SoundAroundService not running", null)
-                    }
                 }
                 else -> result.notImplemented()
             }

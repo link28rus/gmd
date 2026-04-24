@@ -9,6 +9,24 @@
 
 ---
 
+## v0.35.0-rc.3 — 2026-04-24
+
+### Изменения
+
+- **«Звук вокруг» — Phase 3: mobile-child Opus-recorder + WebSocket uploader.** Приложение ребёнка переписано под backend-relay из v0.35.0-rc.1. Вместо WebRTC peer connection / TURN-relay-через-чужой-сервер теперь шлём Opus-кадры прямо в backend, который передаёт их родителю по второму WebSocket'у.
+- mobile-child: новый `SoundAroundController` (`apps/mobile-child/lib/features/sound_around/sound_around_controller.dart`) — `record.startStream(PCM 16kHz mono)` → накопление в `BytesBuilder` до 20-мс кадра (640 байт) → `SimpleOpusEncoder.encode(Int16List 320)` → `WebSocket.add(opusBytes)`. Auto-stop по `durationSec + 5с`, error reporting через WS control-frame `{op:'error', code, message}` + HTTP-fallback на `/child/audio/sessions/:id/error`.
+- mobile-child: `audio_command_handler.dart` понимает новый payload `START_AUDIO`: `{sessionId, ws: {url, token, ttlSec}, durationSec}`. Обработка `AUDIO_ANSWER` удалена (больше не приходит).
+- mobile-child: `sound_around_entry.dart` инициализирует `opus_dart` через `opus_flutter.load()` (lazy Future, ждётся в первом `init` коллбеке от native). `applyAnswer` MethodChannel метод удалён.
+- mobile-child: `core/api/audio_api.dart` — убраны `sendReady` и `sendIce` (HTTP signaling endpoints удалены backend'ом в Phase 1). Остался `sendError` как fallback.
+- mobile-child: добавлены `record ^6.2.0`, `opus_dart ^3.0.1`, `opus_flutter ^3.0.3`, `web_socket_channel ^3.0.3`. Удалён `flutter_webrtc`.
+- mobile-child (Android native): `SoundAroundChannel.kt` — `start` принимает `wsUrl` вместо `turnCreds`, метод `deliverAnswer` удалён. `SoundAroundService.kt` — `EXTRA_TURN_CREDS_JSON` → `EXTRA_WS_URL`, `sActiveBgChannel` static reference удалён (был нужен только для пробрасывания `applyAnswer` из UI engine'а в background — теперь не используется).
+- mobile-child: pubspec версия `0.35.0-rc.2+40` → `0.35.0-rc.3+41` (versionCode инкрементирован для RuStore).
+- mobile-child: 67 unit-тестов passed, `flutter analyze` clean. `audio_api_test.dart` и `audio_command_handler_test.dart` обновлены под новый API. Реальное покрытие WebSocket+Opus pipeline — manual smoke на Xiaomi (Phase 5).
+
+> ⚠ Production-сборка `0.35.0-rc.3` готова к ручному тестированию end-to-end на устройстве, но Phase 4 (cleanup coturn из docker-compose.prod.yml) и Phase 5 (Playwright + Xiaomi smoke) ещё впереди — без них прод не катить.
+
+---
+
 ## v0.35.0-rc.2 — 2026-04-24
 
 ### Изменения

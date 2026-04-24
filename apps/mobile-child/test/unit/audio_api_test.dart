@@ -17,103 +17,6 @@ void main() {
     api = AudioApi(dio);
   });
 
-  group('AudioApi.sendReady', () {
-    test('POST /child/audio/sessions/:id/ready with sdp body and X-Child-Token header', () async {
-      when(
-        () => dio.post(
-          '/child/audio/sessions/sess_abc/ready',
-          data: any(named: 'data'),
-          options: any(named: 'options'),
-        ),
-      ).thenAnswer(
-        (_) async => Response(
-          requestOptions: RequestOptions(path: '/child/audio/sessions/sess_abc/ready'),
-          statusCode: 204,
-        ),
-      );
-
-      await api.sendReady(
-        sessionId: 'sess_abc',
-        deviceToken: 'tok_123',
-        sdp: 'v=0\r\n...',
-      );
-
-      final captured = verify(
-        () => dio.post(
-          '/child/audio/sessions/sess_abc/ready',
-          data: captureAny(named: 'data'),
-          options: captureAny(named: 'options'),
-        ),
-      ).captured;
-
-      final body = captured[0] as Map<String, dynamic>;
-      final opts = captured[1] as Options;
-
-      expect(body['sdp'], 'v=0\r\n...');
-      expect(opts.headers?['X-Child-Token'], 'tok_123');
-    });
-
-    test('sendReady throws UnauthorizedException on 401', () async {
-      when(
-        () => dio.post(
-          any(),
-          data: any(named: 'data'),
-          options: any(named: 'options'),
-        ),
-      ).thenThrow(
-        DioException(
-          requestOptions: RequestOptions(path: '/child/audio/sessions/s1/ready'),
-          response: Response(
-            requestOptions: RequestOptions(path: '/child/audio/sessions/s1/ready'),
-            statusCode: 401,
-          ),
-        ),
-      );
-
-      expect(
-        () => api.sendReady(sessionId: 's1', deviceToken: 'bad', sdp: 'v=0'),
-        throwsA(isA<UnauthorizedException>()),
-      );
-    });
-  });
-
-  group('AudioApi.sendIce', () {
-    test('POST /child/audio/sessions/:id/ice with candidate body and X-Child-Token header', () async {
-      when(
-        () => dio.post(
-          '/child/audio/sessions/sess_xyz/ice',
-          data: any(named: 'data'),
-          options: any(named: 'options'),
-        ),
-      ).thenAnswer(
-        (_) async => Response(
-          requestOptions: RequestOptions(path: '/child/audio/sessions/sess_xyz/ice'),
-          statusCode: 204,
-        ),
-      );
-
-      await api.sendIce(
-        sessionId: 'sess_xyz',
-        deviceToken: 'tok_456',
-        candidate: 'candidate:0 1 UDP 2122252543 ...',
-      );
-
-      final captured = verify(
-        () => dio.post(
-          '/child/audio/sessions/sess_xyz/ice',
-          data: captureAny(named: 'data'),
-          options: captureAny(named: 'options'),
-        ),
-      ).captured;
-
-      final body = captured[0] as Map<String, dynamic>;
-      final opts = captured[1] as Options;
-
-      expect(body['candidate'], 'candidate:0 1 UDP 2122252543 ...');
-      expect(opts.headers?['X-Child-Token'], 'tok_456');
-    });
-  });
-
   group('AudioApi.sendError', () {
     test('POST /child/audio/sessions/:id/error with code and message', () async {
       when(
@@ -145,11 +48,13 @@ void main() {
       ).captured;
 
       final body = captured[0] as Map<String, dynamic>;
+      final opts = captured[1] as Options;
       expect(body['code'], 'PERMISSION_DENIED');
       expect(body['message'], 'Микрофон недоступен');
+      expect(opts.headers?['X-Child-Token'], 'tok_789');
     });
 
-    test('POST /child/audio/sessions/:id/error without message — no message key', () async {
+    test('POST /:id/error without message — no message key', () async {
       when(
         () => dio.post(
           '/child/audio/sessions/sess_err2/error',
@@ -184,6 +89,29 @@ void main() {
   });
 
   group('AudioApi error handling', () {
+    test('throws UnauthorizedException on 401', () async {
+      when(
+        () => dio.post(
+          any(),
+          data: any(named: 'data'),
+          options: any(named: 'options'),
+        ),
+      ).thenThrow(
+        DioException(
+          requestOptions: RequestOptions(path: '/child/audio/sessions/s1/error'),
+          response: Response(
+            requestOptions: RequestOptions(path: '/child/audio/sessions/s1/error'),
+            statusCode: 401,
+          ),
+        ),
+      );
+
+      expect(
+        () => api.sendError(sessionId: 's1', deviceToken: 'bad', code: 'UNKNOWN'),
+        throwsA(isA<UnauthorizedException>()),
+      );
+    });
+
     test('throws UnauthorizedException on 403', () async {
       when(
         () => dio.post(
@@ -193,16 +121,16 @@ void main() {
         ),
       ).thenThrow(
         DioException(
-          requestOptions: RequestOptions(path: '/child/audio/sessions/s1/ice'),
+          requestOptions: RequestOptions(path: '/child/audio/sessions/s1/error'),
           response: Response(
-            requestOptions: RequestOptions(path: '/child/audio/sessions/s1/ice'),
+            requestOptions: RequestOptions(path: '/child/audio/sessions/s1/error'),
             statusCode: 403,
           ),
         ),
       );
 
       expect(
-        () => api.sendIce(sessionId: 's1', deviceToken: 'bad', candidate: 'cand'),
+        () => api.sendError(sessionId: 's1', deviceToken: 'bad', code: 'UNKNOWN'),
         throwsA(isA<UnauthorizedException>()),
       );
     });
@@ -216,9 +144,9 @@ void main() {
         ),
       ).thenThrow(
         DioException(
-          requestOptions: RequestOptions(path: '/child/audio/sessions/s1/ready'),
+          requestOptions: RequestOptions(path: '/child/audio/sessions/s1/error'),
           response: Response(
-            requestOptions: RequestOptions(path: '/child/audio/sessions/s1/ready'),
+            requestOptions: RequestOptions(path: '/child/audio/sessions/s1/error'),
             statusCode: 500,
             data: {},
           ),
@@ -226,7 +154,7 @@ void main() {
       );
 
       expect(
-        () => api.sendReady(sessionId: 's1', deviceToken: 'tok', sdp: 'v=0'),
+        () => api.sendError(sessionId: 's1', deviceToken: 'tok', code: 'UNKNOWN'),
         throwsA(isA<ServerException>()),
       );
     });

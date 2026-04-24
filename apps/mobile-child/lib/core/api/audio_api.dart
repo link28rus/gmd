@@ -12,35 +12,12 @@ class AudioApi {
   AudioApi(this._dio);
   final Dio _dio;
 
-  /// Отправить SDP-offer от child → backend переводит сессию PENDING → READY.
-  Future<void> sendReady({
-    required String sessionId,
-    required String deviceToken,
-    required String sdp,
-  }) async {
-    await _post(
-      '/child/audio/sessions/$sessionId/ready',
-      deviceToken,
-      {'sdp': sdp},
-    );
-  }
-
-  /// Отправить ICE-candidate от child.
-  Future<void> sendIce({
-    required String sessionId,
-    required String deviceToken,
-    required String candidate,
-  }) async {
-    await _post(
-      '/child/audio/sessions/$sessionId/ice',
-      deviceToken,
-      {'candidate': candidate},
-    );
-  }
-
   /// Сообщить backend об ошибке (PERMISSION_DENIED / MIC_BUSY / OEM_BLOCKED /
   /// NETWORK_ERROR / UNKNOWN). Backend помечает сессию FAILED.
   /// Поле [message] опциональное — не включается в тело если null.
+  ///
+  /// v0.35: HTTP-fallback на случай если WebSocket ещё не открыт. Основной
+  /// канал отчёта об ошибке — WS control-frame {op:'error', code, message}.
   Future<void> sendError({
     required String sessionId,
     required String deviceToken,

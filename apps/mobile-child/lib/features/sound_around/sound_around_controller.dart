@@ -1,9 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
-import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:opus_dart/opus_dart.dart';
+import 'package:record/record.dart';
 
-import '../../core/api/api_exceptions.dart';
 import '../../core/api/audio_api.dart';
 import '../../core/config/env.dart';
 import '../../core/diag/diag_channel.dart';
@@ -13,176 +16,213 @@ typedef StopRequestCallback = void Function({String? reason});
 
 const _tag = 'SoundAround';
 
-/// Управляет lifecycle одной audio-сессии:
-/// - setup PeerConnection с force-relay TURN-конфигом
-/// - захват микрофона (echoCancellation/noiseSuppression/AGC)
-/// - SDP-offer → POST /child/audio/sessions/:id/ready
-/// - ICE-candidates → POST /ice (trickle)
-/// - applyAnswer(sdp) — вызывается из AudioCommandHandler при AUDIO_ANSWER (Task 9)
-/// - auto-stop по durationSec timeout
-/// - явный stop по STOP_AUDIO команде
+// 16 kHz mono PCM 16 бит — стандартный набор для VOIP-Opus, минимальный битрейт.
+// 20-мс кадр = 320 семплов = 640 байт PCM. Opus encoder возвращает ~40-80 байт/кадр.
+const int _sampleRateHz = 16000;
+const int _frameDurationMs = 20;
+const int _frameSamples = _sampleRateHz * _frameDurationMs ~/ 1000; // 320
+const int _frameBytes = _frameSamples * 2; // Int16 little-endian
+
+/// Управляет lifecycle одной audio-сессии (v0.35: WebSocket + Opus).
 ///
-/// Ошибки: getUserMedia denied/busy / network / unknown → POST /error +
-/// onStopRequest(reason). Идемпотентно: повторный stop — no-op.
+/// Поток:
+///   record.startStream(PCM 16k mono)
+///     → BytesBuilder (накапливает до 20-мс кадра = 640 байт)
+///       → SimpleOpusEncoder.encode(Int16List 320 семплов)
+///         → WebSocket(/audio/ws?role=child&sessionId=…&token=…).add(Opus bytes)
+///
+/// Init Opus делается один раз на изолят в [soundAroundEntryPoint] —
+/// перед вызовом [start] обязательно `await _opusReady`.
+///
+/// Ошибки:
+///  - permission denied / mic busy / network → WS control-frame {op:'error', code}
+///    + best-effort HTTP fallback POST /child/audio/sessions/:id/error
+///  - auto-stop по `durationSec + 5с буфер` → onStopRequest(reason: 'duration_timeout')
+///  - WS закрылся (4006/4008/иное) → onStopRequest(reason: 'ws_closed')
+///
+/// Идемпотентно: повторный stop — no-op.
 class SoundAroundController {
   SoundAroundController({
     required this.onStopRequest,
+    AudioRecorder? recorder,
     AudioApi? audioApi,
     SecureStorageService? storage,
-  })  : _audioApi = audioApi ?? AudioApi(_buildDio()),
-        _storage = storage ?? SecureStorageService();
+  }) : _recorder = recorder ?? AudioRecorder(),
+       _audioApi = audioApi ?? AudioApi(_buildDio()),
+       _storage = storage ?? SecureStorageService();
 
   final StopRequestCallback onStopRequest;
+  final AudioRecorder _recorder;
   final AudioApi _audioApi;
   final SecureStorageService _storage;
 
-  RTCPeerConnection? _pc;
-  MediaStream? _localStream;
+  WebSocket? _ws;
+  StreamSubscription<Uint8List>? _pcmSub;
+  SimpleOpusEncoder? _encoder;
   Timer? _autoStopTimer;
-  String? _deviceToken;
   bool _stopped = false;
+  final BytesBuilder _byteBuffer = BytesBuilder(copy: false);
 
-  static Dio _buildDio() => Dio(BaseOptions(
-        baseUrl: apiBaseUrl,
-        connectTimeout: const Duration(seconds: 10),
-        receiveTimeout: const Duration(seconds: 30),
-      ));
+  static Dio _buildDio() => Dio(
+    BaseOptions(
+      baseUrl: apiBaseUrl,
+      connectTimeout: const Duration(seconds: 10),
+      receiveTimeout: const Duration(seconds: 30),
+    ),
+  );
 
   Future<void> start({
     required String sessionId,
-    required Map<String, dynamic> turnCreds,
+    required String wsUrl,
     required int durationSec,
   }) async {
-    _deviceToken = await _storage.readDeviceToken();
-    if (_deviceToken == null || _deviceToken!.isEmpty) {
-      unawaited(diagLog(_tag, 'no device token — cannot signal'));
-      onStopRequest(reason: 'no_token');
-      return;
-    }
-
     unawaited(diagLog(_tag, 'start sessionId=$sessionId duration=${durationSec}s'));
 
     try {
-      // 1) Configure PeerConnection с TURN-credentials.
-      final config = <String, dynamic>{
-        'iceServers': [
-          {
-            'urls': turnCreds['url'],
-            'username': turnCreds['username'],
-            'credential': turnCreds['password'],
-          },
-        ],
-        'iceTransportPolicy': 'relay', // force-relay
-      };
-      _pc = await createPeerConnection(config);
-
-      // 2) ICE-candidate listener — отправляем на backend.
-      // ICE-candidate transport — backend хранит только candidate.candidate (string).
-      // Parent (Plan C) при addIceCandidate реконструирует sdpMid='0', sdpMLineIndex=0
-      // для audio-only-single-m-line сессии. Если будущий рефактор введёт несколько
-      // m-line (multi-track audio+video или stereo) — нужно расширить schema +
-      // передавать sdpMid/sdpMLineIndex через backend тоже. Тогда обновить:
-      //   - apps/backend/src/audio/dto/audio.dto.ts (IceCandidateSchema)
-      //   - backend БД (добавить sdpMid/sdpMLineIndex в AudioIceCandidate)
-      //   - обе стороны mobile.
-      _pc!.onIceCandidate = (cand) {
-        if (cand.candidate == null || _stopped) return;
-        unawaited(
-          _audioApi
-              .sendIce(
-                sessionId: sessionId,
-                deviceToken: _deviceToken!,
-                candidate: cand.candidate!,
-              )
-              .catchError((Object e) {
-            unawaited(diagLog(_tag, 'sendIce failed: $e'));
-          }),
-        );
-      };
-
-      _pc!.onConnectionState = (state) {
-        unawaited(diagLog(_tag, 'connection state: $state'));
-        if (state == RTCPeerConnectionState.RTCPeerConnectionStateFailed ||
-            state == RTCPeerConnectionState.RTCPeerConnectionStateClosed) {
-          unawaited(stop(reason: 'connection_$state'));
-        }
-      };
-
-      // 3) Захват микрофона (требует RECORD_AUDIO permission).
-      final stream = await navigator.mediaDevices.getUserMedia({
-        'audio': {
-          'echoCancellation': true,
-          'noiseSuppression': true,
-          'autoGainControl': true,
-        },
-        'video': false,
-      });
-      _localStream = stream;
-      for (final track in stream.getAudioTracks()) {
-        await _pc!.addTrack(track, stream);
+      if (!await _recorder.hasPermission()) {
+        unawaited(diagLog(_tag, 'mic permission denied'));
+        await _reportErrorAndStop(sessionId, 'PERMISSION_DENIED', 'no_mic_permission');
+        return;
       }
 
-      // 4) Создать SDP-offer и отправить.
-      final offer = await _pc!.createOffer({'offerToReceiveAudio': false});
-      await _pc!.setLocalDescription(offer);
+      // Encoder создаётся per-сессию, чтобы освобождать ресурсы при stop().
+      // Application.voip — самый агрессивный режим компрессии для голоса.
+      _encoder = SimpleOpusEncoder(
+        sampleRate: _sampleRateHz,
+        channels: 1,
+        application: Application.voip,
+      );
 
-      // 5) Auto-stop таймер (durationSec + 5с буфер) — запускаем ДО sendReady,
-      // чтобы медленная сеть не расширяла реальное время записи сверх durationSec.
+      // WebSocket: URL уже содержит query (?role=child&sessionId=…&token=…),
+      // выдан backend'ом в payload START_AUDIO команды.
+      _ws = await WebSocket.connect(wsUrl);
+      _ws!.listen(
+        (dynamic data) {
+          // Backend control-frames в эту сторону не шлёт сейчас; молча игнорируем.
+        },
+        onError: (dynamic e) {
+          unawaited(diagLog(_tag, 'ws error: $e'));
+          unawaited(stop(reason: 'ws_error'));
+        },
+        onDone: () {
+          unawaited(
+            diagLog(
+              _tag,
+              'ws closed code=${_ws?.closeCode} reason=${_ws?.closeReason}',
+            ),
+          );
+          unawaited(stop(reason: 'ws_closed'));
+        },
+        cancelOnError: true,
+      );
+
+      // record v6: startStream возвращает Stream<Uint8List> с raw PCM-байтами.
+      // Кадры приходят НЕ ровно по 20ms; накапливаем в BytesBuilder.
+      final stream = await _recorder.startStream(
+        const RecordConfig(
+          encoder: AudioEncoder.pcm16bits,
+          sampleRate: _sampleRateHz,
+          numChannels: 1,
+          echoCancel: true,
+          noiseSuppress: true,
+          autoGain: true,
+        ),
+      );
+      _pcmSub = stream.listen(
+        _onPcmChunk,
+        onError: (Object e) {
+          unawaited(diagLog(_tag, 'record stream error: $e'));
+          unawaited(stop(reason: 'record_error'));
+        },
+      );
+
       _autoStopTimer = Timer(Duration(seconds: durationSec + 5), () {
         unawaited(diagLog(_tag, 'auto-stop по durationSec timeout'));
         unawaited(stop(reason: 'duration_timeout'));
       });
 
-      await _audioApi.sendReady(
-        sessionId: sessionId,
-        deviceToken: _deviceToken!,
-        sdp: offer.sdp!,
-      );
-
-      unawaited(diagLog(_tag, 'READY отправлен, ждём AUDIO_ANSWER + ICE'));
+      unawaited(diagLog(_tag, 'streaming start OK, ws=open, recorder=running'));
     } on Exception catch (e) {
       unawaited(diagLog(_tag, 'start failed: $e'));
       String code = 'UNKNOWN';
       final msg = e.toString().toLowerCase();
-      if (msg.contains('notallowed') ||
-          msg.contains('permission') ||
+      if (msg.contains('permission') ||
           msg.contains('record_audio') ||
-          msg.contains('user denied') ||
-          msg.contains('отказано')) {
+          msg.contains('user denied')) {
         code = 'PERMISSION_DENIED';
       } else if (msg.contains('busy') || msg.contains('in use')) {
         code = 'MIC_BUSY';
-      } else if (e is NetworkException) {
+      } else if (e is SocketException || e is WebSocketException) {
         code = 'NETWORK_ERROR';
       }
-      try {
-        await _audioApi.sendError(
-          sessionId: sessionId,
-          deviceToken: _deviceToken ?? '',
-          code: code,
-          message: e.toString(),
-        );
-      } catch (_) {
-        // best-effort: если не можем сообщить backend — просто стопаемся
-      }
-      await stop(reason: 'start_failed');
+      await _reportErrorAndStop(sessionId, code, e.toString());
     }
   }
 
-  /// Применить SDP-answer от parent. Вызывается из AudioCommandHandler при
-  /// получении AUDIO_ANSWER команды (Task 9, v0.32.1+).
-  Future<void> applyAnswer(String sdp) async {
-    if (_pc == null || _stopped) {
-      unawaited(diagLog(_tag, 'applyAnswer skipped: pc=$_pc stopped=$_stopped'));
-      return;
+  void _onPcmChunk(Uint8List bytes) {
+    if (_stopped) return;
+    _byteBuffer.add(bytes);
+    while (_byteBuffer.length >= _frameBytes) {
+      // takeBytes() возвращает накопленный буфер и обнуляет builder.
+      final all = _byteBuffer.takeBytes();
+      // Полные 20-мс кадры пакуем и шлём, остаток (< 640 байт) кладём обратно.
+      var offset = 0;
+      while (offset + _frameBytes <= all.length) {
+        _encodeAndSend(Uint8List.sublistView(all, offset, offset + _frameBytes));
+        offset += _frameBytes;
+      }
+      if (offset < all.length) {
+        _byteBuffer.add(Uint8List.sublistView(all, offset));
+      }
     }
+  }
+
+  void _encodeAndSend(Uint8List frameBytes) {
+    final encoder = _encoder;
+    final ws = _ws;
+    if (encoder == null || ws == null || ws.readyState != WebSocket.open) return;
     try {
-      final desc = RTCSessionDescription(sdp, 'answer');
-      await _pc!.setRemoteDescription(desc);
-      unawaited(diagLog(_tag, 'answer applied — handshake complete, ждём audio flow'));
+      final byteData = ByteData.sublistView(frameBytes);
+      final pcm = Int16List(_frameSamples);
+      for (var i = 0; i < _frameSamples; i++) {
+        pcm[i] = byteData.getInt16(i * 2, Endian.little);
+      }
+      final opus = encoder.encode(input: pcm);
+      ws.add(opus);
     } catch (e) {
-      unawaited(diagLog(_tag, 'applyAnswer failed: $e'));
+      // Один проблемный кадр не должен ронять сессию — следующий через 20ms.
+      unawaited(diagLog(_tag, 'encode/send frame failed: $e'));
     }
+  }
+
+  Future<void> _reportErrorAndStop(
+    String sessionId,
+    String code,
+    String message,
+  ) async {
+    final ws = _ws;
+    if (ws != null && ws.readyState == WebSocket.open) {
+      try {
+        ws.add(jsonEncode({'op': 'error', 'code': code, 'message': message}));
+      } catch (_) {
+        /* ignore */
+      }
+    }
+    // HTTP fallback на случай если WS ещё не подключился.
+    try {
+      final token = await _storage.readDeviceToken();
+      if (token != null && token.isNotEmpty) {
+        await _audioApi.sendError(
+          sessionId: sessionId,
+          deviceToken: token,
+          code: code,
+          message: message,
+        );
+      }
+    } catch (_) {
+      /* best-effort */
+    }
+    await stop(reason: 'error_$code');
   }
 
   Future<void> stop({String? reason}) async {
@@ -191,9 +231,19 @@ class SoundAroundController {
     _autoStopTimer?.cancel();
     unawaited(diagLog(_tag, 'stop reason=$reason'));
     try {
-      _localStream?.getTracks().forEach((t) => t.stop());
-      await _localStream?.dispose();
-      await _pc?.close();
+      await _pcmSub?.cancel();
+      _pcmSub = null;
+      if (await _recorder.isRecording()) {
+        await _recorder.stop();
+      }
+      _byteBuffer.clear();
+      final ws = _ws;
+      if (ws != null && ws.readyState == WebSocket.open) {
+        await ws.close(1000, 'child_stop');
+      }
+      _ws = null;
+      _encoder?.destroy();
+      _encoder = null;
     } catch (e) {
       unawaited(diagLog(_tag, 'stop cleanup error: $e'));
     }
