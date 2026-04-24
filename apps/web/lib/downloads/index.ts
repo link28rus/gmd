@@ -15,12 +15,14 @@ export interface DownloadFile {
 }
 
 // gmd-child-0.14.0-arm64-v8a.apk → {app, version, abi}
+// SemVer 2.0: MAJOR.MINOR.PATCH с опциональным prerelease (-rc.1, -beta.0…)
+// и опциональным build-номером Flutter (+N).
 const FILENAME_RE =
-  /^(?<app>gmd-(?:child|parent))-(?<version>\d+\.\d+\.\d+(?:\+\d+)?)-(?<abi>arm64-v8a|armeabi-v7a|x86_64|universal)\.apk$/;
+  /^(?<app>gmd-(?:child|parent))-(?<version>\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+\d+)?)-(?<abi>arm64-v8a|armeabi-v7a|x86_64|universal)\.apk$/;
 
 // Только релизные APK — те же ABI, строго, без path-traversal.
 const STRICT_FILENAME_RE =
-  /^(?:gmd-(?:child|parent))-\d+\.\d+\.\d+(?:\+\d+)?-(?:arm64-v8a|armeabi-v7a|x86_64|universal)\.apk$/;
+  /^(?:gmd-(?:child|parent))-\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+\d+)?-(?:arm64-v8a|armeabi-v7a|x86_64|universal)\.apk$/;
 
 function downloadDir(): string {
   return process.env.DOWNLOAD_DIR ?? '/srv/download';
