@@ -22,7 +22,7 @@ interface Params {
  *
  * Протокол signaling (см. docs/audio-api.md §9.1):
  *   1. Backend → SSE event READY {sdp}     → handleReadyOffer(sdp)
- *   2. Backend → SSE event ICE_FROM_CHILD  → handleIceFromChild(candidate)
+ *   2. Backend → SSE event ICE (side='child') → handleIceFromChild(candidate)
  *   3. Local onicecandidate                → sendIce(candidate)
  *   4. Remote ontrack                      → onRemoteStream(stream)
  *   5. Backend → ENDED/FAILED/EXPIRED      → stop()

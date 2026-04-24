@@ -9,6 +9,14 @@
 
 ---
 
+## v0.34.6 — 2026-04-24
+
+### Исправления
+
+- **fix(web):** SSE event state mismatch — backend шлёт `state: 'ICE'` с payload `{side, candidate}`, а клиент проверял `state === 'ICE_FROM_CHILD'`. В итоге parent **игнорировал все** ICE candidates от child → `addIceCandidate` никогда не вызывался → `remoteCandidate` список пустой → `pc.connectionState` застревал в `"new"` → RTP не шёл → track оставался `muted: true` → тишина в динамиках. Правильный backend-контракт документирован в `docs/audio-api.md` §7.2, но в клиентском коде было старое имя. Диагностировано через `pc.getStats()` на реальной prod-сессии Plan E.
+
+---
+
 ## v0.34.5 — 2026-04-24
 
 ### Исправления

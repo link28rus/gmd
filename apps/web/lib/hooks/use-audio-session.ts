@@ -38,7 +38,7 @@ interface Params {
  * Склеивает audioApi + useAudioSse + AudioSessionController в один API для UI:
  *  - start()  → создаёт сессию, получает TURN creds, подписывается на SSE.
  *  - READY    → инициализирует WebRTC, отправляет answer.
- *  - ICE_FROM_CHILD → передаёт кандидата в PeerConnection.
+ *  - ICE (side='child') → передаёт кандидата в PeerConnection.
  *  - ACTIVE   → запускает таймер elapsed, авто-stop при durationSec.
  *  - ENDED/FAILED/EXPIRED → чистка ресурсов + state.
  *  - stop()   → cleanup + POST /stop (best-effort).
@@ -149,9 +149,14 @@ export function useAudioSession({ childId, durationSec }: Params): UseAudioSessi
           setState('failed');
           cleanup();
         });
-      } else if (event.state === 'ICE_FROM_CHILD') {
-        const payload = event.payload as { candidate: string };
-        void controllerRef.current?.handleIceFromChild(payload.candidate);
+      } else if (event.state === 'ICE') {
+        // Backend шлёт ICE events для обеих сторон (side: 'child'|'parent'). Parent
+        // игнорирует свои (это его собственные candidates — он их сам отправлял
+        // через POST /ice). Добавляем в pc только candidates от child.
+        const payload = event.payload as { side: 'child' | 'parent'; candidate: string };
+        if (payload.side === 'child') {
+          void controllerRef.current?.handleIceFromChild(payload.candidate);
+        }
       } else if (event.state === 'ACTIVE') {
         activeStartRef.current = Date.now();
         setState('active');

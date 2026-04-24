@@ -25,7 +25,7 @@ export type AudioSseState =
   | 'PENDING'
   | 'READY'
   | 'ACTIVE'
-  | 'ICE_FROM_CHILD'
+  | 'ICE' // backend шлёт {side: 'child'|'parent', candidate}; клиент обрабатывает только side='child'
   | 'ENDED'
   | 'FAILED'
   | 'EXPIRED';
