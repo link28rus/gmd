@@ -141,7 +141,9 @@ export class DeviceCommandsService {
     sessionId: string,
     createdByUserId: string,
   ): Promise<void> {
-    const expiresAt = new Date(Date.now() + 30_000);
+    // TTL 180s (v0.34.4) — см. комментарий в enqueueAudioAnswer. 30s не хватало
+    // для одного poll-цикла mobile-child (heartbeat 120с).
+    const expiresAt = new Date(Date.now() + 180_000);
     await this.prisma.deviceCommand.create({
       data: {
         childDeviceId,
@@ -156,14 +158,19 @@ export class DeviceCommandsService {
 
   // Доставить SDP-answer родителя на child-устройство через DeviceCommand poll (v0.32.1).
   // Child заберёт AUDIO_ANSWER при следующем /child/commands/pending запросе и завершит
-  // WebRTC handshake (setRemoteDescription). TTL 60s — достаточно для одного poll-цикла.
+  // WebRTC handshake (setRemoteDescription).
+  //
+  // TTL 180s (v0.34.4): Plan E E2E показал что poll привязан к location-heartbeat
+  // (каждые 120с), а TTL 60с не перекрывал один цикл poll'а → answer expire'ился
+  // до доставки, сессия через какое-то время падала. 180s даёт запас на 1-2 poll-цикла.
+  // Правильное решение post-MVP — отдельный command-poll timer в mobile-child.
   async enqueueAudioAnswer(
     childDeviceId: string,
     sessionId: string,
     sdp: string,
     createdByUserId: string,
   ): Promise<void> {
-    const expiresAt = new Date(Date.now() + 60_000);
+    const expiresAt = new Date(Date.now() + 180_000);
     await this.prisma.deviceCommand.create({
       data: {
         childDeviceId,

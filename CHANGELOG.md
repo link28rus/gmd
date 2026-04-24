@@ -9,6 +9,14 @@
 
 ---
 
+## v0.34.4 — 2026-04-24
+
+### Исправления
+
+- **fix(backend):** TTL команд `AUDIO_ANSWER` (60s → 180s) и `STOP_AUDIO` (30s → 180s). В Plan E E2E оказалось: parent успешно отправлял answer, backend создавал команду `AUDIO_ANSWER`, но child-poll привязан к location-heartbeat (каждые 120с) — и команда expire'илась за 60с до того как её забрали. Теперь TTL перекрывает 1-2 poll-цикла. Правильное решение — отдельный command-poll timer в mobile-child, это post-MVP работа.
+
+---
+
 ## v0.34.3 — 2026-04-24
 
 ### Исправления
