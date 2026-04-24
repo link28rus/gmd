@@ -9,6 +9,14 @@
 
 ---
 
+## v0.34.3 — 2026-04-24
+
+### Исправления
+
+- **fix(mobile-child):** `soundAroundEntryPoint` удалялся AOT tree-shaker'ом в release-build, несмотря на `@pragma('vm:entry-point')`. В debug-build всё работало. Symptom: native `SoundAroundService` стартовал, логгировал `startFlutterEngine OK`, но Dart-isolate не запускался — логи `[sound_around] soundAroundEntryPoint: starting headless isolate` не появлялись, сессия expire'илась с `PARENT_TIMEOUT`. Fix: в `main.dart` держим ссылку на `soundAroundEntryPoint` (как уже делали для `locationEntryPoint` — именно этот паттерн был задокументирован, но применён не ко всем entrypoint'ам). Обнаружено в Plan E E2E.
+
+---
+
 ## v0.34.2 — 2026-04-24
 
 ### Исправления
