@@ -16,7 +16,6 @@ import io.flutter.plugin.common.MethodChannel
 private const val UI_METHOD_CHANNEL = "ru.link28rus.gmd.child/location"
 private const val DIAG_METHOD_CHANNEL = "ru.link28rus.gmd.child/diag"
 private const val PROTECTION_METHOD_CHANNEL = "ru.link28rus.gmd.child/protection"
-private const val SOUND_AROUND_CHANNEL = "gmd.child/sound_around"
 
 private const val REQUEST_CODE_ADD_ADMIN = 8101
 
@@ -175,72 +174,9 @@ class MainActivity : FlutterActivity() {
                 }
             }
 
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SOUND_AROUND_CHANNEL)
-            .setMethodCallHandler { call, result ->
-                when (call.method) {
-                    "start" -> {
-                        val sessionId = call.argument<String>("sessionId") ?: ""
-                        @Suppress("UNCHECKED_CAST")
-                        val turnCreds =
-                            call.argument<Map<String, Any?>>("turnCreds") ?: emptyMap()
-                        val durationSec = call.argument<Int>("durationSec") ?: 300
-
-                        DiagLog.write(
-                            this,
-                            "sound_around",
-                            "start: sessionId=${sessionId.take(8)}… durationSec=$durationSec",
-                        )
-                        val intent = Intent(this, SoundAroundService::class.java).apply {
-                            putExtra(SoundAroundService.EXTRA_SESSION_ID, sessionId)
-                            putExtra(
-                                SoundAroundService.EXTRA_TURN_CREDS_JSON,
-                                org.json.JSONObject(turnCreds).toString(),
-                            )
-                            putExtra(SoundAroundService.EXTRA_DURATION_SEC, durationSec)
-                        }
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                            startForegroundService(intent)
-                        } else {
-                            startService(intent)
-                        }
-                        result.success(null)
-                    }
-                    "stop" -> {
-                        DiagLog.write(this, "sound_around", "stop requested from Dart")
-                        val intent = Intent(this, SoundAroundService::class.java).apply {
-                            action = SoundAroundService.ACTION_STOP
-                        }
-                        startService(intent)
-                        result.success(null)
-                    }
-                    "deliverAnswer" -> {
-                        val sessionId = call.argument<String>("sessionId") ?: ""
-                        val sdp = call.argument<String>("sdp") ?: ""
-                        val bg = SoundAroundService.sActiveBgChannel
-                        if (bg != null) {
-                            DiagLog.write(
-                                this,
-                                "sound_around",
-                                "deliverAnswer → bgChannel: sessionId=${sessionId.take(8)}…",
-                            )
-                            bg.invokeMethod(
-                                "applyAnswer",
-                                mapOf("sessionId" to sessionId, "sdp" to sdp),
-                            )
-                            result.success(null)
-                        } else {
-                            // FGS не активен — answer бесполезен
-                            // (сессия уже закрыта или не стартовала)
-                            DiagLog.write(
-                                this,
-                                "sound_around",
-                                "deliverAnswer: NO_ACTIVE_FGS — ignoring answer",
-                            )
-                            result.error("NO_ACTIVE_FGS", "SoundAroundService not running", null)
-                        }
-                    }
-                    else -> result.notImplemented()
-                }
-            }
+        // gmd.child/sound_around — регистрируем через общий helper.
+        // Тот же helper вызывается в LocationForegroundService для background isolate,
+        // иначе POLL-команда START_AUDIO в фоне падает с MissingPluginException.
+        SoundAroundChannel.register(this, flutterEngine.dartExecutor.binaryMessenger)
     }
 }

@@ -71,6 +71,27 @@ function failReasonLabel(reason: string | null): string {
 }
 
 export function AudioListenDialog({ child, open, onOpenChange }: Props): ReactElement {
+  // Внутренний компонент `AudioSessionPane` содержит `useAudioSession` и всю
+  // логику. Он монтируется только когда `open=true`, поэтому при закрытии
+  // диалога hook unmount'ится и state не протечёт на следующее открытие
+  // (иначе повторный open показывал бы 'expired'/'ended' от прошлой сессии,
+  // а useEffect автостарта проверяет state==='idle' и ничего не делал).
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        {open ? <AudioSessionPane child={child} onOpenChange={onOpenChange} /> : null}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function AudioSessionPane({
+  child,
+  onOpenChange,
+}: {
+  child: Child;
+  onOpenChange: (v: boolean) => void;
+}): ReactElement {
   const session = useAudioSession({ childId: child.id, durationSec: DURATION_SEC });
   const { state: sessionState, start: sessionStart } = session;
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -100,13 +121,12 @@ export function AudioListenDialog({ child, open, onOpenChange }: Props): ReactEl
     return stop;
   }, [session.mediaStream]);
 
-  // Автостарт при открытии. Зависим только от sessionState/sessionStart (стабильные
-  // ссылки), не от всего объекта `session` — тот пересоздаётся каждый рендер.
+  // Автостарт при mount (pane рендерится только когда open=true).
   useEffect(() => {
-    if (open && sessionState === 'idle') {
+    if (sessionState === 'idle') {
       void sessionStart();
     }
-  }, [open, sessionState, sessionStart]);
+  }, [sessionState, sessionStart]);
 
   // Toast на FAILED/EXPIRED
   useEffect(() => {
@@ -136,67 +156,63 @@ export function AudioListenDialog({ child, open, onOpenChange }: Props): ReactEl
   const levelPct = Math.round(level * 100);
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Ear className="h-5 w-5 text-emerald-600" />
-            Звук вокруг — {child.name}
-          </DialogTitle>
-          <DialogDescription>
-            Слушаем микрофон устройства ребёнка. На устройстве появится системный индикатор
-            использования микрофона.
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      <DialogHeader>
+        <DialogTitle className="flex items-center gap-2">
+          <Ear className="h-5 w-5 text-emerald-600" />
+          Звук вокруг — {child.name}
+        </DialogTitle>
+        <DialogDescription>
+          Слушаем микрофон устройства ребёнка. На устройстве появится системный индикатор
+          использования микрофона.
+        </DialogDescription>
+      </DialogHeader>
 
-        <div className="space-y-4 py-2">
-          <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 px-4 py-3">
-            <div className="flex items-center gap-2 text-sm">
-              {session.state === 'active' ? (
-                <Mic className="h-4 w-4 text-emerald-600" aria-hidden="true" />
-              ) : (
-                <MicOff className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-              )}
-              <span aria-live="polite">{stateLabel(session.state)}</span>
-            </div>
-            <span className="font-mono text-sm tabular-nums">
-              {elapsed} / {total}
-            </span>
+      <div className="space-y-4 py-2">
+        <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 px-4 py-3">
+          <div className="flex items-center gap-2 text-sm">
+            {session.state === 'active' ? (
+              <Mic className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+            ) : (
+              <MicOff className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            )}
+            <span aria-live="polite">{stateLabel(session.state)}</span>
           </div>
-
-          <div
-            className="h-2 w-full overflow-hidden rounded-full bg-muted"
-            role="meter"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={levelPct}
-            aria-label="Уровень звука"
-          >
-            <div
-              className="h-full bg-emerald-500 transition-[width] duration-75"
-              style={{ width: `${levelPct}%` }}
-            />
-          </div>
-
-          <audio ref={audioRef} autoPlay playsInline className="sr-only" />
-
-          {(session.state === 'failed' || session.state === 'expired') && (
-            <p className="text-sm text-red-600">
-              {session.state === 'expired'
-                ? 'Устройство ребёнка не ответило. Проверьте интернет на телефоне ребёнка.'
-                : failReasonLabel(session.errorReason)}
-            </p>
-          )}
+          <span className="font-mono text-sm tabular-nums">
+            {elapsed} / {total}
+          </span>
         </div>
 
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => void handleClose(false)}>
-            {session.state === 'active' || session.state === 'negotiating'
-              ? 'Остановить'
-              : 'Закрыть'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        <div
+          className="h-2 w-full overflow-hidden rounded-full bg-muted"
+          role="meter"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={levelPct}
+          aria-label="Уровень звука"
+        >
+          <div
+            className="h-full bg-emerald-500 transition-[width] duration-75"
+            style={{ width: `${levelPct}%` }}
+          />
+        </div>
+
+        <audio ref={audioRef} autoPlay playsInline className="sr-only" />
+
+        {(session.state === 'failed' || session.state === 'expired') && (
+          <p className="text-sm text-red-600">
+            {session.state === 'expired'
+              ? 'Устройство ребёнка не ответило. Проверьте интернет на телефоне ребёнка.'
+              : failReasonLabel(session.errorReason)}
+          </p>
+        )}
+      </div>
+
+      <DialogFooter>
+        <Button variant="ghost" onClick={() => void handleClose(false)}>
+          {session.state === 'active' || session.state === 'negotiating' ? 'Остановить' : 'Закрыть'}
+        </Button>
+      </DialogFooter>
+    </>
   );
 }

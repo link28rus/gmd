@@ -291,6 +291,12 @@ class LocationForegroundService : Service() {
                         else -> result.notImplemented()
                     }
                 }
+
+            // gmd.child/sound_around — тот же канал что и в MainActivity.
+            // Без него команда START_AUDIO из background poll'а падает с
+            // MissingPluginException (Plan E bugfix 2026-04-24).
+            SoundAroundChannel.register(applicationContext, engine.dartExecutor.binaryMessenger)
+
             log("ensureBackgroundEngine: OK, channel ready")
         } catch (e: Throwable) {
             logErr("ensureBackgroundEngine FAILED", e)

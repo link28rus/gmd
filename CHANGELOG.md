@@ -9,6 +9,20 @@
 
 ---
 
+## v0.34.2 — 2026-04-24
+
+### Исправления
+
+- **fix(mobile-child):** `gmd.child/sound_around` MethodChannel теперь регистрируется и в background Dart isolate (LocationForegroundService), не только в UI-engine (MainActivity). Причина: POLL-команда `START_AUDIO` приходит в фоне через ingestor — и именно там вызывался `MethodChannel.invokeMethod('start', ...)`, который падал с `MissingPluginException` → команда никогда не ack'алась → backend expire'ил сессию с `PARENT_TIMEOUT`. Плагин-регистрация вынесена в helper `SoundAroundChannel.kt`, вызывается из обоих engine'ов. Обнаружено в Plan E E2E на Xiaomi HyperOS 15.
+- **fix(web):** `AudioListenDialog` вынесен в inner-компонент `AudioSessionPane`, который монтируется только когда `open=true`. Раньше `useAudioSession` hook жил в outer-компоненте и не размонтировался при закрытии модалки — при повторном открытии state оставался `expired`/`ended`, useEffect автостарта не срабатывал (триггер `state === 'idle'` не выполнялся). Теперь каждое открытие диалога — fresh hook.
+
+### Изменения
+
+- chore: версия `0.34.1 → 0.34.2`, build number mobile-child `38 → 39`.
+- chore(infra): `app_settings.audio.child_ready_timeout_sec` на prod увеличен 45 → 180 для запаса под polling-цикл mobile-child (heartbeat каждые 120 сек).
+
+---
+
 ## v0.34.1 — 2026-04-24
 
 ### Исправления
