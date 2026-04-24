@@ -2,7 +2,7 @@ import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import type { DeviceCommand } from '@prisma/client';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import type { TurnCreds } from '../audio/dto/audio.dto';
+import type { AudioWsConnInfo } from '../audio/dto/audio.dto';
 
 // TTL на команду: если child не забрал её за это время, помечаем как
 // expired при следующем pending-запросе. 5 минут — щедрый запас поверх
@@ -113,12 +113,18 @@ export class DeviceCommandsService {
     }
   }
 
-  // Enqueue START_AUDIO для child-устройства. payload содержит sessionId
-  // и TURN-креды. Child заберёт через next /child/commands/pending poll.
+  /**
+   * Enqueue START_AUDIO для child-устройства (v0.35: WebSocket-relay).
+   * Payload содержит sessionId, координаты подключения к WS-relay и durationSec.
+   * Child заберёт через next /child/commands/pending poll и откроет WS.
+   *
+   * AUDIO_ANSWER (v0.32–v0.34) больше не используется: с WS-relay child'у не нужен
+   * SDP-answer родителя — оба клиента подключаются к серверу независимо.
+   */
   async enqueueAudioStart(
     childDeviceId: string,
     sessionId: string,
-    turnCreds: TurnCreds,
+    ws: AudioWsConnInfo,
     durationSec: number,
     createdByUserId: string,
     ttlMs = 60_000,
@@ -131,7 +137,7 @@ export class DeviceCommandsService {
         status: 'pending',
         createdByUserId,
         expiresAt,
-        payload: { sessionId, turnCreds, durationSec } as unknown as Prisma.InputJsonValue,
+        payload: { sessionId, ws, durationSec } as unknown as Prisma.InputJsonValue,
       },
     });
   }
@@ -141,8 +147,9 @@ export class DeviceCommandsService {
     sessionId: string,
     createdByUserId: string,
   ): Promise<void> {
-    // TTL 180s (v0.34.4) — см. комментарий в enqueueAudioAnswer. 30s не хватало
-    // для одного poll-цикла mobile-child (heartbeat 120с).
+    // TTL 180s (v0.34.4): poll в mobile-child привязан к location-heartbeat
+    // (каждые 120с), 60с не перекрывало один цикл → команда expire'илась до доставки.
+    // 180s даёт запас на 1-2 poll-цикла.
     const expiresAt = new Date(Date.now() + 180_000);
     await this.prisma.deviceCommand.create({
       data: {
@@ -152,33 +159,6 @@ export class DeviceCommandsService {
         createdByUserId,
         expiresAt,
         payload: { sessionId } as Prisma.InputJsonValue,
-      },
-    });
-  }
-
-  // Доставить SDP-answer родителя на child-устройство через DeviceCommand poll (v0.32.1).
-  // Child заберёт AUDIO_ANSWER при следующем /child/commands/pending запросе и завершит
-  // WebRTC handshake (setRemoteDescription).
-  //
-  // TTL 180s (v0.34.4): Plan E E2E показал что poll привязан к location-heartbeat
-  // (каждые 120с), а TTL 60с не перекрывал один цикл poll'а → answer expire'ился
-  // до доставки, сессия через какое-то время падала. 180s даёт запас на 1-2 poll-цикла.
-  // Правильное решение post-MVP — отдельный command-poll timer в mobile-child.
-  async enqueueAudioAnswer(
-    childDeviceId: string,
-    sessionId: string,
-    sdp: string,
-    createdByUserId: string,
-  ): Promise<void> {
-    const expiresAt = new Date(Date.now() + 180_000);
-    await this.prisma.deviceCommand.create({
-      data: {
-        childDeviceId,
-        type: 'AUDIO_ANSWER',
-        status: 'pending',
-        createdByUserId,
-        expiresAt,
-        payload: { sessionId, sdp } as Prisma.InputJsonValue,
       },
     });
   }

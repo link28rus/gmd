@@ -43,7 +43,9 @@ export function writePubspecVersion(filePath, newSemver) {
 
 export function readChangelogTopVersion(filePath) {
   const raw = readFileSync(filePath, 'utf8');
-  const match = raw.match(/^## v(\d+\.\d+\.\d+)/m);
+  // SemVer 2.0: MAJOR.MINOR.PATCH с опциональным prerelease (-rc.1, -beta.0 и т.п.).
+  // Captures всё включая prerelease, чтобы 0.35.0-rc.1 в CHANGELOG не путался с 0.35.0.
+  const match = raw.match(/^## v(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)/m);
   return match ? match[1] : null;
 }
 

@@ -8,25 +8,8 @@ export const CreateAudioSessionSchema = z.object({
 });
 export type CreateAudioSessionDto = z.infer<typeof CreateAudioSessionSchema>;
 
-// Parent: ответ с offer
-export const ParentAnswerSchema = z.object({
-  sdp: z.string().min(1).max(10_000),
-});
-export type ParentAnswerDto = z.infer<typeof ParentAnswerSchema>;
-
-// Parent / Child: ICE candidate
-export const IceCandidateSchema = z.object({
-  candidate: z.string().min(1).max(2000),
-});
-export type IceCandidateDto = z.infer<typeof IceCandidateSchema>;
-
-// Child: prepare offer
-export const ChildReadySchema = z.object({
-  sdp: z.string().min(1).max(10_000),
-});
-export type ChildReadyDto = z.infer<typeof ChildReadySchema>;
-
-// Child: error
+// Child: error report (legacy HTTP — оставлен для обратной совместимости с mobile-child v0.34.x;
+// в v0.35 child должен слать через WS control frame {op:'error', code, message}).
 export const ChildErrorSchema = z.object({
   code: z.enum(['PERMISSION_DENIED', 'MIC_BUSY', 'OEM_BLOCKED', 'NETWORK_ERROR', 'UNKNOWN']),
   message: z.string().max(500).optional(),
@@ -43,17 +26,27 @@ export const UpdateAudioSettingsSchema = z.object({
 });
 export type UpdateAudioSettingsDto = z.infer<typeof UpdateAudioSettingsSchema>;
 
-// Response shapes (no Zod, just TS types)
-export interface TurnCreds {
-  url: string; // turn:turn.gmd.link28rus.ru:3478
-  username: string; // <ts>:<sessionId>
-  password: string; // base64(HMAC_SHA1(secret, username))
-  ttl: number; // seconds
+// ─── Response shapes ──────────────────────────────────────────────────────────
+
+/**
+ * Координаты для подключения клиента к WebSocket-relay.
+ * Возвращаются parent'у в response startSession; для child'а — кладутся в
+ * payload START_AUDIO device-команды.
+ */
+export interface AudioWsConnInfo {
+  /** Полный URL с query-параметрами role, sessionId, token. */
+  url: string;
+  /** JWT (HS256, AUDIO_WS_SECRET). Дублируется в URL для удобства; используйте либо то, либо другое. */
+  token: string;
+  /** Сколько секунд токен валиден. */
+  ttlSec: number;
 }
 
 export interface CreateAudioSessionResponse {
   id: string;
   state: 'PENDING';
-  expiresAt: string; // ISO
-  turnCreds: TurnCreds;
+  /** ISO. До этого момента child должен подключиться к WS, иначе сессия EXPIRED. */
+  expiresAt: string;
+  /** Координаты подключения parent'а к WS-relay. */
+  ws: AudioWsConnInfo;
 }

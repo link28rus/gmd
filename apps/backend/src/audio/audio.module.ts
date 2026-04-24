@@ -7,7 +7,9 @@ import { ConsentModule } from '../consent/consent.module';
 import { DeviceCommandsModule } from '../device-commands/device-commands.module';
 import { AdminModule } from '../admin/admin.module';
 import { AudioService } from './audio.service';
-import { AudioEvents } from './audio.events';
+import { AudioRelay } from './audio.relay';
+import { AudioTokenService } from './audio-token.service';
+import { AudioGateway } from './audio.gateway';
 import { ParentAudioController } from './parent-audio.controller';
 import { ChildAudioController } from './child-audio.controller';
 import { AudioAdminController } from './audio-admin.controller';
@@ -23,7 +25,7 @@ import { AudioAdminController } from './audio-admin.controller';
     AdminModule,
   ],
   controllers: [ParentAudioController, ChildAudioController, AudioAdminController],
-  providers: [AudioService, AudioEvents],
-  exports: [AudioService, AudioEvents],
+  providers: [AudioService, AudioRelay, AudioTokenService, AudioGateway],
+  exports: [AudioService, AudioRelay],
 })
 export class AudioModule {}

@@ -375,18 +375,17 @@ enum AudioAuditEvent {
   CONSENT_REVOKED
 }
 
-enum AudioIceSide {
-  parent
-  child
-}
-
-// Сессия аудиомониторинга «Звук вокруг ребёнка». Состояния:
-// PENDING — родитель создал, child ещё не подтвердил готовность
-// READY   — child прислал SDP-offer, ждём parent answer
-// ACTIVE  — обмен ICE состоялся, аудио идёт
+// Сессия аудиомониторинга «Звук вокруг ребёнка». v0.35: WebSocket-relay.
+// Состояния:
+// PENDING — родитель создал, child ещё не подключился к WS-relay
+// ACTIVE  — оба клиента (child + parent) подключены, аудио идёт через backend
 // ENDED   — штатное завершение
 // FAILED  — ошибка (см. failureReason)
-// EXPIRED — child не успел ответить за TIMEOUT_SEC
+// EXPIRED — child не успел подключиться за readyTimeoutSec
+//
+// READY — устаревшее состояние из v0.32–v0.34 (WebRTC SDP exchange). Сохранено
+// в enum только для обратной совместимости со старыми записями в БД; новый
+// код его не использует.
 //
 // Аудио НЕ хранится — только метаданные сессии и audit-log. Под 152-ФЗ это
 // «обработка без накопления»; согласие фиксируется в ConsentRecord.
@@ -400,11 +399,8 @@ model AudioSession {
   durationSec     Int                 // запрошенная длительность
   actualSec       Int?                // реальная длительность (NULL пока не ENDED)
   failureReason   AudioFailureReason?
-  // SDP offer от child / answer от parent — короткие, OK хранить inline.
-  sdpOffer        String?
-  sdpAnswer       String?
   startedAt       DateTime            @default(now())
-  readyAt         DateTime?
+  readyAt         DateTime?           // legacy v0.32–v0.34, не выставляется в v0.35
   activeAt        DateTime?
   endedAt         DateTime?
   // Billing-заготовка (post-MVP)
@@ -415,29 +411,12 @@ model AudioSession {
   childDevice   ChildDevice         @relation(fields: [childDeviceId], references: [id], onDelete: Cascade)
   requestedBy   User                @relation(fields: [requestedById], references: [id], onDelete: Restrict)
   auditLog      AudioAuditLog[]
-  iceCandidates AudioIceCandidate[]
 
   @@index([childId, startedAt(sort: Desc)])
   @@index([requestedById, startedAt(sort: Desc)])
   // Для concurrentSessionsPerChild=1: одна активная на child.
   @@index([childId, state], map: "audio_sessions_child_active_idx")
   @@map("audio_sessions")
-}
-
-// ICE candidates — буфер на случай, если parent SSE дисконнектнулся.
-// Прямо отдаём через SSE и параллельно сохраняем; child poll'ит /ice.
-model AudioIceCandidate {
-  id        String       @id @default(cuid())
-  sessionId String
-  side      AudioIceSide
-  candidate String
-  createdAt DateTime     @default(now())
-  consumed  Boolean      @default(false)
-
-  session AudioSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-
-  @@index([sessionId, side, consumed])
-  @@map("audio_ice_candidates")
 }
 
 // Аудит для compliance. Retention 1 год (pg_cron). Не CASCADE-удаляется

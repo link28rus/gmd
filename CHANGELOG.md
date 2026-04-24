@@ -9,6 +9,23 @@
 
 ---
 
+## v0.35.0-rc.1 — 2026-04-24
+
+### Изменения
+
+- **«Звук вокруг» — переход с WebRTC/coturn на WebSocket-relay (Phase 1: backend).** Plan E E2E (v0.34.1–v0.34.6) показал, что WebRTC через TURN не работает в нашей CG-NAT-топологии: оба клиента (parent+child) аллоцируют relay от одного coturn, и `CREATE_PERMISSION` для relay-to-relay падает с 403 «Forbidden IP» даже при `allowed-peer-ip=0.0.0.0-255.255.255.255`. Мы целиком отказались от WebRTC и переходим на серверный аудио-relay через WebSocket: child открывает WS, шлёт Opus-кадры, backend перебрасывает их parent'у. Латентность вырастает на ~200 мс (transit через RU-сервер), зато надёжно работает за NAT любой строгости. 152-ФЗ: аудио проходит транзитом без записи, retention=0 не меняется.
+- backend: новый модуль `audio.gateway.ts` (`@nestjs/platform-ws`, native `ws`) на `/audio/ws?role={child|parent}&sessionId=…&token=…`. JWT (HS256, `AUDIO_WS_SECRET`) только для подключения к одной сессии, TTL = readyTimeout + duration + 60с.
+- backend: in-memory `AudioRelay` с per-consumer backpressure — drop кадров при `bufferedAmount > 512KB`, terminate с close 4004 при > 2MB. Watchdog раз в 60с убивает сессии где producer не шлёт > 90с.
+- backend: state machine упрощена `PENDING → ACTIVE → ENDED|FAILED|EXPIRED` (без `READY`); `ACTIVE` выставляется автоматически когда оба сокета подключены.
+- backend: удалены HTTP signaling endpoints `POST /audio/sessions/:id/answer`, `POST /audio/sessions/:id/ice`, `POST /child/audio/sessions/:id/ready`, `POST /child/audio/sessions/:id/ice`, SSE `GET /audio/sessions/:id/events`. `generateTurnCreds()` тоже удалён.
+- backend: `AUDIO_ANSWER` device-команда больше не отправляется — child получает координаты WS прямо в payload `START_AUDIO`.
+- prisma migration `20260424170000_audio_drop_signaling`: убраны таблица `audio_ice_candidates`, enum `AudioIceSide`, колонки `sdpOffer`/`sdpAnswer` в `audio_sessions`. Все висящие сессии (`PENDING`/`READY`/`ACTIVE` от v0.34.x) переведены в `EXPIRED` чтобы не путать новый код.
+- env: `AUDIO_WS_SECRET` (HS256 ключ ≥32 байт) и `AUDIO_WS_PUBLIC_URL` (`wss://gmd.link28rus.ru/audio/ws`). `TURN_*` переменные больше не читаются кодом (coturn будет удалён в v0.35.1 после отката web/mobile).
+
+> ⚠ Это первый из пяти шагов плана v0.35. Web-парнер и mobile-child всё ещё на WebRTC — фронтенд будет переписан в Phase 2/3, до того момента production-сборка `0.35.0-rc.1` ломает «Звук вокруг» end-to-end. Не катить на prod до завершения Phase 5.
+
+---
+
 ## v0.34.6 — 2026-04-24
 
 ### Исправления
