@@ -49,7 +49,13 @@ export class AudioSessionController {
 
     this.pc = this.factory(config);
 
-    this.pc.addTransceiver('audio', { direction: 'recvonly' });
+    // NOTE: НЕ добавляем `addTransceiver('audio', {direction: 'recvonly'})` заранее.
+    // Plan E E2E показал: это создаёт лишний transceiver без mid → после
+    // setRemoteDescription(offer) Chrome добавляет второй transceiver с mid="0"
+    // от m-line child'а, получается два m-секции в answer SDP, ICE candidates от
+    // child не matched правильно, connectionState застревает в "new".
+    // Направление `recvonly` теперь приходит из SDP child (он шлёт sendonly) →
+    // transceiver создаётся автоматически в setRemoteDescription уже с mid.
 
     this.pc.onicecandidate = (e) => {
       if (e.candidate?.candidate) {

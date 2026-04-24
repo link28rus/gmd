@@ -9,6 +9,14 @@
 
 ---
 
+## v0.34.5 — 2026-04-24
+
+### Исправления
+
+- **fix(web):** `AudioSessionController` больше не вызывает `addTransceiver('audio', {direction: 'recvonly'})` заранее. Этот вызов создавал transceiver **без** mid, а после `setRemoteDescription(offer)` Chrome добавлял **второй** transceiver c mid="0" (от m-line child'а) — в итоге в answer-SDP parent было два audio-секции. ICE candidates от child не matched правильно → `pc.connectionState` застревал в `"new"`, RTP audio не шёл, трек оставался `muted: true`. UI показывал «Подключено» (backend ставит ACTIVE после answer, а не после media flow), но звука не было. Plan E E2E на Xiaomi HyperOS 15.
+
+---
+
 ## v0.34.4 — 2026-04-24
 
 ### Исправления
