@@ -180,25 +180,36 @@ function SummaryCard({ range, tab }: { range: UsageRangeDto; tab: RangeTab }): R
 function Chart({ range, tab }: { range: UsageRangeDto; tab: RangeTab }): ReactElement {
   const max = Math.max(1, ...range.byHour);
   const isWeek = tab === 'week';
+  // Подпись для столбца: "HH:00" или "День N"
+  const labelFor = (idx: number): string => (isWeek ? `День ${idx + 1}` : `${idx}:00`);
   return (
     <div className="mt-4 rounded-2xl border border-border bg-card p-4">
       <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
         {isWeek ? 'Минут по дням' : 'Минут по часам'}
       </p>
-      <div className="flex h-32 items-end gap-1">
+      <div className="flex h-32 items-end gap-1 border-b border-border/40">
         {range.byHour.map((sec, idx) => {
           const ratio = sec / max;
           const min = Math.round(sec / 60);
+          const isEmpty = sec === 0;
+          // Активные часы — нормальная высота (минимум 6% для видимости).
+          // Пустые часы — одна-пиксельная серая «база», чтобы visually отделять
+          // ось от активных столбцов и не создавать ложное впечатление активности.
+          const heightPct = isEmpty ? 0 : Math.max(6, ratio * 100);
           return (
             <div
               key={idx}
               className="group relative flex flex-1 items-end"
-              title={`${isWeek ? `День ${idx + 1}` : `${idx}:00`} — ${min} мин`}
+              title={`${labelFor(idx)} — ${isEmpty ? 'нет активности' : `${min} мин`}`}
             >
-              <div
-                className="w-full rounded-t bg-blue-500/70 transition-colors hover:bg-blue-500"
-                style={{ height: `${Math.max(2, ratio * 100)}%` }}
-              />
+              {isEmpty ? (
+                <div className="h-px w-full bg-muted-foreground/30" aria-hidden />
+              ) : (
+                <div
+                  className="w-full rounded-t bg-blue-500 transition-colors hover:bg-blue-400"
+                  style={{ height: `${heightPct}%` }}
+                />
+              )}
             </div>
           );
         })}
