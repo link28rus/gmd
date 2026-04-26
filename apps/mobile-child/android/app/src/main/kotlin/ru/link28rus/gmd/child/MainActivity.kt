@@ -42,6 +42,11 @@ class MainActivity : FlutterActivity() {
                 // мгновенный sync. UX: «открой app → через 30 сек данные в кабинете».
                 AppControlScheduler.runInstalledAppsNow(this)
                 AppControlScheduler.runUsageNow(this)
+                // v0.39 Phase 6.2: на старте сразу подтянуть active-block + app-rules.
+                // Без этого после рестарта app локальный BlockManager может
+                // содержать устаревший state (например, родитель остановил блок
+                // пока app был закрыт).
+                AppControlScheduler.runBlockPollNow(this)
                 // v0.38 escape hatch: на старте app сразу probe — если ребёнка
                 // удалили пока приложение было закрыто, не ждём периодический час.
                 // Фоновый thread, не блокирует UI.

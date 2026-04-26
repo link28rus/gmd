@@ -180,6 +180,15 @@ object ChildEscapeOrchestrator {
       DiagLog.write(ctx, TAG, "NativeCreds.save(null) FAILED: ${e.message}")
     }
 
+    // 5. v0.39 Phase 6.2: снять активную блокировку приложений (если была).
+    // Без этого AccessibilityService продолжит блокировать запуск других apps
+    // даже когда родитель удалил ребёнка из кабинета — child повисает.
+    try {
+      BlockManager.clearActiveBlock(ctx, "escape-mode")
+    } catch (e: Throwable) {
+      DiagLog.write(ctx, TAG, "BlockManager.clearActiveBlock FAILED: ${e.message}")
+    }
+
     DiagLog.write(ctx, TAG, "ESCAPE COMPLETE — uninstall теперь разрешён, UI должен показать спецэкран")
   }
 

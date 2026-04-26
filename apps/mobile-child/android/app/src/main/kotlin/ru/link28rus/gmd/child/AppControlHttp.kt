@@ -110,6 +110,65 @@ object AppControlHttp {
     return doPost(ctx, "/child/usage-reports", payload)
   }
 
+  /**
+   * GET /child/active-block
+   * Возвращает {session: {sessionId, startedAt, endsAt} | null}.
+   * Используется PollWorker (60 сек fallback) и при старте app.
+   */
+  fun getActiveBlock(ctx: Context): Result =
+    doGet(ctx, "/child/active-block")
+
+  /**
+   * GET /child/app-rules
+   * Возвращает {rules: [{packageName, mode, source}]}.
+   * Включает HARDCODED первыми. Тянется при FCM SYNC_RULES, при старте app,
+   * раз в 6 ч.
+   */
+  fun getAppRules(ctx: Context): Result =
+    doGet(ctx, "/child/app-rules")
+
+  private fun doGet(ctx: Context, path: String): Result {
+    val token = NativeCreds.getToken(ctx)
+    val baseUrl = NativeCreds.getApiBaseUrl(ctx)
+    if (token.isNullOrEmpty() || baseUrl.isNullOrEmpty()) {
+      DiagLog.write(ctx, TAG, "GET $path skipped — no creds")
+      return Result(ok = false, statusCode = 0, bodyJson = null)
+    }
+    val urlStr = baseUrl.trimEnd('/') + path
+    var conn: HttpURLConnection? = null
+    return try {
+      val url = URL(urlStr)
+      conn = (url.openConnection() as HttpURLConnection).apply {
+        requestMethod = "GET"
+        connectTimeout = CONNECT_TIMEOUT_MS
+        readTimeout = READ_TIMEOUT_MS
+        doInput = true
+        setRequestProperty("Accept", "application/json")
+        setRequestProperty("X-Child-Token", token)
+        setRequestProperty("User-Agent", "gmd-child-worker/0.39")
+      }
+      val code = conn.responseCode
+      val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+      val body = stream?.let {
+        BufferedReader(InputStreamReader(it, Charsets.UTF_8)).use { r -> r.readText() }
+      } ?: ""
+      val json = if (body.isNotEmpty() && body.startsWith("{")) {
+        try { JSONObject(body) } catch (_: Throwable) { null }
+      } else null
+      val ok = code in 200..299
+      if (!ok) {
+        val short = if (body.length > 300) body.take(300) + "…" else body
+        DiagLog.write(ctx, TAG, "GET $path → $code: $short")
+      }
+      Result(ok = ok, statusCode = code, bodyJson = json)
+    } catch (e: Throwable) {
+      DiagLog.write(ctx, TAG, "GET $path FAILED: ${e.javaClass.simpleName}: ${e.message}")
+      Result(ok = false, statusCode = -1, bodyJson = null)
+    } finally {
+      conn?.disconnect()
+    }
+  }
+
   private fun doPost(ctx: Context, path: String, payload: JSONObject): Result {
     val token = NativeCreds.getToken(ctx)
     val baseUrl = NativeCreds.getApiBaseUrl(ctx)

@@ -55,8 +55,66 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         when (type) {
             "START_AUDIO" -> handleStartAudio(data)
             "STOP_AUDIO" -> handleStopAudio(data)
+            // v0.39 Phase 6.2 — App Blocking
+            "BLOCK_APPS" -> handleBlockApps(data)
+            "UNBLOCK_APPS" -> handleUnblockApps(data)
+            "SYNC_RULES" -> handleSyncRules()
             else -> DiagLog.write(this, "fcm", "unknown type=$type — ignored")
         }
+    }
+
+    /**
+     * Backend отправил {sessionId, endsAt} — сохраняем активную блок-сессию
+     * в [BlockManager]. AccessibilityService уже подключен (если ребёнок дал
+     * permission) и сразу начнёт ловить попытки открыть blocked app.
+     */
+    private fun handleBlockApps(data: Map<String, String>) {
+        val sessionId = data["sessionId"] ?: return logErr("BLOCK_APPS without sessionId")
+        val endsAtIso = data["endsAt"] ?: return logErr("BLOCK_APPS without endsAt")
+        val endsAtMs = parseIsoToMs(endsAtIso) ?: run {
+            logErr("BLOCK_APPS unparseable endsAt=$endsAtIso")
+            return
+        }
+        DiagLog.write(this, "fcm", "BLOCK_APPS via FCM: id=${sessionId.take(8)}… endsAt=$endsAtIso")
+        BlockManager.setActiveBlock(applicationContext, sessionId, endsAtMs)
+    }
+
+    /** Backend сообщил что сессия закрыта. Чистим локально. */
+    private fun handleUnblockApps(data: Map<String, String>) {
+        val sessionId = data["sessionId"]
+        DiagLog.write(this, "fcm", "UNBLOCK_APPS via FCM: id=${sessionId?.take(8) ?: "?"}…")
+        BlockManager.clearActiveBlock(applicationContext, "fcm-unblock")
+    }
+
+    /**
+     * Backend сообщил что AppRule изменилось. Делаем GET /child/app-rules
+     * на background-thread (FCM service на Android 14+ может убиться через 10с,
+     * поэтому Thread без глубокой работы).
+     */
+    private fun handleSyncRules() {
+        DiagLog.write(this, "fcm", "SYNC_RULES via FCM — pulling /child/app-rules")
+        Thread {
+            try {
+                val res = AppControlHttp.getAppRules(applicationContext)
+                if (res.ok && res.bodyJson != null) {
+                    BlockManager.applyRulesFromJsonObject(applicationContext, res.bodyJson)
+                } else {
+                    DiagLog.write(this, "fcm", "SYNC_RULES pull failed: status=${res.statusCode}")
+                }
+            } catch (e: Throwable) {
+                DiagLog.write(this, "fcm", "SYNC_RULES exception: ${e.javaClass.simpleName}: ${e.message}")
+            }
+        }.start()
+    }
+
+    /** ISO-8601 (`2026-04-26T10:43:24.000Z`) → epoch millis. */
+    private fun parseIsoToMs(iso: String): Long? = try {
+        // Простой парсер без java.time зависимостей: формат фиксирован backend'ом.
+        java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).apply {
+            timeZone = java.util.TimeZone.getTimeZone("UTC")
+        }.parse(iso)?.time
+    } catch (_: Throwable) {
+        null
     }
 
     private fun handleStartAudio(data: Map<String, String>) {

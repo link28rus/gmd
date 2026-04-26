@@ -9,6 +9,35 @@
 
 ---
 
+## v0.39.0-rc.2 — 2026-04-26 — Phase 6.2 «Блокировка приложений» (mobile-child)
+
+Реализует устройственную часть Phase 6.2: устройство ребёнка теперь умеет
+ловить попытки открыть запрещённое приложение и показывать full-screen
+блокировочный экран с countdown'ом до конца сессии.
+
+### Новые возможности
+
+- **Блокировочный оверлей на устройстве ребёнка.** Когда родитель запускает блок-сессию из бэкенда (rc.1), устройство мгновенно (через FCM `BLOCK_APPS`) или с задержкой ≤15 мин (через `BlockPollWorker`) сохраняет активную сессию локально. Каждое переключение foreground app проверяется через `AccessibilityService` — если package в blacklist, поверх него запускается `BlockOverlayActivity`: full-screen, lock-screen bypass, FLAG_KEEP_SCREEN_ON, swallow back-button, кнопка «Закрыть» → Home.
+
+### Изменения
+
+- **AccessibilityService реактивирован.** Класс был no-op с v0.29.2 (PIN-lock убран). Теперь снова в манифесте + `accessibility_service_config.xml` (только `typeWindowStateChanged`, без чтения content). Для уже установленных в RuStore версий: пользователь должен вручную включить через Settings → Accessibility → «Где мои дети — ребёнок» (wizard в onboarding добавим в rc.3 при появлении UI).
+- **`BlockManager` (Kotlin singleton, SharedPreferences-backed).** Хранит активную сессию (sessionId+endsAt) и whitelist правила (JSON). API `isBlocked(pkg)` для AccessibilityService с приоритетом HARDCODED → SAFETY_ALLOWED → AppRule → Mode.DEFAULT-with-active-session. Локально продублирован HARDCODED whitelist (`ru.link28rus.gmd.child`, `ru.oneme.app`) и SAFETY_ALLOWED (Settings, dialer, telecom, emergency) — даже без backend ответа критичные системные apps не блокируются.
+- **`BlockOverlayActivity` (XML layout, без Compose).** Показывает таймер вида «ещё 1 ч 59 мин» с тиком раз в секунду. При истечении endsAt сам вызывает `clearActiveBlock` + Home. На onPause закрывается (если ребёнок ушёл) — следующий blocked-window AccessibilityService поднимет overlay снова.
+- **`BlockPollWorker` (15 мин periodic).** Fallback poll `GET /child/active-block` + `GET /child/app-rules`. Страховка от потерянного FCM push'а (TTL 60с) или Doze. Также one-time запускается в `MainActivity.onCreate` для immediate sync при открытии app.
+- **FCM handlers.** `MyFirebaseMessagingService` теперь обрабатывает `BLOCK_APPS{sessionId, endsAt}`, `UNBLOCK_APPS{sessionId}`, `SYNC_RULES`. ISO-парсинг endsAt через SimpleDateFormat (формат фиксирован backend'ом). На SYNC_RULES делает background pull `GET /child/app-rules`.
+- **`AppControlHttp`.** Добавлены `getActiveBlock()` и `getAppRules()`, общий `doGet()` с теми же таймаутами и логированием.
+- **Escape hatch расширен.** `ChildEscapeOrchestrator.triggerEscape()` дополнительно вызывает `BlockManager.clearActiveBlock()` — без этого если родитель удалит ребёнка во время активной блокировки, AccessibilityService продолжит блокировать запуск apps (повисает устройство).
+
+### Известные ограничения
+
+- **Onboarding wizard для AccessibilityService** будет в rc.3 (вместе с web-parent UI). Пока пользователь должен включить вручную через Settings → Accessibility.
+- **Web-parent UI** — диалог time picker, sub-tab «Не блокируется» — rc.3.
+- **Mobile-parent native** — отдельной фазой.
+- **MIUI/HyperOS «Ограниченные настройки»** — на новых OEM Android требует «Разрешить ограниченные настройки» для AccessibilityService после sideload-установки. Wizard добавим в rc.3.
+
+---
+
 ## v0.39.0-rc.1 — 2026-04-26 — Phase 6.2 «Блокировка приложений» (backend core)
 
 Первый rc нового Phase 6.2 «App Blocking Core». Backend-only релиз — child и

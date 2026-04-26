@@ -72,6 +72,21 @@ object AppControlScheduler {
       .addTag(EscapeProbeWorker.TAG)
       .build()
 
+    // v0.39 Phase 6.2: fallback poll active-block + app-rules. FCM = main канал
+    // (мгновенно), poll = страховка от Doze / отсутствия Google Play Services /
+    // потерянного TTL=60с push'а.
+    val blockPollReq = PeriodicWorkRequestBuilder<BlockPollWorker>(
+      15, TimeUnit.MINUTES,
+    )
+      .setConstraints(
+        Constraints.Builder()
+          .setRequiredNetworkType(NetworkType.CONNECTED)
+          .build(),
+      )
+      .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+      .addTag(BlockPollWorker.TAG)
+      .build()
+
     wm.enqueueUniquePeriodicWork(
       UsageStatsReportWorker.UNIQUE_NAME,
       ExistingPeriodicWorkPolicy.KEEP,
@@ -87,10 +102,15 @@ object AppControlScheduler {
       ExistingPeriodicWorkPolicy.KEEP,
       escapeReq,
     )
+    wm.enqueueUniquePeriodicWork(
+      BlockPollWorker.UNIQUE_NAME,
+      ExistingPeriodicWorkPolicy.KEEP,
+      blockPollReq,
+    )
     DiagLog.write(
       ctx,
       TAG,
-      "scheduled UsageStats(15min) + InstalledApps(24h) + EscapeProbe(1h) periodic (KEEP)",
+      "scheduled UsageStats(15min) + InstalledApps(24h) + EscapeProbe(1h) + BlockPoll(15min) periodic (KEEP)",
     )
   }
 
@@ -104,8 +124,27 @@ object AppControlScheduler {
     wm.cancelUniqueWork(UsageStatsReportWorker.UNIQUE_NAME)
     wm.cancelUniqueWork(InstalledAppsReportWorker.UNIQUE_NAME)
     wm.cancelUniqueWork(EscapeProbeWorker.UNIQUE_NAME)
+    wm.cancelUniqueWork(BlockPollWorker.UNIQUE_NAME)
     DiagLog.write(ctx, TAG, "cancelled existing workers, re-enqueueing")
     scheduleAll(ctx)
+  }
+
+  /**
+   * Триггерит немедленный poll active-block + app-rules. Используется на старте
+   * MainActivity чтобы сразу подтянуть актуальное состояние (не ждать 15 мин
+   * до первого periodic'а), а также после grant'а Accessibility — чтобы тут же
+   * получить правила и активную сессию из backend'а.
+   */
+  fun runBlockPollNow(ctx: Context) {
+    val req = androidx.work.OneTimeWorkRequestBuilder<BlockPollWorker>()
+      .setConstraints(
+        Constraints.Builder()
+          .setRequiredNetworkType(NetworkType.CONNECTED)
+          .build(),
+      )
+      .build()
+    WorkManager.getInstance(ctx).enqueue(req)
+    DiagLog.write(ctx, TAG, "enqueued one-time BlockPoll run (manual trigger)")
   }
 
   /** Триггерит немедленный запуск usage-worker (для wizard'а после grant'а). */

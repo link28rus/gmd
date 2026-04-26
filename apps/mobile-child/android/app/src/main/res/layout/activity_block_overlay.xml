@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+v0.39 Phase 6.2: full-screen overlay при попытке открыть заблокированное app.
+Дизайн упрощённый (без иллюстраций) — текст + большой таймер + кнопка «Закрыть».
+«Мне очень нужно» (unlock-request) добавим в v0.40.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#0F172A"
+    android:gravity="center"
+    android:padding="32dp">
+
+    <!-- Замок (emoji вместо drawable) -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="🔒"
+        android:textSize="80sp"
+        android:layout_marginBottom="32dp"/>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Телефон заблокирован"
+        android:textColor="#FFFFFF"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:layout_marginBottom="8dp"/>
+
+    <TextView
+        android:id="@+id/block_overlay_remaining"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="ещё 0 мин"
+        android:textColor="#7DD3FC"
+        android:textSize="36sp"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:layout_marginBottom="24dp"/>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Если очень нужно — попроси родителя снять блокировку из приложения «Где мои дети»."
+        android:textColor="#94A3B8"
+        android:textSize="14sp"
+        android:gravity="center"
+        android:layout_marginBottom="48dp"/>
+
+    <Button
+        android:id="@+id/block_overlay_home"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:text="Закрыть"
+        android:textColor="#FFFFFF"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:background="#0EA5E9"/>
+
+</LinearLayout>

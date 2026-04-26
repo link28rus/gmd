@@ -174,10 +174,37 @@
             </intent-filter>
         </receiver>
 
-        <!-- GmdAccessibilityService оставлен пустым no-op'ом (класс существует,
-             но сервис в манифесте больше не регистрируется). У уже включивших
-             a11y в Settings пользователей Android автоматически пометит сервис
-             как недоступный и выключит — PIN-lock L2 полностью удалён в v0.29.2. -->
+        <!-- v0.39 Phase 6.2: AccessibilityService реактивирован для блокировки
+             приложений (PIN-lock остался удалён, защита от удаления — Device Admin L1).
+             Ловит TYPE_WINDOW_STATE_CHANGED, проверяет packageName через BlockManager
+             и при попадании в blacklist запускает BlockOverlayActivity. Грантится
+             вручную: Settings → Accessibility → "Где мои дети — ребёнок". -->
+        <service
+            android:name=".GmdAccessibilityService"
+            android:label="@string/accessibility_service_description"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
+
+        <!-- v0.39 Phase 6.2: full-screen overlay при попытке открыть заблокированное app.
+             excludeFromRecents=true — оверлей не висит в недавних задачах.
+             showWhenLocked=true (manifest + setShowWhenLocked в Activity) — overlay
+             перекрывает lockscreen. launchMode=singleTop — повторный startActivity
+             не плодит дубли. theme — без ActionBar, NoActionBar.Fullscreen аналог. -->
+        <activity
+            android:name=".BlockOverlayActivity"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:excludeFromRecents="true"
+            android:showOnLockScreen="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
