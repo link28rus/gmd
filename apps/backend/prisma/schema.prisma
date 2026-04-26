@@ -74,6 +74,7 @@ model User {
   emailVerificationTokens  EmailVerificationToken[]
   passwordResetTokens      PasswordResetToken[]
   audioSessionsRequested   AudioSession[]
+  blockSessionsCreated     BlockSession[]
 
   @@index([email])
   @@index([role])
@@ -266,6 +267,8 @@ model ChildDevice {
   audioSessions AudioSession[]
   installedApps InstalledApp[]
   usageBuckets  UsageBucket[]
+  appRules      AppRule[]
+  blockSessions BlockSession[]
 
   @@map("child_devices")
 }
@@ -649,4 +652,91 @@ model UsageBucket {
   @@unique([childDeviceId, date, hour, packageName])
   @@index([childDeviceId, date])
   @@map("usage_buckets")
+}
+
+// ─── Phase 6.2 (v0.39): App Blocking Core ──────────────────────────────────
+// См. docs/superpowers/specs/2026-04-26-gmd-phase6-app-control.md §5.
+//
+// Модель блокировки = whitelist + глобальный таймер (decision 2026-04-26):
+// родитель запускает BlockSession{durationMin}, на child всё блокируется
+// КРОМЕ AppRule{mode=ALWAYS_ALLOWED} (whitelist) + системных defaults
+// (dialer/sms/camera/contacts/settings — резолвятся child'ом и UPSERT'ятся
+// как AppRule{source=SYSTEM_DEFAULT, mode=ALWAYS_ALLOWED}).
+
+enum AppRuleMode {
+  // Подчиняется активной BlockSession (= блокируется когда сессия ACTIVE).
+  // Default для всех новых apps.
+  DEFAULT
+  // Никогда не блокируется (whitelist). Игнорирует BlockSession.
+  ALWAYS_ALLOWED
+  // Блокируется ВСЕГДА, даже без активной сессии. Зарезервировано для v0.40.
+  ALWAYS_BLOCKED
+}
+
+enum AppRuleSource {
+  // Родитель явно настроил через UI.
+  PARENT
+  // Авто-резолвлено child'ом (default dialer/sms/camera/contacts/settings).
+  // Backend UPSERT'ит при /child/installed-apps с payload.systemDefaults.
+  SYSTEM_DEFAULT
+  // Зашито в backend: ru.link28rus.gmd.child, ru.oneme.app — нельзя удалить.
+  HARDCODED
+}
+
+// Per-(child × packageName) правило. Если правила нет → mode = DEFAULT.
+// Один rule на пакет: при смене source/mode UPSERT по (childDeviceId, packageName).
+// SYSTEM_DEFAULT можно перезаписать через PARENT (но не наоборот — backend
+// не даст откатить PARENT обратно в SYSTEM_DEFAULT).
+// HARDCODED резолвится в backend на чтении, в БД физически нет —
+// иначе админу пришлось бы их seed'ить (см. compileEffectiveRules в сервисе).
+model AppRule {
+  id            String        @id @default(cuid())
+  childDeviceId String
+  packageName   String
+  mode          AppRuleMode
+  source        AppRuleSource
+
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  childDevice ChildDevice @relation(fields: [childDeviceId], references: [id], onDelete: Cascade)
+
+  @@unique([childDeviceId, packageName])
+  @@index([childDeviceId])
+  @@map("app_rules")
+}
+
+enum BlockSessionState {
+  ACTIVE          // endsAt > now, ребёнок видит overlay при попытке открыть DEFAULT app
+  ENDED           // парент явно остановил (DELETE)
+  EXPIRED         // auto-expired по endsAt (cron / OnModuleInit cleanup)
+}
+
+enum BlockEndReason {
+  PARENT_STOPPED  // явный DELETE
+  EXPIRED         // endsAt <= now
+  UNLOCK_APPROVED // v0.40: парент одобрил UnlockRequest с decision=APPROVED_FULL
+}
+
+// Активная блокировка экрана ребёнка. Per-child максимум одна ACTIVE
+// (валидируется на POST). startedAt + durationMin = endsAt — child получает
+// absolute UTC timestamp endsAt (не зависит от system clock manipulation).
+model BlockSession {
+  id                String           @id @default(cuid())
+  childDeviceId     String
+  // Кто из родителей запустил. Для аудита и отображения в UI.
+  createdByUserId   String
+
+  state             BlockSessionState @default(ACTIVE)
+  startedAt         DateTime          @default(now())
+  endsAt            DateTime          // = startedAt + durationMin
+  endedAt           DateTime?         // фактическое окончание (early stop / expired)
+  endReason         BlockEndReason?
+
+  childDevice ChildDevice @relation(fields: [childDeviceId], references: [id], onDelete: Cascade)
+  createdByUser User      @relation(fields: [createdByUserId], references: [id])
+
+  @@index([childDeviceId, state])
+  @@index([endsAt])  // для cron auto-expire / OnModuleInit cleanup
+  @@map("block_sessions")
 }

@@ -9,6 +9,39 @@
 
 ---
 
+## v0.39.0-rc.1 — 2026-04-26 — Phase 6.2 «Блокировка приложений» (backend core)
+
+Первый rc нового Phase 6.2 «App Blocking Core». Backend-only релиз — child и
+parent UI пока не подключены, проверка через curl/тесты.
+
+### Новые возможности
+
+- **Backend для блокировки приложений у ребёнка по запросу родителя.** Реализована модель «whitelist + глобальный таймер»: родитель запускает блок-сессию длительностью 5 мин..24 ч, на устройстве ребёнка всё блокируется кроме явного whitelist'а (mode `ALWAYS_ALLOWED`), системных defaults (default dialer/sms/camera/contacts/settings — резолвит сам ребёнок) и зашитых в backend `ru.link28rus.gmd.child` + `ru.oneme.app`. Запасной вариант — `ALWAYS_BLOCKED` для постоянно запрещённых приложений (UI в v0.40).
+
+### Изменения
+
+- **Prisma:** новые модели `AppRule` (per-(child × packageName)) и `BlockSession` (per-child максимум одна `ACTIVE`); enums `AppRuleMode {DEFAULT|ALWAYS_ALLOWED|ALWAYS_BLOCKED}`, `AppRuleSource {PARENT|SYSTEM_DEFAULT|HARDCODED}`, `BlockSessionState {ACTIVE|ENDED|EXPIRED}`, `BlockEndReason {PARENT_STOPPED|EXPIRED|UNLOCK_APPROVED}`; миграция `20260426170000_phase6_app_blocking_core` с pg_cron job `gmd_block_sessions_auto_expire` (раз в минуту переводит просроченные сессии в `EXPIRED`).
+- **Backend endpoints (parent, JWT):**
+  - `POST /family/children/:id/app-control/block-sessions` — создать сессию `{durationMin}`. 409 если уже есть `ACTIVE`.
+  - `GET /family/children/:id/app-control/block-sessions/active` — текущая активная сессия (auto-expire on-read).
+  - `DELETE /family/children/:id/app-control/block-sessions/:sessionId` — досрочное завершение, идемпотентно.
+  - `GET /family/children/:id/app-control/app-rules` — список правил `PARENT + SYSTEM_DEFAULT`.
+  - `PUT /family/children/:id/app-control/app-rules/:packageName` — установить правило, source автоматически `PARENT`.
+- **Backend endpoints (child, device-token):**
+  - `GET /child/app-rules` — effective whitelist (`HARDCODED` + `PARENT` + `SYSTEM_DEFAULT`); HARDCODED идут первыми и не перезаписываются.
+  - `GET /child/active-block` — активная блок-сессия для устройства (или `{session: null}`).
+- **FCM команды:** `BLOCK_APPS{sessionId, endsAt}` при создании, `UNBLOCK_APPS{sessionId}` при остановке, `SYNC_RULES` при изменении правила. Fire-and-forget; при недоставке child подтягивает через poll-эндпоинты.
+- **OnModuleInit cleanup:** при старте бэка все `ACTIVE` сессии с истёкшим `endsAt` помечаются `EXPIRED` (страховка от gap'а между shutdown и pg_cron tick).
+- **Тесты:** `app-blocking.service.spec.ts` — 16 unit-тестов, покрывают create/stop/getActive/upsertRule/listEffective/onModuleInit, включая идемпотентность и приоритет HARDCODED.
+
+### Известные ограничения
+
+- **Mobile-child** ещё не использует новые endpoints — Drift таблицы, `BlockManager`, FCM handlers, AccessibilityService extension и `BlockOverlayActivity` будут в `v0.39.0-rc.2`.
+- **Web-parent** UI (диалог time picker, sub-tab «Не блокируется», список правил) — `v0.39.0-rc.3`.
+- **Mobile-parent** native — отдельной фазой после развития base app.
+
+---
+
 ## v0.38.1 — 2026-04-26
 
 ### Исправления

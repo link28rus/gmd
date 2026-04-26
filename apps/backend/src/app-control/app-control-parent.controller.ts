@@ -1,10 +1,16 @@
 import {
   BadRequestException,
+  Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Inject,
   NotFoundException,
   Param,
+  Post,
+  Put,
   Query,
   Req,
   UseGuards,
@@ -12,7 +18,11 @@ import {
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PrismaService } from '../prisma/prisma.service';
+import { ZodValidationPipe } from '../common/zod/zod-validation.pipe';
 import { AppControlService } from './app-control.service';
+import { AppBlockingService } from './app-blocking.service';
+import { CreateBlockSessionSchema, type CreateBlockSessionBody } from './dto/block-session.dto';
+import { PutAppRuleSchema, type PutAppRuleBody } from './dto/app-rule.dto';
 
 interface AuthedRequest extends Request {
   user: { userId: string; familyId: string; role: 'owner' | 'parent' | 'admin' };
@@ -28,6 +38,7 @@ interface AuthedRequest extends Request {
 export class AppControlParentController {
   constructor(
     @Inject(AppControlService) private readonly svc: AppControlService,
+    @Inject(AppBlockingService) private readonly blocking: AppBlockingService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
   ) {}
 
@@ -56,6 +67,117 @@ export class AppControlParentController {
     }
     const result = await this.svc.getUsage(childId, range, date ?? null);
     return { range, result };
+  }
+
+  // ─── Phase 6.2 (v0.39): App Blocking ────────────────────────────────────
+
+  /**
+   * Создать BlockSession (родитель нажал «Заблокировать на N минут»).
+   * 201 + {sessionId, startedAt, endsAt}.
+   * 409 session_already_active — для child уже есть ACTIVE сессия.
+   * 404 no_active_device — у ребёнка нет привязанного устройства.
+   */
+  @Post('block-sessions')
+  @HttpCode(HttpStatus.CREATED)
+  async createBlockSession(
+    @Req() req: AuthedRequest,
+    @Param('childId') childId: string,
+    @Body(new ZodValidationPipe(CreateBlockSessionSchema)) dto: CreateBlockSessionBody,
+  ): Promise<{ sessionId: string; startedAt: string; endsAt: string }> {
+    await this.assertChildInFamily(req.user.familyId, childId);
+    const result = await this.blocking.createSession({
+      childId,
+      createdByUserId: req.user.userId,
+      durationMin: dto.durationMin,
+    });
+    return {
+      sessionId: result.sessionId,
+      startedAt: result.startedAt.toISOString(),
+      endsAt: result.endsAt.toISOString(),
+    };
+  }
+
+  /**
+   * Текущая активная сессия для child. 200 + payload | 204 если нет.
+   */
+  @Get('block-sessions/active')
+  async activeBlockSession(
+    @Req() req: AuthedRequest,
+    @Param('childId') childId: string,
+  ): Promise<{ sessionId: string; startedAt: string; endsAt: string } | null> {
+    await this.assertChildInFamily(req.user.familyId, childId);
+    const session = await this.blocking.getActiveSession(childId);
+    if (!session) return null;
+    return {
+      sessionId: session.id,
+      startedAt: session.startedAt.toISOString(),
+      endsAt: session.endsAt.toISOString(),
+    };
+  }
+
+  /**
+   * Завершить активную сессию (родитель нажал «Снять блок»).
+   * 204. Идемпотентно для уже ENDED/EXPIRED сессий.
+   */
+  @Delete('block-sessions/:sessionId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async stopBlockSession(
+    @Req() req: AuthedRequest,
+    @Param('childId') childId: string,
+    @Param('sessionId') sessionId: string,
+  ): Promise<void> {
+    await this.assertChildInFamily(req.user.familyId, childId);
+    await this.blocking.stopSession({
+      childId,
+      sessionId,
+      stoppedByUserId: req.user.userId,
+    });
+  }
+
+  /**
+   * Список явно сохранённых правил (PARENT + SYSTEM_DEFAULT). HARDCODED не
+   * включаем — UI знает их статически. Frontend комбинирует этот ответ со
+   * списком installed-apps.
+   */
+  @Get('app-rules')
+  async listAppRules(
+    @Req() req: AuthedRequest,
+    @Param('childId') childId: string,
+  ): Promise<{ rules: Array<{ packageName: string; mode: string; source: string }> }> {
+    await this.assertChildInFamily(req.user.familyId, childId);
+    const device = await this.prisma.childDevice.findFirst({
+      where: { childId, revokedAt: null },
+      select: { id: true },
+    });
+    if (!device) return { rules: [] };
+    const rules = await this.blocking.listParentRules(device.id);
+    return { rules };
+  }
+
+  /**
+   * Установить правило для конкретного packageName.
+   * 200 + сохранённое правило.
+   */
+  @Put('app-rules/:packageName')
+  async putAppRule(
+    @Req() req: AuthedRequest,
+    @Param('childId') childId: string,
+    @Param('packageName') packageName: string,
+    @Body(new ZodValidationPipe(PutAppRuleSchema)) dto: PutAppRuleBody,
+  ): Promise<{ packageName: string; mode: string; source: string }> {
+    await this.assertChildInFamily(req.user.familyId, childId);
+    if (!packageName || packageName.length > 255) {
+      throw new BadRequestException({
+        code: 'invalid_package_name',
+        message: 'packageName required (max 255 chars)',
+      });
+    }
+    const rule = await this.blocking.upsertParentRule({
+      childId,
+      packageName,
+      mode: dto.mode,
+    });
+    return { packageName: rule.packageName, mode: rule.mode, source: rule.source };
   }
 
   // ─── Helpers ────────────────────────────────────────────────────────────
