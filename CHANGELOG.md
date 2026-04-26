@@ -13,22 +13,26 @@
 
 ### Новые возможности
 
-- **«Звук вокруг» подключается мгновенно (3-5 сек) вместо 60-120 сек.** Backend отправляет команду `START_AUDIO` ребёнку через **FCM high-priority data-message** параллельно с очередью `DeviceCommand` — Firebase будит устройство и доставляет команду без ожидания poll-цикла. То же для `STOP_AUDIO`. Очередь команд остаётся как fallback: если FCM не настроен, упал, или у устройства нет валидного token — child заберёт команду через poll, как в v0.36 (60-120с latency). Backend Phase 1 готов; mobile-child Phase 2 (приём push) — следующий релиз.
+- **«Звук вокруг» подключается за 3-10 секунд вместо 60-120.** Backend отправляет команду `START_AUDIO` ребёнку через **FCM high-priority data-message** параллельно с очередью `DeviceCommand` — Firebase будит устройство и доставляет команду без ожидания poll-цикла. То же для `STOP_AUDIO`. **End-to-end verified на Тимохе (Xiaomi 25028PC03G, locked screen): click → стрим за 10 секунд (vs 60-120 сек раньше).** Очередь команд остаётся как fallback: если FCM не настроен, упал, или у устройства нет валидного token — child заберёт команду через poll, как в v0.36.
 
 ### Изменения
 
 - **Prisma migration `20260426150000_add_fcm_token`**: `child_devices.fcmToken String?` (UNIQUE) + `fcmTokenUpdatedAt DateTime?`.
-- **Новый модуль `apps/backend/src/fcm/`** с `FcmService` (Firebase Admin SDK V1, init из `FIREBASE_SA_KEY` base64-env). Если переменной нет — DISABLED state с warn'ом, fallback на poll работает прозрачно.
-- **Endpoint `POST /child/devices/fcm-token`** (auth через X-Child-Token) — child регистрирует/обновляет FCM token при старте app и `onTokenRefresh`. Идемпотентен; защищён от race с UNIQUE constraint при FCM token reset.
-- **`AudioService.createSession()`** — после `enqueueAudioStart()` параллельно вызывает `fcm.sendDataMessage()` с тем же payload.
-- **`AudioService.expireOrFail()` + `endSession()`** — то же для STOP_AUDIO.
+- **Backend** `apps/backend/src/fcm/` с `FcmService` (Firebase Admin SDK V1, init из `FIREBASE_SA_KEY` base64-env). Если переменной нет — DISABLED state с warn'ом, fallback на poll работает прозрачно.
+- **Backend endpoint `POST /child/devices/fcm-token`** (auth через X-Child-Token) — child регистрирует/обновляет FCM token при старте app и `onTokenRefresh`. Идемпотентен; защищён от race с UNIQUE constraint при FCM token reset.
+- **Backend `AudioService.createSession()` / `expireOrFail()` / `endSession()`** — параллельно с очередью вызывают `fcm.sendDataMessage()`. UNREGISTERED/INVALID_ARGUMENT errors → автоматически чистят `fcmToken` в БД.
+- **Mobile-child Android `MyFirebaseMessagingService`**: `onMessageReceived` парсит `data.type` (START_AUDIO/STOP_AUDIO) и стартует SoundAroundService. `onNewToken` сохраняет в SharedPreferences для повторной регистрации.
+- **Mobile-child Dart `FcmRegistrar`**: на startup при наличии device-token получает FCM token у Firebase и POST'ит на backend. Подписан на `onTokenRefresh` для автоматической перерегистрации при rotate'е.
+- **Mobile-child** `firebase_messaging` plugin активирован, `Firebase.initializeApp()` в `main()` (best-effort).
+- **Android gradle**: `com.google.gms.google-services:4.4.4` plugin + `firebase-bom:34.12.0` + `firebase-messaging`.
 - **Docker compose**: проброс `FIREBASE_SA_KEY` в backend контейнер. Опционально (если не задано — FCM disabled).
 - **`.env.prod.example`**: документирована переменная `FIREBASE_SA_KEY` с инструкцией base64-encode.
+- **Manifest**: зарегистрирован `MyFirebaseMessagingService` с FCM intent-filter.
 
 ### Безопасность
 
 - `service-account.json` хранится в `.firebase-credentials/` (gitignore).
-- `google-services.json` для mobile-child будет добавлен в Phase 2 (тоже gitignore).
+- `google-services.json` в `apps/mobile-child/android/app/` (gitignore через `**/google-services.json`).
 - На прод сервере `FIREBASE_SA_KEY` лежит в `/opt/gmd/.env.prod` (только root reading).
 
 ---

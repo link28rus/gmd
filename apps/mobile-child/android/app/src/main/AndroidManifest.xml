@@ -136,6 +136,17 @@
             android:name=".AudioStartTrampolineReceiver"
             android:enabled="true"
             android:exported="false"/>
+        <!-- v0.37 — Firebase Cloud Messaging service для high-priority push.
+             Backend шлёт data-message {type:START_AUDIO/STOP_AUDIO,...} —
+             onMessageReceived стартует SoundAroundService. Это даёт latency
+             3-5 сек вместо 60-120 сек poll-цикла. -->
+        <service
+            android:name=".MyFirebaseMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
         <!-- L1-защита от удаления приложения. Пока Device Admin активен,
              Android блокирует стандартный Uninstall из Settings → Apps →
              gmd_child — вместо этого показывается «Deactivate device

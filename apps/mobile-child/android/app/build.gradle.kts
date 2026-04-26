@@ -6,6 +6,9 @@ plugins {
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+    // v0.37: применяем google-services plugin (читает google-services.json,
+    // генерирует Firebase config classes для FirebaseMessaging init).
+    id("com.google.gms.google-services")
 }
 
 // Загружаем release-signing конфиг из android/key.properties (в git не хранится).
@@ -73,4 +76,9 @@ flutter {
 
 dependencies {
     implementation("com.google.android.gms:play-services-location:21.3.0")
+    // v0.37: Firebase Cloud Messaging — нужен compile-time доступ к
+    // FirebaseMessagingService class из MyFirebaseMessagingService.kt.
+    // Через BoM 34.12.0 (выровнен с Firebase Console wizard).
+    implementation(platform("com.google.firebase:firebase-bom:34.12.0"))
+    implementation("com.google.firebase:firebase-messaging")
 }

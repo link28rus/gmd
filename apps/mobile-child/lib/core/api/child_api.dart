@@ -267,4 +267,27 @@ class ChildApi {
       throw ServerException('Ошибка сервера', status);
     }
   }
+
+  // v0.37: регистрируем FCM token в backend для high-priority push доставки
+  // команд (мгновенный START_AUDIO/STOP_AUDIO без 60-120с poll latency).
+  // null = устройство сделало FirebaseInstanceId.delete() (rare); backend
+  // в этом случае автоматически fallback'ится на poll-команды.
+  Future<void> setFcmToken({
+    required String? fcmToken,
+    required String deviceToken,
+  }) async {
+    try {
+      await _dio.post(
+        '/child/devices/fcm-token',
+        data: {'fcmToken': fcmToken},
+        options: Options(headers: {'X-Child-Token': deviceToken}),
+      );
+    } on DioException catch (e) {
+      final status = e.response?.statusCode;
+      if (status == 401 || status == 403) {
+        throw const UnauthorizedException();
+      }
+      throw NetworkException(e.message ?? 'Network');
+    }
+  }
 }
