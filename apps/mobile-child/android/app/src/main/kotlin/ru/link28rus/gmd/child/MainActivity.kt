@@ -35,6 +35,13 @@ class MainActivity : FlutterActivity() {
         try {
             if (!NativeCreds.getToken(this).isNullOrEmpty()) {
                 AppControlScheduler.scheduleAll(this)
+                // v0.38.0-rc.7: на каждом старте app триггерим one-time
+                // installed-apps + usage runs. Это решает проблему когда
+                // periodic worker'ы ушли в exponential backoff после серии 5xx —
+                // periodic не сработает быстро, но ручной open-app сделает
+                // мгновенный sync. UX: «открой app → через 30 сек данные в кабинете».
+                AppControlScheduler.runInstalledAppsNow(this)
+                AppControlScheduler.runUsageNow(this)
                 // v0.38 escape hatch: на старте app сразу probe — если ребёнка
                 // удалили пока приложение было закрыто, не ждём периодический час.
                 // Фоновый thread, не блокирует UI.

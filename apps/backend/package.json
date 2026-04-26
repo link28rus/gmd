@@ -1,6 +1,6 @@
 {
   "name": "@gmd/backend",
-  "version": "0.38.0-rc.6",
+  "version": "0.38.0-rc.7",
   "private": true,
   "description": "GMD backend — NestJS API",
   "scripts": {
@@ -30,6 +30,7 @@
     "@sentry/nestjs": "^9",
     "@sentry/node": "^9",
     "cookie-parser": "^1.4.7",
+    "express": "^5.2.1",
     "firebase-admin": "^13.8.0",
     "ioredis": "^5.10.1",
     "jose": "^5.9.6",

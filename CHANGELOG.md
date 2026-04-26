@@ -9,6 +9,14 @@
 
 ---
 
+## v0.38.0-rc.7 — 2026-04-26
+
+### Улучшения
+
+- **mobile-child: при каждом запуске app сразу триггерим `runInstalledAppsNow` + `runUsageNow`** (one-time WorkManager job), не дожидаясь периодического тика. Решает проблему когда после серии 5xx-ошибок periodic worker уходит в exponential backoff на 24+ часа — после fix backend родитель должен видеть данные в кабинете в течение минуты, а не на следующий день. Verified на 12T Pro link28rus: после первой ошибки (PayloadTooLarge) periodic ушёл в backoff +23h51m → после rc.7 install через 30 секунд **280 иконок и 524 apps в БД**.
+
+---
+
 ## v0.38.0-rc.6 — 2026-04-26
 
 ### Исправления
