@@ -20,6 +20,7 @@ import { ZonesModule } from './zones/zones.module';
 import { DeviceCommandsModule } from './device-commands/device-commands.module';
 import { AudioModule } from './audio/audio.module';
 import { FcmModule } from './fcm/fcm.module';
+import { AppControlModule } from './app-control/app-control.module';
 import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storage';
 import { SecretsModule } from './common/secrets/secrets.module';
 
@@ -51,6 +52,7 @@ import { SecretsModule } from './common/secrets/secrets.module';
     DeviceCommandsModule,
     AudioModule,
     FcmModule,
+    AppControlModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

@@ -253,11 +253,19 @@ model ChildDevice {
   fcmToken           String?   @unique
   fcmTokenUpdatedAt  DateTime?
 
-  child     Child           @relation(fields: [childId], references: [id], onDelete: Cascade)
-  locations Location[]
-  sosEvents SosEvent[]
-  commands  DeviceCommand[]
+  // v0.38: IANA timezone устройства ребёнка ("Europe/Moscow") — нужно для
+  // корректной агрегации UsageBucket по local-date. Шлётся child'ом при
+  // /usage-reports POST. NULL до первого репорта — UI парента в этом случае
+  // показывает «нет данных».
+  timezone           String?
+
+  child         Child           @relation(fields: [childId], references: [id], onDelete: Cascade)
+  locations     Location[]
+  sosEvents     SosEvent[]
+  commands      DeviceCommand[]
   audioSessions AudioSession[]
+  installedApps InstalledApp[]
+  usageBuckets  UsageBucket[]
 
   @@map("child_devices")
 }
@@ -566,4 +574,79 @@ model ZoneState {
   @@unique([zoneId, childId])
   @@index([childId])
   @@map("zone_states")
+}
+
+// ─── Phase 6 (v0.38): Screen-time reporting ──────────────────────────────────
+// См. docs/superpowers/specs/2026-04-26-gmd-phase6-app-control.md
+//
+// На MVP — только сбор статистики использования приложений и список
+// установленных apps (с иконками). Блокировка приложений (BlockSession,
+// AppRule, UnlockRequest) добавится в v0.39/v0.40.
+
+// Snapshot установленных приложений у ребёнка. Обновляется ежедневным
+// InstalledAppsWorker'ом на mobile-child. Apps, исчезнувшие из payload
+// >7 дней — soft-deleted (lastSeenAt смотрим в UI парента и серым выводим).
+model InstalledApp {
+  id            String   @id @default(cuid())
+  childDeviceId String
+  packageName   String   // "com.zhiliaoapp.musically"
+  appLabel      String   // "TikTok"
+  // SHA-256 raw PNG bytes иконки (см. AppIcon). NULL — иконку ещё не
+  // успели зарезолвить (новый пакет, не успел загрузиться).
+  iconSha256    String?
+  // ApplicationInfo.FLAG_SYSTEM или FLAG_UPDATED_SYSTEM_APP. Системные
+  // показываем (вариант A в дизайне), но визуально отделяем + не позволяем
+  // блокировать звонки/SMS/камеру/Settings.
+  isSystem      Boolean  @default(false)
+  // Резолвится через app_categories.json seed. NULL → "other" в UI.
+  category      String?
+
+  firstSeenAt   DateTime @default(now())
+  lastSeenAt    DateTime @default(now())
+
+  childDevice ChildDevice @relation(fields: [childDeviceId], references: [id], onDelete: Cascade)
+
+  @@unique([childDeviceId, packageName])
+  @@index([childDeviceId])
+  @@map("installed_apps")
+}
+
+// Глобальный кэш иконок приложений. Dedupe по sha256 — один и тот же TikTok
+// у 1000 детей хранится один раз. PNG, max 96x96 RGBA, ≤100KB.
+//
+// На v0.38 хранится BYTEA прямо в БД (для упрощения deploy — MinIO bucket
+// setup отложен). Ожидаемый объём: ~500 уникальных pkg/семья × 100KB = 50MB
+// в самом плохом случае. При росте >10GB total — мигрируем в MinIO.
+//
+// Отдаётся через GET /app-icons/:sha256 с Cache-Control: public, max-age=31536000,
+// immutable (sha256 — content-addressable, можно кэшировать вечно).
+model AppIcon {
+  sha256    String   @id      // SHA-256 raw PNG bytes (hex lowercase, 64 char)
+  pngBytes  Bytes              // raw PNG content (max 100KB enforced на API уровне)
+  bytes     Int                // размер для аналитики/лимитов (= length(pngBytes))
+  createdAt DateTime @default(now())
+
+  @@map("app_icons")
+}
+
+// Часовой bucket использования приложения. Ровно один rec на каждую
+// (child, local-date, hour, package). UPSERT при POST /child/usage-reports.
+// Retention 30 дней — pg_cron job (см. infra/postgres/init/).
+//
+// `seconds` агрегируется на child'е: child queryEvents UsageStats, считает
+// время в каждом bucket'е по часам в local-TZ (TZ хранится в ChildDevice).
+// Backend никаких пересчётов TZ не делает — просто записывает как есть.
+model UsageBucket {
+  id            String   @id @default(cuid())
+  childDeviceId String
+  date          DateTime @db.Date  // local-date в TZ ребёнка (см. ChildDevice.timezone)
+  hour          Int                // 0..23
+  packageName   String
+  seconds       Int                // суммарно в этом часе
+
+  childDevice ChildDevice @relation(fields: [childDeviceId], references: [id], onDelete: Cascade)
+
+  @@unique([childDeviceId, date, hour, packageName])
+  @@index([childDeviceId, date])
+  @@map("usage_buckets")
 }

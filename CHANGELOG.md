@@ -9,6 +9,43 @@
 
 ---
 
+## v0.38.0-rc.1 — 2026-04-26
+
+### Новые возможности
+
+- **Phase 6.1 «Родительский контроль» — backend-фундамент.** Подготовлены модели данных и API для сбора статистики экранного времени с устройств детей и хранения списка установленных приложений с иконками. UI парента (web + mobile) и сборщик на mobile-child пойдут отдельным релизом v0.38.0-rc.2. Дизайн фичи — [docs/superpowers/specs/2026-04-26-gmd-phase6-app-control.md](docs/superpowers/specs/2026-04-26-gmd-phase6-app-control.md).
+
+### Изменения
+
+- **Prisma migration `20260426160000_phase6_screen_time`**:
+  - `child_devices.timezone TEXT?` — IANA timezone устройства ребёнка для агрегации `usage_buckets` по local-date.
+  - `installed_apps` — снапшот установленных apps (childDeviceId, packageName, appLabel, iconSha256, isSystem, category, firstSeenAt, lastSeenAt). UNIQUE(childDeviceId, packageName).
+  - `app_icons` — глобальный sha256-dedupe кэш PNG-иконок (BYTEA, max 100KB на иконку, content-addressable). На MVP хранится в БД; миграция в MinIO — при росте >10GB.
+  - `usage_buckets` — часовые bucket'ы использования (childDeviceId, date, hour, packageName, seconds). UNIQUE(childDeviceId, date, hour, packageName).
+  - `pg_cron` job `gmd_usage_buckets_cleanup` (DELETE старше 30 дней, 03:15 UTC). DO/EXCEPTION-обёртка чтобы dev без pg_cron не падал.
+- **Backend модуль `apps/backend/src/app-control/`**:
+  - `AppControlService` — UPSERT installed apps / icons / usage buckets, агрегации `getUsage(range='day'|'week')` с `byHour[24]`/`byHour[7]`, `byCategory`, `vsAverage` (% разница со средним за 7 дней).
+  - `CategoryResolver` — резолв package → category по статичному JSON-справочнику топ-200 RU/EN apps (11 категорий: social, messengers, video, games, browsers, education, music, navigation, shopping, system, other).
+  - `AppControlChildController` (auth: device-token):
+    - `POST /child/installed-apps` — снапшот установленных apps + timezone, возвращает список missing iconSha256 для последующей загрузки;
+    - `POST /child/app-icons` — батч новых иконок (до 50 за раз, base64 PNG ≤100KB, sha256 верифицируется на бэке + PNG magic check);
+    - `POST /child/usage-reports` — часовые bucket'ы (UPSERT-replace, max 24000 buckets за payload).
+  - `AppControlParentController` (auth: JWT):
+    - `GET /family/children/:id/app-control/installed-apps` — список с iconUrl, категорией, временем за сегодня;
+    - `GET /family/children/:id/app-control/usage?range=day|week&date=YYYY-MM-DD` — агрегации.
+  - `AppIconsPublicController`:
+    - `GET /app-icons/:sha256` — public, immutable Cache-Control max-age 1 год, Throttle 600/мин.
+- **Throttle limits:** installed-apps 5/час, app-icons 20/час, usage-reports 30/час (под worker'ы 1×day / 15-min с запасом на retry).
+
+### Что в следующих релизах v0.38
+
+- **v0.38.0-rc.2:** mobile-child — UsageStatsWorker (Kotlin, 15-min periodic + 7-day backfill), InstalledAppsWorker (daily + sha256-dedup иконок), wizard для `PACKAGE_USAGE_STATS` permission.
+- **v0.38.0-rc.3:** web-parent — страница `/children/[id]/parental-control` (вкладки Сегодня/Вчера/Неделя, bar chart, чипы категорий, список apps).
+- **v0.38.0-rc.4:** mobile-parent — тот же экран на Flutter.
+- **v0.39:** App blocking (BlockSession, AppRule, BlockOverlayActivity, FCM BLOCK_APPS/UNBLOCK_APPS).
+
+---
+
 ## v0.37.0-rc.1 — 2026-04-26
 
 ### Новые возможности
