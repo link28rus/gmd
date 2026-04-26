@@ -81,4 +81,7 @@ dependencies {
     // Через BoM 34.12.0 (выровнен с Firebase Console wizard).
     implementation(platform("com.google.firebase:firebase-bom:34.12.0"))
     implementation("com.google.firebase:firebase-messaging")
+    // v0.38 Phase 6.1: WorkManager periodic для UsageStatsReportWorker (15-min)
+    // и InstalledAppsReportWorker (daily). Минимальный интервал periodic = 15 мин.
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
 }

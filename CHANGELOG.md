@@ -9,6 +9,29 @@
 
 ---
 
+## v0.38.0-rc.3 — 2026-04-26
+
+### Изменения
+
+- **mobile-child Phase 6.1: WorkManager periodic workers + onboarding wizard.**
+  - **Kotlin `AppControlHttp.kt`** — `HttpURLConnection`-клиент для нативных worker'ов: `postInstalledApps` / `postAppIcons` / `postUsageReport`. Читает `deviceToken` + `apiBaseUrl` из `NativeCreds` SharedPreferences. Без новых зависимостей. Возвращает `Result(ok, statusCode, bodyJson)` для классификации worker'ом.
+  - **Kotlin `UsageStatsReportWorker`** (15-min `CoroutineWorker` periodic): дёргает `AppControlNative.collectUsageBuckets(daysBack)` + `AppControlHttp.postUsageReport`. **Первый запуск — backfill 7 дней** (флаг в SharedPreferences `gmd_app_control`); последующие — 1 день. 4xx → `success-skip`, 5xx/network → `retry` с exp backoff.
+  - **Kotlin `InstalledAppsReportWorker`** (24h periodic): `collectInstalledApps` → `postInstalledApps` (получает `missingIconSha256`) → батчами ≤50 `postAppIcons`. Constraint `BATTERY_NOT_LOW` (PNG-кодирование).
+  - **Kotlin `AppControlScheduler`** — `enqueueUniquePeriodicWork(KEEP)` для обоих worker'ов. Helpers `runUsageNow` / `runInstalledAppsNow` для one-time trigger (используются wizard'ом сразу после grant'а).
+  - **MainActivity** — `scheduleAll()` в `onCreate` (если есть token) и в `saveNativeCreds` handler'е (после claim'а).
+  - **Dart `core/native/app_control_channel.dart`** — добавлены `scheduleAll()`, `runUsageNow()`, `runInstalledAppsNow()`.
+  - **Dart `features/permissions/usage_stats_step.dart`** — onboarding шаг «Доступ к статистике приложений». Открывает `Settings.ACTION_USAGE_ACCESS_SETTINGS`, при resume lifecycle проверяет grant и запускает worker'ы. MIUI/HyperOS-инструкция про «Ограниченные настройки» в описании.
+  - **Router** — маршрут `/permissions/usage-stats`, devadmin placeholder теперь ведёт на usage-stats вместо `/home`.
+- **build.gradle.kts** — `androidx.work:work-runtime-ktx:2.9.1` (для periodic workers).
+
+### Что осталось для v0.38
+
+- **v0.38.0-rc.4 (web-parent):** страница `/children/[id]/parental-control` — табы Сегодня/Вчера/Неделя, bar chart, чипы категорий, список apps с иконками.
+- **v0.38.0-rc.5 (mobile-parent):** тот же экран на Flutter.
+- **Smoke-тест rc.3 на устройстве** — реальный install + grant + наблюдение что workers выполняются + проверка backend-данных.
+
+---
+
 ## v0.38.0-rc.2 — 2026-04-26
 
 ### Изменения

@@ -10,6 +10,7 @@ import '../features/permissions/battery_step.dart';
 import '../features/permissions/location_step.dart';
 import '../features/permissions/microphone_step.dart';
 import '../features/permissions/notifications_step.dart';
+import '../features/permissions/usage_stats_step.dart';
 
 class AppRouter {
   static GoRouter buildRouter({String initialLocation = '/onboarding'}) =>
@@ -58,6 +59,10 @@ class AppRouter {
       builder: (_, _) => const _DeviceAdminPlaceholder(),
     ),
     GoRoute(
+      path: '/permissions/usage-stats',
+      builder: (_, _) => const UsageStatsStep(),
+    ),
+    GoRoute(
       path: '/home',
       builder: (_, _) => const HomeScreen(),
     ),
@@ -74,7 +79,7 @@ class _DeviceAdminPlaceholder extends StatelessWidget {
   Widget build(BuildContext context) => Scaffold(
     body: Center(
       child: ElevatedButton(
-        onPressed: () => GoRouter.of(context).go('/home'),
+        onPressed: () => GoRouter.of(context).go('/permissions/usage-stats'),
         child: const Text('Продолжить (devadmin placeholder)'),
       ),
     ),

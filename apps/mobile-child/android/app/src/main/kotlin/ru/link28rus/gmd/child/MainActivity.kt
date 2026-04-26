@@ -24,6 +24,19 @@ private const val REQUEST_CODE_ADD_ADMIN = 8101
 class MainActivity : FlutterActivity() {
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
+        // v0.38 Phase 6.1: при наличии device-token поднимаем periodic workers
+        // (UsageStatsReportWorker 15-min + InstalledAppsReportWorker 24h).
+        // Идемпотентно (KEEP-policy) — повторные вызовы безопасны. Если token
+        // ещё не сохранён (первый запуск до claim'а) — workers запустятся
+        // после saveNativeCreds через protection channel (см. ниже).
+        try {
+            if (!NativeCreds.getToken(this).isNullOrEmpty()) {
+                AppControlScheduler.scheduleAll(this)
+            }
+        } catch (e: Throwable) {
+            DiagLog.write(this, "ui", "scheduleAll failed: ${e.javaClass.simpleName}: ${e.message}")
+        }
+
         // v0.36.0 D-lite: pre-warm SoundAroundService в FGS=microphone idle state.
         // Activity visible = foreground = Android разрешает startForeground(type=MICROPHONE)
         // без SecurityException. После этого service остаётся жить, и START_AUDIO команды
@@ -196,6 +209,15 @@ class MainActivity : FlutterActivity() {
                             "native",
                             "saveNativeCreds: token=${token?.take(6)}… base=$baseUrl",
                         )
+                        // v0.38 Phase 6.1: после claim'а запускаем periodic workers.
+                        // Идемпотентно (KEEP) — если уже стояли, ничего не меняется.
+                        if (!token.isNullOrEmpty()) {
+                            try {
+                                AppControlScheduler.scheduleAll(this)
+                            } catch (e: Throwable) {
+                                DiagLog.write(this, "native", "scheduleAll after creds failed: ${e.message}")
+                            }
+                        }
                         result.success(null)
                     }
                     else -> result.notImplemented()
@@ -270,6 +292,30 @@ class MainActivity : FlutterActivity() {
                                 }
                             }
                         }.start()
+                    }
+                    "scheduleAll" -> {
+                        try {
+                            AppControlScheduler.scheduleAll(this)
+                            result.success(null)
+                        } catch (e: Throwable) {
+                            result.error("schedule_failed", e.message, null)
+                        }
+                    }
+                    "runUsageNow" -> {
+                        try {
+                            AppControlScheduler.runUsageNow(this)
+                            result.success(null)
+                        } catch (e: Throwable) {
+                            result.error("run_failed", e.message, null)
+                        }
+                    }
+                    "runInstalledAppsNow" -> {
+                        try {
+                            AppControlScheduler.runInstalledAppsNow(this)
+                            result.success(null)
+                        } catch (e: Throwable) {
+                            result.error("run_failed", e.message, null)
+                        }
                     }
                     else -> result.notImplemented()
                 }

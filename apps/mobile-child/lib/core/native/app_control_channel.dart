@@ -47,6 +47,25 @@ class AppControlChannel {
         .toList();
   }
 
+  /// Поднять periodic workers (UsageStats 15-min + InstalledApps 24h).
+  /// Идемпотентно (KEEP-policy). Вызывается обычно после успешного claim'а.
+  /// Также native код сам вызывает это в MainActivity.onCreate если есть token.
+  static Future<void> scheduleAll() async {
+    await _ch.invokeMethod<void>('scheduleAll');
+  }
+
+  /// Триггер немедленного запуска UsageStats worker'а
+  /// (для wizard'а — после grant'а сразу залить данные на бэк).
+  static Future<void> runUsageNow() async {
+    await _ch.invokeMethod<void>('runUsageNow');
+  }
+
+  /// Триггер немедленного запуска InstalledApps worker'а
+  /// (для wizard'а — сразу отправить snapshot apps + иконки).
+  static Future<void> runInstalledAppsNow() async {
+    await _ch.invokeMethod<void>('runInstalledAppsNow');
+  }
+
   /// Часовые usage-bucket'ы за последние [daysBack] дней (включая сегодня).
   ///
   /// daysBack=1 → только сегодня (для 15-min worker'а).
