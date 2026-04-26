@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../../core/native/app_control_channel.dart';
+
 /// Красный баннер сверху на home, если критические permissions для фонового
 /// трекинга не даны. Показывается и при первом запуске, и после обновлений
 /// приложения (когда онбординг уже пройден, но требования могли поменяться —
@@ -17,6 +19,7 @@ class PermissionHealthBanner extends StatefulWidget {
 class _PermissionHealthBannerState extends State<PermissionHealthBanner>
     with WidgetsBindingObserver {
   List<String> _missing = const [];
+  String _route = '/permissions/battery';
   Timer? _recheckTimer;
 
   @override
@@ -42,6 +45,7 @@ class _PermissionHealthBannerState extends State<PermissionHealthBanner>
 
   Future<void> _check() async {
     final missing = <String>[];
+    var route = '/permissions/battery';
     // Локация «Всегда» — без этого background не работает.
     final locAlways = await Permission.locationAlways.status;
     if (!locAlways.isGranted) missing.add('Местоположение «Всегда»');
@@ -51,8 +55,19 @@ class _PermissionHealthBannerState extends State<PermissionHealthBanner>
     // Уведомления — Android 13+ требует runtime.
     final notif = await Permission.notification.status;
     if (!notif.isGranted) missing.add('Уведомления');
+    // v0.39 Phase 6.2: блокировка приложений требует AccessibilityService.
+    // Если выключен — родитель не сможет блокировать apps. Critical для фичи,
+    // но не для остального tracking — ставим в banner отдельным пунктом.
+    final a11y = await AppControlChannel.isAccessibilityServiceEnabled();
+    if (!a11y) {
+      missing.add('Блокировка приложений');
+      if (missing.length == 1) route = '/permissions/accessibility';
+    }
     if (!mounted) return;
-    setState(() => _missing = missing);
+    setState(() {
+      _missing = missing;
+      _route = route;
+    });
   }
 
   @override
@@ -62,7 +77,7 @@ class _PermissionHealthBannerState extends State<PermissionHealthBanner>
       color: Colors.red.shade50,
       child: InkWell(
         onTap: () {
-          context.go('/permissions/battery');
+          context.go(_route);
         },
         child: Padding(
           padding: const EdgeInsets.all(12),
@@ -75,7 +90,7 @@ class _PermissionHealthBannerState extends State<PermissionHealthBanner>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Приложение не будет работать в фоне',
+                      'Не все разрешения настроены',
                       style: TextStyle(
                         color: Colors.red.shade900,
                         fontWeight: FontWeight.w600,

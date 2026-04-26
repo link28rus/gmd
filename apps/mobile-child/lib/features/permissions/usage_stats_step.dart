@@ -116,14 +116,14 @@ class _UsageStatsStepState extends State<UsageStatsStep>
   }
 
   void _goNext() {
-    if (mounted) GoRouter.of(context).go('/home');
+    if (mounted) GoRouter.of(context).go('/permissions/accessibility');
   }
 
   @override
   Widget build(BuildContext context) {
     return PermissionsWizardScaffold(
       stepIndex: 6,
-      totalSteps: 7,
+      totalSteps: 8,
       title: 'Статистика приложений',
       description:
           'Чтобы родитель видел в кабинете, сколько ты сегодня провёл в '

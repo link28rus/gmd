@@ -11,6 +11,7 @@ import '../features/permissions/location_step.dart';
 import '../features/permissions/microphone_step.dart';
 import '../features/permissions/notifications_step.dart';
 import '../features/permissions/usage_stats_step.dart';
+import '../features/permissions/accessibility_step.dart';
 import '../features/escape/escape_screen.dart';
 
 class AppRouter {
@@ -62,6 +63,13 @@ class AppRouter {
     GoRoute(
       path: '/permissions/usage-stats',
       builder: (_, _) => const UsageStatsStep(),
+    ),
+    // v0.39 Phase 6.2: Accessibility (для блокировки приложений). Идёт
+    // последним шагом — после usage-stats. Без него a11y service не подключён,
+    // BlockOverlayActivity не показывается.
+    GoRoute(
+      path: '/permissions/accessibility',
+      builder: (_, _) => const AccessibilityStep(),
     ),
     GoRoute(
       path: '/home',

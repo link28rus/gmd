@@ -35,7 +35,7 @@ class MicrophoneStep extends StatelessWidget {
   Widget build(BuildContext context) {
     return PermissionsWizardScaffold(
       stepIndex: 4,
-      totalSteps: 6,
+      totalSteps: 8,
       title: 'Доступ к микрофону',
       description:
           'Нужен для функции «Звук вокруг ребёнка» — родитель сможет в кризисной '

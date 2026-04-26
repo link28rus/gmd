@@ -1,6 +1,6 @@
 {
   "name": "@gmd/backend",
-  "version": "0.39.0-rc.2",
+  "version": "0.39.0-rc.3",
   "private": true,
   "description": "GMD backend — NestJS API",
   "scripts": {

@@ -24,6 +24,26 @@ class AppControlChannel {
     await _ch.invokeMethod<void>('openUsageStatsSettings');
   }
 
+  /// v0.39 Phase 6.2: включён ли наш GmdAccessibilityService.
+  /// На iOS / web — false.
+  static Future<bool> isAccessibilityServiceEnabled() async {
+    final granted = await _ch.invokeMethod<bool>('isAccessibilityServiceEnabled');
+    return granted ?? false;
+  }
+
+  /// v0.39 Phase 6.2: открыть Settings → Accessibility (общий список).
+  /// Пользователь сам находит «Где мои дети» и включает.
+  static Future<void> openAccessibilitySettings() async {
+    await _ch.invokeMethod<void>('openAccessibilitySettings');
+  }
+
+  /// v0.39 Phase 6.2: открыть карточку приложения в Settings.
+  /// Используется для разрешения «Ограниченных настроек» на MIUI/HyperOS
+  /// (⋮ → «Разрешить ограниченные настройки») перед грантом Accessibility.
+  static Future<void> openAppDetailsSettings() async {
+    await _ch.invokeMethod<void>('openAppDetailsSettings');
+  }
+
   /// IANA timezone устройства (например "Europe/Moscow").
   /// Шлётся в payload installed-apps / usage-reports.
   static Future<String> deviceTimezone() async {

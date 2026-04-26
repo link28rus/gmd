@@ -84,6 +84,55 @@ object AppControlNative {
     ctx.startActivity(intent)
   }
 
+  // ─── v0.39 Phase 6.2: Accessibility permission helpers ────────────────────
+
+  /**
+   * Включён ли наш [GmdAccessibilityService] в системе.
+   *
+   * Читаем `enabled_accessibility_services` (`Settings.Secure`) — это
+   * single-source-of-truth. AccessibilityManager.getEnabledAccessibilityServiceList
+   * не возвращает наш сервис, если он сейчас «binding» (HyperOS интеграционный
+   * лаг), поэтому используем строковое сравнение.
+   */
+  fun isAccessibilityServiceEnabled(ctx: Context): Boolean {
+    val expected = "${ctx.packageName}/${ctx.packageName}.GmdAccessibilityService"
+    val enabled = Settings.Secure.getString(
+      ctx.contentResolver,
+      Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+    ) ?: return false
+    return enabled.split(":").any { it.equals(expected, ignoreCase = true) }
+  }
+
+  /**
+   * Открыть системные Settings → Accessibility (общий список).
+   * Пользователь должен сам найти «Где мои дети» и включить.
+   *
+   * На MIUI/HyperOS перед этим может потребоваться разрешить «Ограниченные
+   * настройки» через карточку приложения — см. [openAppDetailsSettings].
+   */
+  fun openAccessibilitySettings(ctx: Context) {
+    val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+      .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    ctx.startActivity(intent)
+  }
+
+  /**
+   * Открыть карточку приложения в Settings (для разрешения «Ограниченных
+   * настроек» на MIUI/HyperOS перед грантом Accessibility).
+   *
+   * После открытия пользователь нажимает ⋮ в правом верхнем углу и выбирает
+   * «Разрешить ограниченные настройки» / «Allow restricted settings».
+   * Это снимает блок с тумблеров для sideload-приложений (a11y, device admin
+   * для apps вне Play Store).
+   */
+  fun openAppDetailsSettings(ctx: Context) {
+    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+      data = android.net.Uri.fromParts("package", ctx.packageName, null)
+      addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    ctx.startActivity(intent)
+  }
+
   /** IANA timezone устройства (например "Europe/Moscow"). Шлётся в backend. */
   fun deviceTimezone(): String = TimeZone.getDefault().id
 

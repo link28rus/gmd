@@ -269,6 +269,25 @@ class MainActivity : FlutterActivity() {
                             result.error("open_settings_failed", e.message, null)
                         }
                     }
+                    // v0.39 Phase 6.2: Accessibility helpers
+                    "isAccessibilityServiceEnabled" ->
+                        result.success(AppControlNative.isAccessibilityServiceEnabled(this))
+                    "openAccessibilitySettings" -> {
+                        try {
+                            AppControlNative.openAccessibilitySettings(this)
+                            result.success(null)
+                        } catch (e: Throwable) {
+                            result.error("open_settings_failed", e.message, null)
+                        }
+                    }
+                    "openAppDetailsSettings" -> {
+                        try {
+                            AppControlNative.openAppDetailsSettings(this)
+                            result.success(null)
+                        } catch (e: Throwable) {
+                            result.error("open_settings_failed", e.message, null)
+                        }
+                    }
                     "deviceTimezone" ->
                         result.success(AppControlNative.deviceTimezone())
                     "collectInstalledApps" -> {

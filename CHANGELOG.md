@@ -9,6 +9,26 @@
 
 ---
 
+## v0.39.0-rc.3 — 2026-04-26 — onboarding-шаг для блокировки приложений (mobile-child)
+
+В rc.2 устройство умело показывать блокировочный оверлей, но включить
+AccessibilityService приходилось вручную через системные настройки. rc.3
+добавляет полноценный wizard-шаг и индикатор статуса на главном экране.
+
+### Новые возможности
+
+- **Шаг «Блокировка приложений» в onboarding-wizard.** Открывается после шага «Статистика приложений», ведёт пользователя на системный экран Спецвозможностей и обнаруживает успешный grant через lifecycle resume. Включает отдельную кнопку «Разрешить ограниченные настройки (Xiaomi)» — открывает карточку приложения в Settings, пользователь нажимает ⋮ → «Разрешить ограниченные настройки», после чего тумблер Accessibility активируется. Без этого шага на MIUI/HyperOS Accessibility просто не включается.
+- **Индикатор статуса блокировки в Permission Health Banner на /home.** Если AccessibilityService выключен — в красном баннере появляется пункт «Блокировка приложений», tap ведёт сразу на новый шаг wizard. Старые установленные пользователи (онбординг был пройден до v0.39) увидят это автоматически.
+
+### Изменения
+
+- **Native (Kotlin):** добавлены `AppControlNative.isAccessibilityServiceEnabled()`, `openAccessibilitySettings()`, `openAppDetailsSettings()`. Регистрация в `MainActivity` MethodChannel `app_control`. Все three методы безопасно throw'ют через `result.error('open_settings_failed', ...)` при недоступности Settings activity.
+- **Dart channel:** `AppControlChannel.isAccessibilityServiceEnabled()`, `openAccessibilitySettings()`, `openAppDetailsSettings()`.
+- **Wizard:** новый `AccessibilityStep` widget (`lib/features/permissions/accessibility_step.dart`), маршрут `/permissions/accessibility`. Переход `usage_stats_step` → `/home` заменён на `/permissions/accessibility`. Все existing steps (`notifications`, `location`, `battery`, `activity`, `microphone`, `usage-stats`) обновлены `totalSteps: 6 → 8`.
+- **Permission health banner:** проверяет `isAccessibilityServiceEnabled()`, при выключенном — добавляет «Блокировка приложений» в `_missing` и роутит на `/permissions/accessibility`.
+
+---
+
 ## v0.39.0-rc.2 — 2026-04-26 — Phase 6.2 «Блокировка приложений» (mobile-child)
 
 Реализует устройственную часть Phase 6.2: устройство ребёнка теперь умеет
