@@ -9,6 +9,26 @@
 
 ---
 
+## v0.38.0-rc.2 — 2026-04-26
+
+### Изменения
+
+- **mobile-child Phase 6.1 native-фундамент** (без worker'ов и UI wizard — следующий rc.2b):
+  - **Kotlin `AppControlNative.kt`**: `hasUsageStatsPermission()` через `AppOpsManager.unsafeCheckOpNoThrow(OPSTR_GET_USAGE_STATS)`, `openUsageStatsSettings()` (Settings.ACTION_USAGE_ACCESS_SETTINGS), `deviceTimezone()` (IANA), `collectInstalledApps()` (PackageManager + 96x96 PNG icons + sha256), `collectUsageBuckets(daysBack)` (UsageEvents ACTIVITY_RESUMED/PAUSED → часовые bucket'ы в local-TZ, корректно режет интервалы по границам часов).
+  - **MethodChannel `ru.link28rus.gmd.child/app_control`** в MainActivity. Тяжёлые операции (`collectInstalledApps`, `collectUsageBuckets`) выполняются на background-thread.
+  - **Dart `core/native/app_control_channel.dart`**: type-safe обёртки `AppControlChannel` + DTO `InstalledAppNative` (с `Uint8List iconPngBytes`) и `UsageBucketNative`.
+  - **Dart `core/api/child_api.dart`**: новые методы `postInstalledApps` (возвращает list missing iconSha256), `postAppIcons` (батч ≤50, base64), `postUsageReport` (под endpoints rc.1).
+  - **Manifest:** `PACKAGE_USAGE_STATS` + `QUERY_ALL_PACKAGES` permissions с `tools:ignore`.
+
+### Что осталось для v0.38.0-rc.2b
+
+- WorkManager periodic workers (`UsageStatsWorker` 15-min, `InstalledAppsWorker` daily) — будут дёргать `AppControlNative` напрямую без MethodChannel.
+- UI wizard: экран onboarding для grant `PACKAGE_USAGE_STATS` (по аналогии с a11y wizard v0.27.1, с MIUI/HyperOS-текстом про «Ограниченные настройки»).
+- DiagLog индикатор «Usage Stats: granted/denied» на /debug экране.
+- 7-day retroactive backfill при первом успешном grant'е.
+
+---
+
 ## v0.38.0-rc.1 — 2026-04-26
 
 ### Новые возможности

@@ -43,6 +43,16 @@
          переключать FLP в режим 5-мин интервала и экономить батарею ребёнка.
          Permission optional: при отказе сервис работает в active-only режиме. -->
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION"/>
+    <!-- v0.38 Phase 6.1: screen-time reporting.
+         PACKAGE_USAGE_STATS — special access (Settings → Special access → Usage data),
+         используется UsageStatsManager.queryEvents для часовых bucket'ов.
+         QUERY_ALL_PACKAGES — Android 11+ (API 30) требуется для PackageManager
+         .getInstalledApplications чтобы вернуть полный список (не только наш).
+         Парент-контроль — оправданное use-case по политике RuStore. -->
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions"/>
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission"/>
     <application
         android:label="gmd_child"
         android:name="${applicationName}"

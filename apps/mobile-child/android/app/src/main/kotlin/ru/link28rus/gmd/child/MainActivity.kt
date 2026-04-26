@@ -16,6 +16,8 @@ import io.flutter.plugin.common.MethodChannel
 private const val UI_METHOD_CHANNEL = "ru.link28rus.gmd.child/location"
 private const val DIAG_METHOD_CHANNEL = "ru.link28rus.gmd.child/diag"
 private const val PROTECTION_METHOD_CHANNEL = "ru.link28rus.gmd.child/protection"
+// v0.38: Phase 6.1 screen-time. Native helpers для UsageStatsManager + installed apps.
+private const val APP_CONTROL_METHOD_CHANNEL = "ru.link28rus.gmd.child/app_control"
 
 private const val REQUEST_CODE_ADD_ADMIN = 8101
 
@@ -204,5 +206,73 @@ class MainActivity : FlutterActivity() {
         // Тот же helper вызывается в LocationForegroundService для background isolate,
         // иначе POLL-команда START_AUDIO в фоне падает с MissingPluginException.
         SoundAroundChannel.register(this, flutterEngine.dartExecutor.binaryMessenger)
+
+        // v0.38: Phase 6.1 screen-time channel. Только UI-isolate (worker'ы используют
+        // AppControlNative напрямую через WorkManager — не через channel).
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, APP_CONTROL_METHOD_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "hasUsageStatsPermission" ->
+                        result.success(AppControlNative.hasUsageStatsPermission(this))
+                    "openUsageStatsSettings" -> {
+                        try {
+                            AppControlNative.openUsageStatsSettings(this)
+                            result.success(null)
+                        } catch (e: Throwable) {
+                            result.error("open_settings_failed", e.message, null)
+                        }
+                    }
+                    "deviceTimezone" ->
+                        result.success(AppControlNative.deviceTimezone())
+                    "collectInstalledApps" -> {
+                        // Тяжёлая операция (~100-500ms на типичном устройстве из-за
+                        // PNG-кодирования иконок). Запускаем на background-thread,
+                        // result уходит в Flutter после завершения.
+                        Thread {
+                            try {
+                                val apps = AppControlNative.collectInstalledApps(this)
+                                val payload = apps.map {
+                                    mapOf(
+                                        "packageName" to it.packageName,
+                                        "appLabel" to it.appLabel,
+                                        "isSystem" to it.isSystem,
+                                        "iconSha256" to it.iconSha256,
+                                        // ВНИМАНИЕ: pngBytes передаются как ByteArray, Flutter
+                                        // получает Uint8List. Не base64 — экономим memcpy.
+                                        "iconPngBytes" to it.iconPngBytes,
+                                    )
+                                }
+                                runOnUiThread { result.success(payload) }
+                            } catch (e: Throwable) {
+                                runOnUiThread {
+                                    result.error("collect_failed", e.message, null)
+                                }
+                            }
+                        }.start()
+                    }
+                    "collectUsageBuckets" -> {
+                        val daysBack = (call.argument<Int>("daysBack") ?: 1).coerceIn(1, 30)
+                        Thread {
+                            try {
+                                val buckets = AppControlNative.collectUsageBuckets(this, daysBack)
+                                val payload = buckets.map {
+                                    mapOf(
+                                        "date" to it.date,
+                                        "hour" to it.hour,
+                                        "packageName" to it.packageName,
+                                        "seconds" to it.seconds,
+                                    )
+                                }
+                                runOnUiThread { result.success(payload) }
+                            } catch (e: Throwable) {
+                                runOnUiThread {
+                                    result.error("collect_failed", e.message, null)
+                                }
+                            }
+                        }.start()
+                    }
+                    else -> result.notImplemented()
+                }
+            }
     }
 }

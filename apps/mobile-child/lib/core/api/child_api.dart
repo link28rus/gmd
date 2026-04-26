@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 import 'api_exceptions.dart';
 
@@ -288,6 +291,96 @@ class ChildApi {
         throw const UnauthorizedException();
       }
       throw NetworkException(e.message ?? 'Network');
+    }
+  }
+
+  // ─── v0.38 Phase 6.1: screen-time reporting ─────────────────────────────
+
+  /// POST snapshot установленных apps + IANA timezone.
+  /// Возвращает список sha256 иконок, которых backend ещё НЕ имеет —
+  /// caller должен залить их через [postAppIcons].
+  ///
+  /// `apps` — каждый элемент это Map с ключами:
+  /// `packageName`, `appLabel`, `isSystem`, `iconSha256` (опционально).
+  Future<List<String>> postInstalledApps({
+    required String deviceToken,
+    required String timezone,
+    required List<Map<String, dynamic>> apps,
+  }) async {
+    try {
+      final resp = await _dio.post(
+        '/child/installed-apps',
+        data: {'timezone': timezone, 'apps': apps},
+        options: Options(headers: {'X-Child-Token': deviceToken}),
+      );
+      final data = resp.data as Map<String, dynamic>;
+      final missing = (data['missingIconSha256'] as List?)?.cast<String>() ?? const [];
+      return missing;
+    } on DioException catch (e) {
+      final status = e.response?.statusCode;
+      if (status == 401 || status == 403) throw const UnauthorizedException();
+      if (status == null) throw NetworkException(e.message ?? 'Network');
+      throw ServerException('Ошибка сервера', status);
+    }
+  }
+
+  /// POST батч иконок. Каждый элемент `icons` — `{sha256, pngBytes}`.
+  /// Backend проверяет sha256 на соответствие байтам + PNG magic bytes.
+  ///
+  /// Лимит — 50 иконок на batch (соответствует backend AppIconsBodySchema).
+  /// Возвращает {uploaded, skipped} счётчики.
+  Future<({int uploaded, int skipped})> postAppIcons({
+    required String deviceToken,
+    required List<({String sha256, Uint8List pngBytes})> icons,
+  }) async {
+    assert(icons.length <= 50, 'max 50 icons per batch');
+    final payload = icons
+        .map((i) => {
+              'sha256': i.sha256,
+              'pngBase64': base64Encode(i.pngBytes),
+            })
+        .toList(growable: false);
+    try {
+      final resp = await _dio.post(
+        '/child/app-icons',
+        data: {'icons': payload},
+        options: Options(headers: {'X-Child-Token': deviceToken}),
+      );
+      final data = resp.data as Map<String, dynamic>;
+      return (
+        uploaded: (data['uploaded'] as num?)?.toInt() ?? 0,
+        skipped: (data['skipped'] as num?)?.toInt() ?? 0,
+      );
+    } on DioException catch (e) {
+      final status = e.response?.statusCode;
+      if (status == 401 || status == 403) throw const UnauthorizedException();
+      if (status == null) throw NetworkException(e.message ?? 'Network');
+      throw ServerException('Ошибка сервера', status);
+    }
+  }
+
+  /// POST часовых usage-bucket'ов.
+  /// `buckets` — список Map'ов с ключами `date` (YYYY-MM-DD), `hour` (0..23),
+  /// `packageName`, `seconds`.
+  ///
+  /// Backend UPSERT'ит — replace, не add (см. семантику в backend DTO).
+  Future<void> postUsageReport({
+    required String deviceToken,
+    required String timezone,
+    required List<Map<String, dynamic>> buckets,
+  }) async {
+    if (buckets.isEmpty) return; // backend требует min 1, тривиальный no-op
+    try {
+      await _dio.post(
+        '/child/usage-reports',
+        data: {'timezone': timezone, 'buckets': buckets},
+        options: Options(headers: {'X-Child-Token': deviceToken}),
+      );
+    } on DioException catch (e) {
+      final status = e.response?.statusCode;
+      if (status == 401 || status == 403) throw const UnauthorizedException();
+      if (status == null) throw NetworkException(e.message ?? 'Network');
+      throw ServerException('Ошибка сервера', status);
     }
   }
 }
