@@ -128,6 +128,14 @@
             android:name=".ActivityTransitionReceiver"
             android:enabled="true"
             android:exported="false"/>
+        <!-- v0.36.0 — trampoline для запуска SoundAroundService через TempAllowList exemption.
+             AlarmManager.setExactAndAllowWhileIdle → этот receiver получает ~10 сек exemption
+             → может стартовать FGS-microphone из background (locked screen, headless isolate).
+             Без trampoline'а Android 14 крашит startForeground(type=MICROPHONE) с SecurityException. -->
+        <receiver
+            android:name=".AudioStartTrampolineReceiver"
+            android:enabled="true"
+            android:exported="false"/>
         <!-- L1-защита от удаления приложения. Пока Device Admin активен,
              Android блокирует стандартный Uninstall из Settings → Apps →
              gmd_child — вместо этого показывается «Deactivate device

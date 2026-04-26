@@ -68,6 +68,15 @@ export class DeviceCommandsService {
   // Child-устройство: забрать список pending-команд. Попутно помечаем как
   // expired команды, которые пропустили окно доставки — это единственная
   // точка, где это происходит (pg_cron не нужен, их мало).
+  //
+  // v0.36.0-rc.2: дедупликация START_AUDIO + STOP_AUDIO для одной sessionId.
+  // Сценарий race: parent создал сессию → backend поставил START_AUDIO в очередь
+  // (TTL 180s); ребёнок не успел запустить аудио до watchdog timeout → backend
+  // поставил STOP_AUDIO. К моменту следующего poll'а в очереди обе команды для
+  // одной мёртвой сессии. Если отдать обе — child запускает Flutter engine и
+  // через 145мс глушит. Реально аудио не запускается, batter wasted, parent видит
+  // «не отвечает» уже в следующий раз. Решение: если для одной sessionId есть
+  // и START, и STOP — обе помечаем expired, ничего не отдаём.
   async listPending(
     deviceId: string,
   ): Promise<Array<{ id: string; type: string; payload: unknown; createdAt: string }>> {
@@ -88,7 +97,45 @@ export class DeviceCommandsService {
       },
       orderBy: { createdAt: 'asc' },
     });
-    return commands.map((c: DeviceCommand) => ({
+
+    // Дедупликация: собираем sessionId из START_AUDIO + STOP_AUDIO. Если
+    // одна и та же sessionId встречается в обоих типах — глушим обе команды.
+    const startSessions = new Set<string>();
+    const stopSessions = new Set<string>();
+    for (const c of commands) {
+      const sid = (c.payload as { sessionId?: unknown } | null)?.sessionId;
+      if (typeof sid !== 'string') continue;
+      if (c.type === 'START_AUDIO') startSessions.add(sid);
+      else if (c.type === 'STOP_AUDIO') stopSessions.add(sid);
+    }
+    const dropSessions = new Set<string>();
+    for (const sid of startSessions) {
+      if (stopSessions.has(sid)) dropSessions.add(sid);
+    }
+    if (dropSessions.size > 0) {
+      const idsToExpire = commands
+        .filter((c) => {
+          if (c.type !== 'START_AUDIO' && c.type !== 'STOP_AUDIO') return false;
+          const sid = (c.payload as { sessionId?: unknown } | null)?.sessionId;
+          return typeof sid === 'string' && dropSessions.has(sid);
+        })
+        .map((c) => c.id);
+      if (idsToExpire.length > 0) {
+        await this.prisma.deviceCommand.updateMany({
+          where: { id: { in: idsToExpire } },
+          data: { status: 'expired' },
+        });
+      }
+    }
+
+    const filtered = commands.filter((c) => {
+      if (c.type !== 'START_AUDIO' && c.type !== 'STOP_AUDIO') return true;
+      const sid = (c.payload as { sessionId?: unknown } | null)?.sessionId;
+      if (typeof sid !== 'string') return true;
+      return !dropSessions.has(sid);
+    });
+
+    return filtered.map((c: DeviceCommand) => ({
       id: c.id,
       type: c.type,
       payload: c.payload,

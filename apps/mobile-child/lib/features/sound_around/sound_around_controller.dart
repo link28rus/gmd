@@ -79,11 +79,13 @@ class SoundAroundController {
     unawaited(diagLog(_tag, 'start sessionId=$sessionId duration=${durationSec}s'));
 
     try {
-      if (!await _recorder.hasPermission()) {
-        unawaited(diagLog(_tag, 'mic permission denied'));
-        await _reportErrorAndStop(sessionId, 'PERMISSION_DENIED', 'no_mic_permission');
-        return;
-      }
+      // v0.35.0-rc.5: НЕ проверяем _recorder.hasPermission() — record_android 6.x
+      // в headless isolate без Activity возвращает false даже при granted-permission
+      // (нет ActivityCompat.checkSelfPermission fallback). Сразу пробуем startStream;
+      // если permission реально нет — Android кинет SecurityException, поймаем
+      // в catch и отчитаемся PERMISSION_DENIED. См. v0.35 incident report.
+      final permStatusLog = await _recorder.hasPermission();
+      unawaited(diagLog(_tag, 'recorder.hasPermission()=$permStatusLog (advisory only)'));
 
       // Encoder создаётся per-сессию, чтобы освобождать ресурсы при stop().
       // Application.voip — самый агрессивный режим компрессии для голоса.
@@ -146,14 +148,32 @@ class SoundAroundController {
       unawaited(diagLog(_tag, 'start failed: $e'));
       String code = 'UNKNOWN';
       final msg = e.toString().toLowerCase();
-      if (msg.contains('permission') ||
+      if (msg.contains('securityexception') ||
+          msg.contains('permission') ||
           msg.contains('record_audio') ||
-          msg.contains('user denied')) {
+          msg.contains('user denied') ||
+          msg.contains('not granted')) {
         code = 'PERMISSION_DENIED';
-      } else if (msg.contains('busy') || msg.contains('in use')) {
+      } else if (msg.contains('busy') ||
+          msg.contains('in use') ||
+          msg.contains('errorcode_invalid_state')) {
         code = 'MIC_BUSY';
       } else if (e is SocketException || e is WebSocketException) {
         code = 'NETWORK_ERROR';
+      }
+      await _reportErrorAndStop(sessionId, code, e.toString());
+    } catch (e) {
+      // PlatformException и прочее не-Exception
+      unawaited(diagLog(_tag, 'start crashed (non-Exception): $e'));
+      String code = 'UNKNOWN';
+      final msg = e.toString().toLowerCase();
+      if (msg.contains('securityexception') ||
+          msg.contains('permission') ||
+          msg.contains('record_audio') ||
+          msg.contains('not granted')) {
+        code = 'PERMISSION_DENIED';
+      } else if (msg.contains('busy') || msg.contains('errorcode_invalid_state')) {
+        code = 'MIC_BUSY';
       }
       await _reportErrorAndStop(sessionId, code, e.toString());
     }

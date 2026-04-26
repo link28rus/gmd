@@ -20,6 +20,32 @@ private const val PROTECTION_METHOD_CHANNEL = "ru.link28rus.gmd.child/protection
 private const val REQUEST_CODE_ADD_ADMIN = 8101
 
 class MainActivity : FlutterActivity() {
+    override fun onCreate(savedInstanceState: android.os.Bundle?) {
+        super.onCreate(savedInstanceState)
+        // v0.36.0 D-lite: pre-warm SoundAroundService в FGS=microphone idle state.
+        // Activity visible = foreground = Android разрешает startForeground(type=MICROPHONE)
+        // без SecurityException. После этого service остаётся жить, и START_AUDIO команды
+        // из background isolate (poll-loop при locked screen) могут активировать AudioRecord
+        // без нового FGS-старта (= без crash).
+        // Идемпотентен: если service уже в FGS state — handlePrewarm = no-op.
+        try {
+            val prewarmIntent = Intent(this, SoundAroundService::class.java)
+                .putExtra(SoundAroundService.EXTRA_MODE, SoundAroundService.MODE_PREWARM)
+            if (Build.VERSION.SDK_INT >= 26) {
+                startForegroundService(prewarmIntent)
+            } else {
+                startService(prewarmIntent)
+            }
+            DiagLog.write(this, "ui", "onCreate: SoundAroundService pre-warm dispatched")
+        } catch (e: Throwable) {
+            DiagLog.write(
+                this,
+                "ui",
+                "onCreate: pre-warm SoundAroundService FAILED: ${e.javaClass.simpleName}: ${e.message}",
+            )
+        }
+    }
+
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == REQUEST_CODE_ADD_ADMIN) {

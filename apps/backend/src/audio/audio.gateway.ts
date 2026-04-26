@@ -10,10 +10,13 @@ import { AudioTokenService, type AudioWsClaims } from './audio-token.service';
 import { AudioService } from './audio.service';
 import type { AudioWsControlMessage, AudioWsHello } from './dto/audio-ws.dto';
 
-// 60s — частота watchdog-сканирования. Глобальный idle-порог 90s (полтора окна),
-// чтобы не убить сессию из-за единичного network blip'а.
+// 60s — частота watchdog-сканирования. Глобальный idle-порог 180s — должен быть
+// >= audio.child_ready_timeout_sec (по умолчанию 180s), чтобы PENDING-сессии
+// добивались expireIfStuck'ом БЕЗ enqueueAudioStop, а не watchdog'ом, который
+// enqueue'ит STOP_AUDIO и порождает race START+STOP в command queue для child'а
+// (см. v0.36.0-rc.2 fix в device-commands.service.ts listPending).
 const WATCHDOG_INTERVAL_MS = 60_000;
-const SESSION_IDLE_TIMEOUT_MS = 90_000;
+const SESSION_IDLE_TIMEOUT_MS = 180_000;
 
 interface WsContext {
   sessionId: string;

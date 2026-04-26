@@ -9,6 +9,58 @@
 
 ---
 
+## v0.36.0-rc.2 — 2026-04-26
+
+### Исправления
+
+- **«Звук вокруг» больше не падает в «не отвечает», когда parent ждёт несколько раз подряд.** Backend теперь дедуплицирует пары `START_AUDIO` + `STOP_AUDIO` для одной `sessionId` в очереди команд ребёнка. Сценарий race: родитель кликает «Звук вокруг» → backend ставит START_AUDIO в очередь → ребёнок не успевает спросить за watchdog timeout → backend ставит STOP_AUDIO для той же сессии. К моменту следующего poll'а (60-120с) в очереди обе команды для уже мёртвой сессии — child запускал Flutter engine на 145мс, тут же глушил, WS не открывал, parent видел «Ошибка соединения». Теперь backend помечает обе команды как expired в `listPending()` и не отдаёт ребёнку — следующий клик parent создаёт чистую сессию без застрявших STOP в очереди ([device-commands.service.ts](apps/backend/src/device-commands/device-commands.service.ts)).
+- **`SESSION_IDLE_TIMEOUT_MS` поднят с 90s до 180s** — чтобы PENDING-сессии добивались `expireIfStuck` (без enqueue STOP_AUDIO), а не gateway watchdog'ом (который enqueue'ит STOP). Это вторая страховка против того же race ([audio.gateway.ts](apps/backend/src/audio/audio.gateway.ts)).
+
+### Изменения
+
+- Тесты: добавлен `device-commands.service.spec.ts` с 4 кейсами на дедупликацию START+STOP.
+
+---
+
+## v0.36.0-rc.1 — 2026-04-26
+
+### Новые возможности
+
+- **«Звук вокруг» работает при заблокированном экране ребёнка.** Раньше функция работала только при разблокированном — Android 14 жёстко блокирует `startForeground(type=MICROPHONE)` из background context (locked screen, headless isolate, AlarmManager-trampoline тоже не помогает) с SecurityException «the app must be in the eligible state/exemptions». Решение через D-lite архитектуру: SoundAroundService запускается при открытии приложения (Activity foreground = разрешено) в pre-warm режиме (FGS=microphone idle, без AudioRecord), и остаётся жить. Когда родитель шлёт START_AUDIO — service уже в FGS state, просто включается AudioRecord без нового FGS-старта. Mic-indicator (зелёная точка) появляется только при активном AudioRecord, не от FGS=microphone в idle. mobile-child v0.36.0-rc.1+45.
+
+### Изменения
+
+- Исправлено поведение `SoundAroundService.onTaskRemoved` — теперь свайп приложения из recents НЕ убивает service (раньше убивал, и следующий «Звук вокруг» крашился при locked screen). Service переживает task removal, готов к STREAM команде.
+- В `BootReceiver` добавлен best-effort pre-warm SoundAroundService после ребута (если system даёт BootReceiver mic-exemption). При неудаче — юзер откроет app сам, MainActivity.onCreate сделает prewarm.
+- `AudioStartTrampolineReceiver` (v0.35.0-rc.7) больше не вызывается — оставлен в коде как dead code, удалим в v0.36.1.
+
+---
+
+## v0.35.0-rc.7 — 2026-04-24 (rolled back)
+
+### Исправления (попытка, не сработала)
+
+- **«Звук вокруг» при заблокированном экране — попытка через AlarmManager-trampoline.** Гипотеза: `AlarmManager.setExactAndAllowWhileIdle()` даёт receiver'у TempAllowList exemption на ~10 сек, в этом окне `startForeground(type=MICROPHONE)` должен пройти. PoC через adb logcat показал что **подход НЕ работает на Android 14**: TempAllowList от AlarmManager даёт exemption на FGS-start, но НЕ на mic-access (это второй check). SecurityException всё равно крашит app. См. v0.36.0-rc.1 для рабочего решения через pre-warm.
+
+---
+
+## v0.35.0-rc.6 — 2026-04-24
+
+### Исправления
+
+- **«Звук вокруг» работает при заблокированном экране.** Раньше FGS стартовал, но `executeDartEntrypoint` зависал на 30-60 сек до разблокировки экрана (на MIUI/HyperOS Binder-вызовы к Flutter loader не обслуживаются без активного wake lock). Добавлен `PARTIAL_WAKE_LOCK` в `SoundAroundService` (по образцу `LocationForegroundService` v0.15.2) — захват микрофона теперь стартует моментально и работает в фоне всю сессию (до 5 минут). mobile-child v0.35.0-rc.6+43.
+
+---
+
+## v0.35.0-rc.5 — 2026-04-24
+
+### Исправления
+
+- **«Звук вокруг» — фикс PERMISSION_DENIED ложного срабатывания на устройстве ребёнка.** `record_android` 6.x в headless isolate (FGS-контекст без Activity) возвращал `hasPermission()=false` даже когда permission реально granted в Android Settings. Убран pre-check, попытка `startStream()` идёт напрямую — Android выкидывает SecurityException только если permission реально отсутствует, ошибка корректно мапится в `PERMISSION_DENIED`. mobile-child v0.35.0-rc.5+42.
+- **«Звук вокруг» — родитель видит причину ошибки на устройстве ребёнка.** Backend при `child_error` (PERMISSION_DENIED / MIC_BUSY / OEM_BLOCKED / NETWORK_ERROR) теперь передаёт код в WebSocket close-reason (`child_error:<CODE>`). Web-кабинет парсит и показывает читаемое сообщение вместо общего «Не удалось установить соединение».
+
+---
+
 ## v0.35.0-rc.4 — 2026-04-24
 
 ### Изменения

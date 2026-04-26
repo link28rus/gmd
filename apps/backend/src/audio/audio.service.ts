@@ -307,7 +307,9 @@ export class AudioService {
         metadata: { code: p.code, message: p.message },
       },
     });
-    this.relay.terminate(p.sessionId, 4008, 'session_failed');
+    // v0.35.0-rc.5: prefix `child_error:` парсится parent UI (use-audio-session.ts
+    // handleCloseCode) → setErrorReason → читаемое сообщение про PERMISSION_DENIED/MIC_BUSY
+    this.relay.terminate(p.sessionId, 4008, `child_error:${p.code}`);
   }
 
   async parentStop(p: { sessionId: string; userId: string; familyId: string }): Promise<void> {

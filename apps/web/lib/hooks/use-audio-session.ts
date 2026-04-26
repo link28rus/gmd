@@ -73,14 +73,18 @@ export function useAudioSession({ childId, durationSec }: Params): UseAudioSessi
 
   const stop = useCallback(async () => {
     const id = sessionId;
+    console.log('[audio-session] stop() called, sessionId=', id);
     cleanup();
     setState((prev) => (prev === 'active' || prev === 'negotiating' ? 'ended' : prev));
     if (id) {
       try {
         await audioApi.stopSession(id);
-      } catch {
-        /* best-effort — backend сам перейдёт в ENDED по close WS */
+        console.log('[audio-session] stopSession OK for', id);
+      } catch (e) {
+        console.error('[audio-session] stopSession FAILED for', id, e);
       }
+    } else {
+      console.warn('[audio-session] stop() skipped — sessionId was null');
     }
   }, [sessionId, cleanup]);
 
@@ -119,6 +123,14 @@ export function useAudioSession({ childId, durationSec }: Params): UseAudioSessi
         return;
       }
       if (code === 4008) {
+        // v0.35.0-rc.5: backend передаёт reason='child_error:<CODE>' когда сессия
+        // упала из-за ошибки на устройстве ребёнка (PERMISSION_DENIED / MIC_BUSY / OEM_BLOCKED / NETWORK_ERROR).
+        // Парсим и кладём в errorReason — failReasonLabel в UI покажет читаемый текст.
+        if (reason && reason.startsWith('child_error:')) {
+          setErrorReason(reason.slice('child_error:'.length));
+          setState('failed');
+          return;
+        }
         setState((prev) => (prev === 'failed' ? prev : prev === 'active' ? 'ended' : 'expired'));
         return;
       }
@@ -139,6 +151,7 @@ export function useAudioSession({ childId, durationSec }: Params): UseAudioSessi
   );
 
   const start = useCallback(async () => {
+    console.log('[audio-session] start() called');
     cleanup();
     setState('starting');
     setError(null);
@@ -153,7 +166,9 @@ export function useAudioSession({ childId, durationSec }: Params): UseAudioSessi
       wsUrl = res.ws.url;
       setSessionId(res.id);
       setState('waiting');
+      console.log('[audio-session] session created, state=waiting, id=', res.id, 'wsUrl=', wsUrl);
     } catch (e) {
+      console.error('[audio-session] createSession failed', e);
       setError(e instanceof Error ? e.message : 'Не удалось создать сессию');
       setState('failed');
       return;
@@ -162,6 +177,7 @@ export function useAudioSession({ childId, durationSec }: Params): UseAudioSessi
     let stateAtClose: AudioUiState = 'waiting';
     const player = new WebAudioOpusPlayer(wsUrl, {
       onStateChange: (s: OpusPlayerState) => {
+        console.log('[audio-session] player.onStateChange', s);
         if (s === 'connected') {
           setState((prev) => {
             stateAtClose = prev === 'waiting' ? 'negotiating' : prev;
@@ -174,15 +190,24 @@ export function useAudioSession({ childId, durationSec }: Params): UseAudioSessi
         }
       },
       onCloseCode: (code, reason) => {
+        console.warn(
+          '[audio-session] player.onCloseCode',
+          code,
+          reason,
+          'stateAtClose=',
+          stateAtClose,
+        );
         handleCloseCode(code, reason, stateAtClose);
         cleanup();
       },
       onError: (err) => {
+        console.error('[audio-session] player.onError', err);
         setError(err.message);
         setState('failed');
         cleanup();
       },
       onChildError: (code) => {
+        console.warn('[audio-session] player.onChildError', code);
         setErrorReason(code);
         setState('failed');
         cleanup();
@@ -192,7 +217,9 @@ export function useAudioSession({ childId, durationSec }: Params): UseAudioSessi
     try {
       const stream = await player.start();
       setMediaStream(stream);
+      console.log('[audio-session] player.start resolved, mediaStream set');
     } catch (e) {
+      console.error('[audio-session] player.start threw', e);
       setError(e instanceof Error ? e.message : 'Не удалось подключить аудио');
       setState('failed');
       cleanup();
