@@ -9,6 +9,30 @@
 
 ---
 
+## v0.38.0-rc.4 — 2026-04-26
+
+### Новые возможности
+
+- **Web-кабинет: страница «Родительский контроль»** на карточке ребёнка → кнопка «Родительский контроль» → `/cabinet/children/[id]/parental-control`. Табы Сегодня / Вчера / Неделя, бар-чарт по часам (в режиме недели — по дням), большая цифра общего времени с индикатором «↑/↓ % от обычного» (для «Сегодня»), чипы по категориям (Соцсети / Игры / Мессенджеры / …), список установленных приложений с иконками + временем за сегодня + категорией + меткой «системное». Кнопка «Заблокировать приложения» — заглушка, появится в v0.39 после бэкенд-моделей BlockSession.
+
+### Изменения
+
+- **Next.js API proxy routes** под рестанонные endpoints rc.1:
+  - `GET /api/children/[id]/app-control/installed-apps`
+  - `GET /api/children/[id]/app-control/usage?range=day|week&date=YYYY-MM-DD`
+  - `GET /api/app-icons/[sha256]` — public proxy (immutable cache 1 год, single origin для браузера) к backend `AppIconsPublicController`.
+- **Lib `lib/api/app-control.ts`** — TypeScript типы (`AppCategory`, `InstalledAppDto`, `UsageRangeDto`, `UsageResponseDto`), `appControlApi` методы. Helper `rewriteIconUrl()` подменяет URL backend'а на `/api/app-icons/<sha256>` (избегает CORS dev/prod).
+- **Lib `lib/hooks/use-app-control.ts`** — TanStack Query hooks `useInstalledApps(childId)`, `useUsage(childId, range, date?)` с `staleTime: 5 мин`.
+- **Component `ChildCard`** — добавлена кнопка `ShieldCheck` «Родительский контроль» (видна только при активном устройстве).
+- **EmptyAppsHint** — UI-подсказка с тремя возможными причинами пустого списка (нет permission, прошло <15 мин с включения, нет интернета).
+
+### Что осталось для v0.38
+
+- **rc.5 mobile-parent:** тот же экран на Flutter (fl_chart) — следующий заход.
+- **Smoke-тест end-to-end:** установить APK rc.3 на устройство, грантить permission, дождаться ≥15 мин или вручную дёрнуть worker, открыть страницу в кабинете и убедиться что данные приходят.
+
+---
+
 ## v0.38.0-rc.3 — 2026-04-26
 
 ### Изменения

@@ -3,7 +3,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { MapPin, MoreVertical, QrCode, RotateCcw } from 'lucide-react';
+import { MapPin, MoreVertical, QrCode, RotateCcw, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DeviceStatusBadge } from './device-status-badge';
 import { EditChildDialog } from './edit-child-dialog';
@@ -95,6 +95,15 @@ export function ChildCard({ child }: Props) {
           >
             <MapPin className="h-4 w-4" />
             На карту
+          </Link>
+        )}
+        {hasActiveDevice && (
+          <Link
+            href={`/cabinet/children/${child.id}/parental-control`}
+            className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-3 py-1.5 text-sm text-foreground hover:bg-muted"
+          >
+            <ShieldCheck className="h-4 w-4" />
+            Родительский контроль
           </Link>
         )}
         {hasActiveDevice && (
