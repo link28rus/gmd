@@ -9,6 +9,43 @@
 
 ---
 
+## v0.38.0 — 2026-04-26 — «Родительский контроль» (статистика экранного времени)
+
+Phase 6.1 «Родительский контроль» в стабильном релизе. Объединяет работу rc.1..rc.7.
+
+### Новые возможности
+
+- **Статистика экранного времени ребёнка в web-кабинете родителя.** На карточке ребёнка → кнопка «Родительский контроль» открывает страницу `/cabinet/children/[id]/parental-control` с тремя вкладками (Вчера / Сегодня / Неделя), большой цифрой общего времени, графиком по часам, чипами по категориям (Соцсети / Игры / Мессенджеры / Видео / Браузеры / Образование / Музыка / Навигация / Покупки / Системные / Другое) и списком всех установленных у ребёнка приложений с реальными иконками, временем за сегодня и принадлежностью к категории.
+- **Автоматический сбор данных на устройстве ребёнка.** На стороне `mobile-child` поднимается WorkManager с тремя periodic-задачами: UsageStats каждые 15 минут, список установленных приложений + иконки раз в сутки, escape-probe раз в час. Иконки 96x96 PNG дедуплицируются по SHA-256 (одна и та же иконка TikTok у тысячи семей хранится в БД один раз). Каждый запуск приложения дополнительно дёргает one-time worker — родитель видит свежие данные через 30 секунд.
+- **Onboarding-шаг** для PACKAGE_USAGE_STATS permission с инструкцией для MIUI/HyperOS «Ограниченные настройки».
+- **Escape hatch — самоуничтожение защиты при удалении ребёнка.** Если родитель удалит ребёнка из кабинета (или сделает «Сбросить устройство»), `mobile-child` в течение часа (или сразу при следующем 401-ответе на любом endpoint) дёргает `POST /child/auth-status`, видит `child_deleted` / `device_revoked` и автоматически: снимает Device Admin, останавливает все workers, стирает device-token, переходит на специальный экран «Родитель удалил твой профиль» с кнопкой «Открыть настройки приложения» для нормального uninstall. Без этого защищённое v0.27 Device Admin превращало бы устройство в «кирпич». **Verified end-to-end на 12T Pro link28rus.**
+
+### Изменения
+
+- **Backend:** новые модели `installed_apps`, `app_icons` (BYTEA dedupe по sha256), `usage_buckets` (часовые), `child_devices.timezone`. Endpoints `/child/installed-apps`, `/child/app-icons`, `/child/usage-reports`, `/child/auth-status`, `/family/children/:id/app-control/installed-apps`, `/family/children/:id/app-control/usage`, `/app-icons/:sha256` (immutable cache 1 год). pg_cron retention 30 дней для `usage_buckets`. Express body-parser limit 10MB. CategoryResolver на 11 категорий × 200+ packages.
+- **Mobile-child:** Kotlin `AppControlNative` (UsageStatsManager queryEvents → часовые bucket'ы по local-TZ), `AppControlHttp` (HttpURLConnection для worker'ов), `UsageStatsReportWorker` / `InstalledAppsReportWorker` / `EscapeProbeWorker`, `AppControlScheduler`, `ChildEscapeOrchestrator`. Manifest: `PACKAGE_USAGE_STATS` + `QUERY_ALL_PACKAGES`. Dart обёртки + `EscapeScreen` + main.dart auto-redirect.
+- **Web-parent:** Next.js API proxy routes, `lib/api/app-control.ts`, TanStack Query hooks `useInstalledApps` / `useUsage`, страница `/cabinet/children/[id]/parental-control` с pure-CSS bar chart (24/7 столбиков), кнопка `ShieldCheck` «Родительский контроль» в `ChildCard` (только при активном устройстве).
+
+### Verified на проде
+
+- 12T Pro link28rus (Xiaomi 22081212UG, Android 15 HyperOS V816) — 524 установленных apps, 280 уникальных иконок в БД, escape hatch отработал безупречно.
+- TECNO KL4 Степан (Android 14, HiOS) — APK rc.7 успешно установлен.
+- Скриншот web-кабинета: страница «Родительский контроль» рендерится корректно с реальными иконками (2ГИС, Авито, ВТБ, Бристоль, Галерея и т.д.) и правильной категоризацией.
+
+### Известные ограничения
+
+- **Время в приложениях / график / чипы категорий** показывают пустое состояние пока ребёнок вручную не включит `PACKAGE_USAGE_STATS` (Settings → Apps → GMD → Special permissions → Usage data → Allow). Wizard в onboarding появляется только при первом запуске приложения; для существующих установок permission нужно дать руками.
+- **Mobile-parent** native экран «Родительский контроль» — пока не реализован (mobile-parent проект сейчас boilerplate без auth-flow). Будет в отдельной фазе как часть полноценного развития mobile-parent.
+- **Блокировка приложений** (BlockSession + AppRule) — отдельный релиз v0.39 (App Blocking Core) согласно дизайн-доку.
+
+### Что в следующих релизах
+
+- **v0.39** — App blocking. Кнопка «Заблокировать приложения» с time picker и whitelist «Не блокируется».
+- **v0.40** — Unlock requests («Мне очень нужно»), `ALWAYS_BLOCKED` mode.
+- **v0.41+** — гео-привязка блокировок, mobile-parent native UI.
+
+---
+
 ## v0.38.0-rc.7 — 2026-04-26
 
 ### Улучшения
