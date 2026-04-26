@@ -18,6 +18,8 @@ private const val DIAG_METHOD_CHANNEL = "ru.link28rus.gmd.child/diag"
 private const val PROTECTION_METHOD_CHANNEL = "ru.link28rus.gmd.child/protection"
 // v0.38: Phase 6.1 screen-time. Native helpers для UsageStatsManager + installed apps.
 private const val APP_CONTROL_METHOD_CHANNEL = "ru.link28rus.gmd.child/app_control"
+// v0.38 escape hatch: probe + status check + open uninstall.
+private const val ESCAPE_METHOD_CHANNEL = "ru.link28rus.gmd.child/escape"
 
 private const val REQUEST_CODE_ADD_ADMIN = 8101
 
@@ -25,13 +27,24 @@ class MainActivity : FlutterActivity() {
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
         // v0.38 Phase 6.1: при наличии device-token поднимаем periodic workers
-        // (UsageStatsReportWorker 15-min + InstalledAppsReportWorker 24h).
+        // (UsageStatsReportWorker 15-min + InstalledAppsReportWorker 24h +
+        //  EscapeProbeWorker 1h).
         // Идемпотентно (KEEP-policy) — повторные вызовы безопасны. Если token
         // ещё не сохранён (первый запуск до claim'а) — workers запустятся
         // после saveNativeCreds через protection channel (см. ниже).
         try {
             if (!NativeCreds.getToken(this).isNullOrEmpty()) {
                 AppControlScheduler.scheduleAll(this)
+                // v0.38 escape hatch: на старте app сразу probe — если ребёнка
+                // удалили пока приложение было закрыто, не ждём периодический час.
+                // Фоновый thread, не блокирует UI.
+                Thread {
+                    try {
+                        ChildEscapeOrchestrator.probe(this)
+                    } catch (e: Throwable) {
+                        DiagLog.write(this, "escape", "onCreate probe failed: ${e.message}")
+                    }
+                }.start()
             }
         } catch (e: Throwable) {
             DiagLog.write(this, "ui", "scheduleAll failed: ${e.javaClass.simpleName}: ${e.message}")
@@ -315,6 +328,36 @@ class MainActivity : FlutterActivity() {
                             result.success(null)
                         } catch (e: Throwable) {
                             result.error("run_failed", e.message, null)
+                        }
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+
+        // v0.38 escape hatch channel.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, ESCAPE_METHOD_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "isInEscapeMode" ->
+                        result.success(ChildEscapeOrchestrator.isInEscapeMode(this))
+                    "lastReason" ->
+                        result.success(ChildEscapeOrchestrator.lastReason(this))
+                    "probeNow" -> {
+                        Thread {
+                            try {
+                                val r = ChildEscapeOrchestrator.probe(this)
+                                runOnUiThread { result.success(r.name) }
+                            } catch (e: Throwable) {
+                                runOnUiThread { result.error("probe_failed", e.message, null) }
+                            }
+                        }.start()
+                    }
+                    "openAppDetails" -> {
+                        try {
+                            ChildEscapeOrchestrator.openAppDetails(this)
+                            result.success(null)
+                        } catch (e: Throwable) {
+                            result.error("open_failed", e.message, null)
                         }
                     }
                     else -> result.notImplemented()

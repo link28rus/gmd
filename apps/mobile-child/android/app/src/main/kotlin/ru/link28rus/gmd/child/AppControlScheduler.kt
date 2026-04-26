@@ -57,6 +57,21 @@ object AppControlScheduler {
       .addTag(InstalledAppsReportWorker.TAG)
       .build()
 
+    // v0.38 escape hatch: probe раз в час. Лёгкая операция, низкие constraints
+    // (только NETWORK), чтобы максимально быстро задетектить child_deleted /
+    // device_revoked и снять защиту с устройства.
+    val escapeReq = PeriodicWorkRequestBuilder<EscapeProbeWorker>(
+      1, TimeUnit.HOURS,
+    )
+      .setConstraints(
+        Constraints.Builder()
+          .setRequiredNetworkType(NetworkType.CONNECTED)
+          .build(),
+      )
+      .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 1, TimeUnit.MINUTES)
+      .addTag(EscapeProbeWorker.TAG)
+      .build()
+
     wm.enqueueUniquePeriodicWork(
       UsageStatsReportWorker.UNIQUE_NAME,
       ExistingPeriodicWorkPolicy.KEEP,
@@ -67,7 +82,16 @@ object AppControlScheduler {
       ExistingPeriodicWorkPolicy.KEEP,
       appsReq,
     )
-    DiagLog.write(ctx, TAG, "scheduled UsageStats(15min) + InstalledApps(24h) periodic workers (KEEP)")
+    wm.enqueueUniquePeriodicWork(
+      EscapeProbeWorker.UNIQUE_NAME,
+      ExistingPeriodicWorkPolicy.KEEP,
+      escapeReq,
+    )
+    DiagLog.write(
+      ctx,
+      TAG,
+      "scheduled UsageStats(15min) + InstalledApps(24h) + EscapeProbe(1h) periodic (KEEP)",
+    )
   }
 
   /**
@@ -79,6 +103,7 @@ object AppControlScheduler {
     val wm = WorkManager.getInstance(ctx)
     wm.cancelUniqueWork(UsageStatsReportWorker.UNIQUE_NAME)
     wm.cancelUniqueWork(InstalledAppsReportWorker.UNIQUE_NAME)
+    wm.cancelUniqueWork(EscapeProbeWorker.UNIQUE_NAME)
     DiagLog.write(ctx, TAG, "cancelled existing workers, re-enqueueing")
     scheduleAll(ctx)
   }

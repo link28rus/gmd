@@ -26,6 +26,12 @@ const VerifyPinSchema = z.object({ pin: z.string().regex(/^\d{4,8}$/) }).strict(
 // 140-200 char; даём разумный max 4096 на всякий случай.
 const FcmTokenSchema = z.object({ fcmToken: z.string().min(10).max(4096).nullable() }).strict();
 
+// v0.38 escape hatch: child устройство периодически проверяет, валиден ли
+// его device-token. Body `{deviceToken}` (а не header X-Child-Token, чтобы
+// случайно не получить 401 от ChildAuthGuard вместо JSON-ответа).
+// Token имеет фиксированную длину (cuid или secret) — даём разумный диапазон.
+const AuthStatusSchema = z.object({ deviceToken: z.string().min(10).max(512) }).strict();
+
 interface ChildRequest extends Request {
   childDevice: ChildAuthContext;
 }
@@ -100,6 +106,23 @@ export class ChildDeviceController {
       familyId: req.childDevice.familyId,
       pin: dto.pin,
     });
+  }
+
+  // v0.38: escape hatch probe — без auth guard, токен в теле.
+  // Возвращает 200 c {status: 'active' | 'device_revoked' | 'child_deleted' | 'unknown'}.
+  // Mobile-child вызывает раз в час и при каждом 401, чтобы понять — нужно ли
+  // делать self-destruct (removeActiveAdmin + clear creds) или это network blip.
+  //
+  // Throttle жёсткий: 6/мин с одного IP — не позволяем enumerate.
+  // 200 OK даже для 'unknown' (а не 404) — ровно один тип ответа, чтобы
+  // attacker по статусам не мог понять, существовал ли token раньше.
+  @Post('auth-status')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { ttl: 60_000, limit: 6 } })
+  async authStatus(
+    @Body(new ZodValidationPipe(AuthStatusSchema)) dto: z.infer<typeof AuthStatusSchema>,
+  ): Promise<{ status: 'active' | 'device_revoked' | 'child_deleted' | 'unknown' }> {
+    return this.svc.getAuthStatus(dto.deviceToken);
   }
 
   // v0.37: child регистрирует FCM token при старте app + onTokenRefresh.

@@ -7,6 +7,7 @@ import 'app.dart';
 import 'background/location_entry.dart' as bg;
 import 'core/diag/diag_channel.dart';
 import 'core/fcm/fcm_registrar.dart';
+import 'core/native/escape_channel.dart';
 import 'core/storage/secure_storage_service.dart';
 import 'features/sound_around/sound_around_entry.dart' as sa;
 
@@ -31,6 +32,22 @@ void main() async {
   } catch (e) {
     unawaited(diagLog('ui', 'Firebase init FAILED: $e (poll-fallback ok)'));
   }
+  // v0.38 escape hatch: сначала проверяем — не находится ли устройство в
+  // escape-mode (родитель удалил ребёнка / сделал reset-device). Если да —
+  // показываем спецэкран сразу, минуя обычный flow. Не зависит от наличия
+  // токена (creds к этому моменту уже стёрты native-слоем).
+  bool escapeMode = false;
+  try {
+    escapeMode = await EscapeChannel.isInEscapeMode();
+  } catch (e) {
+    unawaited(diagLog('ui', 'EscapeChannel.isInEscapeMode failed: $e'));
+  }
+  if (escapeMode) {
+    unawaited(diagLog('ui', 'app started in ESCAPE MODE — showing escape screen'));
+    runApp(ProviderScope(child: GmdChildApp(initialLocation: '/escape')));
+    return;
+  }
+
   // Если device уже приклеймлен — при повторном запуске сразу
   // в /home, а не на экран «Подключиться».
   final token = await SecureStorageService().readDeviceToken();

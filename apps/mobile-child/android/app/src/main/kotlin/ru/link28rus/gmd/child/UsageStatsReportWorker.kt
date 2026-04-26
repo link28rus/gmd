@@ -58,9 +58,15 @@ class UsageStatsReportWorker(
         }
         Result.success()
       }
-      // 401/403 = device revoked → нет смысла retry, success-skip
+      // 401/403 = token больше не валиден на бэке. Дёргаем escape-probe
+      // чтобы понять причину и при необходимости выключить Device Admin etc.
       res.statusCode == 401 || res.statusCode == 403 -> {
-        DiagLog.write(ctx, TAG, "auth error ${res.statusCode}, success-skip")
+        DiagLog.write(ctx, TAG, "auth error ${res.statusCode}, triggering escape probe")
+        try {
+          ChildEscapeOrchestrator.probe(ctx)
+        } catch (e: Throwable) {
+          DiagLog.write(ctx, TAG, "escape probe after 401 failed: ${e.message}")
+        }
         Result.success()
       }
       // 4xx (кроме auth) — bug в payload, retry не поможет

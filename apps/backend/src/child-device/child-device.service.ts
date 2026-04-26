@@ -228,6 +228,37 @@ export class ChildDeviceService {
     };
   }
 
+  // v0.38: escape hatch probe.
+  // Возвращает явную причину, по которой токен может быть невалиден — нужно
+  // mobile-child чтобы решить, делать ли self-destruct (removeActiveAdmin +
+  // clear creds + cancel workers) или это просто временная сетевая проблема.
+  //
+  // 'active'         — токен живой, child не удалён, продолжаем как обычно.
+  // 'device_revoked' — родитель сделал /reset-device → ChildDevice.revokedAt != null,
+  //                    нужно self-destruct (Device Admin блокирует uninstall).
+  // 'child_deleted'  — родитель удалил ребёнка → Child.deletedAt != null,
+  //                    нужно self-destruct.
+  // 'unknown'        — токен никогда не существовал (фейковый/мусорный),
+  //                    self-destruct НЕ нужен (это либо attacker, либо очень
+  //                    старая install с stale token до миграции).
+  async getAuthStatus(
+    token: string,
+  ): Promise<{ status: 'active' | 'device_revoked' | 'child_deleted' | 'unknown' }> {
+    const tokenHash = sha256(token);
+    const device = await this.prisma.childDevice.findFirst({
+      where: { tokenHash },
+      select: { id: true, childId: true, revokedAt: true },
+    });
+    if (!device) return { status: 'unknown' };
+    if (device.revokedAt !== null) return { status: 'device_revoked' };
+    const child = await this.prisma.child.findFirst({
+      where: { id: device.childId },
+      select: { id: true, deletedAt: true },
+    });
+    if (!child || child.deletedAt !== null) return { status: 'child_deleted' };
+    return { status: 'active' };
+  }
+
   touchLastSeen(deviceId: string): void {
     void this.prisma.childDevice
       .update({ where: { id: deviceId }, data: { lastSeenAt: new Date() } })

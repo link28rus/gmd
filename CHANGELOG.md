@@ -9,6 +9,34 @@
 
 ---
 
+## v0.38.0-rc.5 — 2026-04-26
+
+### Новые возможности
+
+- **Escape hatch для удалённого ребёнка.** Если родитель удалит ребёнка из кабинета (или сделает «Сбросить устройство»), mobile-child устройство **автоматически снимет защиту Device Admin и блокировки** (когда они появятся в v0.39), очистит креденшиалы и покажет специальный экран — приложение можно нормально удалить через Настройки. Без этого защищённый Device Admin превратил бы телефон в «кирпич». Реакция: в течение 1 часа (periodic probe) или сразу при следующем запуске app/worker'а с 401-ответом.
+
+### Изменения
+
+- **Backend:** `POST /child/auth-status` (без auth-guard, throttle 6/мин). Возвращает явный статус токена: `active` / `device_revoked` / `child_deleted` / `unknown`. Mobile-child использует чтобы понять — нужно ли self-destruct, или это просто временная сетевая проблема.
+- **Mobile-child Kotlin `ChildEscapeOrchestrator`:**
+  - `probe(ctx)` — POST на backend и при `device_revoked` / `child_deleted` автоматически вызывает `triggerEscape`.
+  - `triggerEscape(reason)` — `dpm.removeActiveAdmin()` + `NativeCreds.setProtectionEnabled(false)` + `WorkManager.cancelAllWork()` + `NativeCreds.save(null,null)` + флаг в SharedPreferences `gmd_escape.escape_mode = true`. Идемпотентно.
+  - Sphlвает Network errors (NETWORK_ERROR не триггерит escape — иначе любой обрыв сети сносит защиту).
+- **Mobile-child Kotlin `EscapeProbeWorker`** — `CoroutineWorker` periodic 1h. Зарегистрирован в `AppControlScheduler.scheduleAll` рядом с usage/installed-apps worker'ами.
+- **Hook 401:** при auth-error от `UsageStatsReportWorker` или `InstalledAppsReportWorker` → немедленный probe (не ждём периодического часа).
+- **MainActivity:** при `onCreate` (если есть token) — фоновый probe + scheduleAll(escape).
+- **Channel `ru.link28rus.gmd.child/escape`:** `isInEscapeMode`, `lastReason`, `probeNow`, `openAppDetails`.
+- **Dart `EscapeChannel`** + `EscapeScreen`** (`/escape` route): иконка lock-open + объяснение причины (`child_deleted` / `device_revoked`) + кнопки «Открыть настройки приложения» (для uninstall) и «Проверить связь».
+- **`main.dart`** — auto-redirect на `/escape` если `EscapeChannel.isInEscapeMode()` при старте.
+- **mobile-child build:** versionCode +47 → +48 (для RuStore monotonic versionCode).
+
+### Что осталось для v0.38
+
+- **rc.6 mobile-parent UI:** «Родительский контроль» на Flutter (тот же что web rc.4).
+- **Smoke end-to-end:** install rc.5 на 12T Pro (link28rus) → пройти onboarding → grant usage stats → проверить sync с backend → удалить ребёнка из кабинета → проверить что устройство уходит в escape mode и Device Admin снимается.
+
+---
+
 ## v0.38.0-rc.4 — 2026-04-26
 
 ### Новые возможности

@@ -11,6 +11,7 @@ import '../features/permissions/location_step.dart';
 import '../features/permissions/microphone_step.dart';
 import '../features/permissions/notifications_step.dart';
 import '../features/permissions/usage_stats_step.dart';
+import '../features/escape/escape_screen.dart';
 
 class AppRouter {
   static GoRouter buildRouter({String initialLocation = '/onboarding'}) =>
@@ -69,6 +70,11 @@ class AppRouter {
     GoRoute(
       path: '/debug',
       builder: (_, _) => const DebugScreen(),
+    ),
+    // v0.38 escape hatch: показывается когда родитель удалил ребёнка.
+    GoRoute(
+      path: '/escape',
+      builder: (_, _) => const EscapeScreen(),
     ),
   ];
 }

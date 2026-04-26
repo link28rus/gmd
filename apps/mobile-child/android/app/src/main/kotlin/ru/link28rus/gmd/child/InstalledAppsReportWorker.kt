@@ -82,7 +82,12 @@ class InstalledAppsReportWorker(
   private fun classifyTransient(ctx: Context, res: AppControlHttp.Result, op: String): Result {
     return when {
       res.statusCode == 401 || res.statusCode == 403 -> {
-        DiagLog.write(ctx, TAG, "$op auth error ${res.statusCode}, success-skip")
+        DiagLog.write(ctx, TAG, "$op auth error ${res.statusCode}, triggering escape probe")
+        try {
+          ChildEscapeOrchestrator.probe(ctx)
+        } catch (e: Throwable) {
+          DiagLog.write(ctx, TAG, "$op escape probe failed: ${e.message}")
+        }
         Result.success()
       }
       res.statusCode in 400..499 -> {
