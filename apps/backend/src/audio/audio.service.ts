@@ -5,6 +5,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  type OnModuleInit,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { AudioSession } from '@prisma/client';
@@ -34,7 +35,7 @@ export type ChildErrorCode =
   | 'UNKNOWN';
 
 @Injectable()
-export class AudioService {
+export class AudioService implements OnModuleInit {
   private readonly logger = new Logger(AudioService.name);
 
   constructor(
@@ -45,6 +46,48 @@ export class AudioService {
     @Inject(AudioTokenService) private readonly tokens: AudioTokenService,
     @Inject(FcmService) private readonly fcm: FcmService,
   ) {}
+
+  /**
+   * v0.37.0-rc.2: при рестарте backend setTimeout'ы expireIfStuck/autoStop
+   * теряются, и PENDING/ACTIVE сессии висят вечно — каждый новый POST
+   * /audio/sessions для того же ребёнка получает 409 session_already_active.
+   *
+   * При старте модуля чистим все PENDING/READY/ACTIVE сессии старше
+   * AUDIO_CHILD_READY_TIMEOUT_SEC + durationSec + buffer (5 минут как разумный
+   * максимум для любых сессий). Это идемпотентно и безопасно — реально живые
+   * сессии этим cleanup'ом не убьются (они моложе 5 мин в любом нормальном
+   * сценарии).
+   *
+   * TODO v0.38: pg_cron каждую минуту делать то же самое для случая когда
+   * backend живой, но отдельные setTimeout'ы потерялись (например после OOM).
+   */
+  async onModuleInit(): Promise<void> {
+    try {
+      const cutoff = new Date(Date.now() - 5 * 60_000);
+      const stuck = await this.prisma.audioSession.findMany({
+        where: {
+          state: { in: ['PENDING', 'READY', 'ACTIVE'] },
+          startedAt: { lt: cutoff },
+        },
+        select: { id: true, childId: true, state: true, startedAt: true, childDeviceId: true },
+      });
+      if (stuck.length === 0) {
+        this.logger.log('startup cleanup: no stuck sessions found');
+        return;
+      }
+      this.logger.warn(`startup cleanup: expiring ${stuck.length} stuck session(s)`);
+      for (const s of stuck) {
+        this.logger.warn(
+          `  → ${s.id} child=${s.childId} state=${s.state} startedAt=${s.startedAt.toISOString()}`,
+        );
+        await this.expireOrFail(s.id, 'EXPIRED', 'NETWORK_ERROR').catch((err) =>
+          this.logger.warn(`  cleanup expireOrFail(${s.id}) failed: ${String(err)}`),
+        );
+      }
+    } catch (err) {
+      this.logger.error(`startup cleanup failed: ${String(err)}`);
+    }
+  }
 
   /**
    * Старт audio-сессии родителем (v0.35: WebSocket-relay).
