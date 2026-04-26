@@ -1,6 +1,6 @@
 {
   "name": "@gmd/web",
-  "version": "0.36.0-rc.2",
+  "version": "0.37.0-rc.1",
   "private": true,
   "description": "GMD web — лендинг и кабинет родителя",
   "scripts": {

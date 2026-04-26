@@ -246,6 +246,13 @@ model ChildDevice {
   revokedAt  DateTime?
   createdAt  DateTime  @default(now())
 
+  // v0.37: FCM token для high-priority push (мгновенная доставка START_AUDIO).
+  // Регистрируется через POST /child/devices/fcm-token при старте app и onTokenRefresh.
+  // null = устройство ещё не зарегистрировало FCM (fresh install / нет Google Play Services) →
+  // backend fallback'ится на poll-команду через DeviceCommand queue.
+  fcmToken           String?   @unique
+  fcmTokenUpdatedAt  DateTime?
+
   child     Child           @relation(fields: [childId], references: [id], onDelete: Cascade)
   locations Location[]
   sosEvents SosEvent[]

@@ -235,4 +235,28 @@ export class ChildDeviceService {
         /* ignore */
       });
   }
+
+  // v0.37: child регистрирует свой FCM token (или null если получил
+  // INSTANCE_ID_RESET / устройство сменило). Backend хранит его в child_devices
+  // и использует для high-priority push при createAudioSession (мгновенный
+  // START_AUDIO вместо poll latency 60-120c).
+  //
+  // Идемпотентно: если token не изменился — обновляем только timestamp.
+  // Если другой device уже привязал этот же token (UNIQUE constraint) — это
+  // означает что Firebase переуступил token (редко, но возможно при reset).
+  // В таком случае очищаем у старого device и привязываем к новому.
+  async setFcmToken(deviceId: string, fcmToken: string | null): Promise<void> {
+    if (fcmToken !== null) {
+      // Очистить token у других устройств с таким же значением
+      // (защита от UNIQUE constraint при FCM reset).
+      await this.prisma.childDevice.updateMany({
+        where: { fcmToken, NOT: { id: deviceId } },
+        data: { fcmToken: null, fcmTokenUpdatedAt: new Date() },
+      });
+    }
+    await this.prisma.childDevice.update({
+      where: { id: deviceId },
+      data: { fcmToken, fcmTokenUpdatedAt: new Date() },
+    });
+  }
 }

@@ -21,6 +21,11 @@ import type { ClaimDto } from './dto/claim.dto';
 
 const VerifyPinSchema = z.object({ pin: z.string().regex(/^\d{4,8}$/) }).strict();
 
+// v0.37: token может быть null если устройство только что сделало
+// FirebaseInstanceId.delete() (но это рарити). Длина FCM token обычно
+// 140-200 char; даём разумный max 4096 на всякий случай.
+const FcmTokenSchema = z.object({ fcmToken: z.string().min(10).max(4096).nullable() }).strict();
+
 interface ChildRequest extends Request {
   childDevice: ChildAuthContext;
 }
@@ -95,5 +100,19 @@ export class ChildDeviceController {
       familyId: req.childDevice.familyId,
       pin: dto.pin,
     });
+  }
+
+  // v0.37: child регистрирует FCM token при старте app + onTokenRefresh.
+  // Используется для high-priority push доставки команд (мгновенный START_AUDIO).
+  // Throttle мягкий (10/мин) — token меняется редко, но retry на ошибках OK.
+  @Post('devices/fcm-token')
+  @UseGuards(ChildAuthGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Throttle({ default: { ttl: 60_000, limit: 10 } })
+  async setFcmToken(
+    @Req() req: ChildRequest,
+    @Body(new ZodValidationPipe(FcmTokenSchema)) dto: z.infer<typeof FcmTokenSchema>,
+  ): Promise<void> {
+    await this.svc.setFcmToken(req.childDevice.deviceId, dto.fcmToken);
   }
 }

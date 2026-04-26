@@ -21,6 +21,13 @@ infra/docker/.env.dev
 infra/docker/.env.prod
 !infra/docker/.env.prod.example
 
+# Firebase / FCM credentials — НИКОГДА не коммитить!
+# service-account.json даёт admin-доступ ко всему проекту в Firebase.
+# google-services.json содержит API key Android-клиента (менее критично, но тоже не нужно).
+.firebase-credentials/
+**/google-services.json
+**/GoogleService-Info.plist
+
 # IDE
 .idea/
 .vscode/*

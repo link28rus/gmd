@@ -11,6 +11,7 @@ import type { AudioSession } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AppSettingsService, SETTINGS_KEYS } from '../app-settings/app-settings.service';
 import { DeviceCommandsService } from '../device-commands/device-commands.service';
+import { FcmService } from '../fcm/fcm.service';
 import { AudioRelay } from './audio.relay';
 import { AudioTokenService } from './audio-token.service';
 import type { CreateAudioSessionResponse, AudioWsConnInfo } from './dto/audio.dto';
@@ -42,6 +43,7 @@ export class AudioService {
     @Inject(DeviceCommandsService) private readonly commands: DeviceCommandsService,
     @Inject(AudioRelay) private readonly relay: AudioRelay,
     @Inject(AudioTokenService) private readonly tokens: AudioTokenService,
+    @Inject(FcmService) private readonly fcm: FcmService,
   ) {}
 
   /**
@@ -165,6 +167,21 @@ export class AudioService {
       readyTimeoutSec * 1000,
     );
 
+    // v0.37: parallel FCM push для мгновенной доставки (3-5s vs 60-120s poll).
+    // Очередь команд остаётся как fallback — если FCM упал/нет токена, child
+    // всё равно заберёт START_AUDIO при следующем poll'е (как в v0.36).
+    // FCM-payload идентичен payload'у в DeviceCommand.
+    void this.fcm
+      .sendDataMessage(device.id, device.fcmToken, {
+        type: 'START_AUDIO',
+        sessionId: session.id,
+        wsUrl: childWs.url,
+        wsToken: childWs.token,
+        ttlSec: String(childWs.ttlSec),
+        durationSec: String(durationSec),
+      })
+      .catch((err) => this.logger.warn(`FCM push START_AUDIO failed: ${String(err)}`));
+
     await this.prisma.audioAuditLog.create({
       data: {
         sessionId: session.id,
@@ -257,6 +274,17 @@ export class AudioService {
     });
     if (session.childDeviceId) {
       await this.commands.enqueueAudioStop(session.childDeviceId, sessionId, session.requestedById);
+      // v0.37: FCM push STOP — мгновенно прервать stream на child'е.
+      const device = await this.prisma.childDevice.findUnique({
+        where: { id: session.childDeviceId },
+        select: { fcmToken: true },
+      });
+      void this.fcm
+        .sendDataMessage(session.childDeviceId, device?.fcmToken ?? null, {
+          type: 'STOP_AUDIO',
+          sessionId,
+        })
+        .catch((err) => this.logger.warn(`FCM push STOP_AUDIO failed: ${String(err)}`));
     }
   }
 
@@ -351,6 +379,19 @@ export class AudioService {
     });
     if (session.childDeviceId) {
       await this.commands.enqueueAudioStop(session.childDeviceId, sessionId, actorUserId);
+      // v0.37: FCM push STOP — мгновенно прервать stream на child'е (parent stop / auto-end).
+      const device = await this.prisma.childDevice.findUnique({
+        where: { id: session.childDeviceId },
+        select: { fcmToken: true },
+      });
+      void this.fcm
+        .sendDataMessage(session.childDeviceId, device?.fcmToken ?? null, {
+          type: 'STOP_AUDIO',
+          sessionId,
+        })
+        .catch((err) =>
+          this.logger.warn(`FCM push STOP_AUDIO (endSession) failed: ${String(err)}`),
+        );
     }
     this.relay.terminate(sessionId, 4008, 'session_ended');
   }

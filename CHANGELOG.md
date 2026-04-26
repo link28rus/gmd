@@ -9,6 +9,30 @@
 
 ---
 
+## v0.37.0-rc.1 — 2026-04-26
+
+### Новые возможности
+
+- **«Звук вокруг» подключается мгновенно (3-5 сек) вместо 60-120 сек.** Backend отправляет команду `START_AUDIO` ребёнку через **FCM high-priority data-message** параллельно с очередью `DeviceCommand` — Firebase будит устройство и доставляет команду без ожидания poll-цикла. То же для `STOP_AUDIO`. Очередь команд остаётся как fallback: если FCM не настроен, упал, или у устройства нет валидного token — child заберёт команду через poll, как в v0.36 (60-120с latency). Backend Phase 1 готов; mobile-child Phase 2 (приём push) — следующий релиз.
+
+### Изменения
+
+- **Prisma migration `20260426150000_add_fcm_token`**: `child_devices.fcmToken String?` (UNIQUE) + `fcmTokenUpdatedAt DateTime?`.
+- **Новый модуль `apps/backend/src/fcm/`** с `FcmService` (Firebase Admin SDK V1, init из `FIREBASE_SA_KEY` base64-env). Если переменной нет — DISABLED state с warn'ом, fallback на poll работает прозрачно.
+- **Endpoint `POST /child/devices/fcm-token`** (auth через X-Child-Token) — child регистрирует/обновляет FCM token при старте app и `onTokenRefresh`. Идемпотентен; защищён от race с UNIQUE constraint при FCM token reset.
+- **`AudioService.createSession()`** — после `enqueueAudioStart()` параллельно вызывает `fcm.sendDataMessage()` с тем же payload.
+- **`AudioService.expireOrFail()` + `endSession()`** — то же для STOP_AUDIO.
+- **Docker compose**: проброс `FIREBASE_SA_KEY` в backend контейнер. Опционально (если не задано — FCM disabled).
+- **`.env.prod.example`**: документирована переменная `FIREBASE_SA_KEY` с инструкцией base64-encode.
+
+### Безопасность
+
+- `service-account.json` хранится в `.firebase-credentials/` (gitignore).
+- `google-services.json` для mobile-child будет добавлен в Phase 2 (тоже gitignore).
+- На прод сервере `FIREBASE_SA_KEY` лежит в `/opt/gmd/.env.prod` (только root reading).
+
+---
+
 ## v0.36.0-rc.2 — 2026-04-26
 
 ### Исправления

@@ -241,6 +241,10 @@ services:
       PORT: '3001'
       AUDIO_WS_SECRET: ${AUDIO_WS_SECRET}
       AUDIO_WS_PUBLIC_URL: ${AUDIO_WS_PUBLIC_URL:-wss://gmd.link28rus.ru/audio/ws}
+      # v0.37: FCM service-account JSON (base64-encoded). Если не задан —
+      # FcmService стартует в DISABLED состоянии, push не отправляется,
+      # backend fallback'ится на poll-команды через DeviceCommand queue.
+      FIREBASE_SA_KEY: ${FIREBASE_SA_KEY:-}
     volumes:
       - /opt/gmd/secrets/jwt-private.pem:/run/secrets/jwt-private.pem:ro
       - /opt/gmd/secrets/jwt-public.pem:/run/secrets/jwt-public.pem:ro

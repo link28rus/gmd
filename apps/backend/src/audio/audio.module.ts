@@ -6,6 +6,7 @@ import { ChildDeviceModule } from '../child-device/child-device.module';
 import { ConsentModule } from '../consent/consent.module';
 import { DeviceCommandsModule } from '../device-commands/device-commands.module';
 import { AdminModule } from '../admin/admin.module';
+import { FcmModule } from '../fcm/fcm.module';
 import { AudioService } from './audio.service';
 import { AudioRelay } from './audio.relay';
 import { AudioTokenService } from './audio-token.service';
@@ -23,6 +24,7 @@ import { AudioAdminController } from './audio-admin.controller';
     ConsentModule,
     DeviceCommandsModule,
     AdminModule,
+    FcmModule,
   ],
   controllers: [ParentAudioController, ChildAudioController, AudioAdminController],
   providers: [AudioService, AudioRelay, AudioTokenService, AudioGateway],
