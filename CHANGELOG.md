@@ -9,6 +9,14 @@
 
 ---
 
+## v0.38.0-rc.6 — 2026-04-26
+
+### Исправления
+
+- **fix(backend): payloadtoolarge на `/child/app-icons` 500 → 200.** Дефолтный Express body-parser лимит 100KB не пропускал батчи иконок (50 PNG × ~30KB base64 = до 7MB). Поднят до 10MB через `app.use(json({ limit: '10mb' }))`. Также распространяется на `/child/usage-reports` (до 24000 bucket'ов) и `/child/installed-apps` (до 1000 apps). Без этого фикса rc.5 mobile-child не мог залить иконки → web-кабинет родителя видел бы appLabel без иконок.
+
+---
+
 ## v0.38.0-rc.5 — 2026-04-26
 
 ### Новые возможности
