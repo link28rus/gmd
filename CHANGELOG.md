@@ -9,6 +9,22 @@
 
 ---
 
+## v0.39.6 — 2026-04-27 — Fix: launcher и системные UI больше не блокируются
+
+### Исправления
+
+- **Overlay блокировки больше не появляется на home screen / launcher / системных UI.** В v0.39.5 при активной блокировке оверлей появлялся не только на запрещённом приложении, но и на launcher'е (`com.miui.home` и аналоги), системном поиске (`com.mi.appfinder`), MIUI SystemUI плагинах. Ребёнок не мог закрыть overlay чтобы попасть на home screen и пользоваться разрешёнными приложениями — каждый клик по «Закрыть» возвращал на home, где a11y тут же снова показывал overlay (бесконечный цикл).
+- **Кнопка «Закрыть» теперь реально закрывает overlay.** Решение: динамически детектируем все установленные launcher'ы через `PackageManager.queryIntentActivities(Intent.ACTION_MAIN+CATEGORY_HOME)` — это покрывает MIUI, OneUI (Samsung), Pixel Launcher, Nova и любые сторонние lauchers'ы. Расширили `SAFETY_ALLOWED` для MIUI/HyperOS системных пакетов (`com.miui.systemui.plugin`, `miui.systemui.plugin`, `com.miui.securitycenter`, `com.mi.appfinder` и др.) + generic Android (`android`, `com.google.android.permissioncontroller`).
+
+### Изменения
+
+- **`BlockManager.SAFETY_ALLOWED`** расширен: ~10 новых системных packages для MIUI/HyperOS + generic Android.
+- **`BlockManager.getLauncherPackages(ctx)`** — новая функция, кэширует результат `PackageManager.queryIntentActivities(HOME)`. Cache инвалидируется при `setRules` (на случай если ребёнок поставил новый launcher между sync'ами).
+- **`BlockManager.isBlocked` / `getEffectiveMode`** теперь дополнительно проверяют `getLauncherPackages` — все установленные launcher'ы whitelisted, вне зависимости от OEM.
+- **Логика после клика «Закрыть»** не изменилась — но теперь работает корректно благодаря whitelist'у launcher'а.
+
+---
+
 ## v0.39.5 — 2026-04-27 — Visual blocking overlay через WindowManager (Phase 6.2 финал)
 
 В v0.39.4 блокировка работала функционально (HOME action выкидывал на launcher),

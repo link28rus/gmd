@@ -1,6 +1,8 @@
 package ru.link28rus.gmd.child
 
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -39,17 +41,62 @@ object BlockManager {
         "ru.oneme.app",
     )
 
-    /** Системные packages, которые НИКОГДА не блокируются (безопасность ребёнка). */
+    /**
+     * Системные packages, которые НИКОГДА не блокируются (безопасность + UX).
+     *
+     * Включает:
+     *   - emergency dial / phone / dialer / contacts / incall — звонки 112,
+     *     медпомощь, контакт родителя.
+     *   - settings / systemui — иначе ребёнок не может ни откатить grant'ы,
+     *     ни увидеть статусбар / notifications.
+     *   - системные плагины SystemUI на MIUI/HyperOS, иначе блочится notification panel.
+     *   - системный поиск (mi.appfinder) — выезжает свайпом со home.
+     *   - install/permissions/services контроллеры.
+     *
+     * Launcher (`com.miui.home`, `com.android.launcher3`, etc.) НЕ хардкодим
+     * — детектим динамически через PackageManager (см. [getLauncherPackages]).
+     * Это покрывает все OEM'ы (Samsung OneUI, Pixel Launcher, Nova и т.д.) +
+     * сторонние лаунчеры ребёнка.
+     */
     private val SAFETY_ALLOWED = setOf(
-        "com.android.settings",         // нужно для grant'ов / решения проблем
-        "com.android.systemui",          // SystemUI overlay (notifications, status bar)
-        "com.android.phone",             // emergency dial
-        "com.android.dialer",            // legacy default dialer
-        "com.android.contacts",          // legacy contacts
-        "com.android.emergency",         // emergency app (некоторые OEM)
-        "com.android.incallui",          // активный звонок
+        // Phone / emergency
+        "com.android.settings",
+        "com.android.systemui",
+        "com.android.phone",
+        "com.android.dialer",
+        "com.android.contacts",
+        "com.android.emergency",
+        "com.android.incallui",
         "com.android.server.telecom",
+        // MIUI / HyperOS system
+        "com.miui.systemui.plugin",
+        "miui.systemui.plugin",
+        "com.miui.securitycenter",
+        "com.miui.notification",
+        "com.miui.system",
+        "com.miui.contentextension",
+        "com.android.miui.home",
+        "com.mi.appfinder",            // системный «выдвижной» поиск свайпом по home
+        "com.miui.global.packageinstaller",
+        "com.android.packageinstaller",
+        // Generic Android
+        "com.google.android.permissioncontroller",
+        "android",
     )
+
+    /**
+     * Cached список launcher packages (`Intent.CATEGORY_HOME` → `queryIntentActivities`).
+     * Заполняется при первом обращении к [isBlocked] / [getEffectiveMode].
+     * Сбрасывается при подозрении что launcher сменился (см. [refreshSystemSafety]).
+     *
+     * Включает ВСЕ установленные на устройстве launchers (default + альтернативные).
+     * Это критично для UX: после клика «Закрыть» в blocking overlay'е ребёнок
+     * попадает на launcher через `ACTION_HOME` → a11y фиксирует переключение →
+     * launcher тоже должен быть allowed, иначе цикл «overlay → home → overlay → home»
+     * и ребёнок не может выбраться из своего же launcher'а.
+     */
+    @Volatile
+    private var cachedLaunchers: Set<String>? = null
 
     enum class Mode { DEFAULT, ALWAYS_ALLOWED, ALWAYS_BLOCKED }
 
@@ -104,6 +151,37 @@ object BlockManager {
     fun setRules(ctx: Context, rulesJson: JSONArray) {
         prefs(ctx).edit().putString(KEY_RULES_JSON, rulesJson.toString()).apply()
         DiagLog.write(ctx, TAG, "setRules count=${rulesJson.length()}")
+        // На случай если ребёнок поставил новый launcher между rules sync'ами.
+        refreshSystemSafety()
+    }
+
+    /**
+     * Все launcher packages на устройстве (default + альтернативные).
+     * Кэшируется, refresh — через [refreshSystemSafety].
+     */
+    private fun getLauncherPackages(ctx: Context): Set<String> {
+        cachedLaunchers?.let { return it }
+        val intent = Intent(Intent.ACTION_MAIN).apply { addCategory(Intent.CATEGORY_HOME) }
+        val pkgs = try {
+            ctx.applicationContext.packageManager
+                .queryIntentActivities(intent, 0)
+                .map { it.activityInfo.packageName }
+                .toSet()
+        } catch (_: Throwable) {
+            emptySet()
+        }
+        cachedLaunchers = pkgs
+        DiagLog.write(ctx, TAG, "launchers detected: $pkgs")
+        return pkgs
+    }
+
+    /**
+     * Сбросить кэш launcher'ов. Вызывается:
+     *   - При [setRules] (на всякий случай — может user поставил новый launcher
+     *     между запусками а мы кэш не инвалидировали).
+     */
+    fun refreshSystemSafety() {
+        cachedLaunchers = null
     }
 
     /** Mode для конкретного package с учётом HARDCODED + SAFETY override'ов. */
@@ -111,6 +189,9 @@ object BlockManager {
     fun getEffectiveMode(ctx: Context, packageName: String): Mode {
         if (packageName in HARDCODED_ALLOWED) return Mode.ALWAYS_ALLOWED
         if (packageName in SAFETY_ALLOWED) return Mode.ALWAYS_ALLOWED
+        // Launcher (любой установленный) — никогда не блокируем, иначе ребёнок
+        // не может попасть на home screen (close-button overlay'я ведёт сюда).
+        if (packageName in getLauncherPackages(ctx)) return Mode.ALWAYS_ALLOWED
 
         val rulesStr = prefs(ctx).getString(KEY_RULES_JSON, null) ?: return Mode.DEFAULT
         val arr = try {
