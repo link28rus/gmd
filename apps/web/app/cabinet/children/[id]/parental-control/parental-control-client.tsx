@@ -3,12 +3,13 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useEffect, useMemo, useState, type ReactElement } from 'react';
-import { ArrowLeft, Lock, ShieldCheck, Smartphone, Unlock } from 'lucide-react';
+import { ArrowLeft, Ban, Check, Lock, Search, ShieldCheck, Smartphone, Unlock } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   HARDCODED_ALLOWED_PACKAGES,
   rewriteIconUrl,
   type AppCategory,
+  type AppRuleMode,
   type BlockSessionDto,
   type InstalledAppDto,
   type UsageRangeDto,
@@ -149,7 +150,7 @@ export default function ParentalControlClient({ childId }: { childId: string }):
 
       <AppsList apps={apps} loading={appsQ.isPending} />
 
-      <WhitelistSection
+      <AppRulesSection
         childId={childId}
         apps={apps}
         rules={rules}
@@ -503,7 +504,9 @@ function EmptyAppsHint(): ReactElement {
   );
 }
 
-// ─── Whitelist section (v0.39: «Не блокируется») ────────────────────────
+// ─── App rules section (v0.39.1: search + 3-state allow/default/block) ──
+
+type RuleFilter = 'all' | 'allowed' | 'default' | 'blocked';
 
 interface RuleViewModel {
   packageName: string;
@@ -511,31 +514,37 @@ interface RuleViewModel {
   category: AppCategory | null;
   iconUrl: string | null;
   isSystem: boolean;
-  /** Текущий mode для отображения: 'ALWAYS_ALLOWED' = в whitelist, иначе нет. */
-  inWhitelist: boolean;
-  /** HARDCODED — нельзя выключить (dim toggle). */
+  /** Эффективный mode для UI: учитывает HARDCODED-приоритет. */
+  mode: AppRuleMode;
+  /** HARDCODED — нельзя менять (radio disabled, всегда ALWAYS_ALLOWED). */
   hardcoded: boolean;
-  /** SYSTEM_DEFAULT — родитель может явно выключить, но это редко нужно. */
+  /** SYSTEM_DEFAULT — auto-разрешено системой, родитель может переопределить. */
   systemDefault: boolean;
+  /** Активность для приоритезации в сортировке (выше = сверху). */
+  todaySeconds: number;
 }
 
 /**
- * Список «Не блокируется». Отображает все installed-apps + все правила
- * (PARENT/SYSTEM_DEFAULT) + HARDCODED — даже если их нет в installed-apps
- * (наш child app + MAX могут быть единственными во whitelist на свежем
- * устройстве).
+ * Раздел «Правила приложений» (v0.39.1).
+ *
+ * Заменил старый бинарный whitelist (v0.39.0). Теперь для каждого приложения
+ * родитель выбирает один из трёх режимов:
+ *   - **Разрешено всегда** (ALWAYS_ALLOWED): не блокируется даже при активной
+ *     BlockSession (whitelist — например, школьный мессенджер).
+ *   - **По умолчанию** (DEFAULT): блокируется, только когда родитель явно
+ *     запустил блок-сессию (Калькулятор, обычные приложения).
+ *   - **Заблокировано всегда** (ALWAYS_BLOCKED): всегда заблокировано даже
+ *     без активной сессии (например, TikTok, не для ребёнка). Эту опцию
+ *     поддерживают backend и mobile-child с v0.39.0, но в UI родителя она
+ *     появилась только сейчас.
  *
  * UX:
- *   - Toggle ON = в whitelist (mode=ALWAYS_ALLOWED, source=PARENT)
- *   - Toggle OFF = убирается из whitelist (mode=DEFAULT, source=PARENT)
- *   - HARDCODED — toggle disabled, всегда ON, метка «системное»
- *   - SYSTEM_DEFAULT — toggle активен (родитель может выключить, но мы
- *     показываем подсказку «по умолчанию разрешено»)
- *
- * При активной BlockSession список «Не блокируется» — это ровно те apps,
- * которые продолжают работать на устройстве ребёнка.
+ *   - Поиск по названию app или package name (case-insensitive).
+ *   - Фильтр-табы: Все / Разрешённые / По умолчанию / Заблокированные.
+ *   - 3-state segmented control справа от каждого app: ✓ — ⛔
+ *   - HARDCODED — segmented disabled (только ✓), pill «системное».
  */
-function WhitelistSection({
+function AppRulesSection({
   childId,
   apps,
   rules,
@@ -547,6 +556,8 @@ function WhitelistSection({
   loading: boolean;
 }): ReactElement {
   const upsert = useUpsertAppRule(childId);
+  const [search, setSearch] = useState<string>('');
+  const [filter, setFilter] = useState<RuleFilter>('all');
 
   const appByPkg = useMemo(() => {
     const map = new Map<string, InstalledAppDto>();
@@ -554,65 +565,115 @@ function WhitelistSection({
     return map;
   }, [apps]);
 
-  // Собираем единый список: HARDCODED + SYSTEM_DEFAULT + PARENT-rules + все apps
+  const ruleByPkg = useMemo(() => {
+    const map = new Map<string, { mode: string; source: string }>();
+    for (const r of rules) map.set(r.packageName, { mode: r.mode, source: r.source });
+    return map;
+  }, [rules]);
+
+  // Собираем единый список: HARDCODED + все apps + любые rules без installed-app
+  // (на случай если правило сохранено для удалённого app — пусть родитель
+  // увидит и сможет почистить).
   const items = useMemo<RuleViewModel[]>(() => {
     const seen = new Set<string>();
     const out: RuleViewModel[] = [];
 
-    const push = (
-      pkg: string,
-      hardcoded: boolean,
-      systemDefault: boolean,
-      explicitAllowed: boolean,
-    ): void => {
+    const hardcodedSet = new Set<string>(HARDCODED_ALLOWED_PACKAGES);
+
+    const push = (pkg: string): void => {
       if (seen.has(pkg)) return;
       seen.add(pkg);
       const a = appByPkg.get(pkg);
+      const r = ruleByPkg.get(pkg);
+      const isHardcoded = hardcodedSet.has(pkg);
+      const isSystemDefault = r?.source === 'SYSTEM_DEFAULT';
+
+      let mode: AppRuleMode;
+      if (isHardcoded) {
+        mode = 'ALWAYS_ALLOWED';
+      } else if (r) {
+        const m = r.mode;
+        mode = m === 'ALWAYS_ALLOWED' || m === 'ALWAYS_BLOCKED' || m === 'DEFAULT' ? m : 'DEFAULT';
+      } else {
+        mode = 'DEFAULT';
+      }
+
       out.push({
         packageName: pkg,
         appLabel: a?.appLabel ?? pkg,
         category: a?.category ?? null,
         iconUrl: a?.iconUrl ?? null,
         isSystem: a?.isSystem ?? false,
-        inWhitelist: hardcoded || systemDefault || explicitAllowed,
-        hardcoded,
-        systemDefault,
+        todaySeconds: a?.todaySeconds ?? 0,
+        mode,
+        hardcoded: isHardcoded,
+        systemDefault: isSystemDefault,
       });
     };
 
-    // 1. HARDCODED
-    for (const pkg of HARDCODED_ALLOWED_PACKAGES) push(pkg, true, false, false);
-    // 2. SYSTEM_DEFAULT (auto-разрешённые системные dialer/sms/etc)
-    for (const r of rules) {
-      if (r.source === 'SYSTEM_DEFAULT' && r.mode === 'ALWAYS_ALLOWED')
-        push(r.packageName, false, true, false);
-    }
-    // 3. PARENT rules (родительский whitelist)
-    for (const r of rules) {
-      if (r.source === 'PARENT' && r.mode === 'ALWAYS_ALLOWED') {
-        push(r.packageName, false, false, true);
-      }
-    }
-    // 4. Все остальные installed apps (toggle OFF, чтобы родитель мог включить)
-    for (const a of apps) push(a.packageName, false, false, false);
+    // Порядок добавления — он же fallback при равенстве сортировки:
+    // hardcoded сверху, затем installed apps, затем «orphan» rules.
+    for (const pkg of HARDCODED_ALLOWED_PACKAGES) push(pkg);
+    for (const a of apps) push(a.packageName);
+    for (const r of rules) push(r.packageName);
 
     return out;
-  }, [apps, appByPkg, rules]);
+  }, [apps, appByPkg, rules, ruleByPkg]);
 
-  // Подсчитаем сколько в whitelist
-  const inWhitelistCount = items.filter((i) => i.inWhitelist).length;
+  // Сортировка финального списка для UI: hardcoded → ALWAYS_BLOCKED →
+  // ALWAYS_ALLOWED → DEFAULT с активностью → DEFAULT остальные. Это даёт
+  // быстрый взгляд: «что я уже настроил» сверху.
+  const sortedItems = useMemo(() => {
+    const order: Record<AppRuleMode, number> = {
+      ALWAYS_BLOCKED: 0,
+      ALWAYS_ALLOWED: 1,
+      DEFAULT: 2,
+    };
+    return [...items].sort((a, b) => {
+      // hardcoded всегда первыми
+      if (a.hardcoded !== b.hardcoded) return a.hardcoded ? -1 : 1;
+      // затем по mode (заблокированные → разрешённые → default)
+      if (a.mode !== b.mode) return order[a.mode] - order[b.mode];
+      // затем по активности (active apps выше)
+      if (b.todaySeconds !== a.todaySeconds) return b.todaySeconds - a.todaySeconds;
+      // затем алфавитно
+      return a.appLabel.localeCompare(b.appLabel, 'ru');
+    });
+  }, [items]);
 
-  function onToggle(item: RuleViewModel): void {
+  // Применяем фильтры (search + tab)
+  const filteredItems = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return sortedItems.filter((it) => {
+      if (q) {
+        const hay = `${it.appLabel} ${it.packageName}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      if (filter === 'allowed') return it.mode === 'ALWAYS_ALLOWED';
+      if (filter === 'blocked') return it.mode === 'ALWAYS_BLOCKED';
+      if (filter === 'default') return it.mode === 'DEFAULT';
+      return true;
+    });
+  }, [sortedItems, search, filter]);
+
+  const counts = useMemo(() => {
+    let allowed = 0,
+      blocked = 0,
+      def = 0;
+    for (const it of items) {
+      if (it.mode === 'ALWAYS_ALLOWED') allowed++;
+      else if (it.mode === 'ALWAYS_BLOCKED') blocked++;
+      else def++;
+    }
+    return { all: items.length, allowed, blocked, default: def };
+  }, [items]);
+
+  function onChangeMode(item: RuleViewModel, nextMode: AppRuleMode): void {
     if (item.hardcoded || upsert.isPending) return;
-    const nextMode = item.inWhitelist ? 'DEFAULT' : 'ALWAYS_ALLOWED';
+    if (item.mode === nextMode) return;
     upsert.mutate(
       { packageName: item.packageName, mode: nextMode },
       {
-        onSuccess: () => {
-          // Тосты для частых действий слишком навязчивы — короткий sonner.success
-          // при первом включении был бы избыточен. Полагаемся на визуальный feedback
-          // toggle.
-        },
         onError: (err: unknown) => {
           toast.error(err instanceof Error ? err.message : 'Не удалось сохранить правило');
         },
@@ -622,30 +683,54 @@ function WhitelistSection({
 
   return (
     <div className="mt-10">
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Не блокируется <span className="text-muted-foreground">({inWhitelistCount})</span>
+          Правила приложений <span className="text-muted-foreground">({counts.all})</span>
         </h2>
         <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
           <ShieldCheck className="h-3.5 w-3.5" />
-          Работает даже при блокировке
+          Применяется на устройстве ≤15 мин
         </span>
       </div>
       <p className="mb-3 text-xs text-muted-foreground">
-        Звонки, SMS, камера и наше приложение всегда доступны. Включи приложения, которые ребёнок
-        должен иметь возможность открыть даже когда всё остальное заблокировано.
+        Для каждого приложения выбери: <b>Разрешено всегда</b> — работает даже при активной
+        блокировке (whitelist), <b>По умолчанию</b> — блокируется только во время блок-сессии,{' '}
+        <b>Заблокировано всегда</b> — заблокировано постоянно (даже без сессии). Звонки, SMS и
+        камера всегда разрешены.
       </p>
+
+      {/* Search */}
+      <div className="relative mb-3">
+        <Search
+          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+          aria-hidden
+        />
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Поиск приложений…"
+          className="w-full rounded-md border border-border bg-card py-2 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-foreground focus:outline-none"
+          aria-label="Поиск приложений"
+        />
+      </div>
+
+      {/* Filter tabs */}
+      <RulesFilterTabs current={filter} onChange={setFilter} counts={counts} />
+
       {loading ? (
-        <p className="text-sm text-muted-foreground">Загрузка списка…</p>
-      ) : items.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Список приложений ещё не получен.</p>
+        <p className="mt-4 text-sm text-muted-foreground">Загрузка списка…</p>
+      ) : filteredItems.length === 0 ? (
+        <p className="mt-4 text-sm text-muted-foreground">
+          {search ? 'Нет приложений по запросу.' : 'Список приложений ещё не получен.'}
+        </p>
       ) : (
-        <ul className="space-y-2">
-          {items.map((it) => (
-            <WhitelistRow
+        <ul className="mt-3 space-y-2">
+          {filteredItems.map((it) => (
+            <AppRuleRow
               key={it.packageName}
               item={it}
-              onToggle={() => onToggle(it)}
+              onChangeMode={(m) => onChangeMode(it, m)}
               busy={upsert.isPending}
             />
           ))}
@@ -655,22 +740,70 @@ function WhitelistSection({
   );
 }
 
-function WhitelistRow({
+function RulesFilterTabs({
+  current,
+  onChange,
+  counts,
+}: {
+  current: RuleFilter;
+  onChange: (f: RuleFilter) => void;
+  counts: { all: number; allowed: number; blocked: number; default: number };
+}): ReactElement {
+  const items: Array<{ key: RuleFilter; label: string; count: number }> = [
+    { key: 'all', label: 'Все', count: counts.all },
+    { key: 'allowed', label: 'Разрешённые', count: counts.allowed },
+    { key: 'default', label: 'По умолчанию', count: counts.default },
+    { key: 'blocked', label: 'Заблокированные', count: counts.blocked },
+  ];
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {items.map((it) => (
+        <button
+          key={it.key}
+          type="button"
+          onClick={() => onChange(it.key)}
+          className={
+            'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors ' +
+            (current === it.key
+              ? 'border-foreground bg-foreground text-background'
+              : 'border-border bg-card text-foreground hover:bg-muted')
+          }
+        >
+          {it.label}
+          <span
+            className={
+              'rounded-full px-1.5 text-[10px] ' +
+              (current === it.key
+                ? 'bg-background/20 text-background'
+                : 'bg-muted text-muted-foreground')
+            }
+          >
+            {it.count}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function AppRuleRow({
   item,
-  onToggle,
+  onChangeMode,
   busy,
 }: {
   item: RuleViewModel;
-  onToggle: () => void;
+  onChangeMode: (mode: AppRuleMode) => void;
   busy: boolean;
 }): ReactElement {
   const proxiedIcon = rewriteIconUrl(item.iconUrl);
   const subtitle = item.hardcoded
-    ? 'Системное · всегда разрешено'
+    ? 'Системное · нельзя заблокировать'
     : item.systemDefault
-      ? 'По умолчанию разрешено'
+      ? 'По умолчанию разрешено системой'
       : item.category !== null
-        ? CATEGORY_LABELS[item.category] + (item.isSystem ? ' · системное' : '')
+        ? CATEGORY_LABELS[item.category] +
+          (item.isSystem ? ' · системное' : '') +
+          (item.todaySeconds > 0 ? ` · ${fmtMinutes(item.todaySeconds)}` : '')
         : item.packageName;
 
   return (
@@ -695,34 +828,109 @@ function WhitelistRow({
         <p className="truncate text-sm font-medium text-foreground">{item.appLabel}</p>
         <p className="truncate text-xs text-muted-foreground">{subtitle}</p>
       </div>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={item.inWhitelist}
-        aria-label={
-          item.inWhitelist
-            ? `Убрать ${item.appLabel} из «Не блокируется»`
-            : `Добавить ${item.appLabel} в «Не блокируется»`
-        }
-        onClick={onToggle}
-        disabled={item.hardcoded || busy}
-        className={
-          'relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors disabled:cursor-not-allowed ' +
-          (item.inWhitelist ? 'bg-emerald-600' : 'bg-muted') +
-          (item.hardcoded ? ' opacity-60' : '') +
-          (busy ? ' disabled:cursor-wait' : '')
-        }
-        title={
-          item.hardcoded ? 'Это приложение всегда разрешено и не может быть выключено' : undefined
-        }
-      >
-        <span
-          className={
-            'inline-block h-4 w-4 transform rounded-full bg-card shadow transition-transform ' +
-            (item.inWhitelist ? 'translate-x-4' : 'translate-x-0.5')
-          }
-        />
-      </button>
+      <ModeSegmented
+        value={item.mode}
+        disabled={item.hardcoded}
+        busy={busy}
+        onChange={onChangeMode}
+        appLabel={item.appLabel}
+      />
     </li>
+  );
+}
+
+/**
+ * 3-state segmented control: ✓ (allow) | — (default) | ⛔ (block).
+ *
+ * Disabled (для HARDCODED) — кнопки серые, ✓ visually-active.
+ *
+ * Размер: компактный, 3×28px = ~84px ширины. Не помещаемся на ультрамалых
+ * экранах (<360px), но эта страница в первую очередь для desktop.
+ */
+function ModeSegmented({
+  value,
+  disabled,
+  busy,
+  onChange,
+  appLabel,
+}: {
+  value: AppRuleMode;
+  disabled: boolean;
+  busy: boolean;
+  onChange: (mode: AppRuleMode) => void;
+  appLabel: string;
+}): ReactElement {
+  const options: Array<{
+    mode: AppRuleMode;
+    icon: ReactElement;
+    label: string;
+    activeBg: string;
+    activeText: string;
+  }> = [
+    {
+      mode: 'ALWAYS_ALLOWED',
+      icon: <Check className="h-3.5 w-3.5" aria-hidden />,
+      label: 'Разрешено всегда',
+      activeBg: 'bg-emerald-600',
+      activeText: 'text-white',
+    },
+    {
+      mode: 'DEFAULT',
+      icon: (
+        <span aria-hidden className="text-base leading-none">
+          —
+        </span>
+      ),
+      label: 'По умолчанию',
+      activeBg: 'bg-muted-foreground/30',
+      activeText: 'text-foreground',
+    },
+    {
+      mode: 'ALWAYS_BLOCKED',
+      icon: <Ban className="h-3.5 w-3.5" aria-hidden />,
+      label: 'Заблокировано всегда',
+      activeBg: 'bg-red-600',
+      activeText: 'text-white',
+    },
+  ];
+  return (
+    <div
+      role="radiogroup"
+      aria-label={`Режим блокировки для ${appLabel}`}
+      className={
+        'inline-flex shrink-0 overflow-hidden rounded-md border border-border ' +
+        (disabled ? 'opacity-60' : '')
+      }
+    >
+      {options.map((opt) => {
+        const active = value === opt.mode;
+        return (
+          <button
+            key={opt.mode}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            aria-label={`${opt.label} — ${appLabel}`}
+            title={opt.label}
+            onClick={() => onChange(opt.mode)}
+            disabled={disabled || busy}
+            className={
+              'flex h-7 w-7 items-center justify-center text-xs transition-colors ' +
+              'border-r border-border last:border-r-0 ' +
+              (active
+                ? `${opt.activeBg} ${opt.activeText}`
+                : 'bg-card text-muted-foreground hover:bg-muted hover:text-foreground') +
+              (disabled
+                ? ' cursor-not-allowed'
+                : busy
+                  ? ' disabled:cursor-wait'
+                  : ' cursor-pointer')
+            }
+          >
+            {opt.icon}
+          </button>
+        );
+      })}
+    </div>
   );
 }
