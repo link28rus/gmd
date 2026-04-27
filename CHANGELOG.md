@@ -9,6 +9,43 @@
 
 ---
 
+## v0.39.0 — 2026-04-27 — Phase 6.2 «Блокировка приложений» 🔒
+
+Полноценный релиз функции блокировки приложений: родитель из веб-кабинета может
+заблокировать все приложения на устройстве ребёнка на 5 мин..24 ч, кроме
+звонков, SMS, камеры и явного whitelist'а.
+
+### Новые возможности
+
+- **Блокировка приложений по таймеру.** На странице «Родительский контроль» появилась кнопка «Заблокировать приложения» — открывает диалог с пресетами 5 мин / 15 мин / 30 мин / 1 ч / 2 ч / 4 ч / 8 ч / 24 ч. После подтверждения на устройстве ребёнка через FCM или поллинг (≤15 мин) активируется глобальная блокировка: при попытке открыть запрещённое приложение появляется полноэкранный оверлей «🔒 Телефон заблокирован» с countdown'ом «осталось X мин Y сек» и кнопкой «Закрыть». Интерсепция через AccessibilityService (event `TYPE_WINDOW_STATE_CHANGED`), оверлей через отдельную lock-screen-bypass Activity.
+- **Карточка активной блокировки в кабинете.** Сверху страницы «Родительский контроль» родитель видит «Приложения заблокированы» с локальным временем окончания и live-countdown'ом (тик каждую секунду) + кнопкой «Снять блок». Опрос состояния — раз в 30 сек, сессия истекает автоматически на стороне backend (`pg_cron` каждую минуту) и синхронно подхватывается устройством.
+- **Whitelist «Не блокируется».** Раздел внизу страницы — toggle-list для каждого установленного app: HARDCODED (наш child-app, мессенджер MAX — всегда включены, нельзя выключить), SYSTEM_DEFAULT (звонки, SMS, камера — авто-разрешённые) и любые приложения по выбору родителя. Whitelist применяется на устройстве ребёнка немедленно через FCM `SYNC_RULES`, fallback — поллинг `GET /child/app-rules` каждые 15 мин.
+- **Onboarding-шаг «Блокировка приложений» (mobile-child).** Открывается после шага «Статистика приложений», ведёт на системный экран Спецвозможностей и обнаруживает успешный grant через lifecycle resume. На Xiaomi/HyperOS дополнительно отдельная кнопка «Разрешить ограниченные настройки» открывает карточку приложения для bypass'а MIUI restricted-settings.
+- **Индикатор статуса блокировки на главном экране (mobile-child).** Если AccessibilityService выключен — в красном Permission Health Banner появляется пункт «Блокировка приложений», tap ведёт сразу на onboarding-шаг.
+
+### Изменения
+
+- **Backend:** новый модуль `AppBlockingService` — модель «whitelist + глобальный таймер» (а не «blacklist + per-app»). HARDCODED-приоритет: `HARDCODED_ALLOWED = ['ru.link28rus.gmd.child', 'ru.oneme.app']` зашит в коде и нельзя переопределить через `PARENT`/`SYSTEM_DEFAULT`. pg_cron job `gmd_block_sessions_auto_expire` (`* * * * *`) переводит просроченные сессии в EXPIRED. `OnModuleInit` cleanup на старте бэкенда. FCM data-messages типа `BLOCK_APPS` / `UNBLOCK_APPS` / `SYNC_RULES`.
+- **Mobile-child:** Kotlin singleton `BlockManager` (SharedPreferences для активной сессии и rules), `BlockOverlayActivity` (full-screen, `setShowWhenLocked(true)`, swallow-back, FLAG_KEEP_SCREEN_ON), `GmdAccessibilityService` (throttle 500ms/package, никогда не падает). Periodic `BlockPollWorker` (15 мин) + manual trigger при старте app. Интеграция с `ChildEscapeOrchestrator` — при reclaim'е активная блокировка снимается локально.
+- **Web-parent:** новые TanStack Query hooks `useActiveBlock`/`useAppRules`/`useCreateBlock`/`useStopBlock`/`useUpsertAppRule`. Mutations через `setQueryData`/`invalidateQueries` для мгновенного UI без ожидания poll. Imageнтрировано в существующую страницу `/cabinet/children/[id]/parental-control`.
+
+### Известные ограничения
+
+- **HyperOS / MIUI «Ограниченные настройки».** На Xiaomi-устройствах включить AccessibilityService через ADB (`pm grant WRITE_SECURE_SETTINGS`, `settings put secure enabled_accessibility_services`) невозможно — система фильтрует sideload-сервисы из bound-services. Onboarding-шаг ведёт пользователя на правильный экран, но ручное действие («Разрешить ограниченные настройки» → тумблер) обязательно. Это не баг GMD — то же ограничение действует для конкурентов («Где мои дети» и др.).
+- **`am force-stop` сбрасывает grant.** На HyperOS принудительное завершение приложения иногда удаляет его из `enabled_accessibility_services`. Если родитель пользуется «Очистить память» — нужно повторно включить тумблер. Будет исправлено в v0.40 через периодическую проверку статуса и push-уведомление родителю.
+- **Whitelist не имеет optimistic UI.** Toggle меняет статус только после ответа backend (≤200 ms). При лаговой сети пользователь увидит небольшую задержку. Будет улучшено по запросу.
+
+### E2E verification
+
+Phase 6.2 проверена end-to-end на 12T Pro (HyperOS V816, Android 15):
+- Backend INSERT BlockSession → poll get-active → BlockManager `setActiveBlock` ✓
+- AccessibilityService bound, `onAccessibilityEvent` fires for blocked package ✓
+- `BlockOverlayActivity` шапка «🔒 Телефон заблокирован», countdown «ещё 4 мин 30 сек», кнопка «Закрыть» ✓
+- Whitelist (наш child app) открывается без интерсепции ✓
+- Auto-expire ровно в `endsAt` (overlay-tick-expired event на устройстве + EXPIRED state в БД) ✓
+
+---
+
 ## v0.39.0-rc.5 — 2026-04-27 — Phase 6.2 «Блокировка приложений» (web-parent UI)
 
 Завершает первый рабочий end-to-end флоу для App Blocking: backend (rc.1) +
