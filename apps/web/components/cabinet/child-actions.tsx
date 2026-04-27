@@ -2,7 +2,7 @@
 
 import { useState, type ReactElement } from 'react';
 import Link from 'next/link';
-import { Bell, Clock, Ear, RotateCcw, Shield, Trash2 } from 'lucide-react';
+import { Bell, Clock, Ear, RotateCcw, Shield, ShieldCheck, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Child } from '@/lib/api/children';
 import { ResetDeviceDialog } from '@/components/children/reset-device-dialog';
@@ -57,6 +57,15 @@ export function ChildActions({ child, showReset }: Props): ReactElement {
           <Clock className="h-4 w-4 text-muted-foreground" />
           История передвижений
         </Link>
+        {showReset && (
+          <Link
+            href={`/cabinet/children/${child.id}/parental-control`}
+            className="flex w-full items-center gap-2 border-t border-border px-3 py-2 text-left text-sm text-foreground hover:bg-muted"
+          >
+            <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+            Родительский контроль
+          </Link>
+        )}
         {showProtection && (
           <div className="flex w-full items-center justify-between gap-2 border-t border-border px-3 py-2 text-sm text-foreground">
             <div className="flex items-center gap-2">
