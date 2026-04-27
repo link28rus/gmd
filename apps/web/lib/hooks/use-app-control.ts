@@ -1,6 +1,7 @@
 // v0.38 Phase 6.1: TanStack Query hooks для «Родительский контроль».
-import { useQuery } from '@tanstack/react-query';
-import { appControlApi } from '../api/app-control';
+// v0.39 Phase 6.2: + App Blocking (BlockSession, AppRule).
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { appControlApi, type AppRuleMode, type BlockSessionDto } from '../api/app-control';
 
 export function useInstalledApps(childId: string | null) {
   return useQuery({
@@ -19,5 +20,77 @@ export function useUsage(childId: string | null, range: 'day' | 'week', date?: s
     queryFn: () => appControlApi.usage(childId!, range, date),
     enabled: childId !== null,
     staleTime: 5 * 60_000,
+  });
+}
+
+// ─── Phase 6.2 (v0.39): App Blocking ───────────────────────────────────────
+
+/**
+ * Активная BlockSession для child. null если нет.
+ *
+ * refetchInterval 30 сек — backend сам помечает EXPIRED через pg_cron каждую
+ * минуту + on-read через getActiveSession. Если сессия истекла, UI обновится
+ * за 30 сек без перезагрузки страницы. Само время «осталось N мин» считаем
+ * на клиенте каждую секунду через setInterval — отдельный хук.
+ */
+export function useActiveBlock(childId: string | null) {
+  return useQuery({
+    queryKey: ['app-control', 'active-block', childId],
+    queryFn: () => appControlApi.activeBlockSession(childId!),
+    enabled: childId !== null,
+    refetchInterval: 30_000,
+    staleTime: 0, // важно знать актуальное состояние сразу
+  });
+}
+
+export function useAppRules(childId: string | null) {
+  return useQuery({
+    queryKey: ['app-control', 'app-rules', childId],
+    queryFn: () => appControlApi.listAppRules(childId!),
+    enabled: childId !== null,
+    staleTime: 5 * 60_000,
+  });
+}
+
+/**
+ * Создать BlockSession. После успеха инвалидирует useActiveBlock — UI сразу
+ * увидит активную сессию (без ожидания 30-сек poll).
+ */
+export function useCreateBlock(childId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (durationMin: number) => appControlApi.createBlockSession(childId, durationMin),
+    onSuccess: (data: BlockSessionDto) => {
+      qc.setQueryData(['app-control', 'active-block', childId], data);
+    },
+  });
+}
+
+/**
+ * Завершить активную сессию. После успеха ставим null в кэш — счётчик
+ * мгновенно исчезает.
+ */
+export function useStopBlock(childId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (sessionId: string) => appControlApi.stopBlockSession(childId, sessionId),
+    onSuccess: () => {
+      qc.setQueryData(['app-control', 'active-block', childId], null);
+    },
+  });
+}
+
+/**
+ * UPSERT правила {packageName × mode}. После успеха инвалидирует useAppRules
+ * — список «не блокируется» обновится автоматически.
+ */
+export function useUpsertAppRule(childId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (params: { packageName: string; mode: AppRuleMode }) =>
+      appControlApi.putAppRule(childId, params.packageName, params.mode),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['app-control', 'app-rules', childId] });
+    },
   });
 }

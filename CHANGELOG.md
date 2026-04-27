@@ -9,6 +9,28 @@
 
 ---
 
+## v0.39.0-rc.5 — 2026-04-27 — Phase 6.2 «Блокировка приложений» (web-parent UI)
+
+Завершает первый рабочий end-to-end флоу для App Blocking: backend (rc.1) +
+mobile-child (rc.2/rc.3) + web-parent UI (rc.5). Родитель теперь видит и
+управляет активной блокировкой из веб-кабинета.
+
+### Новые возможности
+
+- **Кнопка «Заблокировать приложения» на странице «Родительский контроль».** Открывает диалог time-picker с пресетами 5 мин / 15 мин / 30 мин / 1 ч / 2 ч / 4 ч / 8 ч / 24 ч (backend принимает `durationMin: 5..1440`). По подтверждению создаёт `BlockSession` через `POST /family/children/:id/app-control/block-sessions`, FCM `BLOCK_APPS` уходит на устройство ребёнка немедленно.
+- **Карточка активной блокировки сверху страницы.** Показывает live-countdown «осталось X ч Y мин» (тикает каждую секунду на клиенте) + локальное время окончания. Кнопка «Снять блок» → `DELETE /block-sessions/:id` (FCM `UNBLOCK_APPS`). Опрос `GET /block-sessions/active` — раз в 30 сек, чтобы UI автоматически обновился если сессия истекла или была снята с другого устройства.
+- **Раздел «Не блокируется» с whitelist-toggle для каждого приложения.** Список объединяет HARDCODED (наш child-app, MAX — тумблер всегда включён, disabled), SYSTEM_DEFAULT (звонки, SMS, камера — авто-разрешённые backend'ом), PARENT-исключения (родительский whitelist) и все installed-apps. Клик по тумблеру → `PUT /app-rules/:packageName` с `mode: ALWAYS_ALLOWED` или `DEFAULT`, FCM `SYNC_RULES` доставляется ребёнку, `BlockPollWorker` подтягивает изменения за ≤15 мин на случай отказа FCM.
+
+### Изменения
+
+- **API client (`lib/api/app-control.ts`):** добавлены типы `AppRuleMode`, `AppRuleSource`, `AppRuleDto`, `BlockSessionDto`, константа `HARDCODED_ALLOWED_PACKAGES = ['ru.link28rus.gmd.child', 'ru.oneme.app']`. Методы `createBlockSession`, `activeBlockSession`, `stopBlockSession`, `listAppRules`, `putAppRule`.
+- **TanStack Query hooks (`lib/hooks/use-app-control.ts`):** `useActiveBlock` (refetchInterval 30s, staleTime 0), `useAppRules`, `useCreateBlock`, `useStopBlock`, `useUpsertAppRule`. Mutations используют `setQueryData`/`invalidateQueries` чтобы UI обновлялся мгновенно без ожидания poll.
+- **Next API proxy:** добавлены `/api/children/[id]/app-control/block-sessions` (POST), `/block-sessions/active` (GET), `/block-sessions/[sessionId]` (DELETE), `/app-rules` (GET), `/app-rules/[packageName]` (PUT). `lib/backend.ts` и `_helpers.ts` расширены поддержкой PUT.
+- **`BlockDialog` компонент (`components/children/block-dialog.tsx`):** изолированный диалог с пресет-чипами, обработкой `409 session_already_active` / `404 no_active_device`. Reset state на закрытии.
+- **Страница `/cabinet/children/[id]/parental-control`:** старый `DisabledBlockButton` (заглушка из v0.38) заменён на рабочий `BlockButton` (скрывается при активной блокировке). Добавлены `ActiveBlockCard` и `WhitelistSection`. Имя ребёнка для UI берётся из `useChildren()` — без отдельного fetch.
+
+---
+
 ## v0.39.0-rc.4 — 2026-04-27
 
 ### Исправления

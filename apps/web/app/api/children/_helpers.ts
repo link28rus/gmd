@@ -23,7 +23,7 @@ export function proxyResponse(r: BackendResponse<unknown>): NextResponse {
 }
 
 export async function proxy(
-  method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
+  method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE',
   backendPath: string,
   req: NextRequest,
   body?: unknown,

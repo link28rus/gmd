@@ -2,7 +2,7 @@ import 'server-only';
 
 const BACKEND_URL = process.env.BACKEND_URL ?? 'http://127.0.0.1:3001';
 
-export type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE';
+export type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
 
 export interface BackendResponse<T = unknown> {
   status: number;

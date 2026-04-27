@@ -1,4 +1,5 @@
 // v0.38 Phase 6.1: API client для «Родительский контроль» (screen-time).
+// v0.39 Phase 6.2: + App Blocking (BlockSession, AppRule).
 import { apiFetch } from './client';
 
 export type AppCategory =
@@ -43,6 +44,28 @@ export interface UsageResponseDto {
   result: UsageRangeDto;
 }
 
+// ─── Phase 6.2 (v0.39): App Blocking ─────────────────────────────────────
+//
+// HARDCODED packages зашиты в backend (см. AppBlockingService.HARDCODED_ALLOWED).
+// UI должен показывать их в whitelist как «всегда разрешено» (toggle disabled
+// в позиции ON), чтобы родитель видел, что наш child app не заблокируется.
+export const HARDCODED_ALLOWED_PACKAGES = ['ru.link28rus.gmd.child', 'ru.oneme.app'] as const;
+
+export type AppRuleMode = 'DEFAULT' | 'ALWAYS_ALLOWED' | 'ALWAYS_BLOCKED';
+export type AppRuleSource = 'PARENT' | 'SYSTEM_DEFAULT' | 'HARDCODED';
+
+export interface AppRuleDto {
+  packageName: string;
+  mode: string; // backend возвращает upper-case enum, нормализуем на клиенте
+  source: string;
+}
+
+export interface BlockSessionDto {
+  sessionId: string;
+  startedAt: string; // ISO
+  endsAt: string; // ISO
+}
+
 export const appControlApi = {
   installedApps: (childId: string) =>
     apiFetch<{ apps: InstalledAppDto[] }>(`/api/children/${childId}/app-control/installed-apps`),
@@ -53,6 +76,43 @@ export const appControlApi = {
       `/api/children/${childId}/app-control/usage?${params.toString()}`,
     );
   },
+
+  // ─── Block sessions ────────────────────────────────────────────────────
+  createBlockSession: (childId: string, durationMin: number) =>
+    apiFetch<BlockSessionDto>(`/api/children/${childId}/app-control/block-sessions`, {
+      method: 'POST',
+      body: JSON.stringify({ durationMin }),
+    }),
+  /**
+   * Активная сессия. Возвращает null если у ребёнка нет ACTIVE сессии (backend
+   * отдаёт `null` строкой в JSON — apiFetch разворачивает в JS null).
+   */
+  activeBlockSession: (childId: string) =>
+    apiFetch<BlockSessionDto | null>(`/api/children/${childId}/app-control/block-sessions/active`),
+  stopBlockSession: (childId: string, sessionId: string) =>
+    apiFetch<void>(`/api/children/${childId}/app-control/block-sessions/${sessionId}`, {
+      method: 'DELETE',
+    }),
+
+  // ─── App rules (whitelist) ─────────────────────────────────────────────
+  /**
+   * Список явно сохранённых правил (PARENT + SYSTEM_DEFAULT). HARDCODED не
+   * включаются — UI добавляет их статически из HARDCODED_ALLOWED_PACKAGES.
+   */
+  listAppRules: (childId: string) =>
+    apiFetch<{ rules: AppRuleDto[] }>(`/api/children/${childId}/app-control/app-rules`),
+  /**
+   * Установить правило. mode: 'ALWAYS_ALLOWED' добавляет в whitelist,
+   * 'DEFAULT' откатывает к default (не в whitelist).
+   */
+  putAppRule: (childId: string, packageName: string, mode: AppRuleMode) =>
+    apiFetch<AppRuleDto>(
+      `/api/children/${childId}/app-control/app-rules/${encodeURIComponent(packageName)}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({ mode }),
+      },
+    ),
 };
 
 /**
