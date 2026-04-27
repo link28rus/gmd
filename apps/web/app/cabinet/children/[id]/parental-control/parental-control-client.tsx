@@ -629,9 +629,12 @@ function AppRulesSection({
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           Приложения <span className="text-muted-foreground">({counts.all})</span>
         </h2>
-        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+        <span
+          className="inline-flex items-center gap-1 text-xs text-muted-foreground"
+          title="Применяется через FCM high-priority push (≈5 сек). Если устройство офлайн — догонит через ≤15 мин при следующем поллинге."
+        >
           <ShieldCheck className="h-3.5 w-3.5" />
-          Применяется на устройстве ≤15 мин
+          Применяется на устройстве за несколько секунд
         </span>
       </div>
       <p className="mb-3 text-xs text-muted-foreground">
