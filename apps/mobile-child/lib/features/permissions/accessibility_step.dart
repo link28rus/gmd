@@ -114,14 +114,15 @@ class _AccessibilityStepState extends State<AccessibilityStep>
   }
 
   void _goNext() {
-    if (mounted) GoRouter.of(context).go('/home');
+    // v0.39.5: после Accessibility — шаг SAW (для visual blocking overlay).
+    if (mounted) GoRouter.of(context).go('/permissions/overlay');
   }
 
   @override
   Widget build(BuildContext context) {
     return PermissionsWizardScaffold(
       stepIndex: 7,
-      totalSteps: 8,
+      totalSteps: 9,
       title: 'Блокировка приложений',
       description:
           'Чтобы родитель мог временно заблокировать игры и соцсети — нужно '

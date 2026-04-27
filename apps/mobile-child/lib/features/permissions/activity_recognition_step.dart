@@ -22,7 +22,7 @@ class ActivityRecognitionStep extends StatelessWidget {
   Widget build(BuildContext context) {
     return PermissionsWizardScaffold(
       stepIndex: 3,
-      totalSteps: 8,
+      totalSteps: 9,
       title: 'Экономия батареи',
       description:
           'Разреши распознавание физической активности (сидишь / идёшь / едешь), '

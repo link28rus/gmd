@@ -18,7 +18,7 @@ class LocationPermissionsStep extends StatelessWidget {
   Widget build(BuildContext context) {
     return PermissionsWizardScaffold(
       stepIndex: 1,
-      totalSteps: 8,
+      totalSteps: 9,
       title: 'Местоположение',
       description:
           'Чтобы видеть где ты, даже когда приложение закрыто. Нужно «Всегда» — это защищает тебя.',

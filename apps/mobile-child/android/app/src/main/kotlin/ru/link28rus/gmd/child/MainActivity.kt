@@ -288,6 +288,17 @@ class MainActivity : FlutterActivity() {
                             result.error("open_settings_failed", e.message, null)
                         }
                     }
+                    // v0.39.5 Phase 6.2 fix: SAW для visual blocking overlay
+                    "canDrawOverlays" ->
+                        result.success(AppControlNative.canDrawOverlays(this))
+                    "openOverlaySettings" -> {
+                        try {
+                            AppControlNative.openOverlaySettings(this)
+                            result.success(null)
+                        } catch (e: Throwable) {
+                            result.error("open_settings_failed", e.message, null)
+                        }
+                    }
                     "deviceTimezone" ->
                         result.success(AppControlNative.deviceTimezone())
                     "collectInstalledApps" -> {

@@ -71,6 +71,10 @@ object BlockManager {
             .remove(KEY_ACTIVE_ENDS_AT_MS)
             .apply()
         DiagLog.write(ctx, TAG, "clearActiveBlock reason=$reason")
+        // v0.39.5: если overlay сейчас показан (например по UNBLOCK_APPS FCM или
+        // expire) — убираем. Если активная сессия снята, но open app всё ещё
+        // ALWAYS_BLOCKED — следующий a11y event поднимет overlay заново.
+        OverlayManager.hide(ctx, "block-cleared:$reason")
     }
 
     /** Возвращает активную блок-сессию или null если истекла / нет. */

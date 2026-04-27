@@ -123,7 +123,7 @@ class _UsageStatsStepState extends State<UsageStatsStep>
   Widget build(BuildContext context) {
     return PermissionsWizardScaffold(
       stepIndex: 6,
-      totalSteps: 8,
+      totalSteps: 9,
       title: 'Статистика приложений',
       description:
           'Чтобы родитель видел в кабинете, сколько ты сегодня провёл в '

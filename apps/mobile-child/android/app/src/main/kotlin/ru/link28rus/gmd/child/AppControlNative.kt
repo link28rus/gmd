@@ -133,6 +133,36 @@ object AppControlNative {
     ctx.startActivity(intent)
   }
 
+  // ─── v0.39.5 Phase 6.2 fix: SYSTEM_ALERT_WINDOW для visual overlay ────────
+
+  /**
+   * Может ли наш app рисовать поверх других apps? Это `SYSTEM_ALERT_WINDOW`
+   * special access (не runtime). Без него `WindowManager.addView` с
+   * `TYPE_APPLICATION_OVERLAY` бросает `BadTokenException` → blocking overlay
+   * не показывается, остаётся только `GLOBAL_ACTION_HOME` fallback.
+   */
+  fun canDrawOverlays(ctx: Context): Boolean = Settings.canDrawOverlays(ctx)
+
+  /**
+   * Открыть Settings → Спецдоступ → Поверх других приложений → GMD ребёнок.
+   * Передаём `package:<our package>` — Android открывает уже на нашем app
+   * (на большинстве OEM, на некоторых выкидывает в общий список — fallback OK).
+   */
+  fun openOverlaySettings(ctx: Context) {
+    val intent = Intent(
+      Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+      android.net.Uri.parse("package:${ctx.packageName}"),
+    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    try {
+      ctx.startActivity(intent)
+    } catch (_: Throwable) {
+      // На некоторых OEM нужен Intent без data — fallback.
+      ctx.startActivity(
+        Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+      )
+    }
+  }
+
   /** IANA timezone устройства (например "Europe/Moscow"). Шлётся в backend. */
   fun deviceTimezone(): String = TimeZone.getDefault().id
 

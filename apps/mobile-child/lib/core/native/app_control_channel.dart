@@ -44,6 +44,21 @@ class AppControlChannel {
     await _ch.invokeMethod<void>('openAppDetailsSettings');
   }
 
+  /// v0.39.5 Phase 6.2 fix: дано ли SYSTEM_ALERT_WINDOW (Settings.canDrawOverlays).
+  /// Без него `WindowManager.addView` с TYPE_APPLICATION_OVERLAY бросает
+  /// BadTokenException — visual blocking overlay не показывается, остаётся
+  /// только GLOBAL_ACTION_HOME fallback в a11y.
+  static Future<bool> canDrawOverlays() async {
+    final granted = await _ch.invokeMethod<bool>('canDrawOverlays');
+    return granted ?? false;
+  }
+
+  /// v0.39.5: открыть Settings → Спецдоступ → Поверх других приложений.
+  /// Передаём `package:<our>` — на большинстве OEM открывает уже на нашем app.
+  static Future<void> openOverlaySettings() async {
+    await _ch.invokeMethod<void>('openOverlaySettings');
+  }
+
   /// IANA timezone устройства (например "Europe/Moscow").
   /// Шлётся в payload installed-apps / usage-reports.
   static Future<String> deviceTimezone() async {

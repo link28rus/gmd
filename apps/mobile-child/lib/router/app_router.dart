@@ -12,6 +12,7 @@ import '../features/permissions/microphone_step.dart';
 import '../features/permissions/notifications_step.dart';
 import '../features/permissions/usage_stats_step.dart';
 import '../features/permissions/accessibility_step.dart';
+import '../features/permissions/overlay_step.dart';
 import '../features/escape/escape_screen.dart';
 
 class AppRouter {
@@ -65,11 +66,18 @@ class AppRouter {
       builder: (_, _) => const UsageStatsStep(),
     ),
     // v0.39 Phase 6.2: Accessibility (для блокировки приложений). Идёт
-    // последним шагом — после usage-stats. Без него a11y service не подключён,
-    // BlockOverlayActivity не показывается.
+    // после usage-stats. Без него a11y service не подключён, и заблокированное
+    // приложение не определится.
     GoRoute(
       path: '/permissions/accessibility',
       builder: (_, _) => const AccessibilityStep(),
+    ),
+    // v0.39.5 Phase 6.2 fix: SYSTEM_ALERT_WINDOW для visual overlay'а.
+    // Идёт ПОСЛЕ accessibility — без него блокировка работает (HOME action),
+    // но без красивого экрана «🔒 Телефон заблокирован» с таймером.
+    GoRoute(
+      path: '/permissions/overlay',
+      builder: (_, _) => const OverlayStep(),
     ),
     GoRoute(
       path: '/home',

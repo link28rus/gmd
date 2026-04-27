@@ -15,7 +15,7 @@ class BatteryPermissionsStep extends StatelessWidget {
   Widget build(BuildContext context) {
     return PermissionsWizardScaffold(
       stepIndex: 2,
-      totalSteps: 8,
+      totalSteps: 9,
       title: 'Не засыпать',
       description:
           'Разреши приложению работать в фоне, чтобы мама и папа видели где ты даже при '

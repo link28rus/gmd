@@ -9,6 +9,33 @@
 
 ---
 
+## v0.39.5 — 2026-04-27 — Visual blocking overlay через WindowManager (Phase 6.2 финал)
+
+В v0.39.4 блокировка работала функционально (HOME action выкидывал на launcher),
+но визуальный экран «🔒 Телефон заблокирован» не показывался — Android 12+
+блокировал запуск Activity из background. v0.39.5 решает это через
+`SYSTEM_ALERT_WINDOW` + `WindowManager.addView` (этот window layer не подпадает
+под BAL ограничения).
+
+### Новые возможности
+
+- **Полноценный visual overlay при блокировке.** Когда ребёнок открывает запрещённое приложение, поверх любого экрана появляется чёрный фон с большим 🔒, текстом «Телефон заблокирован», live-таймером «ещё X мин Y сек» и синей кнопкой «Закрыть» (отправляет на launcher). Visually идентично «Где мои дети». Реализовано через `TYPE_APPLICATION_OVERLAY` window — не Activity, поэтому BAL restriction не блокирует.
+- **Onboarding-шаг «Экран блокировки».** Идёт после шага Accessibility. Открывает Settings → Спецдоступ → «Поверх других приложений» → ребёнок включает тумблер. Lifecycle resume ловит grant. Без grant'а блокировка работает (HOME action), но без визуального экрана — пользователь может skip.
+- **Permission Health Banner показывает «Поверх других приложений»** если SAW не grant'ed. Переход прямо на onboarding-шаг.
+
+### Изменения
+
+- **Native (Kotlin):** новый singleton `OverlayManager` управляет жизненным циклом overlay через `WindowManager.addView`/`removeView` с `TYPE_APPLICATION_OVERLAY`. Использует тот же XML layout `activity_block_overlay.xml`. Countdown timer в Handler, expire → авто-hide. Кнопка «Закрыть» → `ACTION_MAIN+CATEGORY_HOME` (HOME-intent имеет специальный BAL exemption).
+- **`GmdAccessibilityService`** теперь делает `OverlayManager.show` (visual) + `performGlobalAction(GLOBAL_ACTION_HOME)` (надёжный kick) — первое требует SAW, второе работает всегда. На устройстве с SAW — overlay поверх launcher'а; без SAW — пользователь просто на launcher (graceful degradation).
+- **`BlockManager.clearActiveBlock`** автоматически вызывает `OverlayManager.hide` — при FCM `UNBLOCK_APPS` overlay убирается мгновенно.
+- **`AppControlNative`:** добавлены `canDrawOverlays()` и `openOverlaySettings()` (open `Settings.ACTION_MANAGE_OVERLAY_PERMISSION` с `package:<our>`).
+- **Dart:** `AppControlChannel.canDrawOverlays()` / `openOverlaySettings()`.
+- **Wizard:** новый `OverlayStep` widget (`lib/features/permissions/overlay_step.dart`), маршрут `/permissions/overlay`. Переход `accessibility_step._goNext` теперь → `/permissions/overlay` (вместо `/home`). Все existing steps обновлены `totalSteps: 8 → 9`.
+- **Permission Health Banner:** проверяет `canDrawOverlays`, при выключенном — добавляет «Поверх других приложений» в `_missing` и роутит на `/permissions/overlay`.
+- `BlockOverlayActivity` остался в коде но больше не используется (запасной путь). Удалится в v0.40.
+
+---
+
 ## v0.39.4 — 2026-04-27 — Fix блокировки на HyperOS / Android 12+ (background-activity-start)
 
 ### Исправления

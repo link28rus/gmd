@@ -1,7 +1,6 @@
 package ru.link28rus.gmd.child
 
 import android.accessibilityservice.AccessibilityService
-import android.content.Intent
 import android.view.accessibility.AccessibilityEvent
 
 /**
@@ -66,10 +65,15 @@ class GmdAccessibilityService : AccessibilityService() {
             // (overlay всё равно перепроверит и сам зачистит когда сессия снимется).
             val endsAt = active?.endsAtMs ?: (now + 3600_000L)
 
-            // STEP 1: Instant kick на home через GLOBAL_ACTION_HOME.
-            // Это работает ВСЕГДА (a11y system action, не требует BAL exemption ни SAW).
-            // Главная гарантия: blocked app исчезает с экрана за ~50ms даже если
-            // overlay activity не запустится из-за HyperOS background-activity-start ban.
+            // STEP 1: Visual overlay через TYPE_APPLICATION_OVERLAY (v0.39.5).
+            // Не Activity → BAL ограничения не распространяются. Требует SAW perm,
+            // если нет — silent no-op, fallback'нёмся на STEP 2.
+            OverlayManager.show(applicationContext, endsAt)
+
+            // STEP 2: GLOBAL_ACTION_HOME — гарантированный kick на launcher.
+            // Работает ВСЕГДА (a11y system action, не требует ни BAL exemption ни SAW).
+            // Если SAW есть и overlay показался — overlay поверх launcher'а (visually
+            // правильно). Если SAW нет — ребёнок просто на launcher (graceful).
             val homeOk = try {
                 performGlobalAction(GLOBAL_ACTION_HOME)
             } catch (e: Throwable) {
@@ -77,23 +81,11 @@ class GmdAccessibilityService : AccessibilityService() {
                 false
             }
 
-            // STEP 2: Поверх launcher'а (если STEP 1 удался) пытаемся показать overlay.
-            // Activity start с TYPE_APPLICATION_OVERLAY-like behavior через FLAG_ACTIVITY_NEW_TASK.
-            // На Android 12+ HyperOS startActivity из background часто абортится,
-            // тогда graceful degradation: пользователь уже на home через STEP 1.
-            val intent = Intent(this, BlockOverlayActivity::class.java).apply {
-                putExtra(BlockOverlayActivity.EXTRA_PACKAGE_NAME, pkg)
-                putExtra(BlockOverlayActivity.EXTRA_ENDS_AT_MS, endsAt)
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or
-                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                    Intent.FLAG_ACTIVITY_NO_HISTORY  // не оставляем в back-stack
-            }
-            try {
-                startActivity(intent)
-                DiagLog.write(this, TAG, "blocked $pkg → home=$homeOk + overlay-startActivity dispatched")
-            } catch (e: Throwable) {
-                DiagLog.write(this, TAG, "blocked $pkg → home=$homeOk + overlay FAILED: ${e.javaClass.simpleName}: ${e.message}")
-            }
+            DiagLog.write(
+                this,
+                TAG,
+                "blocked $pkg → overlay=${OverlayManager.isShowing()} home=$homeOk endsAt=$endsAt",
+            )
         } catch (e: Throwable) {
             // Never crash — a11y exceptions могут отключить сервис.
             DiagLog.write(this, TAG, "onAccessibilityEvent crashed: ${e.javaClass.simpleName}: ${e.message}")

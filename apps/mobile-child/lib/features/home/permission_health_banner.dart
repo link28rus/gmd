@@ -63,6 +63,14 @@ class _PermissionHealthBannerState extends State<PermissionHealthBanner>
       missing.add('Блокировка приложений');
       if (missing.length == 1) route = '/permissions/accessibility';
     }
+    // v0.39.5 Phase 6.2 fix: SYSTEM_ALERT_WINDOW для visual blocking overlay.
+    // Без него блокировка работает (выкидывает на home), но без красивого
+    // экрана «🔒 Телефон заблокирован». Не блокер, но UX-критично.
+    final overlay = await AppControlChannel.canDrawOverlays();
+    if (!overlay) {
+      missing.add('Поверх других приложений');
+      if (missing.length == 1) route = '/permissions/overlay';
+    }
     if (!mounted) return;
     setState(() {
       _missing = missing;
