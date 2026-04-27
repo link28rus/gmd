@@ -53,6 +53,14 @@
         tools:ignore="ProtectedPermissions"/>
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission"/>
+    <!-- v0.39.4 Phase 6.2 fix: Android 12+ HyperOS блокирует startActivity()
+         из background даже из AccessibilityService (Abort background activity
+         starts). SYSTEM_ALERT_WINDOW даёт нашему процессу exemption на BAL +
+         позволяет показывать TYPE_APPLICATION_OVERLAY поверх любого app.
+         Special access — грантится через ACTION_MANAGE_OVERLAY_PERMISSION,
+         не runtime. Без него блокировка деградирует до GLOBAL_ACTION_HOME
+         (выкидывает на launcher без визуального overlay'а). -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
     <application
         android:label="gmd_child"
         android:name="${applicationName}"

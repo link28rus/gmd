@@ -9,6 +9,15 @@
 
 ---
 
+## v0.39.4 — 2026-04-27 — Fix блокировки на HyperOS / Android 12+ (background-activity-start)
+
+### Исправления
+
+- **Блокировка приложений теперь реально работает на HyperOS / Android 12+ (mobile-child).** Раньше AccessibilityService корректно детектировал попытку открыть запрещённое приложение, но `startActivity(BlockOverlayActivity)` системой обрывался с `ActivityTaskManager: Abort background activity starts` (Android 12+ запрещает запуск Activity из background даже из AccessibilityService процесса). На обычных Android (Pixel, Samsung One UI) overlay показывался, на Xiaomi/HyperOS — нет, приложение продолжало работать. Теперь a11y делает **двухступенчатый ответ**: 1) `performGlobalAction(GLOBAL_ACTION_HOME)` мгновенно (~50 мс) выкидывает на launcher (это system-action, не требует exemption); 2) `startActivity(BlockOverlayActivity)` сверху launcher'а — если показалась, ребёнок видит привычный «🔒 Телефон заблокирован», если HyperOS BAL абортит — graceful degradation, ребёнок уже на home. В любом случае запрещённое приложение исчезает с экрана.
+- **`SYSTEM_ALERT_WINDOW` permission объявлен в манифесте.** Это special access (грантится через системные настройки, не runtime). Когда родитель его выдаст в onboarding — overlay будет показываться с гарантией даже без HOME-trampoline'а (TYPE_APPLICATION_OVERLAY layer). UI для grant'а появится в следующей версии.
+
+---
+
 ## v0.39.3 — 2026-04-27 — Honest подпись о скорости применения правил
 
 ### Исправления

@@ -14,6 +14,13 @@ import android.view.accessibility.AccessibilityEvent
  *   - v0.39 — реактивирован для блокировки приложений: ловит TYPE_WINDOW_STATE_CHANGED,
  *     если foreground package — `BlockManager.isBlocked(...)` → запускает
  *     [BlockOverlayActivity]. Защита от удаления держится по-прежнему на Device Admin L1.
+ *   - v0.39.4 — fix: Android 12+ HyperOS блокирует startActivity() из background
+ *     (`E ActivityTaskManager: Abort background activity starts`). Решение —
+ *     **двухступенчатый** ответ: сначала `performGlobalAction(GLOBAL_ACTION_HOME)`
+ *     (instant kick на launcher, не требует ни SAW ни BAL exemption), затем
+ *     `startActivity(BlockOverlayActivity)` поверх launcher'а (overlay покажется
+ *     если есть SYSTEM_ALERT_WINDOW perm, иначе user уже на home — graceful
+ *     degradation).
  *
  * **Throttling:** TYPE_WINDOW_STATE_CHANGED спамит десятки раз/сек при scroll'е —
  * между запусками одного и того же overlay для одного и того же package
@@ -59,6 +66,21 @@ class GmdAccessibilityService : AccessibilityService() {
             // (overlay всё равно перепроверит и сам зачистит когда сессия снимется).
             val endsAt = active?.endsAtMs ?: (now + 3600_000L)
 
+            // STEP 1: Instant kick на home через GLOBAL_ACTION_HOME.
+            // Это работает ВСЕГДА (a11y system action, не требует BAL exemption ни SAW).
+            // Главная гарантия: blocked app исчезает с экрана за ~50ms даже если
+            // overlay activity не запустится из-за HyperOS background-activity-start ban.
+            val homeOk = try {
+                performGlobalAction(GLOBAL_ACTION_HOME)
+            } catch (e: Throwable) {
+                DiagLog.write(this, TAG, "GLOBAL_ACTION_HOME failed for $pkg: ${e.message}")
+                false
+            }
+
+            // STEP 2: Поверх launcher'а (если STEP 1 удался) пытаемся показать overlay.
+            // Activity start с TYPE_APPLICATION_OVERLAY-like behavior через FLAG_ACTIVITY_NEW_TASK.
+            // На Android 12+ HyperOS startActivity из background часто абортится,
+            // тогда graceful degradation: пользователь уже на home через STEP 1.
             val intent = Intent(this, BlockOverlayActivity::class.java).apply {
                 putExtra(BlockOverlayActivity.EXTRA_PACKAGE_NAME, pkg)
                 putExtra(BlockOverlayActivity.EXTRA_ENDS_AT_MS, endsAt)
@@ -68,9 +90,9 @@ class GmdAccessibilityService : AccessibilityService() {
             }
             try {
                 startActivity(intent)
-                DiagLog.write(this, TAG, "overlay launched for $pkg endsAt=$endsAt")
+                DiagLog.write(this, TAG, "blocked $pkg → home=$homeOk + overlay-startActivity dispatched")
             } catch (e: Throwable) {
-                DiagLog.write(this, TAG, "startActivity failed for $pkg: ${e.javaClass.simpleName}: ${e.message}")
+                DiagLog.write(this, TAG, "blocked $pkg → home=$homeOk + overlay FAILED: ${e.javaClass.simpleName}: ${e.message}")
             }
         } catch (e: Throwable) {
             // Never crash — a11y exceptions могут отключить сервис.
