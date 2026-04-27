@@ -148,8 +148,8 @@ export default function ParentalControlClient({ childId }: { childId: string }):
         <BlockButton disabled={appsQ.isPending} onClick={() => setBlockDialogOpen(true)} />
       )}
 
-      <AppsList apps={apps} loading={appsQ.isPending} />
-
+      {/* v0.39.2: убрали отдельный AppsList — статистика и список приложений
+          теперь в AppRulesSection (одна секция). */}
       <AppRulesSection
         childId={childId}
         apps={apps}
@@ -423,70 +423,6 @@ function ActiveBlockCard({
 
 // ─── Apps list ──────────────────────────────────────────────────────────
 
-function AppsList({ apps, loading }: { apps: InstalledAppDto[]; loading: boolean }): ReactElement {
-  // Сортируем: сначала по todaySeconds desc (нюанс — даже на «вчера» tab показываем
-  // todaySeconds; для consistency с бэк ответом installed-apps. UI-уточнение придёт
-  // вместе с улучшенной фильтрацией в v0.39).
-  const sorted = useMemo(
-    () =>
-      [...apps].sort((a, b) => {
-        if (b.todaySeconds !== a.todaySeconds) return b.todaySeconds - a.todaySeconds;
-        return a.appLabel.localeCompare(b.appLabel, 'ru');
-      }),
-    [apps],
-  );
-
-  return (
-    <div className="mt-8">
-      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-        Все приложения{' '}
-        {sorted.length > 0 && <span className="text-muted-foreground">({sorted.length})</span>}
-      </h2>
-      {loading ? (
-        <p className="text-sm text-muted-foreground">Загрузка списка…</p>
-      ) : sorted.length === 0 ? (
-        <EmptyAppsHint />
-      ) : (
-        <ul className="space-y-2">
-          {sorted.map((a) => (
-            <AppRow key={a.packageName} app={a} />
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-function AppRow({ app }: { app: InstalledAppDto }): ReactElement {
-  const proxiedIcon = rewriteIconUrl(app.iconUrl);
-  return (
-    <li className="flex items-center gap-3 rounded-xl border border-border bg-card p-3">
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted">
-        {proxiedIcon ? (
-          <Image
-            src={proxiedIcon}
-            alt=""
-            width={40}
-            height={40}
-            className="h-10 w-10"
-            unoptimized
-          />
-        ) : (
-          <Smartphone className="h-5 w-5 text-muted-foreground" aria-hidden />
-        )}
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-foreground">{app.appLabel}</p>
-        <p className="text-xs text-muted-foreground">
-          {app.todaySeconds > 0 ? fmtMinutes(app.todaySeconds) : 'без активности'} ·{' '}
-          {CATEGORY_LABELS[app.category]}
-          {app.isSystem ? ' · системное' : ''}
-        </p>
-      </div>
-    </li>
-  );
-}
-
 function EmptyAppsHint(): ReactElement {
   return (
     <div className="rounded-2xl border border-dashed border-border bg-card/50 p-5 text-sm text-muted-foreground">
@@ -681,11 +617,17 @@ function AppRulesSection({
     );
   }
 
+  // v0.39.2: один объединённый раздел вместо двух (раньше «Все приложения»
+  // + «Не блокируется»). Если устройство ещё не прислало installed-apps —
+  // показываем EmptyAppsHint баннер сверху, но сам список (хотя бы HARDCODED)
+  // продолжаем рендерить, чтобы родитель видел уже доступные правила.
+  const noAppsFromDevice = !loading && apps.length === 0;
+
   return (
-    <div className="mt-10">
+    <div className="mt-8">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Правила приложений <span className="text-muted-foreground">({counts.all})</span>
+          Приложения <span className="text-muted-foreground">({counts.all})</span>
         </h2>
         <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
           <ShieldCheck className="h-3.5 w-3.5" />
@@ -698,6 +640,14 @@ function AppRulesSection({
         <b>Заблокировано всегда</b> — заблокировано постоянно (даже без сессии). Звонки, SMS и
         камера всегда разрешены.
       </p>
+
+      {/* Если apps пустой — показываем подсказку «почему» сверху, но не скрываем
+          список (HARDCODED уже доступен). */}
+      {noAppsFromDevice && (
+        <div className="mb-3">
+          <EmptyAppsHint />
+        </div>
+      )}
 
       {/* Search */}
       <div className="relative mb-3">
@@ -722,7 +672,7 @@ function AppRulesSection({
         <p className="mt-4 text-sm text-muted-foreground">Загрузка списка…</p>
       ) : filteredItems.length === 0 ? (
         <p className="mt-4 text-sm text-muted-foreground">
-          {search ? 'Нет приложений по запросу.' : 'Список приложений ещё не получен.'}
+          {search ? 'Нет приложений по запросу.' : 'Список приложений пуст.'}
         </p>
       ) : (
         <ul className="mt-3 space-y-2">
