@@ -31,6 +31,8 @@ interface Props {
   /** Available children for zone assignment */
   kids: KidOption[];
   initial?: Zone;
+  /** Pre-set center for create-mode (e.g. when opened by map double-click) */
+  initialCenter?: { lat: number; lon: number };
   onSaved: (z: Zone) => void;
 }
 
@@ -40,13 +42,59 @@ const DEFAULT_RADIUS = 250;
 const DEFAULT_COLOR: ZoneColor = '#22c55e';
 const DEFAULT_ICON: ZoneIcon = 'home';
 
-export function ZoneEditorDialog({ open, onOpenChange, kids, initial, onSaved }: Props) {
+export function ZoneEditorDialog({
+  open,
+  onOpenChange,
+  kids,
+  initial,
+  initialCenter,
+  onSaved,
+}: Props) {
+  // key пересоздаёт форму при смене режима/зоны/центра — чинит «второе открытие»
+  const formKey = initial?.id ?? `new:${initialCenter?.lat ?? '_'}:${initialCenter?.lon ?? '_'}`;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl overflow-y-auto max-h-[90vh]">
+        <DialogHeader>
+          <DialogTitle>{initial ? 'Изменить зону' : 'Новая зона'}</DialogTitle>
+        </DialogHeader>
+
+        <ZoneEditorForm
+          key={formKey}
+          kids={kids}
+          initial={initial}
+          initialCenter={initialCenter}
+          onCancel={() => onOpenChange(false)}
+          onSaved={(z) => {
+            onSaved(z);
+            onOpenChange(false);
+          }}
+        />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+interface FormProps {
+  kids: KidOption[];
+  initial?: Zone;
+  initialCenter?: { lat: number; lon: number };
+  onCancel: () => void;
+  onSaved: (z: Zone) => void;
+}
+
+function ZoneEditorForm({ kids, initial, initialCenter, onCancel, onSaved }: FormProps) {
   const [address, setAddress] = useState(initial?.address ?? '');
   const [name, setName] = useState(initial?.name ?? '');
   const [color, setColor] = useState<ZoneColor>(initial?.color ?? DEFAULT_COLOR);
   const [icon, setIcon] = useState<ZoneIcon>(initial?.icon ?? DEFAULT_ICON);
-  const [centerLat, setCenterLat] = useState(initial?.centerLat ?? DEFAULT_LAT);
-  const [centerLon, setCenterLon] = useState(initial?.centerLon ?? DEFAULT_LON);
+  const [centerLat, setCenterLat] = useState(
+    initial?.centerLat ?? initialCenter?.lat ?? DEFAULT_LAT,
+  );
+  const [centerLon, setCenterLon] = useState(
+    initial?.centerLon ?? initialCenter?.lon ?? DEFAULT_LON,
+  );
   const [radius, setRadius] = useState(initial?.radius ?? DEFAULT_RADIUS);
   const [childIds, setChildIds] = useState<string[]>(initial?.childIds ?? kids.map((c) => c.id));
 
@@ -80,7 +128,6 @@ export function ZoneEditorDialog({ open, onOpenChange, kids, initial, onSaved }:
         : await create.mutateAsync(payload);
       toast.success(initial ? 'Зона обновлена' : 'Зона создана');
       onSaved(saved);
-      onOpenChange(false);
     } catch (e) {
       const msg =
         (e as { body?: { message?: string } }).body?.message ??
@@ -91,87 +138,98 @@ export function ZoneEditorDialog({ open, onOpenChange, kids, initial, onSaved }:
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl overflow-y-auto max-h-[90vh]">
-        <DialogHeader>
-          <DialogTitle>{initial ? 'Изменить зону' : 'Новая зона'}</DialogTitle>
-        </DialogHeader>
+    <>
+      <div className="space-y-4">
+        <AddressSearch value={address} onChange={setAddress} onPick={handleAddressPick} />
 
-        <div className="space-y-4">
-          <AddressSearch value={address} onChange={setAddress} onPick={handleAddressPick} />
+        <ZoneEditorMap
+          centerLat={centerLat}
+          centerLon={centerLon}
+          radius={radius}
+          color={color}
+          onCenterChange={(lat, lon) => {
+            setCenterLat(lat);
+            setCenterLon(lon);
+          }}
+          onRadiusChange={setRadius}
+        />
 
-          <ZoneEditorMap
-            centerLat={centerLat}
-            centerLon={centerLon}
-            radius={radius}
-            color={color}
-            onCenterChange={(lat, lon) => {
-              setCenterLat(lat);
-              setCenterLon(lon);
-            }}
-            onRadiusChange={setRadius}
+        <p className="text-xs text-muted-foreground">
+          Кликните по карте, чтобы переместить центр зоны. Перетащите белую точку справа от центра,
+          чтобы изменить радиус.
+        </p>
+
+        <div>
+          <Label htmlFor="zone-radius">Радиус: {radius} м</Label>
+          <input
+            id="zone-radius"
+            type="range"
+            min={50}
+            max={2000}
+            step={10}
+            value={radius}
+            onChange={(e) => setRadius(Number(e.target.value))}
+            className="mt-1 w-full accent-primary"
           />
-
-          <p className="text-sm text-muted-foreground">Радиус: {radius} м</p>
-
-          <div>
-            <Label htmlFor="zone-name">Название</Label>
-            <Input
-              id="zone-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              maxLength={60}
-              placeholder="Например: Школа"
-            />
-          </div>
-
-          <div>
-            <Label>Цвет</Label>
-            <div className="mt-1">
-              <ColorPicker value={color} onChange={(c) => setColor(c as ZoneColor)} />
-            </div>
-          </div>
-
-          <div>
-            <Label>Иконка</Label>
-            <div className="mt-1">
-              <IconPicker value={icon} onChange={(i) => setIcon(i as ZoneIcon)} />
-            </div>
-          </div>
-
-          {kids.length > 0 && (
-            <div>
-              <Label>Дети</Label>
-              <div className="mt-1 space-y-1">
-                {kids.map((c) => (
-                  <label key={c.id} className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 rounded border-border"
-                      checked={childIds.includes(c.id)}
-                      onChange={(e) => {
-                        setChildIds((prev) =>
-                          e.target.checked ? [...prev, c.id] : prev.filter((id) => id !== c.id),
-                        );
-                      }}
-                    />
-                    <span className="text-sm">{c.name}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
 
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={saving}>
-            Отмена
-          </Button>
-          <Button onClick={onSubmit} disabled={saving}>
-            {saving ? 'Сохраняем…' : 'Сохранить'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        <div>
+          <Label htmlFor="zone-name">Название</Label>
+          <Input
+            id="zone-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            maxLength={60}
+            placeholder="Например: Школа"
+          />
+        </div>
+
+        <div>
+          <Label>Цвет</Label>
+          <div className="mt-1">
+            <ColorPicker value={color} onChange={(c) => setColor(c as ZoneColor)} />
+          </div>
+        </div>
+
+        <div>
+          <Label>Иконка</Label>
+          <div className="mt-1">
+            <IconPicker value={icon} onChange={(i) => setIcon(i as ZoneIcon)} />
+          </div>
+        </div>
+
+        {kids.length > 0 && (
+          <div>
+            <Label>Дети</Label>
+            <div className="mt-1 space-y-1">
+              {kids.map((c) => (
+                <label key={c.id} className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-border"
+                    checked={childIds.includes(c.id)}
+                    onChange={(e) => {
+                      setChildIds((prev) =>
+                        e.target.checked ? [...prev, c.id] : prev.filter((id) => id !== c.id),
+                      );
+                    }}
+                  />
+                  <span className="text-sm">{c.name}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <DialogFooter>
+        <Button variant="ghost" onClick={onCancel} disabled={saving}>
+          Отмена
+        </Button>
+        <Button onClick={onSubmit} disabled={saving}>
+          {saving ? 'Сохраняем…' : 'Сохранить'}
+        </Button>
+      </DialogFooter>
+    </>
   );
 }

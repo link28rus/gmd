@@ -11,6 +11,7 @@ import {
   YMapControls,
   YMapZoomControl,
   YMapFeature,
+  YMapListener,
   YMapMarker,
 } from 'ymap3-components';
 import { circlePolygon } from '@/lib/geo/circle-polygon';
@@ -58,6 +59,16 @@ export function ZoneEditorMapInner({
           <YMapControls position="right">
             <YMapZoomControl />
           </YMapControls>
+
+          <YMapListener
+            {...({
+              onClick: (_obj: unknown, ev: { coordinates?: [number, number] }) => {
+                const c = ev?.coordinates;
+                if (!c) return;
+                onCenterChange(c[1], c[0]);
+              },
+            } as any)}
+          />
 
           <YMapFeature
             geometry={

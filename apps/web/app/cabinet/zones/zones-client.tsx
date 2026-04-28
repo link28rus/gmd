@@ -73,6 +73,8 @@ function ZonesContent(): ReactElement {
   const [selected, setSelected] = useState<string | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingZone, setEditingZone] = useState<Zone | null>(null);
+  const [pendingCenter, setPendingCenter] = useState<{ lat: number; lon: number } | null>(null);
+  const [showZones, setShowZones] = useState(true);
 
   // childrenApi.list returns { children: Child[] }
   const kids =
@@ -80,11 +82,19 @@ function ZonesContent(): ReactElement {
 
   const openCreate = () => {
     setEditingZone(null);
+    setPendingCenter(null);
     setEditorOpen(true);
   };
 
   const openEdit = (zone: Zone) => {
     setEditingZone(zone);
+    setPendingCenter(null);
+    setEditorOpen(true);
+  };
+
+  const handleMapDblClick = (lat: number, lon: number) => {
+    setEditingZone(null);
+    setPendingCenter({ lat, lon });
     setEditorOpen(true);
   };
 
@@ -96,7 +106,10 @@ function ZonesContent(): ReactElement {
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-8">
-      <h1 className="mb-6 text-2xl font-semibold text-foreground">Геозоны</h1>
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold text-foreground">Геозоны</h1>
+        <ShowZonesToggle checked={showZones} onChange={setShowZones} />
+      </div>
 
       {isLoading && <p className="text-sm text-muted-foreground">Загрузка…</p>}
 
@@ -112,20 +125,32 @@ function ZonesContent(): ReactElement {
       )}
 
       {!isLoading && !isError && (
-        <div className="flex flex-col gap-4 lg:flex-row" style={{ minHeight: '500px' }}>
-          <div className="lg:w-1/3">
-            <ZonesList
-              zones={zones ?? []}
-              selectedId={selected}
-              onSelect={setSelected}
-              onCreate={openCreate}
-              onEdit={openEdit}
-            />
+        <>
+          <p className="mb-3 text-xs text-muted-foreground">
+            Совет: дважды кликните по зданию на карте — откроется быстрое создание новой зоны с
+            готовым центром.
+          </p>
+          <div className="flex flex-col gap-4 lg:flex-row" style={{ minHeight: '500px' }}>
+            <div className="lg:w-1/3">
+              <ZonesList
+                zones={zones ?? []}
+                selectedId={selected}
+                onSelect={setSelected}
+                onCreate={openCreate}
+                onEdit={openEdit}
+              />
+            </div>
+            <div className="overflow-hidden rounded-md border lg:flex-1">
+              <ZonesMap
+                zones={zones ?? []}
+                selectedId={selected}
+                onSelect={setSelected}
+                showZones={showZones}
+                onMapDblClick={handleMapDblClick}
+              />
+            </div>
           </div>
-          <div className="overflow-hidden rounded-md border lg:flex-1">
-            <ZonesMap zones={zones ?? []} selectedId={selected} onSelect={setSelected} />
-          </div>
-        </div>
+        </>
       )}
 
       <div className="mt-8">
@@ -140,8 +165,39 @@ function ZonesContent(): ReactElement {
         onOpenChange={setEditorOpen}
         kids={kids}
         initial={editingZone ?? undefined}
+        initialCenter={pendingCenter ?? undefined}
         onSaved={handleSaved}
       />
     </div>
+  );
+}
+
+interface ShowZonesToggleProps {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}
+
+function ShowZonesToggle({ checked, onChange }: ShowZonesToggleProps): ReactElement {
+  return (
+    <label className="inline-flex select-none items-center gap-2 text-sm text-muted-foreground">
+      <span>Показывать геозоны на карте</span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        onClick={() => onChange(!checked)}
+        className={[
+          'relative h-5 w-9 rounded-full border transition-colors',
+          checked ? 'bg-primary border-primary' : 'bg-muted border-border',
+        ].join(' ')}
+      >
+        <span
+          className={[
+            'absolute top-0.5 h-4 w-4 rounded-full bg-card shadow transition-transform',
+            checked ? 'translate-x-[18px]' : 'translate-x-0.5',
+          ].join(' ')}
+        />
+      </button>
+    </label>
   );
 }
