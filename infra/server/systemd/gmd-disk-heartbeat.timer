@@ -1,0 +1,13 @@
+[Unit]
+Description=GMD disk-space heartbeat (every 5 min)
+
+[Timer]
+# Push-monitor в Uptime Kuma настроен с interval=300s, retries=3. Шлём чаще
+# чем нужно — небольшой запас на сетевые сбои/рестарты сервера.
+OnBootSec=2min
+OnUnitActiveSec=5min
+RandomizedDelaySec=15s
+AccuracySec=15s
+
+[Install]
+WantedBy=timers.target
