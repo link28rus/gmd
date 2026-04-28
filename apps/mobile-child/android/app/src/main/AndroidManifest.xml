@@ -61,6 +61,12 @@
          не runtime. Без него блокировка деградирует до GLOBAL_ACTION_HOME
          (выкидывает на launcher без визуального overlay'а). -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
+    <!-- v0.40 auto-update: после скачивания APK через Dio app дёргает системный
+         installer (ACTION_VIEW + FileProvider URI). REQUEST_INSTALL_PACKAGES —
+         special access (Settings → Установка из неизвестных источников),
+         грантится один раз на наш package. Без него ACTION_VIEW показывает
+         блокирующий «Запретить установку», а не наш installer. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
     <application
         android:label="gmd_child"
         android:name="${applicationName}"
@@ -199,6 +205,20 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/accessibility_service_config" />
         </service>
+
+        <!-- v0.40 auto-update: FileProvider для передачи скачанного APK
+             системному installer'у через content:// URI. Authority строго
+             "${packageName}.fileprovider" (используется в InstallerNative.kt).
+             Пути ограничены external-cache/updates/ (см. res/xml/file_provider_paths.xml). -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_provider_paths" />
+        </provider>
 
         <!-- v0.39 Phase 6.2: full-screen overlay при попытке открыть заблокированное app.
              excludeFromRecents=true — оверлей не висит в недавних задачах.

@@ -9,6 +9,30 @@
 
 ---
 
+## v0.40.0+6061 — 2026-04-28 — Auto-update mobile-child из приложения
+
+### Новые возможности
+
+- **Автоматическое обновление приложения ребёнка.** Раньше для обновления mobile-child нужно было вручную скачать APK с web-кабинета и переустановить — родитель часто не имеет физического доступа к телефону ребёнка. Теперь приложение проверяет наличие новой версии при каждом запуске. Если есть — сразу скачивает APK в фоне (видна полоса прогресса с процентами и размером), по готовности автоматически открывает системный диалог установки. Кнопки «Установить» / «Повторить» позволяют управлять процессом если что-то пошло не так. Если разрешения на установку из приложения нет — показывается баннер «Открыть настройки» который ведёт прямо в нужный экран Settings.
+- **Если обновлений нет — баннер не показывается.** UI остаётся чистым для всех актуальных версий.
+
+### Изменения
+
+- **Web (Next.js):** новый публичный endpoint `GET /api/public/updates/mobile-child/latest?abi=arm64-v8a`. Парсит APK из `/srv/download` через существующий `listDownloadFiles()`, сортирует по SemVer + Flutter buildNumber, возвращает топ. 204 если для ABI нет APK, 400 при невалидном ABI. Caddyfile получил отдельный handle для `/api/public/updates/*` → web.
+- **Web utility:** `lib/downloads/version-compare.ts` — парсер X.Y.Z[-prerelease][+build] и compare-функция. Stable > prerelease, build (Flutter versionCode) — tie-breaker.
+- **Native (Kotlin):** `InstallerNative` — singleton с `canRequestInstall()` (API 26+ → `PackageManager.canRequestPackageInstalls`, ниже — true), `openInstallSourceSettings()` (`Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES` с `package:<our>`), `installApk(path)` (FileProvider URI + ACTION_VIEW + APK MIME).
+- **Manifest:** `<uses-permission REQUEST_INSTALL_PACKAGES>` + `<provider androidx.core.content.FileProvider>` с authority `${applicationId}.fileprovider`. Path `external-cache-path/updates/` (см. `res/xml/file_provider_paths.xml`).
+- **Channel `ru.link28rus.gmd.child/installer`** — методы `canRequestInstall` / `openInstallSourceSettings` / `installApk` / `cleanupCache`.
+- **Dart `core/updates/`:**
+  - `UpdateInfo` + `ParsedVersion` (compare X.Y.Z + prerelease + build).
+  - `UpdatesService` — `checkLatest()` + `downloadApk()` через Dio (15-min receive timeout для медленного 3G).
+  - `UpdateController` (Riverpod StateNotifier) — sealed state `UpdateIdle/Checking/NotNeeded/Downloading/Downloaded/InstallerLaunched/NeedsPermission/Failed`. Auto-trigger installer один раз чтобы не зацикливать диалог.
+- **`UpdateBanner`** на `home_screen.dart` — рендерит state в карточку с прогрессом и кнопками. При `Idle/Checking/NotNeeded/InstallerLaunched` — `SizedBox.shrink` (UI чист).
+- **Lifecycle resume** баннер перепроверяет `canRequestInstall` — если user только что разрешил установку в settings, автоматически дёрнет installer.
+- **Защита от install-loop:** per-filename флаг `update_installer_attempted_<filename>` в encryptedSharedPreferences. Auto-trigger срабатывает ОДИН раз — если пользователь отменил системный диалог, на следующем запуске app покажет UpdateBanner с кнопкой «Установить» вместо повторного auto-launch (раздражало бы каждый старт). При обновлении до новой версии флаг для предыдущей удаляется через `cleanupCache` (вызывается на UpdateNotNeeded). Endpoint нормализует `buildNumber` под Flutter ABI offset (`ABI_VERSION * 1000 + pubspecBuild`) — иначе `PackageInfo.buildNumber` (8060 для arm64+`+6060`) не совпадает с raw `+6060` из имени файла, и сравнение версий ломается.
+
+---
+
 ## v0.39.6 — 2026-04-27 — Fix: launcher и системные UI больше не блокируются
 
 ### Исправления

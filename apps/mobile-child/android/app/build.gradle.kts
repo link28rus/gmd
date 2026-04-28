@@ -84,4 +84,8 @@ dependencies {
     // v0.38 Phase 6.1: WorkManager periodic для UsageStatsReportWorker (15-min)
     // и InstalledAppsReportWorker (daily). Минимальный интервал periodic = 15 мин.
     implementation("androidx.work:work-runtime-ktx:2.9.1")
+    // v0.40 auto-update: FileProvider для шаринга скачанного APK системному
+    // installer'у. Тянется транзитивно через workmanager, но явно фиксируем —
+    // имя класса androidx.core.content.FileProvider используется в манифесте.
+    implementation("androidx.core:core-ktx:1.13.1")
 }

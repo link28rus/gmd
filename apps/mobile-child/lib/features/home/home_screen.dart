@@ -8,6 +8,7 @@ import 'home_controller.dart';
 import 'location_profile_indicator.dart';
 import 'permission_health_banner.dart';
 import 'protection_banner.dart';
+import 'update_banner.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -76,6 +77,9 @@ class HomeScreen extends ConsumerWidget {
           const ProtectionBanner(),
           const PermissionHealthBanner(),
           const ActivityRecognitionBanner(),
+          // v0.40 auto-update: показывается ТОЛЬКО когда есть обновление
+          // (Downloading / Downloaded / NeedsPermission / Failed). Idle/None — пустой.
+          const UpdateBanner(),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.all(24),

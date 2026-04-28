@@ -80,6 +80,13 @@ gmd.link28rus.ru {
 		reverse_proxy web:3000
 	}
 
+	# /api/public/updates/* — web (auto-update endpoint для mobile-child:
+	# проверка последней версии APK на каждом запуске)
+	@publicUpdates path /api/public/updates/*
+	handle @publicUpdates {
+		reverse_proxy web:3000
+	}
+
 	# /audio/ws — WebSocket-relay для «Звук вокруг ребёнка» (v0.35).
 	# Caddy v2 reverse_proxy автоматически апгрейдит Connection: Upgrade.
 	# Большой timeout: read=0 (бесконечно), flush_interval=-1 (для streaming).
