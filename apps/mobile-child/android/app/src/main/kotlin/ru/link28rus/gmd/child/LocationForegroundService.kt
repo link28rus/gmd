@@ -69,6 +69,20 @@ class LocationForegroundService : Service() {
         private const val DEDUP_MIN_DIST_M = 30f
         private const val DEDUP_WINDOW_MS = 60_000L
 
+        // v0.41.1 — отдельный gate для точек без speed.
+        // Эмпирика на проде (Артём, 28 апреля): из 25 точек 2 outlier'а имели
+        // hasSpeed()=false (acc=13м и 26м, обе через Wi-Fi MLS — wifiSsid="link28rus5G"
+        // у одной, network="mobile" у другой), все 23 нормальные GPS-точки имели speed.
+        // FLP не различает GPS vs network на уровне provider="fused", но отсутствие
+        // speed — надёжный сигнал что fix получен через positioning service, не GPS.
+        // Такие точки могут иметь "уверенно низкую" accuracy (10-30м) при физическом
+        // смещении 30-100м — основная причина "отдельных точек" на треке.
+        private const val ACCURACY_GATE_NO_SPEED_M = 10f
+        // Порог для requestFreshLocationOnce при wake-on-motion. Если первая
+        // точка после пробуждения хуже — лучше дропнуть и подождать FLP-callback
+        // (5 сек с PRIORITY_HIGH_ACCURACY), чем нарисовать "прыжок".
+        private const val FRESH_LOCATION_MAX_ACCURACY_M = 30f
+
         // Два профиля апдейтов FLP:
         //   ACTIVE — ребёнок движется (по speed > SPEED_MOVING_MS либо AR=MOVING).
         //            Плотный трек: 5 сек / 10 м, PRIORITY_HIGH_ACCURACY → каждые
@@ -571,12 +585,22 @@ class LocationForegroundService : Service() {
                 null, // CancellationToken — null = не отменяем
             )
                 .addOnSuccessListener { loc ->
-                    if (loc != null) {
-                        log("requestFreshLocationOnce: got location, sending")
-                        sendToDart(loc, heartbeat = false)
-                    } else {
+                    if (loc == null) {
                         log("requestFreshLocationOnce: location is null (no GPS yet)")
+                        return@addOnSuccessListener
                     }
+                    // v0.41.1 — re-validation. Если GPS не успел поймать спутники,
+                    // FLP отдаст cached/Wi-Fi точку. Лучше дропнуть и подождать
+                    // FLP-callback (~5 сек с PRIORITY_HIGH_ACCURACY), чем нарисовать
+                    // "прыжок" в 30-100 м от реального места.
+                    if (!loc.hasSpeed() ||
+                        (loc.hasAccuracy() && loc.accuracy > FRESH_LOCATION_MAX_ACCURACY_M)
+                    ) {
+                        log("requestFreshLocationOnce: REJECT cold-fix (acc=${loc.accuracy} hasSpeed=${loc.hasSpeed()} provider=${loc.provider}), waiting for FLP callback")
+                        return@addOnSuccessListener
+                    }
+                    log("requestFreshLocationOnce: got location, sending")
+                    sendToDart(loc, heartbeat = false)
                 }
                 .addOnFailureListener { e -> logErr("requestFreshLocationOnce failed", e) }
         } catch (e: SecurityException) {
@@ -674,12 +698,22 @@ class LocationForegroundService : Service() {
         // чем мы пропустим reading. switchProfile сам no-op если профиль не меняется.
         maybeAutoSwitchProfile(loc)
 
+        // v0.41.1 — точки без speed (FLP отдал координаты через Wi-Fi MLS / cell
+        // positioning, не GPS) идут с ужесточённым gate. Heartbeat исключаем —
+        // у него speed=NULL легитимный (lastLocation, может быть старый GPS-fix).
+        if (!heartbeat && !loc.hasSpeed() && loc.hasAccuracy() &&
+            loc.accuracy > ACCURACY_GATE_NO_SPEED_M
+        ) {
+            log("sendToDart: DROPPED (no-speed acc=${loc.accuracy} > $ACCURACY_GATE_NO_SPEED_M, provider=${loc.provider})")
+            return
+        }
+
         // v0.31.0 accuracy gate: отфильтровываем точки с плохой точностью.
         // Heartbeat'у разрешаем порог помягче — лучше показать родителю
         // "был тут 2 мин назад ±100м", чем молчать.
         val gate = if (heartbeat) ACCURACY_GATE_HEARTBEAT_M else ACCURACY_GATE_M
         if (loc.hasAccuracy() && loc.accuracy > gate) {
-            log("sendToDart: DROPPED (accuracy=${loc.accuracy} > $gate, heartbeat=$heartbeat)")
+            log("sendToDart: DROPPED (accuracy=${loc.accuracy} > $gate, heartbeat=$heartbeat, provider=${loc.provider})")
             return
         }
 
@@ -704,7 +738,7 @@ class LocationForegroundService : Service() {
         lastSentLat = loc.latitude
         lastSentLon = loc.longitude
         lastSentTimeMs = System.currentTimeMillis()
-        log("sendToDart lat=${loc.latitude} lon=${loc.longitude} acc=${loc.accuracy} hb=$heartbeat")
+        log("sendToDart lat=${loc.latitude} lon=${loc.longitude} acc=${loc.accuracy} hasSpeed=${loc.hasSpeed()} provider=${loc.provider} hb=$heartbeat")
         val (batteryLevel, isCharging) = batterySnapshot()
         val payload = mapOf(
             "lat" to loc.latitude,
