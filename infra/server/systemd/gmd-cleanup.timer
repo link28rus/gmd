@@ -1,0 +1,15 @@
+[Unit]
+Description=Weekly GMD Docker cleanup (Sunday 04:30)
+Documentation=https://github.com/link28rus/gmd/blob/main/CLAUDE.md
+
+[Timer]
+# Воскресенье 04:30 — после ночных pg_dump (cron-таймер их раньше делает)
+# и в безусловно бездейственный для пользователей час.
+# Persistent=true — если сервер был выключен в момент запуска, выполнить
+# при следующем старте.
+OnCalendar=Sun *-*-* 04:30:00
+Persistent=true
+RandomizedDelaySec=10m
+
+[Install]
+WantedBy=timers.target

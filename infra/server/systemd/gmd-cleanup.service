@@ -1,0 +1,15 @@
+[Unit]
+Description=GMD weekly Docker garbage collection
+Documentation=https://github.com/link28rus/gmd/blob/main/CLAUDE.md
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+# `until=72h` оставляет свежие images (используемые runninng-контейнерами никогда
+# не попадают под нож). `--volumes=false` явно запрещает трогать volumes —
+# гарантия для БД, даже если в будущем кто-то добавит named volume.
+ExecStart=/usr/bin/docker system prune -a -f --filter until=72h --volumes=false
+StandardOutput=append:/var/log/gmd-cleanup.log
+StandardError=append:/var/log/gmd-cleanup.log
+ExecStartPost=/bin/sh -c 'echo "=== gmd-cleanup finished $(date -Iseconds) ===" >> /var/log/gmd-cleanup.log'
