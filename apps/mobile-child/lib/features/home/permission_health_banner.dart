@@ -71,6 +71,15 @@ class _PermissionHealthBannerState extends State<PermissionHealthBanner>
       missing.add('Поверх других приложений');
       if (missing.length == 1) route = '/permissions/overlay';
     }
+    // v0.41.0: микрофон для «Звук вокруг ребёнка». Без RECORD_AUDIO
+    // FGS-microphone падает с SecurityException, кнопка в кабинете родителя
+    // вечно висит на «Устанавливаем соединение». Раньше об этом нельзя было
+    // узнать — теперь баннер на home сразу подсвечивает проблему.
+    final mic = await Permission.microphone.status;
+    if (!mic.isGranted) {
+      missing.add('Микрофон');
+      if (missing.length == 1) route = '/permissions/microphone';
+    }
     if (!mounted) return;
     setState(() {
       _missing = missing;

@@ -6,6 +6,7 @@ import '../sos/sos_controller.dart';
 import 'activity_recognition_banner.dart';
 import 'home_controller.dart';
 import 'location_profile_indicator.dart';
+import 'microphone_permission_guard.dart';
 import 'permission_health_banner.dart';
 import 'protection_banner.dart';
 import 'update_banner.dart';
@@ -74,6 +75,9 @@ class HomeScreen extends ConsumerWidget {
       ),
       body: Column(
         children: [
+          // v0.41.0 — невидимый guard: при init и lifecycle resume проверяет
+          // RECORD_AUDIO. Если denied → показывает блокирующий AlertDialog.
+          const MicrophonePermissionGuard(),
           const ProtectionBanner(),
           const PermissionHealthBanner(),
           const ActivityRecognitionBanner(),
