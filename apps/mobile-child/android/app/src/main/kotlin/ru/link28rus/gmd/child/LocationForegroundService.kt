@@ -42,12 +42,14 @@ class LocationForegroundService : Service() {
         const val ACTION_ACTIVITY_STILL = "ACTION_ACTIVITY_STILL"
         const val ACTION_ACTIVITY_MOVING = "ACTION_ACTIVITY_MOVING"
         private const val WAKE_LOCK_TAG = "gmd:LocationForegroundService"
-        // Heartbeat — гарантированная точка раз в 2 минуты, даже если телефон
-        // неподвижен и fused с distance-filter 20м не присылает обновлений.
+        // Heartbeat — гарантированная точка раз в 90 секунд, даже если телефон
+        // неподвижен и fused с distance-filter 30м не присылает обновлений.
         // Родитель в web видит "Был тут только что" независимо от движения.
+        // Также именно heartbeat-точка даёт нам speed → детектим начало движения
+        // в STILL-режиме без ожидания Activity Recognition (см. v0.40.1).
         // Реализовано через AlarmManager (не Handler), чтобы MIUI не замораживал
         // тики после свайпа — см. HeartbeatReceiver.
-        private const val HEARTBEAT_INTERVAL_MS = 2 * 60 * 1000L
+        private const val HEARTBEAT_INTERVAL_MS = 90 * 1000L
         private const val HEARTBEAT_ALARM_REQUEST = 0x48
         private const val ACTIVITY_REQUEST_CODE = 0x49
 
@@ -68,13 +70,33 @@ class LocationForegroundService : Service() {
         private const val DEDUP_WINDOW_MS = 60_000L
 
         // Два профиля апдейтов FLP:
-        //   ACTIVE — ребёнок движется (или Activity Recognition не дал STILL-сигнала).
-        //   STILL  — Activity Recognition сообщил STILL. Снижаем частоту до 5 мин;
-        //            heartbeat раз в 2 мин всё равно обеспечивает свежесть.
-        private const val ACTIVE_INTERVAL_MS = 10_000L
-        private const val ACTIVE_MIN_DIST_M = 20f
-        private const val STILL_INTERVAL_MS = 5 * 60_000L
-        private const val STILL_MIN_DIST_M = 50f
+        //   ACTIVE — ребёнок движется (по speed > SPEED_MOVING_MS либо AR=MOVING).
+        //            Плотный трек: 5 сек / 10 м, PRIORITY_HIGH_ACCURACY → каждые
+        //            ~10-15м точка при езде 50 км/ч, дороги выглядят как дороги.
+        //   STILL  — телефон неподвижен дольше STILL_DEBOUNCE_MS. Сильно реже,
+        //            но не настолько как раньше — 60 сек / 30 м: если ребёнок
+        //            побежал/поехал, мы заметим speed > 2 м/с уже на следующем
+        //            FLP-апдейте (не ждать AR transition'а 30-90 сек).
+        //
+        // v0.40.1: переключение профилей теперь не только по AR, но и по speed
+        // в самих location callback'ах (см. maybeAutoSwitchProfile). AR медленный
+        // на старт движения — пропускались первые 1-2 км трека.
+        private const val ACTIVE_INTERVAL_MS = 5_000L
+        private const val ACTIVE_MIN_DIST_M = 10f
+        private const val STILL_INTERVAL_MS = 60_000L
+        private const val STILL_MIN_DIST_M = 30f
+
+        // Speed-based fast switch (v0.40.1).
+        //   SPEED_MOVING_MS         — выше этого считаем "точно движется"
+        //                              (~7 км/ч, выше скорости walk-noise).
+        //   SPEED_STILL_MS          — ниже этого "точно стоит".
+        //   STILL_DEBOUNCE_MS       — сколько подряд должно быть STILL-точек
+        //                              чтобы переключиться обратно в STILL.
+        //                              Без debounce'а на светофоре сразу
+        //                              переключались бы туда-обратно.
+        private const val SPEED_MOVING_MS = 2.0f
+        private const val SPEED_STILL_MS = 0.5f
+        private const val STILL_DEBOUNCE_MS = 90_000L
 
         // v0.31.2 — текущий профиль экспозится Dart-стороне через SharedPreferences.
         // UI-engine читает эти prefs через MainActivity MethodChannel и рендерит
@@ -105,6 +127,12 @@ class LocationForegroundService : Service() {
     private var lastSentLat: Double? = null
     private var lastSentLon: Double? = null
     private var lastSentTimeMs: Long = 0L
+
+    // v0.40.1: время последнего "движущегося" speed (≥ SPEED_MOVING_MS).
+    // Если 0 — ни разу не двигались с момента старта сервиса.
+    // Используется в [maybeAutoSwitchProfile] для STILL→ACTIVE и ACTIVE→STILL
+    // быстрее чем Activity Recognition transitions (которые лагают 30-90с).
+    private var lastMovingTimeMs: Long = 0L
 
     private fun log(msg: String) = DiagLog.write(this, "svc", msg)
     private fun logErr(msg: String, e: Throwable) =
@@ -367,15 +395,18 @@ class LocationForegroundService : Service() {
 
     // Подписка на FLP с профилем-параметром. Переиспользуется при switchProfile.
     private fun subscribeLocationUpdates(p: Profile) {
-        val (interval, minDist) = when (p) {
-            Profile.ACTIVE -> Pair(ACTIVE_INTERVAL_MS, ACTIVE_MIN_DIST_M)
-            Profile.STILL -> Pair(STILL_INTERVAL_MS, STILL_MIN_DIST_M)
+        val (interval, minDist, priority) = when (p) {
+            // ACTIVE = ребёнок реально движется (по speed или AR=MOVING).
+            // HIGH_ACCURACY включает GPS на полную — это критично, чтобы трек
+            // на дороге был плотным (~10-15 м между точками на 50 км/ч).
+            // Расход батареи compensируется коротким временем в этом профиле.
+            Profile.ACTIVE -> Triple(ACTIVE_INTERVAL_MS, ACTIVE_MIN_DIST_M, Priority.PRIORITY_HIGH_ACCURACY)
+            // STILL = телефон неподвижен. BALANCED не включает GPS на полную,
+            // больше опирается на Wi-Fi/cell — экономит батарею в помещении.
+            // Indoor multipath GPS-шум тоже отсекается (accuracy gate работает).
+            Profile.STILL -> Triple(STILL_INTERVAL_MS, STILL_MIN_DIST_M, Priority.PRIORITY_BALANCED_POWER_ACCURACY)
         }
-        // BALANCED_POWER_ACCURACY вместо HIGH — в помещении FLP меньше ломится
-        // в GPS (который даёт multipath-мусор) и больше опирается на Wi-Fi/cell.
-        // Outdoor FLP автоматически переключается на GPS, так что точность
-        // на улице не деградирует.
-        val request = LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, interval)
+        val request = LocationRequest.Builder(priority, interval)
             .setMinUpdateDistanceMeters(minDist)
             .setMinUpdateIntervalMillis(interval / 2)
             .build()
@@ -394,6 +425,50 @@ class LocationForegroundService : Service() {
         } catch (e: SecurityException) {
             logErr("requestLocationUpdates SecurityException", e)
             stopSelf()
+        }
+    }
+
+    /**
+     * v0.40.1 — fast switch профиля по speed из location callback.
+     *
+     * Activity Recognition (Google Play Services) переключает STILL ↔ MOVING с
+     * лагом 30-90 сек: ребёнок уже километр проехал в машине, а мы всё ещё в
+     * STILL-профиле (interval 60с / minDist 30м), точки приходят редко и трек
+     * на карте — пунктирная прямая через посёлки. Чтобы решить — смотрим
+     * `loc.speed` (FLP его заполняет когда есть GPS-fix).
+     *
+     * Логика:
+     *   - speed ≥ SPEED_MOVING_MS (≈7 км/ч)  → запоминаем lastMovingTimeMs.
+     *     Если профиль STILL → немедленно переключаемся в ACTIVE
+     *     (HIGH_ACCURACY, 5с / 10м).
+     *   - speed ≤ SPEED_STILL_MS (≈1.8 км/ч) И мы в ACTIVE дольше
+     *     STILL_DEBOUNCE_MS без movement-сигнала → переключаемся в STILL.
+     *     Debounce защищает от переключений на каждом светофоре.
+     *
+     * Без speed (loc.hasSpeed()=false, бывает у network-provider) — ничего
+     * не делаем, AR transitions работают как раньше (fallback).
+     */
+    private fun maybeAutoSwitchProfile(loc: android.location.Location) {
+        if (!loc.hasSpeed()) return
+        val speed = loc.speed
+        val now = System.currentTimeMillis()
+
+        if (speed >= SPEED_MOVING_MS) {
+            lastMovingTimeMs = now
+            if (profile == Profile.STILL) {
+                log("auto-switch STILL→ACTIVE: speed=${"%.1f".format(speed)} m/s ≥ $SPEED_MOVING_MS")
+                switchProfile(Profile.ACTIVE)
+            }
+            return
+        }
+
+        // Низкий speed — не делаем ничего пока не накопится debounce.
+        if (speed <= SPEED_STILL_MS && profile == Profile.ACTIVE) {
+            val sinceLastMoving = now - lastMovingTimeMs
+            if (lastMovingTimeMs > 0 && sinceLastMoving > STILL_DEBOUNCE_MS) {
+                log("auto-switch ACTIVE→STILL: speed=${"%.1f".format(speed)} m/s, ${sinceLastMoving / 1000}s since last movement")
+                switchProfile(Profile.STILL)
+            }
         }
     }
 
@@ -493,6 +568,12 @@ class LocationForegroundService : Service() {
             log("sendToDart: bgChannel is null — engine not ready, point DROPPED")
             return
         }
+
+        // v0.40.1: speed-based fast switch профиля. Сделать ДО фильтров —
+        // даже если точка будет отфильтрована (acc > gate), факт "speed = 15 м/с"
+        // = "ребёнок в машине" → нам важно переключиться в HIGH_ACCURACY быстрее
+        // чем мы пропустим reading. switchProfile сам no-op если профиль не меняется.
+        maybeAutoSwitchProfile(loc)
 
         // v0.31.0 accuracy gate: отфильтровываем точки с плохой точностью.
         // Heartbeat'у разрешаем порог помягче — лучше показать родителю
