@@ -9,6 +9,20 @@
 
 ---
 
+## v0.44.1+6069 — 2026-04-28 — Фикс: дубликат сигнала «Найди телефон» после нажатия «Остановить»
+
+### Исправления
+
+- **Сигнал перестал проигрываться повторно после остановки.** Раньше через ~90 секунд после того, как ребёнок нажимал «Остановить» в notification, алярм запускался ещё раз. Причина: в v0.43.0 при добавлении FCM-доставки `PLAY_SIGNAL` мы стартовали `SignalSoundService` сразу, но **не делали ack** на бэкенд. Команда висела в БД `pending` 5 минут, и следующий poll-цикл (привязан к 90-секундному location-heartbeat) забирал её и проигрывал ещё раз. Теперь `MyFirebaseMessagingService.handlePlaySignal` сразу после `startForegroundService` отправляет ack `POST /child/commands/{commandId}/ack` в фоновом thread'е — команда становится executed, дубликат исключён.
+
+### Изменения
+
+- **`AppControlHttp.postCommandAck(ctx, commandId)`** — новый public helper, использует существующий `doPost` (auth через X-Child-Token из NativeCreds). Ack идемпотентен: повторный вызов на executed-команде — no-op (см. `DeviceCommandsService.ackCommand` на бэкенде).
+- **`MyFirebaseMessagingService.handlePlaySignal`** — после `startForegroundService` запускает Thread с `AppControlHttp.postCommandAck`. Не блокирует main thread (FirebaseMessagingService.onMessageReceived имеет ~10с до ANR).
+- Build mobile-child 6068 → 6069.
+
+---
+
 ## v0.44.0+6068 — 2026-04-28 — Auto-update mobile-child работает без открытия приложения
 
 ### Улучшения

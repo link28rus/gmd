@@ -74,8 +74,8 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
      * в очередь — если push не доехал, child заберёт её при следующем poll'е.
      */
     private fun handlePlaySignal(data: Map<String, String>) {
-        val commandId = data["commandId"] ?: "?"
-        DiagLog.write(this, "fcm", "PLAY_SIGNAL via FCM: commandId=${commandId.take(8)}…")
+        val commandId = data["commandId"]
+        DiagLog.write(this, "fcm", "PLAY_SIGNAL via FCM: commandId=${commandId?.take(8) ?: "?"}…")
         val intent = Intent(this, SignalSoundService::class.java)
             .setAction(SignalSoundService.ACTION_PLAY)
         try {
@@ -90,6 +90,30 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
                 "fcm",
                 "PLAY_SIGNAL startService FAILED: ${e.javaClass.simpleName}: ${e.message}",
             )
+        }
+
+        // v0.44.1: ack команды СРАЗУ после получения FCM, иначе следующий
+        // poll-цикл (~90 сек) забёрет её снова и алярм проиграется повторно
+        // даже если ребёнок нажал «Остановить». Делаем в фоновом thread:
+        // FirebaseMessagingService onMessageReceived имеет ~10с до ANR,
+        // HTTP не должен блокировать main.
+        if (!commandId.isNullOrEmpty()) {
+            Thread {
+                try {
+                    val res = AppControlHttp.postCommandAck(applicationContext, commandId)
+                    DiagLog.write(
+                        applicationContext,
+                        "fcm",
+                        "PLAY_SIGNAL ack ${commandId.take(8)}… → ok=${res.ok} status=${res.statusCode}",
+                    )
+                } catch (e: Throwable) {
+                    DiagLog.write(
+                        applicationContext,
+                        "fcm",
+                        "PLAY_SIGNAL ack failed: ${e.javaClass.simpleName}: ${e.message}",
+                    )
+                }
+            }.start()
         }
     }
 

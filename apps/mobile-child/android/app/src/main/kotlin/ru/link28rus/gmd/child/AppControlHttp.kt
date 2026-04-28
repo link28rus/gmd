@@ -119,6 +119,18 @@ object AppControlHttp {
     doGet(ctx, "/child/active-block")
 
   /**
+   * POST /child/commands/{commandId}/ack — без body, идемпотентно
+   * (повторный ack команды в статусе executed — no-op).
+   *
+   * Используется FCM-handler'ом в MyFirebaseMessagingService после старта
+   * SignalSoundService: команда должна быть помечена executed, иначе
+   * следующий poll-цикл (~90 сек) забёрет её снова и алярм проиграется
+   * повторно (v0.44.1 bugfix).
+   */
+  fun postCommandAck(ctx: Context, commandId: String): Result =
+    doPost(ctx, "/child/commands/$commandId/ack", JSONObject())
+
+  /**
    * GET /child/app-rules
    * Возвращает {rules: [{packageName, mode, source}]}.
    * Включает HARDCODED первыми. Тянется при FCM SYNC_RULES, при старте app,
