@@ -9,6 +9,22 @@
 
 ---
 
+## v0.40.3+6064 — 2026-04-28 — Wake-on-motion: первая точка трека через 2-3 секунды
+
+### Улучшения
+
+- **Реакция на старт движения сократилась с 60 секунд до 2-3 секунд.** В STILL-профиле раньше первая точка нового трека приходила только когда сработает FLP-апдейт (до 60 сек по `STILL_INTERVAL_MS`) или Activity Recognition (30-90 сек). На длинных стоянках в начале каждой поездки терялись 100-200 метров. Теперь подписываемся на hardware **motion sensor** (`TYPE_MOTION_DETECT` API 24+ или `TYPE_SIGNIFICANT_MOTION` API 18+) — sensor работает в чипе телефона, расход батареи ~0%, срабатывает за 1-3 секунды с момента старта движения. После trigger'а: forced switch ACTIVE + немедленный запрос `fused.getCurrentLocation` (HIGH_ACCURACY, fresh GPS-fix).
+
+### Изменения
+
+- **`MotionSensorMonitor.kt`** — новый Kotlin класс. Выбирает лучший доступный sensor (`MOTION_DETECT` приоритетнее), graceful fallback на `SIGNIFICANT_MOTION`. Если оба недоступны (старые/нестандартные устройства) — `isSupported=false`, остальная логика (speed-based switch + AR) работает как в v0.40.2.
+- **`LocationForegroundService.switchProfile`** регистрирует sensor при входе в STILL и снимает при входе в ACTIVE. В ACTIVE он не нужен — FLP и так шлёт обновления каждые 5 сек.
+- **`onMotionSensorTriggered`**: обновляет `lastMovingTimeMs` (debounce ACTIVE→STILL), переключает в ACTIVE, дёргает `requestFreshLocationOnce`.
+- **`requestFreshLocationOnce`** — новый метод, использует `fused.getCurrentLocation(PRIORITY_HIGH_ACCURACY)` чтобы получить свежую GPS-точку за 1-3 сек, не дожидаясь следующего FLP-cycle.
+- **DiagLog** при старте сервиса логирует `motion sensor support: MOTION_DETECT(30) / SIGNIFICANT_MOTION(17) / NOT_SUPPORTED` — для проверки на разных устройствах. Подтверждено на POCO C71 (UNISOC, бюджет) и Xiaomi 12T Pro (Snapdragon 8+ Gen 1) — оба поддерживают.
+
+---
+
 ## v0.40.2+6063 — 2026-04-28 — Активный режим держится 15 минут после остановки
 
 ### Улучшения

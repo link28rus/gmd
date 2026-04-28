@@ -122,6 +122,16 @@ class LocationForegroundService : Service() {
     private var bgEngine: FlutterEngine? = null
     private var bgChannel: MethodChannel? = null
 
+    // v0.40.3 — Hardware motion sensor для wake-on-motion в STILL-режиме.
+    // Lazy чтобы applicationContext был готов (создаётся в onCreate).
+    // Callback дёргает forced switch STILL → ACTIVE при первом event'е.
+    private val motionMonitor: MotionSensorMonitor by lazy {
+        MotionSensorMonitor(applicationContext) {
+            log("motion sensor TRIGGERED (${motionMonitor.sensorLabel}) → forced ACTIVE")
+            onMotionSensorTriggered()
+        }
+    }
+
     // Профиль апдейтов FLP. Переключается intent-ами от ActivityTransitionReceiver.
     // Default=ACTIVE: если permission ACTIVITY_RECOGNITION не дан, сервис никогда
     // не получит STILL-сигнал и будет жить в active-профиле — это ок, accuracy-gate
@@ -160,6 +170,7 @@ class LocationForegroundService : Service() {
             ACTION_STOP -> {
                 cancelHeartbeatAlarm()
                 unregisterActivityTransitions()
+                motionMonitor.stop()
                 releaseWakeLock()
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
@@ -368,9 +379,20 @@ class LocationForegroundService : Service() {
         // пришлёт MOVING_ENTER и мы застрянем в STILL → стартуем в ACTIVE.
         val initial = if (hasActivityRecognitionPermission()) Profile.STILL else Profile.ACTIVE
         log("start: initial profile = $initial (AR permission = ${hasActivityRecognitionPermission()})")
+        // v0.40.3 — сразу логируем доступность motion sensor, чтобы при анализе
+        // DiagLog'а понимать почему wake-on-motion работает / не работает на
+        // конкретном устройстве.
+        log("start: motion sensor support: ${motionMonitor.sensorLabel} (supported=${motionMonitor.isSupported})")
         profile = initial
         persistProfile(initial)
         subscribeLocationUpdates(initial)
+        // Если стартуем в STILL — сразу регистрируем motion sensor для wake-on-motion.
+        // (switchProfile сделает то же самое при переключении, но при первом
+        // start() мы не вызываем switchProfile, поэтому делаем явно здесь.)
+        if (initial == Profile.STILL) {
+            val ok = motionMonitor.start()
+            log("start: motion sensor register=$ok (initial STILL)")
+        }
         // Heartbeat: шлём текущую точку раз в 2 минуты через AlarmManager.
         // Ставим даже если повторный start() — PendingIntent с одним requestCode
         // идемпотентен (replace-semantics), лишнего alarm'а не будет.
@@ -493,6 +515,75 @@ class LocationForegroundService : Service() {
         callback?.let { fused.removeLocationUpdates(it) }
         callback = null
         subscribeLocationUpdates(newProfile)
+        // v0.40.3 — motion sensor только в STILL для wake-on-motion. В ACTIVE
+        // он не нужен (FLP и так шлёт обновления каждые 5 сек). Это ещё немного
+        // экономит батарею + предотвращает «двойные» switch'и (sensor + speed).
+        when (newProfile) {
+            Profile.STILL -> {
+                val ok = motionMonitor.start()
+                log("motion sensor: register=$ok kind=${motionMonitor.sensorLabel}")
+            }
+            Profile.ACTIVE -> {
+                motionMonitor.stop()
+                log("motion sensor: unregistered (entering ACTIVE)")
+            }
+        }
+    }
+
+    /**
+     * v0.40.3 — обработчик motion-sensor trigger'а. Sensor'ы (SIGNIFICANT_MOTION /
+     * MOTION_DETECT) вызывают callback с main looper'а — мы тоже на main, поэтому
+     * напрямую дёргаем switchProfile без posting'а.
+     *
+     * Делаем 3 вещи:
+     *   1. Обновляем lastMovingTimeMs — чтобы 15-мин ACTIVE→STILL debounce
+     *      перезапустился (даже если speed первой точки ещё 0).
+     *   2. Switch ACTIVE — поднимаем интервал до 5с / HIGH_ACCURACY.
+     *   3. requestFreshLocationOnce — не ждём первую FLP-точку (до 5с), а
+     *      запрашиваем актуальную сейчас. UX: первая точка трека приходит
+     *      через ~2-3 сек после старта движения, не через 60с STILL_INTERVAL.
+     *
+     * Idempotent: повторный trigger в ACTIVE-профиле просто обновит
+     * lastMovingTimeMs без лишних re-subscribe (см. switchProfile.if-skip).
+     */
+    private fun onMotionSensorTriggered() {
+        lastMovingTimeMs = System.currentTimeMillis()
+        if (profile == Profile.STILL) {
+            switchProfile(Profile.ACTIVE)
+            requestFreshLocationOnce()
+        }
+    }
+
+    /**
+     * Запросить fresh GPS-fix немедленно через `getCurrentLocation` (Google
+     * Play Services). В отличие от `lastLocation` (cached), этот запрос
+     * включает GPS на полную и возвращает свежую точку через 1-3 сек.
+     *
+     * Используется только при wake-on-motion — чтобы не ждать FLP-cycle.
+     * Точка проходит через тот же `sendToDart` (со всеми фильтрами и speed-based
+     * switch), поэтому если sensor сработал, а speed=0 (false positive,
+     * телефон поднял со стола) — обычная логика разрулит.
+     */
+    private fun requestFreshLocationOnce() {
+        try {
+            fused.getCurrentLocation(
+                Priority.PRIORITY_HIGH_ACCURACY,
+                null, // CancellationToken — null = не отменяем
+            )
+                .addOnSuccessListener { loc ->
+                    if (loc != null) {
+                        log("requestFreshLocationOnce: got location, sending")
+                        sendToDart(loc, heartbeat = false)
+                    } else {
+                        log("requestFreshLocationOnce: location is null (no GPS yet)")
+                    }
+                }
+                .addOnFailureListener { e -> logErr("requestFreshLocationOnce failed", e) }
+        } catch (e: SecurityException) {
+            logErr("requestFreshLocationOnce SecurityException", e)
+        } catch (e: Throwable) {
+            logErr("requestFreshLocationOnce unexpected", e)
+        }
     }
 
     // Activity Recognition (Play Services). Требует runtime-permission
@@ -769,6 +860,9 @@ class LocationForegroundService : Service() {
         // стартануть service при надобности, пере-подписка при ACTION_STOP.
         callback?.let { fused.removeLocationUpdates(it) }
         callback = null
+        // Motion sensor отписываем — иначе если service rebornит, при start()
+        // будет регистрация поверх старой (хотя isRegistered защищает).
+        motionMonitor.stop()
         releaseWakeLock()
         // Не рушим bgEngine при onDestroy — он может пригодиться, если service
         // тут же перезапустят (START_STICKY). Чистим только при явном ACTION_STOP.
