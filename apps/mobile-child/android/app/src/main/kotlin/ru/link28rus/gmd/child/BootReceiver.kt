@@ -29,6 +29,15 @@ class BootReceiver : BroadcastReceiver() {
             context.startService(svc)
         }
 
+        // v0.44: периодическая проверка обновлений после ребута. Periodic
+        // WorkManager-задачи не выживают между ребутами (DB-state снесён),
+        // поэтому пере-планируем их здесь.
+        try {
+            UpdateCheckScheduler.schedule(context)
+        } catch (e: Throwable) {
+            DiagLog.write(context, "boot", "UpdateCheck schedule failed: ${e.message}")
+        }
+
         // v0.36.0 D-lite: best-effort pre-warm SoundAroundService после ребута.
         // BootReceiver получает короткий FGS-start exemption от system, поэтому
         // startForeground(type=MICROPHONE) ИНОГДА проходит. Если crashes —

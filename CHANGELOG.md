@@ -9,6 +9,22 @@
 
 ---
 
+## v0.44.0+6068 — 2026-04-28 — Auto-update mobile-child работает без открытия приложения
+
+### Улучшения
+
+- **Авто-обновление теперь приходит даже если ребёнок не открывает приложение.** Раньше проверка обновлений жила в `update_banner.dart` и срабатывала только при build'е home-экрана. На телефонах детей после initial setup UI открывают месяцами раз — process крутился в FGS-трекинге, а версия зависала. На POCO C75 / TECNO KL4 фиксировали 0.41.1 при актуальной 0.43.0. Теперь native-Kotlin `UpdateCheckWorker` через WorkManager раз в 6 часов сам ходит в `/api/public/updates/mobile-child/latest`, скачивает APK в тот же `externalCacheDir/updates/`, и показывает high-importance notification «Обновление готово к установке». Тап → MainActivity → `UpdateController` подхватывает уже скачанный APK → installer.
+
+### Изменения
+
+- **`UpdateCheckWorker.kt`** — `CoroutineWorker` на чистом HttpURLConnection: GET endpoint, парсинг JSON, скачивание (64KB chunks, 15-мин read timeout под APK ~30МБ на 3G), нотификация. Сравнение версий — по `versionCode` (Flutter Gradle plugin ставит `versionCodeOverride = ABI_VERSION[abi]*1000+pubspecBuild`, бэкенд возвращает то же число → простое целочисленное сравнение).
+- **`UpdateCheckScheduler.kt`** — PeriodicWorkRequest 6h с `NetworkType.CONNECTED`, `KEEP`-policy. `runNow()` для one-time трига при открытии MainActivity.
+- **Хуки `schedule()`** в трёх точках — `MainActivity.onCreate` + `runNow()`, `BootReceiver`, `LocationForegroundService.onCreate`. Все идемпотентны.
+- **Notification channel `gmd_update_channel`** (IMPORTANCE_HIGH, badge). Action «Установить» через FileProvider — пропускает Flutter UI если REQUEST_INSTALL_PACKAGES уже granted.
+- Build mobile-child 6067 → 6068.
+
+---
+
 ## v0.43.0+6067 — 2026-04-28 — «Найди телефон»: мгновенный сигнал через FCM + бундлованный звонкий звук
 
 ### Улучшения

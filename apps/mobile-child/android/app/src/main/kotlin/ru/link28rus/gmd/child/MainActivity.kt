@@ -34,6 +34,16 @@ class MainActivity : FlutterActivity() {
         // Идемпотентно (KEEP-policy) — повторные вызовы безопасны. Если token
         // ещё не сохранён (первый запуск до claim'а) — workers запустятся
         // после saveNativeCreds через protection channel (см. ниже).
+        // v0.44: фоновая проверка обновлений — поднимается даже без device-token,
+        // потому что endpoint /api/public/updates/ публичный и работает до claim'а.
+        // Внутри worker'а проверяется apiBaseUrl (если не сохранён — no-op).
+        try {
+            UpdateCheckScheduler.schedule(this)
+            UpdateCheckScheduler.runNow(this)
+        } catch (e: Throwable) {
+            DiagLog.write(this, "ui", "UpdateCheck schedule failed: ${e.message}")
+        }
+
         try {
             if (!NativeCreds.getToken(this).isNullOrEmpty()) {
                 AppControlScheduler.scheduleAll(this)

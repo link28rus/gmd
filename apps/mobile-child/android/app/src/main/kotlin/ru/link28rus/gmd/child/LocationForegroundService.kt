@@ -176,6 +176,14 @@ class LocationForegroundService : Service() {
         fused = LocationServices.getFusedLocationProviderClient(this)
         createChannel()
         ensureBackgroundEngine()
+        // v0.44: страховка для случая когда юзер не открывает MainActivity
+        // месяцами — periodic update-check всё равно поднимется при первом
+        // запуске сервиса (autostart на boot или возврат после кила).
+        try {
+            UpdateCheckScheduler.schedule(this)
+        } catch (e: Throwable) {
+            log("UpdateCheck schedule failed: ${e.message}")
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
