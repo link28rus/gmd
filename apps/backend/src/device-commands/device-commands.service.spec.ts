@@ -1,5 +1,12 @@
 import { DeviceCommandsService } from './device-commands.service';
 import type { PrismaService } from '../prisma/prisma.service';
+import type { FcmService } from '../fcm/fcm.service';
+
+// Тесты trogают только listPending, FCM ему не нужен — пустая заглушка.
+const fcmStub = {
+  isEnabled: () => false,
+  sendDataMessage: jest.fn().mockResolvedValue(false),
+} as unknown as FcmService;
 
 interface MockCmd {
   id: string;
@@ -92,7 +99,7 @@ describe('DeviceCommandsService.listPending', () => {
         expiresAt: future,
       },
     ]);
-    const svc = new DeviceCommandsService(prisma);
+    const svc = new DeviceCommandsService(prisma, fcmStub);
     const out = await svc.listPending(deviceId);
     expect(out.map((c) => c.id).sort()).toEqual(['c1', 'c2']);
   });
@@ -118,7 +125,7 @@ describe('DeviceCommandsService.listPending', () => {
         expiresAt: future,
       },
     ]);
-    const svc = new DeviceCommandsService(prisma);
+    const svc = new DeviceCommandsService(prisma, fcmStub);
     const out = await svc.listPending(deviceId);
     expect(out).toEqual([]);
     // обе помечены expired в DB
@@ -158,7 +165,7 @@ describe('DeviceCommandsService.listPending', () => {
         expiresAt: future,
       },
     ]);
-    const svc = new DeviceCommandsService(prisma);
+    const svc = new DeviceCommandsService(prisma, fcmStub);
     const out = await svc.listPending(deviceId);
     expect(out.map((c) => c.id)).toEqual(['start-B']);
   });
@@ -175,7 +182,7 @@ describe('DeviceCommandsService.listPending', () => {
         expiresAt: future,
       },
     ]);
-    const svc = new DeviceCommandsService(prisma);
+    const svc = new DeviceCommandsService(prisma, fcmStub);
     const out = await svc.listPending(deviceId);
     expect(out.map((c) => c.id)).toEqual(['lone-stop']);
   });

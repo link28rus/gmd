@@ -9,6 +9,24 @@
 
 ---
 
+## v0.43.0+6067 — 2026-04-28 — «Найди телефон»: мгновенный сигнал через FCM + бундлованный звонкий звук
+
+### Улучшения
+
+- **Сигнал «Найди телефон» прилетает за 1–3 секунды вместо 60–120.** Раньше, когда родитель нажимал «Сигнал», команда `PLAY_SIGNAL` ставилась только в очередь `DeviceCommand`, а телефон ребёнка забирал её при следующем poll'е (привязан к 2-минутному location-heartbeat). Теперь backend параллельно с очередью шлёт FCM high-priority data-message — `MyFirebaseMessagingService` ловит его в Doze-bypass-режиме и сразу стартует `SignalSoundService`. Если push не доехал (offline >60с TTL / нет fcmToken) — fallback на старую очередь, пользователь не теряет сигнал.
+- **Звук сигнала теперь бундлован в APK и максимально пронзительный.** Раньше использовался системный default-alarm — у разных пользователей разной громкости и тембра, на дешёвых OEM мог быть тихим. Теперь играем `res/raw/signal_alarm.wav` — alarm-pattern из чередующихся квадратных волн на 2500 / 3500 Hz по 250 мс (психоакустический пик чувствительности уха), 4 секунды, looped. Параллельно сохраняются: STREAM_ALARM на максимум, обход Silent/DND, вибрация, кнопка «Остановить».
+
+### Изменения
+
+- **`DeviceCommandsService.sendSignal`** — инжектит `FcmService`, после `prisma.deviceCommand.create` вызывает `fcm.sendDataMessage(deviceId, fcmToken, {type: "PLAY_SIGNAL", commandId})`. Дублирующий клик в TTL-окне тоже толкает push — на случай, если первый не доехал из-за оффлайна.
+- **`DeviceCommandsModule`** — импортирует `FcmModule`.
+- **`MyFirebaseMessagingService.onMessageReceived`** — case `PLAY_SIGNAL` → `startForegroundService(SignalSoundService.ACTION_PLAY)`.
+- **`SignalSoundService.startSignal`** — приоритет `MediaPlayer.setDataSource(Uri.parse("android.resource://$packageName/${R.raw.signal_alarm}"))`. Fallback на `RingtoneManager` оставлен (теоретически недостижим).
+- **`scripts/gen-signal-sound.mjs`** — генератор WAV (16-bit PCM, 44100 Hz, mono, ~345 KB). Запуск: `node scripts/gen-signal-sound.mjs`.
+- Build number mobile-child: 6066 → 6067.
+
+---
+
 ## v0.42.0 — 2026-04-28 — Геозоны: быстрое создание двойным кликом, фикс редактирования, переключатель видимости
 
 ### Новые возможности

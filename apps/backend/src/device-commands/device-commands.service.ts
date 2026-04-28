@@ -1,7 +1,8 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type { DeviceCommand } from '@prisma/client';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { FcmService } from '../fcm/fcm.service';
 import type { AudioWsConnInfo } from '../audio/dto/audio.dto';
 
 // TTL на команду: если child не забрал её за это время, помечаем как
@@ -12,7 +13,12 @@ const COMMAND_TTL_MS = 5 * 60 * 1000;
 
 @Injectable()
 export class DeviceCommandsService {
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(DeviceCommandsService.name);
+
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(FcmService) private readonly fcm: FcmService,
+  ) {}
 
   // Родитель: отправить сигнал конкретному ребёнку. Возвращает command.id —
   // пригодится для последующего отслеживания статуса, если понадобится.
@@ -49,6 +55,14 @@ export class DeviceCommandsService {
       },
     });
     if (existing) {
+      // Дублирующий клик в течение TTL — всё равно толкаем FCM, на случай
+      // если первый push не доехал до устройства (offline на момент создания).
+      void this.fcm
+        .sendDataMessage(device.id, device.fcmToken, {
+          type: 'PLAY_SIGNAL',
+          commandId: existing.id,
+        })
+        .catch((err) => this.logger.warn(`FCM PLAY_SIGNAL retry failed: ${String(err)}`));
       return { commandId: existing.id, expiresAt: existing.expiresAt.toISOString() };
     }
 
@@ -62,6 +76,18 @@ export class DeviceCommandsService {
         expiresAt,
       },
     });
+
+    // FCM high-priority push для мгновенной доставки (1-3с вместо до 2 минут
+    // poll-цикла). Очередь команд остаётся как fallback — если FCM упал/нет
+    // токена/устройство offline >60с TTL, child заберёт PLAY_SIGNAL
+    // при следующем poll'е через /child/commands/pending.
+    void this.fcm
+      .sendDataMessage(device.id, device.fcmToken, {
+        type: 'PLAY_SIGNAL',
+        commandId: cmd.id,
+      })
+      .catch((err) => this.logger.warn(`FCM PLAY_SIGNAL push failed: ${String(err)}`));
+
     return { commandId: cmd.id, expiresAt: cmd.expiresAt.toISOString() };
   }
 

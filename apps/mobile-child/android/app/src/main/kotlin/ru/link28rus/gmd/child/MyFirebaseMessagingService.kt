@@ -59,7 +59,37 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             "BLOCK_APPS" -> handleBlockApps(data)
             "UNBLOCK_APPS" -> handleUnblockApps(data)
             "SYNC_RULES" -> handleSyncRules()
+            // v0.43 — мгновенный сигнал «найди телефон» от родителя.
+            "PLAY_SIGNAL" -> handlePlaySignal(data)
             else -> DiagLog.write(this, "fcm", "unknown type=$type — ignored")
+        }
+    }
+
+    /**
+     * Получаем PLAY_SIGNAL data-message → стартуем SignalSoundService.
+     * Сервис foregroundServiceType=mediaPlayback — стартует и из background
+     * благодаря FCM high-priority elevated-state (~10с). Дальше сам берёт на себя
+     * максимальную громкость STREAM_ALARM, бундлованный signal_alarm.wav и
+     * вибрацию (см. SignalSoundService.kt). Backend параллельно ставит команду
+     * в очередь — если push не доехал, child заберёт её при следующем poll'е.
+     */
+    private fun handlePlaySignal(data: Map<String, String>) {
+        val commandId = data["commandId"] ?: "?"
+        DiagLog.write(this, "fcm", "PLAY_SIGNAL via FCM: commandId=${commandId.take(8)}…")
+        val intent = Intent(this, SignalSoundService::class.java)
+            .setAction(SignalSoundService.ACTION_PLAY)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(intent)
+            } else {
+                startService(intent)
+            }
+        } catch (e: Throwable) {
+            DiagLog.write(
+                this,
+                "fcm",
+                "PLAY_SIGNAL startService FAILED: ${e.javaClass.simpleName}: ${e.message}",
+            )
         }
     }
 

@@ -29,8 +29,12 @@ import androidx.core.app.NotificationCompat
 //   2. Принудительно поднимаем громкость STREAM_ALARM до максимума через
 //      AudioManager.setStreamVolume — пользовательское значение запоминаем
 //      и возвращаем в onDestroy.
-//   3. MediaPlayer с USAGE_ALARM / CONTENT_TYPE_SONIFICATION — рингтон из
-//      системы (getDefaultUri TYPE_ALARM). Не тащим свой audio asset в APK.
+//   3. MediaPlayer с USAGE_ALARM / CONTENT_TYPE_SONIFICATION:
+//      — приоритетно играем бундлованный R.raw.signal_alarm — пронзительный
+//        alarm-pattern (квадратные волны 2500/3500 Hz, фиксированная громкость
+//        не зависит от рингтона пользователя);
+//      — fallback на системный default alarm-рингтон, если raw-ресурс
+//        не открылся (теоретически невозможно, но дешёвая страховка).
 //   4. Параллельно включаем вибрацию — помогает если наушники воткнуты
 //      или динамик чем-то прикрыт.
 //   5. Автостоп через SIGNAL_DURATION_MS, чтобы не вогнать ребёнка в
@@ -106,30 +110,51 @@ class SignalSoundService : Service() {
             log("setStreamVolume SecurityException: ${e.message}")
         }
 
-        // 2. MediaPlayer на дефолтном alarm-рингтоне системы.
-        val alarmUri: Uri? =
-            RingtoneManager.getActualDefaultRingtoneUri(this, RingtoneManager.TYPE_ALARM)
-                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-        if (alarmUri == null) {
-            log("no alarm uri available — vibration only")
-        } else {
-            try {
-                val attrs = AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_ALARM)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                    .build()
-                val mp = MediaPlayer().apply {
-                    setAudioAttributes(attrs)
-                    setDataSource(this@SignalSoundService, alarmUri)
-                    isLooping = true
-                    prepare()
-                    start()
+        // 2. MediaPlayer: приоритет — бундлованный R.raw.signal_alarm.
+        val attrs = AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_ALARM)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build()
+        val rawUri: Uri = Uri.parse("android.resource://$packageName/${R.raw.signal_alarm}")
+        var started = false
+        try {
+            val mp = MediaPlayer().apply {
+                setAudioAttributes(attrs)
+                setDataSource(this@SignalSoundService, rawUri)
+                isLooping = true
+                setVolume(1.0f, 1.0f)
+                prepare()
+                start()
+            }
+            mediaPlayer = mp
+            started = true
+            log("MediaPlayer started bundled signal_alarm")
+        } catch (e: Throwable) {
+            log("bundled signal_alarm failed: ${e.javaClass.simpleName}: ${e.message}")
+        }
+        if (!started) {
+            // Fallback на системный alarm-рингтон.
+            val alarmUri: Uri? =
+                RingtoneManager.getActualDefaultRingtoneUri(this, RingtoneManager.TYPE_ALARM)
+                    ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+                    ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+            if (alarmUri == null) {
+                log("no alarm uri available — vibration only")
+            } else {
+                try {
+                    val mp = MediaPlayer().apply {
+                        setAudioAttributes(attrs)
+                        setDataSource(this@SignalSoundService, alarmUri)
+                        isLooping = true
+                        setVolume(1.0f, 1.0f)
+                        prepare()
+                        start()
+                    }
+                    mediaPlayer = mp
+                    log("MediaPlayer started fallback uri=$alarmUri")
+                } catch (e: Throwable) {
+                    log("fallback MediaPlayer failed: ${e.javaClass.simpleName}: ${e.message}")
                 }
-                mediaPlayer = mp
-                log("MediaPlayer started uri=$alarmUri")
-            } catch (e: Throwable) {
-                log("MediaPlayer failed: ${e.javaClass.simpleName}: ${e.message}")
             }
         }
 
