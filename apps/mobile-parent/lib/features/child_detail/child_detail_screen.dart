@@ -199,10 +199,9 @@ class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen> {
                     ],
                   ),
           ),
-          // ─── FAB «к ребёнку» — над картой, но под sheet'ом ─────────
-          // Позиционируем выше bottom-sheet'а в свернутом состоянии,
-          // чтобы кнопка не пряталась под ним. 18% sheet от screen-height
-          // + ~12px отступа = bottom ≈ 0.18 * height + 12.
+          // ─── FAB «к ребёнку» — над картой, но над sheet'ом ─────────
+          // Позиционируем выше collapsed sheet'а, чтобы кнопка не
+          // пряталась под ним.
           Positioned(
             right: 16,
             bottom: MediaQuery.of(context).size.height * 0.18 + 12,
@@ -214,8 +213,11 @@ class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen> {
             ),
           ),
           // ─── Bottom-sheet ──────────────────────────────────────────
-          // initial / min = 0.18 → видна status-card.
-          // max = 0.7 → раскрытый список 7 ListTile.
+          // initial / min = 0.18 → видна компактная status-card (имя +
+          // «Был тут N назад» + одна строка inline-метрик: 🔋80% · 🎯±4м
+          // · 📶MegaFon). Учитывает Android system nav bar (~0.05 на
+          // 3-button MIUI/HyperOS) — без 0.18 inline-метрики подрезались.
+          // max = 0.7 → раскрытый список 7 ListTile-actions.
           // snap=true со snapSizes даёт два «защёлкнутых» состояния.
           DraggableScrollableSheet(
             initialChildSize: 0.18,

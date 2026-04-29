@@ -5,11 +5,15 @@ import '../../children/child_models.dart';
 /// Карточка статуса ребёнка для bottom-sheet'а на `ChildDetailScreen`.
 ///
 /// Видна и в свернутом, и в развёрнутом состоянии. Содержит:
-///   - Avatar (буква имени) + имя + «Был тут N мин назад»
-///   - Сетку 4×1 метрик: 🔋батарея / 🎯точность / 📶связь / 📡источник
-///   - Footer с описанием качества точности
+///   - Avatar (буква имени) + имя
+///   - Подзаголовок «Был тут N мин назад»
+///   - Inline-строка с метриками: 🔋батарея · 🎯точность · 📶связь
 ///
-/// Порт из `apps/web/components/locations/child-status-card.tsx`.
+/// Источник GPS (📡) НЕ выводится — он почти всегда «GPS» и не несёт
+/// полезной для родителя информации (Артем в обсуждении 2026-04-29).
+///
+/// Порт из `apps/web/components/locations/child-status-card.tsx`,
+/// упрощённый для мобильного экрана.
 class ChildStatusCard extends StatelessWidget {
   const ChildStatusCard({
     super.key,
@@ -26,91 +30,43 @@ class ChildStatusCard extends StatelessWidget {
     final l = latest;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // Header: avatar + имя + время
-          Row(
-            children: [
-              _Avatar(name: childName),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      childName,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    Text(
-                      l == null
-                          ? 'Точек ещё нет'
-                          : 'Был тут ${_formatAge(l.age)}',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          // Метрики 4×1
-          if (l != null)
-            Row(
+          _Avatar(name: childName),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Expanded(
-                  child: _Metric(
-                    icon: l.isCharging == true ? '🔌' : '🔋',
-                    badge: l.isCharging == true ? '⚡' : null,
-                    label: l.isCharging == true ? 'заряжается' : 'батарея',
-                    value: l.batteryLevel != null ? '${l.batteryLevel}%' : '—',
-                    valueColor: _batteryColor(l.batteryLevel, l.isCharging),
+                // Имя
+                Text(
+                  childName,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                Expanded(
-                  child: _Metric(
-                    icon: '🎯',
-                    label: 'точность',
-                    value: l.accuracy != null
-                        ? '±${l.accuracy!.round()} м'
-                        : '—',
+                // Подзаголовок «Был тут N назад»
+                Text(
+                  l == null ? 'Точек ещё нет' : 'Был тут ${_formatAge(l.age)}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                Expanded(
-                  child: _Metric(
-                    icon: _networkIcon(l.networkType),
-                    label: 'связь',
-                    value: _networkValue(l),
-                  ),
-                ),
-                Expanded(
-                  child: _Metric(
-                    icon: '📡',
-                    label: 'источник',
-                    value: _providerLabel(l.provider),
-                  ),
-                ),
+                if (l != null) ...[
+                  const SizedBox(height: 4),
+                  // Inline-метрики: батарея · точность · связь
+                  _InlineMetrics(latest: l),
+                ],
               ],
             ),
-          // Footer — описание точности
-          if (l != null && l.accuracy != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              'Точность ${_accuracyQuality(l.accuracy!)} (${l.accuracy!.round()} метров)',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
+          ),
         ],
       ),
     );
@@ -121,6 +77,100 @@ class ChildStatusCard extends StatelessWidget {
     if (d.inMinutes < 60) return '${d.inMinutes} мин назад';
     if (d.inHours < 24) return '${d.inHours} ч назад';
     return '${d.inDays} дн назад';
+  }
+}
+
+/// Однострочная сводка метрик: 🔋80% · 🎯±4м · 📶MegaFon.
+///
+/// Каждая метрика — компактный chip без обводки, разделители — тонкие
+/// `· ` между значениями. Если значения нет — пропускаем chip,
+/// разделители подстраиваются.
+class _InlineMetrics extends StatelessWidget {
+  const _InlineMetrics({required this.latest});
+
+  final ChildLocation latest;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+
+    final chips = <Widget>[];
+    final l = latest;
+
+    // 🔋 Батарея
+    if (l.batteryLevel != null) {
+      chips.add(_chip(
+        icon: l.isCharging == true ? '🔌' : '🔋',
+        text: '${l.batteryLevel}%',
+        color: _batteryColor(l.batteryLevel, l.isCharging) ??
+            theme.colorScheme.onSurface,
+      ));
+    }
+
+    // 🎯 Точность
+    if (l.accuracy != null) {
+      chips.add(_chip(
+        icon: '🎯',
+        text: '±${l.accuracy!.round()} м',
+        color: theme.colorScheme.onSurface,
+      ));
+    }
+
+    // 📶 / 📱 Сеть
+    final networkText = _networkText(l);
+    if (networkText != null) {
+      chips.add(_chip(
+        icon: _networkIcon(l.networkType),
+        text: networkText,
+        color: theme.colorScheme.onSurface,
+      ));
+    }
+
+    if (chips.isEmpty) return const SizedBox.shrink();
+
+    // Раскладываем chips через разделитель ` · `
+    final rowChildren = <Widget>[];
+    for (var i = 0; i < chips.length; i++) {
+      if (i > 0) {
+        rowChildren.add(Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          child: Text('·', style: TextStyle(color: muted, fontSize: 12)),
+        ));
+      }
+      rowChildren.add(chips[i]);
+    }
+
+    return DefaultTextStyle.merge(
+      style: theme.textTheme.bodySmall ?? const TextStyle(fontSize: 12),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: rowChildren,
+      ),
+    );
+  }
+
+  Widget _chip({
+    required String icon,
+    required String text,
+    required Color color,
+  }) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Text(icon, style: const TextStyle(fontSize: 13, height: 1.0)),
+        const SizedBox(width: 3),
+        Text(
+          text,
+          style: TextStyle(
+            color: color,
+            fontWeight: FontWeight.w500,
+            fontSize: 12,
+          ),
+        ),
+      ],
+    );
   }
 
   static Color? _batteryColor(int? level, bool? charging) {
@@ -144,7 +194,7 @@ class ChildStatusCard extends StatelessWidget {
     }
   }
 
-  static String _networkValue(ChildLocation l) {
+  static String? _networkText(ChildLocation l) {
     switch (l.networkType) {
       case NetworkType.wifi:
         final ssid = l.wifiSsid?.trim();
@@ -155,26 +205,8 @@ class ChildStatusCard extends StatelessWidget {
       case NetworkType.offline:
         return 'нет сети';
       case NetworkType.unknown:
-        return '—';
+        return null; // не показывать вообще, чтобы не загромождать
     }
-  }
-
-  static String _providerLabel(LocationProvider p) {
-    switch (p) {
-      case LocationProvider.gps:
-      case LocationProvider.fused:
-        return 'GPS';
-      case LocationProvider.network:
-        return 'сеть';
-      case LocationProvider.unknown:
-        return '—';
-    }
-  }
-
-  static String _accuracyQuality(double m) {
-    if (m <= 30) return 'высокая';
-    if (m <= 100) return 'средняя';
-    return 'низкая';
   }
 }
 
@@ -231,63 +263,5 @@ class _Avatar extends StatelessWidget {
       0xFF0D9488, // teal
     ];
     return Color(palette[hash % palette.length]);
-  }
-}
-
-class _Metric extends StatelessWidget {
-  const _Metric({
-    required this.icon,
-    required this.label,
-    required this.value,
-    this.valueColor,
-    this.badge,
-  });
-
-  final String icon;
-  final String label;
-  final String value;
-  final Color? valueColor;
-  final String? badge;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Иконка + опциональный badge (молния для зарядки)
-        Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Text(icon, style: const TextStyle(fontSize: 18)),
-            if (badge != null)
-              Positioned(
-                right: -8,
-                top: -2,
-                child: Text(badge!, style: const TextStyle(fontSize: 10)),
-              ),
-          ],
-        ),
-        const SizedBox(height: 2),
-        Text(
-          value,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: valueColor,
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        Text(
-          label,
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-            fontSize: 10,
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-      ],
-    );
   }
 }
