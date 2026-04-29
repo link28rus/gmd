@@ -9,6 +9,30 @@
 
 ---
 
+## v0.46.0 — 2026-04-29 — Push-уведомления для родителя + дошлифовка экрана ребёнка
+
+### Новые возможности
+
+- **Push-уведомления родителю о ключевых событиях.** Теперь родитель получает FCM-push на телефон, когда: ребёнок входит/выходит из геозоны, нажимает SOS, у ребёнка низкий заряд батареи, ребёнок офлайн дольше N минут. Отдельный канал для SOS — звучит сиреной (плавный sweep 600↔1300 Гц, 12 секунд) даже в Do Not Disturb. Бэкенд держит таблицу `parent_devices` (мульти-устройство на одного родителя), отзывает токен на 401 от FCM, не дублирует с email-нотификациями (#700c45d).
+- **Кнопка «Блокировка приложений» на экране ребёнка.** Плитка-заглушка появилась рядом с «Сигнал / Звук / Геозоны» — фича сама подключится в одном из следующих релизов, бэкенд готов (#7df1f19).
+
+### Улучшения
+
+- **Сессия в mobile-parent переживает перезапуск приложения.** До этого после kill/swipe-out родителю приходилось каждый раз заново вводить email + пароль. Причина: web `/api/auth/*` (через Caddy) клал refresh-token только в HttpOnly cookie, а Dio в Flutter cookies не понимает. Теперь mobile-parent шлёт `X-Client: mobile-parent`, и web для таких запросов возвращает refresh-token прямо в JSON (а cookie — оставляет браузерам). Logout — только если сервер явно отклонил refresh (4xx); offline / 5xx оставляют сессию живой (#d6dfc72).
+- **Карта ребёнка прорисовывается с первого frame.** Раньше на Xiaomi/HyperOS карта оставалась серой пока пользователь её сам не подвигает или не зумит — тайлы OSM вообще не запрашивались. Причина — `Stack` без `StackFit.expand` отдавал FlutterMap «свободные» constraints, и TileLayer 7.x не запускал fetch до первого user-event. Заодно `TileLayer` теперь пересоздаётся через `ValueKey` после `onMapReady`, чтобы гарантированно стартовать с валидным viewport (#7df1f19).
+- **Кнопки на экране ребёнка больше не упираются в системный nav-bar.** На телефонах с 3-кнопочной навигацией / жестовой полосой нижняя панель Сигнал/Звук/Геозоны/Блокировка обрезалась — теперь обёрнута в `SafeArea(top: false)` и всегда полностью видна.
+- **Импеллер (новый Vulkan-рендер Flutter) отключён в mobile-parent.** На Xiaomi/HyperOS он давал AHardwareBuffer-ошибки и косвенно ломал tile-pipeline flutter_map. Откатимся на Skia до апгрейда flutter_map 7.0.2 → 8.x.
+
+### Изменения
+
+- **Удалена плитка «Я.Карты» с экрана ребёнка** — наследие от Yandex MapKit, после перехода на OSM она потеряла смысл. Освободившееся место занято «Блокировкой приложений».
+- **Удалён `url_launcher`** из `apps/mobile-parent/pubspec.yaml` — внешние ссылки больше не нужны.
+- **Backend модуль `parent-devices`** — Prisma-модель `ParentDevice`, миграция `20260429130000_add_parent_devices`, контроллер `POST/DELETE /parents/devices/fcm-token` (JwtAuthGuard, throttle 30/min), сервис с `register/revoke/findActiveByFamilyId/clearTokenByExpired`. `ZoneDetectionService` и `SosService` теперь шлют push в дополнение к email-нотификациям (через `FcmService.sendToToken` с onInvalidToken коллбеком).
+- **mobile-parent**: новые модули `core/fcm/parent_fcm_registrar.dart`, native `ParentFirebaseMessagingService.kt` (4 канала уведомлений: events, sos_v3 со sweep-сиреной, low-battery, offline), `firebase_core` + `firebase_messaging` + `permission_handler` в pubspec, google-services.json для пакета `ru.link28rus.gmd.gmd_parent`.
+- **Скрипт `scripts/gen-sos-siren.mjs`** — генерация custom WAV-сирены для SOS-уведомлений (PCM 16-bit, sweep 600↔1300Hz, 8 циклов × 1.5 сек, fade 8 мс).
+
+---
+
 ## v0.45.0 — 2026-04-29 — Приложение родителя для Android + карты на OpenStreetMap
 
 ### Новые возможности
