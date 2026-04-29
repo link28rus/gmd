@@ -5,7 +5,6 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../children/child_models.dart';
 import '../children/children_providers.dart';
@@ -25,6 +24,10 @@ class ChildDetailScreen extends ConsumerStatefulWidget {
 class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen> {
   final MapController _map = MapController();
   bool _firstFitDone = false;
+  bool _mapReady = false;
+  // Версия для пересоздания TileLayer после onMapReady — workaround
+  // для flutter_map 7.0.2: первый mount не триггерит fetch tiles до user-event.
+  int _tileGen = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -43,9 +46,11 @@ class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen> {
     final latest = latestAsync.value;
     final track = trackAsync.value ?? const <ChildLocation>[];
 
-    // После того, как данные пришли — один раз центрируем карту.
+    // После того, как данные пришли — один раз центрируем карту. Ждём
+    // пока сама карта будет готова (см. onMapReady) — иначе fitCamera
+    // на «пустых» границах не сработает корректно.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_firstFitDone && mounted) _maybeFit(latest, track);
+      if (!_firstFitDone && _mapReady && mounted) _maybeFit(latest, track);
     });
 
     return Scaffold(
@@ -66,7 +71,20 @@ class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen> {
       body: Column(
         children: [
           Expanded(
-            child: Stack(
+            // Строим FlutterMap ТОЛЬКО когда есть позиция (или явно зафикси-
+            // ровано что у ребёнка нет точек). Иначе на rebuild после прихода
+            // latest у уже смонтированного MapController остаётся старый viewport
+            // на Москве, а TileLayer 7.x не запускает fetch tiles для нового
+            // viewport до первого user-event (карта остаётся серой пока не
+            // зумишь). Условный mount решает это радикально и чисто.
+            child: (latest == null && latestAsync.isLoading)
+                ? const Center(child: CircularProgressIndicator())
+                : Stack(
+              // StackFit.expand ОБЯЗАТЕЛЕН: иначе non-positioned FlutterMap
+              // получает loose constraints и может стартовать с size=0 →
+              // TileLayer не запрашивает тайлы до user-event (карта серая).
+              // См. https://docs.fleaflet.dev/usage/basics
+              fit: StackFit.expand,
               children: [
                 FlutterMap(
                   mapController: _map,
@@ -80,15 +98,28 @@ class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen> {
                     interactionOptions: const InteractionOptions(
                       flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
                     ),
+                    onMapReady: () {
+                      if (!mounted) return;
+                      setState(() {
+                        _mapReady = true;
+                        _tileGen++; // форсим пересоздание TileLayer
+                      });
+                      _maybeFit(latest, track);
+                    },
                   ),
                   children: [
                     // OSM tile-сервер. Соблюдаем Tile Usage Policy:
                     // userAgentPackageName идентифицирует наш проект.
                     // https://operations.osmfoundation.org/policies/tiles/
                     TileLayer(
+                      key: ValueKey('tile_$_tileGen'),
                       urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                       userAgentPackageName: 'ru.link28rus.gmd.gmd_parent',
                       maxNativeZoom: 19,
+                      // Держим больше tiles вокруг viewport — меньше «серой
+                      // мозаики» при панорамировании / первом отображении.
+                      keepBuffer: 4,
+                      panBuffer: 2,
                     ),
                     if (track.length >= 2)
                       PolylineLayer(
@@ -294,60 +325,58 @@ class _BottomPanel extends StatelessWidget {
           ),
         ],
       ),
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _LocationLine(latest: latest),
-          const SizedBox(height: 12),
-          Row(
+      // SafeArea учитывает system navigation bar (3-кнопочный или жестовый),
+      // иначе плитки действий упираются в кнопки Android и обрезаются.
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(
-                child: _ActionTile(
-                  icon: Icons.notifications_active_outlined,
-                  label: 'Сигнал',
-                  onTap: () => _showSnack(context, 'Сигнал — следующий шаг'),
-                ),
-              ),
-              Expanded(
-                child: _ActionTile(
-                  icon: Icons.hearing_outlined,
-                  label: 'Звук',
-                  onTap: () => _showSnack(context, 'Звук — следующий шаг'),
-                ),
-              ),
-              Expanded(
-                child: _ActionTile(
-                  icon: Icons.shield_outlined,
-                  label: 'Геозоны',
-                  onTap: () => _showSnack(context, 'Геозоны — следующий шаг'),
-                ),
-              ),
-              Expanded(
-                child: _ActionTile(
-                  icon: Icons.map_outlined,
-                  label: 'Я.Карты',
-                  onTap: latest == null ? null : () => _openInYandexMaps(latest!),
-                ),
+              _LocationLine(latest: latest),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _ActionTile(
+                      icon: Icons.notifications_active_outlined,
+                      label: 'Сигнал',
+                      onTap: () => _showSnack(context, 'Сигнал — следующий шаг'),
+                    ),
+                  ),
+                  Expanded(
+                    child: _ActionTile(
+                      icon: Icons.hearing_outlined,
+                      label: 'Звук',
+                      onTap: () => _showSnack(context, 'Звук — следующий шаг'),
+                    ),
+                  ),
+                  Expanded(
+                    child: _ActionTile(
+                      icon: Icons.shield_outlined,
+                      label: 'Геозоны',
+                      onTap: () => _showSnack(context, 'Геозоны — следующий шаг'),
+                    ),
+                  ),
+                  Expanded(
+                    child: _ActionTile(
+                      icon: Icons.app_blocking_outlined,
+                      label: 'Блокировка',
+                      onTap: () => _showSnack(context, 'Блокировка приложений — следующий шаг'),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }
 
   void _showSnack(BuildContext context, String text) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
-  }
-
-  Future<void> _openInYandexMaps(ChildLocation latest) async {
-    // Внешний просмотр в системном браузере / Я.Карты-приложении —
-    // там детализация лучше OSM, особенно дома и подъезды в РФ.
-    final uri = Uri.parse(
-      'https://yandex.ru/maps/?pt=${latest.lon},${latest.lat}&z=16&l=map',
-    );
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 }
 
