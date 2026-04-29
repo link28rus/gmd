@@ -85,7 +85,16 @@ export function AudioListenDialog({ child, open, onOpenChange }: Props): ReactEl
   );
 }
 
-function AudioSessionPane({
+/**
+ * Содержимое audio-сессии без Dialog-обёртки. Экспортируется чтобы
+ * embed-страница `/embed/audio/[childId]` могла переиспользовать UI
+ * без модального диалога — там это fullscreen-экран в WebView mobile-parent.
+ *
+ * `onOpenChange(false)` вызывается при остановке/закрытии, embed-страница
+ * может проигнорировать (закрытия страницы внутри WebView нет — родитель
+ * жмёт system back).
+ */
+export function AudioSessionPane({
   child,
   onOpenChange,
 }: {

@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 
@@ -358,7 +359,7 @@ class _BottomPanelState extends ConsumerState<_BottomPanel> {
                     child: _ActionTile(
                       icon: Icons.hearing_outlined,
                       label: 'Звук',
-                      onTap: () => _showSnack('Звук — следующий шаг'),
+                      onTap: _onListenAudio,
                     ),
                   ),
                   Expanded(
@@ -382,6 +383,13 @@ class _BottomPanelState extends ConsumerState<_BottomPanel> {
         ),
       ),
     );
+  }
+
+  void _onListenAudio() {
+    // /home/child/:id/audio?name=... — экран AudioListenScreen
+    // подхватит childName из query, авторизация через authSession в WebView.
+    final encoded = Uri.encodeQueryComponent(widget.child.name);
+    context.push('/home/child/${widget.child.id}/audio?name=$encoded');
   }
 
   Future<void> _onSignalTap() async {

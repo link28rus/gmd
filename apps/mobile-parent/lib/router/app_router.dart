@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/providers.dart';
+import '../features/audio/audio_listen_screen.dart';
 import '../features/auth/login_screen.dart';
 import '../features/auth/register_screen.dart';
 import '../features/child_detail/child_detail_screen.dart';
@@ -35,6 +36,16 @@ class AppRouter {
               path: 'child/:id',
               builder: (_, state) =>
                   ChildDetailScreen(childId: state.pathParameters['id']!),
+              routes: [
+                GoRoute(
+                  // /home/child/:id/audio?name=<urlencoded child name>
+                  path: 'audio',
+                  builder: (_, state) => AudioListenScreen(
+                    childId: state.pathParameters['id']!,
+                    childName: state.uri.queryParameters['name'] ?? 'Ребёнок',
+                  ),
+                ),
+              ],
             ),
           ],
         ),

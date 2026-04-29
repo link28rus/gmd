@@ -9,3 +9,10 @@ const apiBaseUrl = String.fromEnvironment(
   'API_BASE_URL',
   defaultValue: 'https://gmd.link28rus.ru/api',
 );
+
+/// Web origin (без `/api`) — нужен для embed-страниц, открываемых в WebView
+/// (например, «Звук вокруг» использует `/embed/audio/<childId>` веб-плеер).
+const webOrigin = String.fromEnvironment(
+  'WEB_ORIGIN',
+  defaultValue: 'https://gmd.link28rus.ru',
+);
