@@ -1,26 +1,18 @@
 // apps/web/app/cabinet/zones/components/zones-map-inner.tsx
 'use client';
-/* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { useEffect, useMemo, useRef, type ReactElement } from 'react';
-import {
-  YMap,
-  YMapComponentsProvider,
-  YMapDefaultSchemeLayer,
-  YMapDefaultFeaturesLayer,
-  YMapControls,
-  YMapZoomControl,
-  YMapFeature,
-  YMapListener,
-} from 'ymap3-components';
+import { useEffect, useMemo, type ReactElement } from 'react';
+import { Circle, MapContainer, TileLayer, useMapEvents, ZoomControl } from 'react-leaflet';
+import L from 'leaflet';
 import type { Zone } from '@/lib/api/zones';
-import { circlePolygon } from '@/lib/geo/circle-polygon';
 import { useTheme } from '@/components/theme/theme-provider';
+import { tileConfigFor } from '@/lib/maps/tile-config';
 
 export interface ZonesMapInnerProps {
   zones: Zone[];
   selectedId?: string | null;
   onSelect?: (id: string) => void;
+  /** Сохранён в API ради обратной совместимости с обёрткой ZonesMap. */
   onMapError?: () => void;
   /** Whether to render zone polygons. Default: true. */
   showZones?: boolean;
@@ -28,102 +20,116 @@ export interface ZonesMapInnerProps {
   onMapDblClick?: (lat: number, lon: number) => void;
 }
 
-const DEFAULT_CENTER: [number, number] = [37.6173, 55.7558];
+const DEFAULT_CENTER: [number, number] = [55.7558, 37.6173]; // Москва
 const DEFAULT_ZOOM = 10;
-const DBLCLICK_MS = 400;
+
+function initialView(zones: Zone[]): {
+  center: [number, number];
+  zoom: number;
+  bounds?: L.LatLngBoundsExpression;
+} {
+  if (zones.length >= 2) {
+    const lats = zones.map((z) => z.centerLat);
+    const lons = zones.map((z) => z.centerLon);
+    const south = Math.min(...lats);
+    const north = Math.max(...lats);
+    const west = Math.min(...lons);
+    const east = Math.max(...lons);
+    return {
+      center: [(south + north) / 2, (west + east) / 2],
+      zoom: 11,
+      bounds: [
+        [south, west],
+        [north, east],
+      ],
+    };
+  }
+  if (zones.length === 1) {
+    return { center: [zones[0].centerLat, zones[0].centerLon], zoom: 13 };
+  }
+  return { center: DEFAULT_CENTER, zoom: DEFAULT_ZOOM };
+}
+
+/** Слушает dblclick на карте и зовёт колбэк с lat/lon. */
+function MapDblClickListener({
+  onDblClick,
+}: {
+  onDblClick?: (lat: number, lon: number) => void;
+}): null {
+  useMapEvents({
+    dblclick(e) {
+      if (!onDblClick) return;
+      onDblClick(e.latlng.lat, e.latlng.lng);
+    },
+  });
+  return null;
+}
 
 export function ZonesMapInner({
   zones,
   selectedId,
   onSelect,
-  onMapError,
   showZones = true,
   onMapDblClick,
 }: ZonesMapInnerProps): ReactElement {
-  const apiKey = process.env.NEXT_PUBLIC_YANDEX_MAPS_API_KEY ?? '';
   const { theme } = useTheme();
-  const mapTheme: 'light' | 'dark' = theme === 'light' ? 'light' : 'dark';
-  const lastClickRef = useRef<{ t: number; lat: number; lon: number } | null>(null);
+  const tile = tileConfigFor(theme);
+  // Стартовая позиция считается ОДИН раз — карта дальше управляется
+  // пользователем, мы её не «дёргаем» при каждом обновлении zones.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const view = useMemo(() => initialView(zones), []);
 
-  const initialLocation = useMemo(() => {
-    if (zones.length >= 2) {
-      const lons = zones.map((z) => z.centerLon);
-      const lats = zones.map((z) => z.centerLat);
-      return {
-        bounds: [
-          [Math.min(...lons), Math.min(...lats)],
-          [Math.max(...lons), Math.max(...lats)],
-        ] as [[number, number], [number, number]],
-      };
-    }
-    if (zones.length === 1) {
-      return { center: [zones[0].centerLon, zones[0].centerLat] as [number, number], zoom: 13 };
-    }
-    return { center: DEFAULT_CENTER, zoom: DEFAULT_ZOOM };
-  }, [zones]);
-
+  // Фикс default leaflet-иконок (нужен только если где-то покажется default
+  // marker — нам тут не нужны, но safety на будущее).
   useEffect(() => {
-    if (!apiKey) onMapError?.();
-  }, [apiKey, onMapError]);
-
-  if (!apiKey) return <></>;
-
-  const handleMapClick = (_obj: unknown, ev: { coordinates?: [number, number] }) => {
-    if (!onMapDblClick) return;
-    const c = ev?.coordinates;
-    if (!c) return;
-    const lat = c[1];
-    const lon = c[0];
-    const now = Date.now();
-    const last = lastClickRef.current;
-    if (last && now - last.t < DBLCLICK_MS) {
-      lastClickRef.current = null;
-      onMapDblClick(lat, lon);
-      return;
-    }
-    lastClickRef.current = { t: now, lat, lon };
-  };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    delete (L.Icon.Default.prototype as any)._getIconUrl;
+    L.Icon.Default.mergeOptions({
+      iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+      iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+      shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+    });
+  }, []);
 
   return (
-    <YMapComponentsProvider apiKey={apiKey} lang="ru_RU" onError={() => onMapError?.()}>
-      <YMap location={initialLocation as any} className="h-full w-full">
-        <YMapDefaultSchemeLayer theme={mapTheme} />
-        <YMapDefaultFeaturesLayer />
-        <YMapControls position="right">
-          <YMapZoomControl />
-        </YMapControls>
+    <MapContainer
+      center={view.center}
+      zoom={view.zoom}
+      bounds={view.bounds}
+      className="h-full w-full"
+      zoomControl={false}
+      doubleClickZoom={onMapDblClick ? false : true}
+    >
+      <TileLayer
+        key={tile.url}
+        url={tile.url}
+        attribution={tile.attribution}
+        maxZoom={tile.maxZoom}
+      />
+      <ZoomControl position="topright" />
+      <MapDblClickListener onDblClick={onMapDblClick} />
 
-        {onMapDblClick && <YMapListener {...({ onClick: handleMapClick } as any)} />}
-
-        {showZones &&
-          zones.map((zone) => {
-            const isSelected = zone.id === selectedId;
-            const baseColor = zone.color ?? '#3b82f6';
-            const fillOpacity = isSelected ? 0.35 : 0.2;
-            const strokeWidth = isSelected ? 3 : 2;
-
-            return (
-              <YMapFeature
-                key={zone.id}
-                geometry={
-                  {
-                    type: 'Polygon',
-                    coordinates: [circlePolygon(zone.centerLat, zone.centerLon, zone.radius)],
-                  } as any
-                }
-                style={
-                  {
-                    stroke: [{ color: baseColor, width: strokeWidth }],
-                    fill: baseColor,
-                    fillOpacity,
-                    cursor: 'pointer',
-                  } as any
-                }
-                onClick={() => onSelect?.(zone.id)}
-              />
-            );
-          })}
-      </YMap>
-    </YMapComponentsProvider>
+      {showZones &&
+        zones.map((zone) => {
+          const isSelected = zone.id === selectedId;
+          const baseColor = zone.color ?? '#3b82f6';
+          return (
+            <Circle
+              key={zone.id}
+              center={[zone.centerLat, zone.centerLon]}
+              radius={zone.radius}
+              pathOptions={{
+                color: baseColor,
+                weight: isSelected ? 3 : 2,
+                fillColor: baseColor,
+                fillOpacity: isSelected ? 0.35 : 0.2,
+              }}
+              eventHandlers={{
+                click: () => onSelect?.(zone.id),
+              }}
+            />
+          );
+        })}
+    </MapContainer>
   );
 }

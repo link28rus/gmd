@@ -1,6 +1,7 @@
 'use client';
 
 import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
 
 export interface AuthUser {
   id: string;
@@ -36,14 +37,34 @@ interface AuthState {
   clear: () => void;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
-  accessToken: null,
-  user: null,
-  family: null,
-  requiresConsent: false,
-  setAll: ({ accessToken, user, family }) => set({ accessToken, user, family }),
-  setAccess: (accessToken) => set({ accessToken }),
-  setConsent: (requiresConsent) => set({ requiresConsent }),
-  patchUser: (patch) => set((s) => (s.user ? { user: { ...s.user, ...patch } } : s)),
-  clear: () => set({ accessToken: null, user: null, family: null, requiresConsent: false }),
-}));
+/**
+ * Auth state хранится в localStorage `gmd-auth`, чтобы пережить page reload.
+ * accessToken (15м TTL) при истечении обновляется через `/api/auth/refresh`
+ * (refresh-token в HTTP-only cookie). Без persist каждый F5 разлогинивал.
+ *
+ * `requiresConsent` — серверное состояние, не персистим (запросим заново).
+ */
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set) => ({
+      accessToken: null,
+      user: null,
+      family: null,
+      requiresConsent: false,
+      setAll: ({ accessToken, user, family }) => set({ accessToken, user, family }),
+      setAccess: (accessToken) => set({ accessToken }),
+      setConsent: (requiresConsent) => set({ requiresConsent }),
+      patchUser: (patch) => set((s) => (s.user ? { user: { ...s.user, ...patch } } : s)),
+      clear: () => set({ accessToken: null, user: null, family: null, requiresConsent: false }),
+    }),
+    {
+      name: 'gmd-auth',
+      storage: createJSONStorage(() => localStorage),
+      partialize: (s) => ({
+        accessToken: s.accessToken,
+        user: s.user,
+        family: s.family,
+      }),
+    },
+  ),
+);

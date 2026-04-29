@@ -1,6 +1,7 @@
 'use client';
 import { useMemo, type ReactElement } from 'react';
-import { YMapFeature, YMapMarker } from 'ymap3-components';
+import { Marker, Polyline } from 'react-leaflet';
+import L from 'leaflet';
 import type { LocationDto, TripDto } from '@/lib/api/locations';
 import { douglasPeucker } from '@/lib/geo/douglas-peucker';
 
@@ -54,29 +55,44 @@ function sampleForDots(items: LocationDto[]): LocationDto[] {
   return out;
 }
 
+const dotIcon = (bg: string, border: string, size = 12): L.DivIcon =>
+  L.divIcon({
+    html: `<div style="width:${size}px;height:${size}px;border-radius:50%;border:2px solid ${border};background:${bg};box-shadow:0 1px 2px rgba(0,0,0,0.2);transform:translate(-50%,-50%);position:absolute;left:0;top:0;"></div>`,
+    className: 'gmd-dot',
+    iconSize: [0, 0],
+    iconAnchor: [0, 0],
+  });
+
+const stopIcon = (label: string, title: string): L.DivIcon =>
+  L.divIcon({
+    html: `<div title="${escapeAttr(title)}" style="display:flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;border:2px solid #f59e0b;background:#fffbeb;box-shadow:0 1px 2px rgba(0,0,0,0.2);font-size:10px;font-weight:600;color:#b45309;transform:translate(-50%,-50%);position:absolute;left:0;top:0;">${escapeHtml(label)}</div>`,
+    className: 'gmd-stop',
+    iconSize: [0, 0],
+    iconAnchor: [0, 0],
+  });
+
 export function TrackPolyline({ items, stops }: Props): ReactElement | null {
-  // Шаг 1: accuracy-фильтр. Точки с accuracy > порога (или null — legacy) оставляем.
-  // null означает что клиент не прислал поле — не пессимизируем.
-  const filtered = useMemo(() => {
-    return items.filter((p) => p.accuracy == null || p.accuracy <= UI_ACCURACY_GATE_M);
-  }, [items]);
+  // Шаг 1: accuracy-фильтр.
+  const filtered = useMemo(
+    () => items.filter((p) => p.accuracy == null || p.accuracy <= UI_ACCURACY_GATE_M),
+    [items],
+  );
 
   // Шаг 2: DP-упрощение по всему отфильтрованному треку.
-  const simplifiedCoords = useMemo<Array<[number, number]>>(() => {
+  // Возвращаем [lat, lon] — у leaflet порядок именно такой.
+  const simplified = useMemo<Array<[number, number]>>(() => {
     if (filtered.length < 2) return [];
-    const coords: Array<[number, number]> = filtered.map((p) => [p.lon, p.lat]);
-    return douglasPeucker(coords, DP_EPSILON_M);
+    const lonLat: Array<[number, number]> = filtered.map((p) => [p.lon, p.lat]);
+    const dp = douglasPeucker(lonLat, DP_EPSILON_M);
+    return dp.map(([lon, lat]) => [lat, lon]);
   }, [filtered]);
 
-  // stops рисуем всегда — даже если линии < 2 точек.
   const stopMarkers = useMemo(() => {
     if (!stops || stops.length === 0) return [] as TripDto[];
-    // Стоянка между поездками рендерится как маркер в точке окончания поездки.
-    // Активную (незакрытую) поездку игнорируем — у неё нет "конечной стоянки".
     return stops.filter((t) => !t.isActive);
   }, [stops]);
 
-  if (simplifiedCoords.length < 2 && stopMarkers.length === 0) return null;
+  if (simplified.length < 2 && stopMarkers.length === 0) return null;
 
   const first = filtered[0];
   const last = filtered[filtered.length - 1];
@@ -84,65 +100,57 @@ export function TrackPolyline({ items, stops }: Props): ReactElement | null {
 
   return (
     <>
-      {simplifiedCoords.length >= 2 && (
-        <YMapFeature
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          geometry={{ type: 'LineString', coordinates: simplifiedCoords } as any}
-          style={
-            {
-              stroke: [{ color: '#2563eb', width: 3, dash: [8, 6] }],
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            } as any
-          }
+      {simplified.length >= 2 && (
+        <Polyline
+          positions={simplified}
+          pathOptions={{ color: '#2563eb', weight: 3, dashArray: '8 6' }}
         />
       )}
-      {/* Dots — показываем только если stops не предоставлены (fallback-режим).
-          Когда stops есть, трек уже упрощён DP и крупные маркеры-стоянки
-          визуально важнее отдельных точек-сэмплов. */}
       {stopMarkers.length === 0 &&
         dots.map((p, i) => {
           if (p === first || p === last) return null;
           return (
-            <YMapMarker key={`${p.recordedAt}-${i}`} coordinates={[p.lon, p.lat]}>
-              <div
-                className="h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[#2563eb] bg-card"
-                title={hhmm(p.recordedAt)}
-              />
-            </YMapMarker>
+            <Marker
+              key={`${p.recordedAt}-${i}`}
+              position={[p.lat, p.lon]}
+              icon={dotIcon('var(--card, #ffffff)', '#2563eb', 10)}
+              title={hhmm(p.recordedAt)}
+            />
           );
         })}
-      {/* Stop markers (по данным /trips). Каждая завершённая поездка рисуется
-          как крупный кружок в точке конца с подписью "прибыл в HH:MM".
-          Длительность самой поездки подставляется в tooltip для контекста. */}
       {stopMarkers.map((t) => {
         const endedAt = t.endedAt ?? t.startedAt;
+        const title = `Был тут в ${hhmm(endedAt)} · поездка ${durationRu(t.startedAt, t.endedAt)}`;
         return (
-          <YMapMarker key={`stop-${t.id}`} coordinates={[t.endLon, t.endLat]}>
-            <div
-              className="flex h-5 w-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-amber-500 bg-amber-50 shadow"
-              title={`Был тут в ${hhmm(endedAt)} · поездка ${durationRu(t.startedAt, t.endedAt)}`}
-            >
-              <span className="text-[10px] font-semibold text-amber-700">П</span>
-            </div>
-          </YMapMarker>
+          <Marker
+            key={`stop-${t.id}`}
+            position={[t.endLat, t.endLon]}
+            icon={stopIcon('П', title)}
+            title={title}
+          />
         );
       })}
       {first && (
-        <YMapMarker coordinates={[first.lon, first.lat]}>
-          <div
-            className="h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white bg-green-600 shadow"
-            title={`Начало: ${hhmm(first.recordedAt)}`}
-          />
-        </YMapMarker>
+        <Marker
+          position={[first.lat, first.lon]}
+          icon={dotIcon('#16a34a', '#ffffff', 12)}
+          title={`Начало: ${hhmm(first.recordedAt)}`}
+        />
       )}
       {last && last !== first && (
-        <YMapMarker coordinates={[last.lon, last.lat]}>
-          <div
-            className="h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white bg-red-600 shadow"
-            title={`Конец: ${hhmm(last.recordedAt)}`}
-          />
-        </YMapMarker>
+        <Marker
+          position={[last.lat, last.lon]}
+          icon={dotIcon('#dc2626', '#ffffff', 12)}
+          title={`Конец: ${hhmm(last.recordedAt)}`}
+        />
       )}
     </>
   );
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function escapeAttr(s: string): string {
+  return escapeHtml(s).replace(/"/g, '&quot;');
 }

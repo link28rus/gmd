@@ -162,4 +162,24 @@ body {
   html[data-admin-theme='dark'] body {
     color-scheme: dark;
   }
+
+  /* Тёмная подложка CartoDB Dark Matter сама по себе очень чёрная — чуть
+     осветляем чтобы дороги и названия читались. dim использует Voyager
+     (нейтральный бежевый), фильтр там не нужен. */
+  html[data-admin-theme='dark'] .leaflet-tile-pane {
+    filter: brightness(1.4) saturate(0.95);
+  }
+
+  /* Leaflet по умолчанию даёт panes z-index 200–800 и control'ам 800 — это
+     перекрывает sticky-карточки и popover'ы кабинета (z-50 и ниже из shadcn).
+     Опускаем всё ниже — карта остаётся внутри своего контейнера, controls
+     видны над тайлами, но НЕ над cabinet-overlay'ями. */
+  .leaflet-pane,
+  .leaflet-top,
+  .leaflet-bottom {
+    z-index: 0 !important;
+  }
+  .leaflet-control {
+    z-index: 1 !important;
+  }
 }

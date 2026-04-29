@@ -1,5 +1,10 @@
 import type { Metadata } from 'next';
 import './globals.css';
+// Leaflet CSS — глобально, чтобы tiles/controls правильно позиционировались.
+// Без этого .leaflet-container не имеет width:100%/height:100% и плитки рисуются
+// «не там». Импорт в client-component 'use client' через Next.js 15 не работает
+// надёжно — поэтому делаем здесь.
+import 'leaflet/dist/leaflet.css';
 import { Geist } from 'next/font/google';
 import { cn } from '@/lib/utils';
 import { Footer } from '@/components/layout/footer';

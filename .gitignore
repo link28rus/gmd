@@ -86,3 +86,8 @@ phase1.1-web-*.png
 
 # Claude Code local config
 .claude/settings.local.json
+
+# Временные скриншоты / эксперименты во время разработки
+tmp-*/
+tmp-*.png
+tmp/

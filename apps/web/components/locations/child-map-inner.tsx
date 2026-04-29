@@ -1,55 +1,109 @@
 'use client';
 import { useEffect, useMemo, useState, type ReactElement } from 'react';
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import {
-  YMap,
-  YMapComponentsProvider,
-  YMapDefaultSchemeLayer,
-  YMapDefaultFeaturesLayer,
-  YMapControls,
-  YMapControlButton,
-  YMapZoomControl,
-} from 'ymap3-components';
+import { MapContainer, TileLayer, useMap, ZoomControl } from 'react-leaflet';
+import L from 'leaflet';
 import type { LatestLocationDto, LocationDto, TripDto } from '@/lib/api/locations';
+import { useTheme } from '@/components/theme/theme-provider';
+import { tileConfigFor } from '@/lib/maps/tile-config';
 import { LatestMarker } from './latest-marker';
 import { TrackPolyline } from './track-polyline';
-import { useTheme } from '@/components/theme/theme-provider';
 
 export interface ChildMapInnerProps {
   childId: string;
   childName: string;
   latest: LatestLocationDto | null;
   track: LocationDto[];
+  /** Сохранён в API ради обратной совместимости с обёрткой ChildMap. */
   onMapError: () => void;
-  /**
-   * v0.31.0 — завершённые поездки за показываемый период. Если передано,
-   * TrackPolyline нарисует stop-маркеры в точках конца поездок вместо
-   * пучка точек. Без stops — старое поведение.
-   */
   stops?: TripDto[];
 }
 
-const DEFAULT_CENTER: [number, number] = [37.6173, 55.7558];
+const DEFAULT_CENTER: [number, number] = [55.7558, 37.6173]; // Москва
 const DEFAULT_ZOOM = 10;
 const FOLLOW_ZOOM = 15;
 
-type MapLocation =
-  | { center: [number, number]; zoom: number }
-  | { bounds: [[number, number], [number, number]] };
-
-function initialLocationFor(latest: LatestLocationDto | null, track: LocationDto[]): MapLocation {
+function initialView(
+  latest: LatestLocationDto | null,
+  track: LocationDto[],
+): { center: [number, number]; zoom: number; bounds?: L.LatLngBoundsExpression } {
   if (track.length >= 2) {
-    const lons = track.map((p) => p.lon);
     const lats = track.map((p) => p.lat);
+    const lons = track.map((p) => p.lon);
+    const south = Math.min(...lats);
+    const north = Math.max(...lats);
+    const west = Math.min(...lons);
+    const east = Math.max(...lons);
+    const center: [number, number] = [(south + north) / 2, (west + east) / 2];
     return {
+      center,
+      zoom: FOLLOW_ZOOM,
       bounds: [
-        [Math.min(...lons), Math.min(...lats)],
-        [Math.max(...lons), Math.max(...lats)],
+        [south, west],
+        [north, east],
       ],
     };
   }
-  if (latest) return { center: [latest.lon, latest.lat], zoom: FOLLOW_ZOOM };
+  if (latest) return { center: [latest.lat, latest.lon], zoom: FOLLOW_ZOOM };
   return { center: DEFAULT_CENTER, zoom: DEFAULT_ZOOM };
+}
+
+/** Императивно центрирует карту, когда меняется выбранный ребёнок. */
+function FollowChild({
+  childId,
+  latest,
+}: {
+  childId: string;
+  latest: LatestLocationDto | null;
+}): null {
+  const map = useMap();
+  const [lastChild, setLastChild] = useState<string | null>(null);
+  useEffect(() => {
+    if (latest && lastChild !== childId) {
+      map.flyTo([latest.lat, latest.lon], FOLLOW_ZOOM, { duration: 0.6 });
+      setLastChild(childId);
+    }
+  }, [childId, latest, lastChild, map]);
+  return null;
+}
+
+/** Кастомная кнопка «К ребёнку». Leaflet нативный Control через React-обёртку. */
+function GoToChildControl({ latest }: { latest: LatestLocationDto | null }): ReactElement | null {
+  const map = useMap();
+  const onClick = (): void => {
+    if (latest) map.flyTo([latest.lat, latest.lon], FOLLOW_ZOOM, { duration: 0.4 });
+  };
+  if (!latest) return null;
+  return (
+    <div className="leaflet-top leaflet-right" style={{ pointerEvents: 'auto' }}>
+      <div className="leaflet-control leaflet-bar" style={{ marginTop: 80, marginRight: 10 }}>
+        <a
+          href="#"
+          role="button"
+          aria-label="К ребёнку"
+          title="К ребёнку"
+          onClick={(e) => {
+            e.preventDefault();
+            onClick();
+          }}
+          className="!flex h-[30px] w-[30px] items-center justify-center bg-card text-foreground"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <polygon points="3 11 22 2 13 21 11 13 3 11" />
+          </svg>
+        </a>
+      </div>
+    </div>
+  );
 }
 
 export function ChildMapInner({
@@ -57,87 +111,53 @@ export function ChildMapInner({
   childName,
   latest,
   track,
-  onMapError,
   stops,
 }: ChildMapInnerProps): ReactElement {
-  const apiKey = process.env.NEXT_PUBLIC_YANDEX_MAPS_API_KEY ?? '';
   const { theme } = useTheme();
-  // Yandex Maps поддерживает только light/dark — dim-тему UI склеиваем с dark,
-  // чтобы карта не резала глаза светлыми тайлами на приглушённом интерфейсе.
-  const mapTheme: 'light' | 'dark' = theme === 'light' ? 'light' : 'dark';
+  const tile = tileConfigFor(theme);
 
-  // Начальная позиция — track bounds / latest / дефолт. Дальше карта
-  // управляется только вручную: перемещение пользователем или клик по кнопке
-  // «К ребёнку». Автоследование за ребёнком отключено намеренно — родители
-  // жаловались, что карта «выдёргивала» обзор при каждом апдейте локации.
-  const initialLocation = useMemo(
-    () => initialLocationFor(latest, track),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
-  );
-
-  // Иконка для кнопки «К ребёнку». Yandex YMapControlButton рендерит или text,
-  // или element (HTMLElement) — React children там не работают. Создаём span
-  // с SVG-навигацией (тот же icon-pack что lucide Navigation).
-  const centerIconEl = useMemo<HTMLElement | undefined>(() => {
-    if (typeof document === 'undefined') return undefined;
-    const span = document.createElement('span');
-    span.style.display = 'inline-flex';
-    span.style.alignItems = 'center';
-    span.style.justifyContent = 'center';
-    span.innerHTML =
-      '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" ' +
-      'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
-      'stroke-linecap="round" stroke-linejoin="round">' +
-      '<polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>';
-    return span;
+  // Чиним default Leaflet marker icons, которые иначе ищут assets по
+  // неправильному пути в Webpack-сборке. Используем CDN unpkg как fallback.
+  useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    delete (L.Icon.Default.prototype as any)._getIconUrl;
+    L.Icon.Default.mergeOptions({
+      iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+      iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+      shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+    });
   }, []);
 
-  const [location, setLocation] = useState<MapLocation>(initialLocation);
-
-  useEffect(() => {
-    if (!apiKey) onMapError();
-  }, [apiKey, onMapError]);
-
-  // При переключении ребёнка в сайдбаре — центрируем карту на выбранном
-  // ребёнке, как только приходят его координаты. Срабатывает один раз на
-  // смену childId: последующие апдейты latest (каждые 5 с) карту не двигают.
-  const [lastCenteredChildId, setLastCenteredChildId] = useState<string | null>(null);
-  useEffect(() => {
-    if (latest && lastCenteredChildId !== childId) {
-      setLocation({ center: [latest.lon, latest.lat], zoom: FOLLOW_ZOOM });
-      setLastCenteredChildId(childId);
-    }
-  }, [childId, latest, lastCenteredChildId]);
-
-  if (!apiKey) return <></>;
-
-  const centerOnChild = (): void => {
-    if (latest) {
-      setLocation({ center: [latest.lon, latest.lat], zoom: FOLLOW_ZOOM });
-    }
-  };
+  const view = useMemo(() => initialView(latest, track), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <YMapComponentsProvider apiKey={apiKey} lang="ru_RU" onError={() => onMapError()}>
-      <YMap location={location as any} className="h-full w-full">
-        <YMapDefaultSchemeLayer theme={mapTheme} />
-        <YMapDefaultFeaturesLayer />
-        <YMapControls position="right">
-          <YMapZoomControl />
-          <YMapControlButton onClick={centerOnChild} element={centerIconEl} />
-        </YMapControls>
-        {latest && (
-          <LatestMarker
-            lat={latest.lat}
-            lon={latest.lon}
-            accuracy={latest.accuracy}
-            childName={childName}
-            ageSec={latest.ageSec}
-          />
-        )}
-        <TrackPolyline items={track} stops={stops} />
-      </YMap>
-    </YMapComponentsProvider>
+    <MapContainer
+      center={view.center}
+      zoom={view.zoom}
+      bounds={view.bounds}
+      className="h-full w-full"
+      zoomControl={false}
+      attributionControl
+    >
+      <TileLayer
+        key={tile.url}
+        url={tile.url}
+        attribution={tile.attribution}
+        maxZoom={tile.maxZoom}
+      />
+      <ZoomControl position="topright" />
+      <GoToChildControl latest={latest} />
+      <FollowChild childId={childId} latest={latest} />
+      {latest && (
+        <LatestMarker
+          lat={latest.lat}
+          lon={latest.lon}
+          accuracy={latest.accuracy}
+          childName={childName}
+          ageSec={latest.ageSec}
+        />
+      )}
+      <TrackPolyline items={track} stops={stops} />
+    </MapContainer>
   );
 }

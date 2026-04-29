@@ -17,10 +17,10 @@ interface YandexResponse {
 }
 
 export async function GET(req: NextRequest) {
-  // У Яндекса один ключ поддерживает JavaScript API + HTTP Геокодер (сервис
-  // "JavaScript API и HTTP Геокодер"). Если YANDEX_GEOCODER_API_KEY отдельно
-  // не задан — используем тот же, что и для карт.
-  const apiKey = process.env.YANDEX_GEOCODER_API_KEY ?? process.env.NEXT_PUBLIC_YANDEX_MAPS_API_KEY;
+  // Yandex HTTP Геокодер ключ — server-side only. После переезда карт на
+  // OSM/leaflet старый NEXT_PUBLIC_YANDEX_MAPS_API_KEY больше не нужен;
+  // геокодер требует отдельной настройки YANDEX_GEOCODER_API_KEY.
+  const apiKey = process.env.YANDEX_GEOCODER_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
       { code: 'geocoder_not_configured', message: 'Yandex API key missing' },
