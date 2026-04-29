@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../core/api/api_exception.dart';
 import '../children/child_models.dart';
 import '../children/children_providers.dart';
 
@@ -306,11 +307,18 @@ class _ArrowPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-class _BottomPanel extends StatelessWidget {
+class _BottomPanel extends ConsumerStatefulWidget {
   const _BottomPanel({required this.child, required this.latest});
 
   final Child child;
   final ChildLocation? latest;
+
+  @override
+  ConsumerState<_BottomPanel> createState() => _BottomPanelState();
+}
+
+class _BottomPanelState extends ConsumerState<_BottomPanel> {
+  bool _signalSending = false;
 
   @override
   Widget build(BuildContext context) {
@@ -334,7 +342,7 @@ class _BottomPanel extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _LocationLine(latest: latest),
+              _LocationLine(latest: widget.latest),
               const SizedBox(height: 12),
               Row(
                 children: [
@@ -342,28 +350,29 @@ class _BottomPanel extends StatelessWidget {
                     child: _ActionTile(
                       icon: Icons.notifications_active_outlined,
                       label: 'Сигнал',
-                      onTap: () => _showSnack(context, 'Сигнал — следующий шаг'),
+                      busy: _signalSending,
+                      onTap: _signalSending ? null : _onSignalTap,
                     ),
                   ),
                   Expanded(
                     child: _ActionTile(
                       icon: Icons.hearing_outlined,
                       label: 'Звук',
-                      onTap: () => _showSnack(context, 'Звук — следующий шаг'),
+                      onTap: () => _showSnack('Звук — следующий шаг'),
                     ),
                   ),
                   Expanded(
                     child: _ActionTile(
                       icon: Icons.shield_outlined,
                       label: 'Геозоны',
-                      onTap: () => _showSnack(context, 'Геозоны — следующий шаг'),
+                      onTap: () => _showSnack('Геозоны — следующий шаг'),
                     ),
                   ),
                   Expanded(
                     child: _ActionTile(
                       icon: Icons.app_blocking_outlined,
                       label: 'Блокировка',
-                      onTap: () => _showSnack(context, 'Блокировка приложений — следующий шаг'),
+                      onTap: () => _showSnack('Блокировка приложений — следующий шаг'),
                     ),
                   ),
                 ],
@@ -375,8 +384,66 @@ class _BottomPanel extends StatelessWidget {
     );
   }
 
-  void _showSnack(BuildContext context, String text) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  Future<void> _onSignalTap() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Отправить сигнал?'),
+        content: Text(
+          '${widget.child.name} услышит громкую сирену даже если телефон '
+          'на беззвучном. Используется чтобы найти телефон или привлечь внимание.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Отправить'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _signalSending = true);
+    try {
+      await ref.read(childrenRepositoryProvider).sendSignal(widget.child.id);
+      if (!mounted) return;
+      _showSnack('Сигнал отправлен — телефон должен зазвучать в течение нескольких секунд');
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      _showSnack(_signalErrorText(e), error: true);
+    } catch (e) {
+      if (!mounted) return;
+      _showSnack('Не удалось отправить сигнал: $e', error: true);
+    } finally {
+      if (mounted) setState(() => _signalSending = false);
+    }
+  }
+
+  String _signalErrorText(ApiException e) {
+    if (e.isRateLimited) return 'Слишком частые сигналы. Подождите минуту.';
+    switch (e.code) {
+      case 'no_active_device':
+        return 'У ребёнка нет активного устройства — приложение GMD не установлено или удалено.';
+      case 'child_not_found':
+        return 'Ребёнок не найден.';
+      case 'consent_required':
+        return 'Сначала примите согласие на использование сервиса.';
+      default:
+        return e.message ?? 'Не удалось отправить сигнал (код ${e.status}).';
+    }
+  }
+
+  void _showSnack(String text, {bool error = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(text),
+        backgroundColor: error ? Colors.red.shade700 : null,
+      ),
+    );
   }
 }
 
@@ -432,12 +499,19 @@ class _LocationLine extends StatelessWidget {
 
 /// Кнопка-плитка: иконка сверху, подпись снизу. Растягивается через Expanded
 /// в Row — все 4 действия гарантированно помещаются на любом экране.
+/// Если [busy]=true — вместо иконки показывается спиннер (для in-flight операций).
 class _ActionTile extends StatelessWidget {
-  const _ActionTile({required this.icon, required this.label, this.onTap});
+  const _ActionTile({
+    required this.icon,
+    required this.label,
+    this.onTap,
+    this.busy = false,
+  });
 
   final IconData icon;
   final String label;
   final VoidCallback? onTap;
+  final bool busy;
 
   @override
   Widget build(BuildContext context) {
@@ -453,7 +527,19 @@ class _ActionTile extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 26, color: color),
+            SizedBox(
+              height: 26,
+              width: 26,
+              child: busy
+                  ? Padding(
+                      padding: const EdgeInsets.all(3),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        valueColor: AlwaysStoppedAnimation(color),
+                      ),
+                    )
+                  : Icon(icon, size: 26, color: color),
+            ),
             const SizedBox(height: 6),
             Text(
               label,

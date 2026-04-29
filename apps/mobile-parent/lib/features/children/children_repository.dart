@@ -30,6 +30,21 @@ class ChildrenRepository {
     return points.map(ChildLocation.fromJson).toList();
   }
 
+  /// Отправить ребёнку команду PLAY_SIGNAL — устройство должно громко
+  /// проиграть сирену чтобы родитель смог его найти. Backend идемпотентен:
+  /// двойной клик в течение TTL вернёт ту же команду + ретрай FCM-push.
+  ///
+  /// Возможные [ApiException] коды: `child_not_found`, `no_active_device`.
+  /// 429 — превышен лимит 6 сигналов в минуту на родителя.
+  Future<({String commandId, DateTime expiresAt})> sendSignal(String childId) async {
+    final res = await _dio.post<dynamic>('/family/children/$childId/commands/signal');
+    final data = res.data as Map<String, dynamic>;
+    return (
+      commandId: data['commandId'] as String,
+      expiresAt: DateTime.parse(data['expiresAt'] as String),
+    );
+  }
+
   /// История точек за период. По умолчанию backend отдаёт ~24 часа.
   Future<List<ChildLocation>> locations(
     String childId, {
