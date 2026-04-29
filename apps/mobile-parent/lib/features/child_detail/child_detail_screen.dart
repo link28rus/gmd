@@ -3,17 +3,20 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 
-import '../../core/api/api_exception.dart';
 import '../children/child_models.dart';
 import '../children/children_providers.dart';
+import 'widgets/child_action_sheet.dart';
 
 /// Экран ребёнка: OSM-карта (flutter_map) + последняя локация + активный
-/// трек + быстрые действия. Phase B Step 1.5 — переход с Yandex MapKit на
-/// OpenStreetMap (бесплатно, без ключа, без санкционных рисков).
+/// трек + collapsible bottom-sheet с действиями.
+///
+/// v0.50.0 редизайн: 4-плиточный horizontal `_BottomPanel` заменён на
+/// `DraggableScrollableSheet` с always-visible `ChildStatusCard` (имя +
+/// 4 метрики: батарея/точность/связь/источник) и развернутым списком из
+/// 7 ListTile-action'ов. См. план в
+/// `docs/engineering/plans/2026-04-29-child-detail-redesign.md`.
 class ChildDetailScreen extends ConsumerStatefulWidget {
   const ChildDetailScreen({super.key, required this.childId});
 
@@ -70,145 +73,162 @@ class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen> {
           ),
         ],
       ),
-      body: Column(
+      // Stack чтобы DraggableScrollableSheet ехал поверх карты, а не
+      // отъедал у неё высоту как в Column. SafeArea тут не нужен — карта
+      // должна занимать всё доступное пространство, sheet сам учитывает
+      // системную нижнюю панель через MediaQuery.padding.
+      body: Stack(
         children: [
-          Expanded(
-            // Строим FlutterMap ТОЛЬКО когда есть позиция (или явно зафикси-
-            // ровано что у ребёнка нет точек). Иначе на rebuild после прихода
-            // latest у уже смонтированного MapController остаётся старый viewport
-            // на Москве, а TileLayer 7.x не запускает fetch tiles для нового
-            // viewport до первого user-event (карта остаётся серой пока не
-            // зумишь). Условный mount решает это радикально и чисто.
+          // ─── Карта на весь экран ────────────────────────────────────
+          Positioned.fill(
             child: (latest == null && latestAsync.isLoading)
                 ? const Center(child: CircularProgressIndicator())
                 : Stack(
-              // StackFit.expand ОБЯЗАТЕЛЕН: иначе non-positioned FlutterMap
-              // получает loose constraints и может стартовать с size=0 →
-              // TileLayer не запрашивает тайлы до user-event (карта серая).
-              // См. https://docs.fleaflet.dev/usage/basics
-              fit: StackFit.expand,
-              children: [
-                FlutterMap(
-                  mapController: _map,
-                  options: MapOptions(
-                    initialCenter: latest != null
-                        ? LatLng(latest.lat, latest.lon)
-                        : const LatLng(55.7558, 37.6173), // Москва, дефолт
-                    initialZoom: latest != null ? 15 : 10,
-                    minZoom: 3,
-                    maxZoom: 18,
-                    interactionOptions: const InteractionOptions(
-                      flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
-                    ),
-                    onMapReady: () {
-                      if (!mounted) return;
-                      setState(() {
-                        _mapReady = true;
-                        _tileGen++; // форсим пересоздание TileLayer
-                      });
-                      _maybeFit(latest, track);
-                    },
-                  ),
-                  children: [
-                    // OSM tile-сервер. Соблюдаем Tile Usage Policy:
-                    // userAgentPackageName идентифицирует наш проект.
-                    // https://operations.osmfoundation.org/policies/tiles/
-                    TileLayer(
-                      key: ValueKey('tile_$_tileGen'),
-                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      userAgentPackageName: 'ru.link28rus.gmd.gmd_parent',
-                      maxNativeZoom: 19,
-                      // Держим больше tiles вокруг viewport — меньше «серой
-                      // мозаики» при панорамировании / первом отображении.
-                      keepBuffer: 4,
-                      panBuffer: 2,
-                    ),
-                    if (track.length >= 2)
-                      PolylineLayer(
-                        polylines: [
-                          Polyline(
-                            points: track
-                                .map((p) => LatLng(p.lat, p.lon))
-                                .toList(),
-                            strokeWidth: 4,
-                            color: const Color(0xFF2E7D32),
-                            borderStrokeWidth: 1,
-                            borderColor: Colors.white,
+                    // StackFit.expand ОБЯЗАТЕЛЕН: иначе non-positioned FlutterMap
+                    // получает loose constraints и может стартовать с size=0 →
+                    // TileLayer не запрашивает тайлы до user-event (карта серая).
+                    // См. https://docs.fleaflet.dev/usage/basics
+                    fit: StackFit.expand,
+                    children: [
+                      FlutterMap(
+                        mapController: _map,
+                        options: MapOptions(
+                          initialCenter: latest != null
+                              ? LatLng(latest.lat, latest.lon)
+                              : const LatLng(55.7558, 37.6173), // Москва, дефолт
+                          initialZoom: latest != null ? 15 : 10,
+                          minZoom: 3,
+                          maxZoom: 18,
+                          interactionOptions: const InteractionOptions(
+                            flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
                           ),
-                        ],
-                      ),
-                    if (latest != null)
-                      MarkerLayer(
-                        markers: [
-                          Marker(
-                            point: LatLng(latest.lat, latest.lon),
-                            width: 56,
-                            height: 56,
-                            alignment: Alignment.topCenter,
-                            child: _ChildMarker(letter: _firstLetter(child.name)),
+                          onMapReady: () {
+                            if (!mounted) return;
+                            setState(() {
+                              _mapReady = true;
+                              _tileGen++; // форсим пересоздание TileLayer
+                            });
+                            _maybeFit(latest, track);
+                          },
+                        ),
+                        children: [
+                          // OSM tile-сервер. Соблюдаем Tile Usage Policy:
+                          // userAgentPackageName идентифицирует наш проект.
+                          // https://operations.osmfoundation.org/policies/tiles/
+                          TileLayer(
+                            key: ValueKey('tile_$_tileGen'),
+                            urlTemplate:
+                                'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                            userAgentPackageName: 'ru.link28rus.gmd.gmd_parent',
+                            maxNativeZoom: 19,
+                            keepBuffer: 4,
+                            panBuffer: 2,
                           ),
-                        ],
-                      ),
-                    const RichAttributionWidget(
-                      // Атрибуция OSM обязательна по лицензии ODbL.
-                      attributions: [
-                        TextSourceAttribution('OpenStreetMap contributors'),
-                      ],
-                    ),
-                  ],
-                ),
-                if (latestAsync.isLoading)
-                  const Positioned(
-                    top: 12,
-                    left: 12,
-                    child: Card(
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                          if (track.length >= 2)
+                            PolylineLayer(
+                              polylines: [
+                                Polyline(
+                                  points: track
+                                      .map((p) => LatLng(p.lat, p.lon))
+                                      .toList(),
+                                  strokeWidth: 4,
+                                  color: const Color(0xFF2E7D32),
+                                  borderStrokeWidth: 1,
+                                  borderColor: Colors.white,
+                                ),
+                              ],
                             ),
-                            SizedBox(width: 8),
-                            Text('Загружаем точку…'),
-                          ],
-                        ),
+                          if (latest != null)
+                            MarkerLayer(
+                              markers: [
+                                Marker(
+                                  point: LatLng(latest.lat, latest.lon),
+                                  width: 56,
+                                  height: 56,
+                                  alignment: Alignment.topCenter,
+                                  child: _ChildMarker(letter: _firstLetter(child.name)),
+                                ),
+                              ],
+                            ),
+                          const RichAttributionWidget(
+                            // Атрибуция OSM обязательна по лицензии ODbL.
+                            attributions: [
+                              TextSourceAttribution('OpenStreetMap contributors'),
+                            ],
+                          ),
+                        ],
                       ),
-                    ),
-                  ),
-                if (latestAsync.hasError)
-                  Positioned(
-                    top: 12,
-                    left: 12,
-                    right: 12,
-                    child: Card(
-                      color: Colors.red.shade50,
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Text(
-                          'Не удалось загрузить локацию: ${latestAsync.error}',
-                          style: TextStyle(color: Colors.red.shade800),
+                      if (latestAsync.isLoading)
+                        const Positioned(
+                          top: 12,
+                          left: 12,
+                          child: Card(
+                            child: Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  ),
+                                  SizedBox(width: 8),
+                                  Text('Загружаем точку…'),
+                                ],
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
+                      if (latestAsync.hasError)
+                        Positioned(
+                          top: 12,
+                          left: 12,
+                          right: 12,
+                          child: Card(
+                            color: Colors.red.shade50,
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Text(
+                                'Не удалось загрузить локацию: ${latestAsync.error}',
+                                style: TextStyle(color: Colors.red.shade800),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
-                Positioned(
-                  bottom: 12,
-                  right: 12,
-                  child: FloatingActionButton.small(
-                    heroTag: 'follow_${widget.childId}',
-                    tooltip: 'К ребёнку',
-                    onPressed: () => _focusOnChild(latest),
-                    child: const Icon(Icons.my_location),
-                  ),
-                ),
-              ],
+          ),
+          // ─── FAB «к ребёнку» — над картой, но под sheet'ом ─────────
+          // Позиционируем выше bottom-sheet'а в свернутом состоянии,
+          // чтобы кнопка не пряталась под ним. 18% sheet от screen-height
+          // + ~12px отступа = bottom ≈ 0.18 * height + 12.
+          Positioned(
+            right: 16,
+            bottom: MediaQuery.of(context).size.height * 0.18 + 12,
+            child: FloatingActionButton.small(
+              heroTag: 'follow_${widget.childId}',
+              tooltip: 'К ребёнку',
+              onPressed: () => _focusOnChild(latest),
+              child: const Icon(Icons.my_location),
             ),
           ),
-          _BottomPanel(child: child, latest: latest),
+          // ─── Bottom-sheet ──────────────────────────────────────────
+          // initial / min = 0.18 → видна status-card.
+          // max = 0.7 → раскрытый список 7 ListTile.
+          // snap=true со snapSizes даёт два «защёлкнутых» состояния.
+          DraggableScrollableSheet(
+            initialChildSize: 0.18,
+            minChildSize: 0.18,
+            maxChildSize: 0.7,
+            snap: true,
+            snapSizes: const [0.18, 0.7],
+            builder: (context, scrollController) => ChildActionSheet(
+              child: child,
+              latest: latest,
+              scrollController: scrollController,
+            ),
+          ),
         ],
       ),
     );
@@ -306,258 +326,4 @@ class _ArrowPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class _BottomPanel extends ConsumerStatefulWidget {
-  const _BottomPanel({required this.child, required this.latest});
-
-  final Child child;
-  final ChildLocation? latest;
-
-  @override
-  ConsumerState<_BottomPanel> createState() => _BottomPanelState();
-}
-
-class _BottomPanelState extends ConsumerState<_BottomPanel> {
-  bool _signalSending = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 8,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
-      // SafeArea учитывает system navigation bar (3-кнопочный или жестовый),
-      // иначе плитки действий упираются в кнопки Android и обрезаются.
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _LocationLine(latest: widget.latest),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: _ActionTile(
-                      icon: Icons.notifications_active_outlined,
-                      label: 'Сигнал',
-                      busy: _signalSending,
-                      onTap: _signalSending ? null : _onSignalTap,
-                    ),
-                  ),
-                  Expanded(
-                    child: _ActionTile(
-                      icon: Icons.hearing_outlined,
-                      label: 'Звук',
-                      onTap: _onListenAudio,
-                    ),
-                  ),
-                  Expanded(
-                    child: _ActionTile(
-                      icon: Icons.shield_outlined,
-                      label: 'Геозоны',
-                      onTap: () => _showSnack('Геозоны — следующий шаг'),
-                    ),
-                  ),
-                  Expanded(
-                    child: _ActionTile(
-                      icon: Icons.app_blocking_outlined,
-                      label: 'Блокировка',
-                      onTap: () => _showSnack('Блокировка приложений — следующий шаг'),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _onListenAudio() {
-    // /home/child/:id/audio?name=... — экран AudioListenScreen
-    // подхватит childName из query, авторизация через authSession в WebView.
-    final encoded = Uri.encodeQueryComponent(widget.child.name);
-    context.push('/home/child/${widget.child.id}/audio?name=$encoded');
-  }
-
-  Future<void> _onSignalTap() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Отправить сигнал?'),
-        content: Text(
-          '${widget.child.name} услышит громкую сирену даже если телефон '
-          'на беззвучном. Используется чтобы найти телефон или привлечь внимание.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Отправить'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
-
-    setState(() => _signalSending = true);
-    try {
-      await ref.read(childrenRepositoryProvider).sendSignal(widget.child.id);
-      if (!mounted) return;
-      _showSnack('Сигнал отправлен — телефон должен зазвучать в течение нескольких секунд');
-    } on ApiException catch (e) {
-      if (!mounted) return;
-      _showSnack(_signalErrorText(e), error: true);
-    } catch (e) {
-      if (!mounted) return;
-      _showSnack('Не удалось отправить сигнал: $e', error: true);
-    } finally {
-      if (mounted) setState(() => _signalSending = false);
-    }
-  }
-
-  String _signalErrorText(ApiException e) {
-    if (e.isRateLimited) return 'Слишком частые сигналы. Подождите минуту.';
-    switch (e.code) {
-      case 'no_active_device':
-        return 'У ребёнка нет активного устройства — приложение GMD не установлено или удалено.';
-      case 'child_not_found':
-        return 'Ребёнок не найден.';
-      case 'consent_required':
-        return 'Сначала примите согласие на использование сервиса.';
-      default:
-        return e.message ?? 'Не удалось отправить сигнал (код ${e.status}).';
-    }
-  }
-
-  void _showSnack(String text, {bool error = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(text),
-        backgroundColor: error ? Colors.red.shade700 : null,
-      ),
-    );
-  }
-}
-
-class _LocationLine extends StatelessWidget {
-  const _LocationLine({required this.latest});
-
-  final ChildLocation? latest;
-
-  @override
-  Widget build(BuildContext context) {
-    final l = latest;
-    if (l == null) {
-      return const Text('Точек ещё нет — ребёнок не подключал устройство.');
-    }
-    final ago = _formatAgo(l.recordedAt);
-    final battery = l.battery != null ? '🔋 ${l.battery}%' : null;
-    final accuracy = l.accuracy != null
-        ? 'точность ±${l.accuracy!.toStringAsFixed(0)} м'
-        : null;
-    final coordinates = '${l.lat.toStringAsFixed(5)}, ${l.lon.toStringAsFixed(5)}';
-    final extras = [battery, accuracy].where((s) => s != null).join(' · ');
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Icon(Icons.schedule, size: 16),
-            const SizedBox(width: 6),
-            Text(ago, style: const TextStyle(fontWeight: FontWeight.w600)),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Text(coordinates, style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
-        if (extras.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text(extras, style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
-          ),
-      ],
-    );
-  }
-
-  String _formatAgo(DateTime t) {
-    final diff = DateTime.now().difference(t);
-    if (diff.inMinutes < 1) return 'Сейчас';
-    if (diff.inMinutes < 60) return '${diff.inMinutes} мин назад';
-    if (diff.inHours < 24) return '${diff.inHours} ч назад';
-    final fmt = DateFormat('d MMM HH:mm', 'ru_RU');
-    return fmt.format(t);
-  }
-}
-
-/// Кнопка-плитка: иконка сверху, подпись снизу. Растягивается через Expanded
-/// в Row — все 4 действия гарантированно помещаются на любом экране.
-/// Если [busy]=true — вместо иконки показывается спиннер (для in-flight операций).
-class _ActionTile extends StatelessWidget {
-  const _ActionTile({
-    required this.icon,
-    required this.label,
-    this.onTap,
-    this.busy = false,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback? onTap;
-  final bool busy;
-
-  @override
-  Widget build(BuildContext context) {
-    final disabled = onTap == null;
-    final color = disabled
-        ? Theme.of(context).disabledColor
-        : Theme.of(context).colorScheme.primary;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(
-              height: 26,
-              width: 26,
-              child: busy
-                  ? Padding(
-                      padding: const EdgeInsets.all(3),
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.5,
-                        valueColor: AlwaysStoppedAnimation(color),
-                      ),
-                    )
-                  : Icon(icon, size: 26, color: color),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              label,
-              style: TextStyle(fontSize: 12, color: color),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }

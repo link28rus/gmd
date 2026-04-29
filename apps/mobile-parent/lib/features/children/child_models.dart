@@ -63,31 +63,116 @@ class ChildDevice {
       );
 }
 
+/// Источник определения координат — поле `provider` в `LocationDto`.
+/// Backend пишет строку 'gps' / 'fused' / 'network' (см. mobile-child
+/// FusedLocationProvider). На UI нам нужны только три варианта.
+enum LocationProvider { gps, fused, network, unknown }
+
+LocationProvider _parseProvider(Object? raw) {
+  if (raw is! String) return LocationProvider.unknown;
+  switch (raw.toLowerCase()) {
+    case 'gps':
+      return LocationProvider.gps;
+    case 'fused':
+      return LocationProvider.fused;
+    case 'network':
+      return LocationProvider.network;
+    default:
+      return LocationProvider.unknown;
+  }
+}
+
+/// Тип подключения к сети — поле `networkType`.
+enum NetworkType { wifi, mobile, offline, unknown }
+
+NetworkType _parseNetwork(Object? raw) {
+  if (raw is! String) return NetworkType.unknown;
+  switch (raw.toLowerCase()) {
+    case 'wifi':
+      return NetworkType.wifi;
+    case 'mobile':
+      return NetworkType.mobile;
+    case 'offline':
+      return NetworkType.offline;
+    default:
+      return NetworkType.unknown;
+  }
+}
+
 /// Точка локации `GET /children/:id/location/latest`.
+///
+/// Бэкенд (`apps/backend/src/locations/locations.service.ts` `LocationDto`)
+/// отдаёт расширенный набор метрик — батарея, точность, провайдер, тип
+/// сети, оператор. `ageSec` добавляется только в `getLatest` (для других
+/// списков точек его нет).
 class ChildLocation {
   ChildLocation({
     required this.lat,
     required this.lon,
     required this.recordedAt,
     this.accuracy,
-    this.battery,
+    this.batteryLevel,
+    this.isCharging,
     this.speed,
+    this.provider = LocationProvider.unknown,
+    this.networkType = NetworkType.unknown,
+    this.wifiSsid,
+    this.mobileOperator,
+    this.ageSec,
   });
 
   final double lat;
   final double lon;
   final DateTime recordedAt;
   final double? accuracy;
-  final int? battery;
+
+  /// Заряд батареи устройства ребёнка, %. Backend поле `batteryLevel`.
+  /// (До v0.50.0 модель читала `json['battery']` — это был баг, поле
+  /// всегда возвращало null.)
+  final int? batteryLevel;
+
+  /// Заряжается ли устройство сейчас.
+  final bool? isCharging;
+
+  /// Скорость в м/с (для активного трека).
   final double? speed;
+
+  /// Источник геолокации — gps/fused/network.
+  final LocationProvider provider;
+
+  /// Wi-Fi / mobile / offline / unknown.
+  final NetworkType networkType;
+
+  /// Имя Wi-Fi сети (если есть и устройство поделилось).
+  final String? wifiSsid;
+
+  /// Имя мобильного оператора (если networkType == mobile).
+  final String? mobileOperator;
+
+  /// Сколько секунд назад был зафиксирован last point. Только для
+  /// `latest-location` endpoint, иначе null.
+  final int? ageSec;
+
+  /// Удобный getter — Duration с момента последней точки. Если backend
+  /// не вернул `ageSec`, считаем по `recordedAt`.
+  Duration get age {
+    if (ageSec != null) return Duration(seconds: ageSec!);
+    return DateTime.now().difference(recordedAt);
+  }
 
   factory ChildLocation.fromJson(Map<String, dynamic> json) => ChildLocation(
         lat: (json['lat'] as num).toDouble(),
         lon: (json['lon'] as num).toDouble(),
         recordedAt: DateTime.parse(json['recordedAt'] as String).toLocal(),
         accuracy: (json['accuracy'] as num?)?.toDouble(),
-        battery: json['battery'] as int?,
+        batteryLevel: json['batteryLevel'] as int?,
+        isCharging: json['isCharging'] as bool?,
         speed: (json['speed'] as num?)?.toDouble(),
+        provider: _parseProvider(json['provider']),
+        networkType: _parseNetwork(json['networkType']),
+        wifiSsid: json['wifiSsid'] as String?,
+        mobileOperator: json['mobileOperator'] as String?,
+        ageSec: json['ageSec'] as int?,
       );
 }
 
