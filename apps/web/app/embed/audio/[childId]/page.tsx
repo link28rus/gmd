@@ -92,7 +92,23 @@ export default function AudioEmbedPage({
 
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col gap-4 p-4">
-      <AudioSessionPane child={child} onOpenChange={() => {}} />
+      <AudioSessionPane child={child} onOpenChange={handleClose} />
     </div>
   );
+}
+
+/**
+ * Когда AudioSessionPane вызывает onOpenChange(false) (кнопка «Закрыть» /
+ * «Остановить»), просим хост-приложение (Flutter WebView) закрыть экран
+ * через JS-bridge GmdHost.postMessage. В web-режиме (вне WebView) канала
+ * нет — fallback пытается просто history.back().
+ */
+function handleClose(open: boolean): void {
+  if (open) return;
+  const host = (window as unknown as { GmdHost?: { postMessage?: (m: string) => void } }).GmdHost;
+  if (host?.postMessage) {
+    host.postMessage('close');
+  } else if (window.history.length > 1) {
+    window.history.back();
+  }
 }

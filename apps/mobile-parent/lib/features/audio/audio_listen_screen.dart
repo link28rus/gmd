@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -63,6 +62,11 @@ class _AudioListenScreenState extends ConsumerState<AudioListenScreen> {
         'GmdHost',
         onMessageReceived: (m) {
           debugPrint('GMD-WV [bridge] ${m.message}');
+          // Команда close — embed-page просит закрыть экран после
+          // тапа «Закрыть» / «Остановить» в audio-сессии.
+          if (m.message == 'close' && mounted) {
+            Navigator.of(context).maybePop();
+          }
         },
       )
       ..setNavigationDelegate(
