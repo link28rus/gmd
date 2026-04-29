@@ -3,14 +3,7 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { Ear, Mic, MicOff } from 'lucide-react';
 import { toast } from 'sonner';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import type { Child } from '@/lib/api/children';
 import { useAudioSession, type AudioUiState } from '@/lib/hooks/use-audio-session';
@@ -166,16 +159,19 @@ export function AudioSessionPane({
 
   return (
     <>
-      <DialogHeader>
-        <DialogTitle className="flex items-center gap-2">
+      <header className="flex flex-col gap-1.5">
+        {/* Plain HTML вместо Radix DialogTitle/Description — этот компонент
+            используется и в модальном Dialog, и в /embed/audio (WebView), где
+            Radix Dialog primitives без Dialog.Root кидают runtime error. */}
+        <h2 className="flex items-center gap-2 text-lg font-semibold leading-none tracking-tight">
           <Ear className="h-5 w-5 text-emerald-600" />
           Звук вокруг — {child.name}
-        </DialogTitle>
-        <DialogDescription>
+        </h2>
+        <p className="text-sm text-muted-foreground">
           Слушаем микрофон устройства ребёнка. На устройстве появится системный индикатор
           использования микрофона.
-        </DialogDescription>
-      </DialogHeader>
+        </p>
+      </header>
 
       <div className="space-y-4 py-2">
         <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 px-4 py-3">
@@ -217,11 +213,11 @@ export function AudioSessionPane({
         )}
       </div>
 
-      <DialogFooter>
+      <footer className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         <Button variant="ghost" onClick={() => void handleClose(false)}>
           {session.state === 'active' || session.state === 'negotiating' ? 'Остановить' : 'Закрыть'}
         </Button>
-      </DialogFooter>
+      </footer>
     </>
   );
 }
