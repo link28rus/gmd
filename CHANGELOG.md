@@ -9,6 +9,28 @@
 
 ---
 
+## v0.45.0 — 2026-04-29 — Приложение родителя для Android + карты на OpenStreetMap
+
+### Новые возможности
+
+- **Мобильное приложение родителя для Android (mobile-parent).** До сих пор родитель управлял ребёнком только через web-кабинет. Теперь есть Flutter-приложение: вход по email + пароль, список детей с last-known локацией, экран ребёнка с интерактивной картой, треком за день и списком геозон. Сборка живёт в `apps/mobile-parent`, использует общий backend, FCM-уведомления, secure-storage для access/refresh токенов. iOS появится позже — пока Android (#4886fc3).
+- **Тёмная тема для карт в кабинете.** Раньше карта оставалась светлой даже когда весь интерфейс переключался в Dim/Dark — глаз ночью «выжигало». Теперь плитки автоматически следуют ThemeProvider: light → стандартный OSM, dim/dark → CartoDB Dark Matter. Переключение мгновенное, без перезагрузки карты.
+
+### Улучшения
+
+- **Карты переехали с Яндекс.Карт на OpenStreetMap.** И в mobile-parent, и в web-кабинете (`/cabinet`, `/cabinet/zones`). Причина — санкционные риски Yandex SDK, требование API-ключа и зависимость от ToS. OSM работает «из коробки», без ключей и квот, тайлы кэшируются стандартным leaflet'ом. Геокодер (поиск адреса в форме зоны) пока остался на Yandex — переедем отдельно.
+- **Сессия в кабинете переживает перезагрузку страницы.** Раньше после F5 родителя выбрасывало на `/login`, потому что auth-state жил только в памяти. Добавлен `zustand/persist` с localStorage — токены восстанавливаются до первого рендера, и пользователь остаётся внутри кабинета.
+
+### Изменения
+
+- **`apps/mobile-parent`** — новые модули: `core/api` (Dio + interceptors + auto-refresh), `core/auth` (login/register/refresh + secure-storage), `core/storage` (SecureStorageService), `features/auth` (login/register screens), `features/children` (repository + providers), `features/child_detail` (карта + трек + зоны), `features/home` (список детей), `features/splash` (auth-gate), `router/app_router.dart` (go_router). Полный список зависимостей в `pubspec.yaml`.
+- **Web карты** — `child-map-inner.tsx`, `latest-marker.tsx`, `track-polyline.tsx`, `zones-map-inner.tsx`, `zone-editor-map-inner.tsx` переписаны с `ymap3-components` на `react-leaflet@5`. Конфиг тайлов вынесен в `lib/maps/tile-config.ts` — единый источник light/dim/dark URL и атрибуции.
+- **Удалены** `ymap3-components` из `apps/web/package.json` и `NEXT_PUBLIC_YANDEX_MAPS_API_KEY` из `.env.example`. Геокодер ходит через серверный `/api/geocode` с отдельным `YANDEX_GEOCODER_API_KEY`.
+- **`apps/web/lib/auth-store.ts`** — обёрнут в `persist` middleware с partialize, чтобы в storage уезжали только поля сессии (без транзитного state).
+- **`apps/web/app/globals.css`** — добавлен `.leaflet-dark` фильтр и подкрутка под dim-тему.
+
+---
+
 ## v0.44.1+6069 — 2026-04-28 — Фикс: дубликат сигнала «Найди телефон» после нажатия «Остановить»
 
 ### Исправления
