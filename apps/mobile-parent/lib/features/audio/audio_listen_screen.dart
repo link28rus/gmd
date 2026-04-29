@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -53,12 +54,45 @@ class _AudioListenScreenState extends ConsumerState<AudioListenScreen> {
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(Theme.of(context).colorScheme.surface)
+      ..setOnConsoleMessage((msg) {
+        // Все JS console.* в logcat, виден через `adb logcat | grep "GMD-WV"`
+        // (через flutter-print, чтобы работало и в release).
+        debugPrint('GMD-WV [${msg.level.name}] ${msg.message}');
+      })
+      ..addJavaScriptChannel(
+        'GmdHost',
+        onMessageReceived: (m) {
+          debugPrint('GMD-WV [bridge] ${m.message}');
+        },
+      )
       ..setNavigationDelegate(
         NavigationDelegate(
           onPageFinished: (_) {
             if (mounted) setState(() => _loading = false);
+            // Перехватчик unhandled errors / promise-rejections — сразу шлём в Flutter.
+            _controller.runJavaScript('''
+              (function () {
+                if (window.__gmdErrHooked) return;
+                window.__gmdErrHooked = true;
+                window.addEventListener('error', function (e) {
+                  try {
+                    GmdHost.postMessage('window.error: ' + (e.error ? (e.error.stack || e.error.message) : e.message));
+                  } catch (_) {}
+                });
+                window.addEventListener('unhandledrejection', function (e) {
+                  try {
+                    var r = e.reason;
+                    GmdHost.postMessage('unhandledrejection: ' + (r && (r.stack || r.message) ? (r.stack || r.message) : String(r)));
+                  } catch (_) {}
+                });
+              })();
+            ''');
           },
           onWebResourceError: (err) {
+            debugPrint(
+              'GMD-WV resource error mainFrame=${err.isForMainFrame} '
+              'code=${err.errorCode} type=${err.errorType} desc=${err.description}',
+            );
             // Игнорируем мелкие ошибки subresources (favicon, метрики и т.п.) —
             // фейлим только если упал основной фрейм.
             if (err.isForMainFrame ?? false) {
