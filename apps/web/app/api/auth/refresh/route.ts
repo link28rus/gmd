@@ -22,7 +22,13 @@ const REFRESH_COOKIE = 'gmd_refresh';
 const REFRESH_MAX_AGE = 60 * 60 * 24 * 30;
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  const old = req.cookies.get(REFRESH_COOKIE)?.value;
+  // Web берёт refresh из HttpOnly cookie, mobile — из body (нет cookie-jar).
+  const isMobile = req.headers.get('x-client')?.startsWith('mobile') ?? false;
+  let old = req.cookies.get(REFRESH_COOKIE)?.value;
+  if (!old && isMobile) {
+    const body = (await req.json().catch(() => ({}))) as { refreshToken?: string };
+    old = body.refreshToken;
+  }
   if (!old) {
     return NextResponse.json(
       { error: { code: 'unauthenticated', message: 'No refresh cookie' } },
@@ -55,6 +61,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           requiresConsent: me.body.requiresConsent ?? false,
         }
       : {}),
+    ...(isMobile ? { refreshToken } : {}),
   });
   res.cookies.set(REFRESH_COOKIE, refreshToken, {
     httpOnly: true,

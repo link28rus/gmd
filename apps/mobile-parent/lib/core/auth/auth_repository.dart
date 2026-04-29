@@ -5,6 +5,8 @@ import '../api/dio_client.dart';
 import '../storage/secure_storage_service.dart';
 import 'auth_models.dart';
 
+enum RefreshResult { refreshed, rejected, networkError }
+
 /// Тонкая обёртка над `/auth/*` эндпоинтами + хранилищем токенов.
 class AuthRepository {
   AuthRepository({
@@ -95,6 +97,21 @@ class AuthRepository {
       }
     }
     await _storage.clearAll();
+  }
+
+  /// Превентивный рефреш для splash-экрана. Возвращает:
+  /// - `RefreshResult.refreshed` — успех, в storage свежий accessToken.
+  /// - `RefreshResult.rejected` — сервер отклонил refresh-токен (expired/revoked),
+  ///   storage уже почищен в `_refresh()`.
+  /// - `RefreshResult.networkError` — оффлайн / 5xx / timeout. Storage не тронут,
+  ///   старые токены остались — пускаем юзера на /home, interceptor разрулит.
+  Future<RefreshResult> refreshSession() async {
+    final hadRefresh = (await _storage.readRefreshToken())?.isNotEmpty ?? false;
+    if (!hadRefresh) return RefreshResult.rejected;
+    final ok = await _refresh();
+    if (ok) return RefreshResult.refreshed;
+    final stillHas = (await _storage.readRefreshToken())?.isNotEmpty ?? false;
+    return stillHas ? RefreshResult.networkError : RefreshResult.rejected;
   }
 
   /// Внутренний рефреш — вызывается DioFactory при 401. Возвращает true,

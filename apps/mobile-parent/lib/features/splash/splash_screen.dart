@@ -3,9 +3,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/auth/auth_models.dart';
+import '../../core/auth/auth_repository.dart';
 import '../../core/providers.dart';
 
-/// Заставка: проверяем есть ли валидная сессия, перебрасываем на /home или /login.
+/// Заставка: восстанавливает сессию из secure storage и решает /home vs /login.
+///
+/// Flow:
+/// 1. Если в storage нет refresh-токена → /login.
+/// 2. Превентивный refresh — гарантирует свежий accessToken на момент входа в /home,
+///    либо явный редирект на /login если refresh expired/revoked сервером.
+/// 3. Offline / 5xx / timeout → пускаем на /home со старыми токенами,
+///    AuthInterceptor разрулит на первом запросе через 401-loop.
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
@@ -22,25 +30,43 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
 
   Future<void> _bootstrap() async {
     final storage = ref.read(secureStorageProvider);
-    final accessToken = await storage.readAccessToken();
-    if (accessToken == null || accessToken.isEmpty) {
-      if (mounted) context.go('/login');
+    final refresh = await storage.readRefreshToken();
+    if (refresh == null || refresh.isEmpty) {
+      _go('/login');
       return;
     }
+
+    final result = await ref.read(authRepositoryProvider).refreshSession();
+    if (result == RefreshResult.rejected) {
+      _go('/login');
+      return;
+    }
+
+    final accessToken = await storage.readAccessToken();
     final userMap = await storage.readUser();
     final familyMap = await storage.readFamily();
-    final refresh = await storage.readRefreshToken();
-    if (userMap == null || familyMap == null || refresh == null) {
-      if (mounted) context.go('/login');
+    final refreshNow = await storage.readRefreshToken();
+
+    if (accessToken == null ||
+        accessToken.isEmpty ||
+        userMap == null ||
+        familyMap == null ||
+        refreshNow == null) {
+      _go('/login');
       return;
     }
+
     ref.read(authSessionProvider.notifier).state = AuthSession(
       accessToken: accessToken,
-      refreshToken: refresh,
+      refreshToken: refreshNow,
       user: AuthUser.fromJson(userMap),
       family: AuthFamily.fromJson(familyMap),
     );
-    if (mounted) context.go('/home');
+    _go('/home');
+  }
+
+  void _go(String path) {
+    if (mounted) context.go(path);
   }
 
   @override

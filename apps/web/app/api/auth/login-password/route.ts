@@ -47,7 +47,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           hasPin: me.body.hasPin ?? false,
         }
       : user;
-  const res = NextResponse.json({ accessToken, user: enrichedUser, family });
+  const isMobile = req.headers.get('x-client')?.startsWith('mobile') ?? false;
+  const res = NextResponse.json({
+    accessToken,
+    user: enrichedUser,
+    family,
+    // Mobile-клиенты не используют HttpOnly cookie — refresh-токен возвращаем
+    // в body, чтобы их secure-storage мог его сохранить и переиспользовать
+    // в /auth/refresh. Browser-flow остаётся прежним (cookie + body без refresh).
+    ...(isMobile ? { refreshToken } : {}),
+  });
   res.cookies.set(REFRESH_COOKIE, refreshToken, {
     httpOnly: true,
     secure: process.env.ALLOW_INSECURE_COOKIE !== 'true' && process.env.NODE_ENV === 'production',

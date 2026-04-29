@@ -5,7 +5,12 @@ import { backend } from '@/lib/backend';
 const REFRESH_COOKIE = 'gmd_refresh';
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  const token = req.cookies.get(REFRESH_COOKIE)?.value;
+  const isMobile = req.headers.get('x-client')?.startsWith('mobile') ?? false;
+  let token = req.cookies.get(REFRESH_COOKIE)?.value;
+  if (!token && isMobile) {
+    const body = (await req.json().catch(() => ({}))) as { refreshToken?: string };
+    token = body.refreshToken;
+  }
   if (token) {
     await backend('POST', '/auth/logout', { refreshToken: token });
   }

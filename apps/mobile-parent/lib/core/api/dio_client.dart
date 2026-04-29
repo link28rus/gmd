@@ -30,7 +30,13 @@ class DioFactory {
         connectTimeout: const Duration(seconds: 10),
         sendTimeout: const Duration(seconds: 15),
         receiveTimeout: const Duration(seconds: 15),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          // Заставляет web /api/auth/* возвращать refreshToken в response body
+          // (а не только класть в HttpOnly cookie, как для browser-flow).
+          // Без этого mobile теряет refresh при перезапуске → юзера выкидывает на /login.
+          'X-Client': 'mobile-parent',
+        },
         // Не бросаем исключение на 4xx — обрабатываем сами в интерсепторе ниже.
         validateStatus: (s) => s != null && s < 500,
       ),

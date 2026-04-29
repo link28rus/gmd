@@ -44,7 +44,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           hasPin: me.body.hasPin ?? false,
         }
       : user;
-  const res = NextResponse.json({ accessToken, user: enrichedUser, family });
+  const isMobile = req.headers.get('x-client')?.startsWith('mobile') ?? false;
+  const res = NextResponse.json({
+    accessToken,
+    user: enrichedUser,
+    family,
+    ...(isMobile ? { refreshToken } : {}),
+  });
   res.cookies.set(REFRESH_COOKIE, refreshToken, {
     httpOnly: true,
     secure: process.env.ALLOW_INSECURE_COOKIE !== 'true' && process.env.NODE_ENV === 'production',

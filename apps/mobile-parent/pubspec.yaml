@@ -1,7 +1,7 @@
 name: gmd_parent
 description: "GMD — приложение родителя"
 publish_to: 'none'
-version: 0.45.0+1
+version: 0.45.0+5
 
 environment:
   sdk: ^3.11.5
@@ -18,8 +18,9 @@ dependencies:
   # HTTP
   dio: ^5.7.0
 
-  # Storage
-  flutter_secure_storage: ^9.2.2
+  # Storage. SharedPreferences (а не flutter_secure_storage) для токенов:
+  # на Android 14/15 MIUI flutter_secure_storage 9.x теряет EncryptedSharedPreferences
+  # MasterKey после перезапуска — все ключи возвращают null. См. lesson в memory-compiler.
   shared_preferences: ^2.3.2
 
   # Routing
