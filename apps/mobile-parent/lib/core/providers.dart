@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'api/dio_client.dart';
 import 'auth/auth_models.dart';
 import 'auth/auth_repository.dart';
+import 'fcm/parent_fcm_registrar.dart';
 import 'storage/secure_storage_service.dart';
 
 final secureStorageProvider = Provider<SecureStorageService>(
@@ -30,3 +31,7 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
 /// Текущая сессия (null → не авторизован). Заполняется splash-экраном
 /// при наличии токена и login/register-экранами после успешного входа.
 final authSessionProvider = StateProvider<AuthSession?>((_) => null);
+
+final parentFcmRegistrarProvider = Provider<ParentFcmRegistrar>((ref) {
+  return ParentFcmRegistrar(dio: ref.watch(dioProvider));
+});

@@ -3,6 +3,9 @@ plugins {
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+    // v0.46: применяем google-services plugin (читает google-services.json,
+    // генерирует Firebase config classes для FirebaseMessaging init).
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -38,4 +41,12 @@ android {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // v0.46: Firebase Cloud Messaging для приёма push на родительском устройстве
+    // (события геозон, SOS, низкий заряд, ребёнок offline). BoM 34.12.0 как у child.
+    implementation(platform("com.google.firebase:firebase-bom:34.12.0"))
+    implementation("com.google.firebase:firebase-messaging")
+    implementation("androidx.core:core-ktx:1.13.1")
 }

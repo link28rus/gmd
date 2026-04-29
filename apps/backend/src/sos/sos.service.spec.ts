@@ -47,10 +47,21 @@ function makeMailer(sendImpl?: jest.Mock): any {
   return { send: sendImpl ?? jest.fn().mockResolvedValue(undefined) };
 }
 
+function makeFcm(): any {
+  return { sendToToken: jest.fn().mockResolvedValue(true) };
+}
+
+function makeParentDevices(): any {
+  return {
+    findActiveByFamilyId: jest.fn().mockResolvedValue([]),
+    clearTokenByExpired: jest.fn().mockResolvedValue(undefined),
+  };
+}
+
 describe('SosService.create', () => {
   it('creates a SosEvent in the database with correct fields', async () => {
     const prisma = makePrisma();
-    const svc = new SosService(prisma, makeMailer());
+    const svc = new SosService(prisma, makeMailer(), makeFcm(), makeParentDevices());
     await svc.create(ctx, validDto);
     expect(prisma.sosEvent.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -65,7 +76,7 @@ describe('SosService.create', () => {
 
   it('returns sosId and createdAt ISO string', async () => {
     const prisma = makePrisma();
-    const svc = new SosService(prisma, makeMailer());
+    const svc = new SosService(prisma, makeMailer(), makeFcm(), makeParentDevices());
     const result = await svc.create(ctx, validDto);
     expect(result.sosId).toBe('sos-id-1');
     expect(result.createdAt).toBe('2026-04-20T10:00:00.000Z');
@@ -81,7 +92,7 @@ describe('SosService.create', () => {
         ],
       },
     });
-    const svc = new SosService(prisma, makeMailer(sendMock));
+    const svc = new SosService(prisma, makeMailer(sendMock), makeFcm(), makeParentDevices());
     await svc.create(ctx, validDto);
     expect(sendMock).toHaveBeenCalledTimes(2);
     expect(sendMock).toHaveBeenCalledWith(
@@ -96,7 +107,7 @@ describe('SosService.create', () => {
   it('still returns 200-style result when mailer throws', async () => {
     const sendMock = jest.fn().mockRejectedValue(new Error('SMTP down'));
     const prisma = makePrisma();
-    const svc = new SosService(prisma, makeMailer(sendMock));
+    const svc = new SosService(prisma, makeMailer(sendMock), makeFcm(), makeParentDevices());
     // Should not throw
     const result = await svc.create(ctx, validDto);
     expect(result.sosId).toBe('sos-id-1');
@@ -105,7 +116,7 @@ describe('SosService.create', () => {
   it('still returns result when family lookup throws', async () => {
     const prisma = makePrisma();
     prisma.family.findFirst = jest.fn().mockRejectedValue(new Error('DB error'));
-    const svc = new SosService(prisma, makeMailer());
+    const svc = new SosService(prisma, makeMailer(), makeFcm(), makeParentDevices());
     const result = await svc.create(ctx, validDto);
     expect(result.sosId).toBe('sos-id-1');
   });
@@ -113,7 +124,7 @@ describe('SosService.create', () => {
   it('skips email when no family found', async () => {
     const sendMock = jest.fn().mockResolvedValue(undefined);
     const prisma = makePrisma({ family: null });
-    const svc = new SosService(prisma, makeMailer(sendMock));
+    const svc = new SosService(prisma, makeMailer(sendMock), makeFcm(), makeParentDevices());
     await svc.create(ctx, validDto);
     expect(sendMock).not.toHaveBeenCalled();
   });
@@ -125,7 +136,7 @@ describe('SosService.create', () => {
         memberships: [{ user: { email: null } }, { user: { email: 'real@example.com' } }],
       },
     });
-    const svc = new SosService(prisma, makeMailer(sendMock));
+    const svc = new SosService(prisma, makeMailer(sendMock), makeFcm(), makeParentDevices());
     await svc.create(ctx, validDto);
     expect(sendMock).toHaveBeenCalledTimes(1);
     expect(sendMock).toHaveBeenCalledWith(expect.objectContaining({ to: 'real@example.com' }));

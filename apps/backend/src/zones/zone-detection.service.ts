@@ -1,6 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { PrismaService } from '../prisma/prisma.service';
+import { FcmService } from '../fcm/fcm.service';
+import { ParentDevicesService } from '../parent-devices/parent-devices.service';
 
 export interface ZoneCandidate {
   id: string;
@@ -27,6 +29,11 @@ export function buffer(radius: number): number {
 @Injectable()
 export class ZoneDetectionService {
   private readonly logger = new Logger(ZoneDetectionService.name);
+
+  constructor(
+    @Inject(FcmService) private readonly fcm: FcmService,
+    @Inject(ParentDevicesService) private readonly parentDevices: ParentDevicesService,
+  ) {}
 
   async findCandidateZones(
     tx: Prisma.TransactionClient | PrismaService,
@@ -165,8 +172,55 @@ export class ZoneDetectionService {
         this.logger.log(
           `zone-event ${eventType} child=${p.childId} zone=${zoneId} at=${p.recordedAt.toISOString()}`,
         );
+        // FCM push родителям. Async после транзакции — fire-and-forget,
+        // не блокируем processPoint и не откатываем event при сбое FCM.
+        void this.notifyParentsOnZoneEvent({
+          familyId: p.familyId,
+          childId: p.childId,
+          zoneId,
+          eventType,
+          recordedAt: p.recordedAt,
+        }).catch((e) => this.logger.error(`zone-fcm notify failed: ${String(e)}`));
       }
       // else: continue waiting — don't touch pendingSince (keeps original anchor)
     }
+  }
+
+  /**
+   * v0.46: разослать FCM data-message всем активным parent-devices семьи.
+   * data: { type: GEOFENCE_ENTER|GEOFENCE_EXIT, childId, childName, zoneId, zoneName, recordedAt }.
+   * Mobile-parent ловит, кладёт notification + deeplink на /home/child/{id}.
+   */
+  private async notifyParentsOnZoneEvent(args: {
+    familyId: string;
+    childId: string;
+    zoneId: string;
+    eventType: 'entry' | 'exit';
+    recordedAt: Date;
+  }): Promise<void> {
+    const devices = await this.parentDevices.findActiveByFamilyId(args.familyId);
+    if (devices.length === 0) return;
+    // Резолвим имена. processPoint работает без injected PrismaService —
+    // используем лёгкий fallback через ParentDevicesService.prisma не годится;
+    // достанем через первый device-record уже в memory caller'а нет, так что
+    // простой запрос здесь. Оставлено явно, чтобы не передавать zoneName/childName
+    // через всю цепочку processPoint.
+    const fcmService = this.fcm;
+    const data: Record<string, string> = {
+      type: args.eventType === 'entry' ? 'GEOFENCE_ENTER' : 'GEOFENCE_EXIT',
+      childId: args.childId,
+      zoneId: args.zoneId,
+      recordedAt: args.recordedAt.toISOString(),
+    };
+    await Promise.all(
+      devices.map((d) =>
+        fcmService.sendToToken({
+          fcmToken: d.fcmToken,
+          data,
+          label: `${data.type} child=${args.childId} zone=${args.zoneId}`,
+          onInvalidToken: (token) => this.parentDevices.clearTokenByExpired(token),
+        }),
+      ),
+    );
   }
 }

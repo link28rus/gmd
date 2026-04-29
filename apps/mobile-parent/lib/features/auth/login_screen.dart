@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -78,6 +80,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             code: _codeCtl.text.trim(),
           );
       ref.read(authSessionProvider.notifier).state = session;
+      // FCM регистрируем fire-and-forget — не блокируем переход на /home.
+      unawaited(ref.read(parentFcmRegistrarProvider).register());
       if (mounted) context.go('/home');
     } on ApiException catch (e) {
       _handleAuthError(e);
@@ -100,6 +104,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             password: _passwordCtl.text,
           );
       ref.read(authSessionProvider.notifier).state = session;
+      unawaited(ref.read(parentFcmRegistrarProvider).register());
       if (mounted) context.go('/home');
     } on ApiException catch (e) {
       _handleAuthError(e);

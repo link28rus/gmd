@@ -96,4 +96,46 @@ export class FcmService implements OnModuleInit {
       return false;
     }
   }
+
+  /**
+   * v0.46: послать data-message на произвольный FCM-токен (parent-device).
+   * При expired/invalid token — `onInvalidToken(token)` колбэк (caller сам
+   * чистит свою таблицу, чтобы не плодить cross-module deps в FcmService).
+   */
+  async sendToToken(args: {
+    fcmToken: string;
+    data: Record<string, string>;
+    onInvalidToken?: (token: string) => Promise<void>;
+    label?: string; // для логов: "geofence-enter zone=X child=Y"
+  }): Promise<boolean> {
+    if (!this.app) return false;
+    const { fcmToken, data, onInvalidToken, label } = args;
+    try {
+      const msg = await admin.messaging(this.app).send({
+        token: fcmToken,
+        data,
+        android: {
+          priority: 'high',
+          ttl: 300_000, // 5 мин — push событий, не критично если опоздает чуть
+        },
+      });
+      this.logger.log(`FCM ${label ?? 'token'}: ${msg}`);
+      return true;
+    } catch (err) {
+      const code = (err as { errorInfo?: { code?: string } } | null)?.errorInfo?.code;
+      if (
+        code === 'messaging/registration-token-not-registered' ||
+        code === 'messaging/invalid-registration-token' ||
+        code === 'messaging/invalid-argument'
+      ) {
+        this.logger.warn(`FCM token expired (${code}) — invoking cleanup`);
+        if (onInvalidToken) {
+          await onInvalidToken(fcmToken).catch(() => undefined);
+        }
+      } else {
+        this.logger.error(`FCM ${label ?? 'token'} failed: ${String(err)}`);
+      }
+      return false;
+    }
+  }
 }

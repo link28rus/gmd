@@ -1,7 +1,7 @@
 name: gmd_parent
 description: "GMD — приложение родителя"
 publish_to: 'none'
-version: 0.45.0+5
+version: 0.45.0+6
 
 environment:
   sdk: ^3.11.5
@@ -37,6 +37,12 @@ dependencies:
   package_info_plus: ^8.1.0
   device_info_plus: ^11.1.0
   connectivity_plus: ^6.0.5
+
+  # v0.46: Firebase Cloud Messaging — push для событий геозон / SOS / низкого заряда.
+  # Versions согласованы с mobile-child (firebase-bom 34.12.0 в gradle).
+  firebase_core: ^3.8.0
+  firebase_messaging: ^15.1.5
+  permission_handler: ^11.3.1
 
 dev_dependencies:
   flutter_test:

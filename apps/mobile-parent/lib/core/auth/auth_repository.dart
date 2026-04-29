@@ -135,7 +135,15 @@ class AuthRepository {
     } on ApiException {
       await _storage.clearAll();
       return false;
-    } on DioException {
+    } on DioException catch (e) {
+      final status = e.response?.statusCode ?? 0;
+      // 4xx — server явно отклонил refresh-token (expired / replay / revoked).
+      // Чистим storage чтобы splash увёл юзера на /login. Иначе UI зависнет
+      // на /home с протухшим access и юзер увидит «не удалось загрузить детей».
+      // 5xx и сетевые ошибки оставляют storage — это transient, повторим позже.
+      if (status >= 400 && status < 500) {
+        await _storage.clearAll();
+      }
       return false;
     }
   }

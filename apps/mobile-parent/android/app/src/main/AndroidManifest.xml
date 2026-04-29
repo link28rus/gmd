@@ -1,6 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <!-- v0.46: для FCM push нужны permission показывать notifications (Android 13+)
+         и keep-screen-awake (для high-priority data-message в Doze). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
 
     <application
         android:name="${applicationName}"
@@ -28,6 +32,22 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- v0.46: Firebase Cloud Messaging — handler для входящих push-сообщений
+             (события геозон, SOS и т.д.). Класс реализует FirebaseMessagingService
+             и стартует системные notifications с deeplink на /home/child/{id}. -->
+        <service
+            android:name=".ParentFirebaseMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <!-- Default notification icon и channel id для FCM (если payload не указывает иначе). -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="gmd_parent_events" />
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

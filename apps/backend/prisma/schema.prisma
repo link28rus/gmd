@@ -75,10 +75,34 @@ model User {
   passwordResetTokens      PasswordResetToken[]
   audioSessionsRequested   AudioSession[]
   blockSessionsCreated     BlockSession[]
+  parentDevices            ParentDevice[]
 
   @@index([email])
   @@index([role])
   @@map("users")
+}
+
+/// v0.46: устройство родителя для FCM push (события геозон, SOS, низкий заряд).
+/// Один пользователь может иметь несколько устройств (телефон + планшет).
+/// fcmToken UNIQUE на уровне всей таблицы — Firebase возвращает один токен на
+/// (project, app installation), и переустановка mobile-parent даёт новый токен,
+/// старая запись помечается revoked при следующем POST /parents/devices/fcm-token.
+model ParentDevice {
+  id                String    @id @default(cuid())
+  userId            String
+  fcmToken          String    @unique
+  fcmTokenUpdatedAt DateTime  @default(now())
+  platform          String    // "android" | "ios" — на MVP только android
+  deviceName        String?   // model + manufacturer ("Xiaomi 22081212UG")
+  appVersion        String?   // "0.46.0+1"
+  lastSeenAt        DateTime  @default(now())
+  revokedAt         DateTime?
+  createdAt         DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("parent_devices")
 }
 
 model PasswordResetToken {

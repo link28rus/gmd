@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -62,6 +64,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
       user: AuthUser.fromJson(userMap),
       family: AuthFamily.fromJson(familyMap),
     );
+    // FCM re-register на каждом старте — токен мог обновиться когда app
+    // был выключен. Fire-and-forget, не блокирует переход на /home.
+    unawaited(ref.read(parentFcmRegistrarProvider).register());
     _go('/home');
   }
 

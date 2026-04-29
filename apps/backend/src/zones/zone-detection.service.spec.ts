@@ -1,5 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { PrismaService } from '../prisma/prisma.service';
+import { FcmService } from '../fcm/fcm.service';
+import { ParentDevicesService } from '../parent-devices/parent-devices.service';
 import { ZoneDetectionService } from './zone-detection.service';
 
 const prismaMock = {
@@ -18,7 +20,18 @@ describe('ZoneDetectionService.findCandidateZones', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     const module = await Test.createTestingModule({
-      providers: [ZoneDetectionService, { provide: PrismaService, useValue: prismaMock }],
+      providers: [
+        ZoneDetectionService,
+        { provide: PrismaService, useValue: prismaMock },
+        { provide: FcmService, useValue: { sendToToken: jest.fn().mockResolvedValue(true) } },
+        {
+          provide: ParentDevicesService,
+          useValue: {
+            findActiveByFamilyId: jest.fn().mockResolvedValue([]),
+            clearTokenByExpired: jest.fn().mockResolvedValue(undefined),
+          },
+        },
+      ],
     }).compile();
     svc = module.get(ZoneDetectionService);
   });
@@ -36,7 +49,18 @@ describe('ZoneDetectionService.processPoint', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     const module = await Test.createTestingModule({
-      providers: [ZoneDetectionService, { provide: PrismaService, useValue: prismaMock }],
+      providers: [
+        ZoneDetectionService,
+        { provide: PrismaService, useValue: prismaMock },
+        { provide: FcmService, useValue: { sendToToken: jest.fn().mockResolvedValue(true) } },
+        {
+          provide: ParentDevicesService,
+          useValue: {
+            findActiveByFamilyId: jest.fn().mockResolvedValue([]),
+            clearTokenByExpired: jest.fn().mockResolvedValue(undefined),
+          },
+        },
+      ],
     }).compile();
     svc = module.get(ZoneDetectionService);
   });

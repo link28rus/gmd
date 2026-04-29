@@ -1,6 +1,8 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailerService } from '../mailer/mailer.service';
+import { FcmService } from '../fcm/fcm.service';
+import { ParentDevicesService } from '../parent-devices/parent-devices.service';
 import type { ChildAuthContext } from '../child-device/child-device.service';
 import type { SosDto } from './dto/sos.dto';
 
@@ -11,6 +13,8 @@ export class SosService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(MailerService) private readonly mailer: MailerService,
+    @Inject(FcmService) private readonly fcm: FcmService,
+    @Inject(ParentDevicesService) private readonly parentDevices: ParentDevicesService,
   ) {}
 
   async create(ctx: ChildAuthContext, dto: SosDto): Promise<{ sosId: string; createdAt: string }> {
@@ -26,7 +30,7 @@ export class SosService {
       },
     });
 
-    // Fetch family + parent emails, send SOS mail.
+    // Fetch family + parent emails, send SOS mail + FCM push.
     // Failures are logged but do NOT throw — event is already persisted.
     try {
       const family = await this.prisma.family.findFirst({
@@ -42,11 +46,35 @@ export class SosService {
             await this.mailer.send({
               to,
               subject: 'SOS от ребёнка',
-              text: `Ребёнок ${ctx.childName} отправил SOS.\nКоординаты: ${dto.lat}, ${dto.lon}\nОткрыть: https://gmd.link28rus.ru/family/sos`,
+              text: `Ребёнок ${ctx.childName} отправил SOS.\nКоординаты: ${dto.lat}, ${dto.lon}\nОткрыть: https://gmd.link28rus.ru/cabinet`,
             });
           } catch (err) {
             this.logger.error(`Failed to email SOS to ${to.slice(0, 3)}***: ${String(err)}`);
           }
+        }
+
+        // v0.46: FCM push на parent-devices.
+        const devices = await this.parentDevices.findActiveByFamilyId(family.id);
+        if (devices.length > 0) {
+          const data: Record<string, string> = {
+            type: 'SOS',
+            childId: ctx.childId,
+            childName: ctx.childName,
+            sosId: event.id,
+            lat: String(dto.lat),
+            lon: String(dto.lon),
+            recordedAt: dto.recordedAt,
+          };
+          await Promise.all(
+            devices.map((d) =>
+              this.fcm.sendToToken({
+                fcmToken: d.fcmToken,
+                data,
+                label: `SOS child=${ctx.childId}`,
+                onInvalidToken: (token) => this.parentDevices.clearTokenByExpired(token),
+              }),
+            ),
+          );
         }
       }
     } catch (err) {
