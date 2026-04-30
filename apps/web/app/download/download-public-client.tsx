@@ -1,7 +1,7 @@
 // apps/web/app/download/download-public-client.tsx
-// Публичный клиент страницы /download. Показывает только АКТУАЛЬНУЮ версию
-// приложения ребёнка (gmd-child) — без залогинивания. Список прошлых версий
-// здесь не нужен, они доступны в кабинете.
+// Публичный клиент страницы /download. Показывает актуальные версии обоих
+// приложений: родителя (gmd-parent) и для телефона ребёнка (gmd-child).
+// Список прошлых версий здесь не нужен, они доступны в кабинете.
 'use client';
 
 import { useEffect, useState, type ReactElement } from 'react';
@@ -28,66 +28,82 @@ function abiHint(abi: string): string {
   return '';
 }
 
-export default function DownloadPublicClient(): ReactElement {
-  const [files, setFiles] = useState<DownloadFile[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+interface AppSection {
+  title: string;
+  description: string;
+  app: 'gmd-parent' | 'gmd-child';
+  instructions: string[];
+}
 
-  useEffect(() => {
-    fetch('/api/public/download', { cache: 'no-store' })
-      .then(async (res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const body = (await res.json()) as { files: DownloadFile[] };
-        setFiles(body.files ?? []);
-      })
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : 'Ошибка загрузки'))
-      .finally(() => setLoading(false));
-  }, []);
+const SECTIONS: AppSection[] = [
+  {
+    title: 'Приложение родителя',
+    description:
+      'Поставьте на свой телефон, чтобы видеть локацию ребёнка, отправлять сигнал, слушать звук вокруг и получать push-уведомления о геозонах.',
+    app: 'gmd-parent',
+    instructions: [
+      'Скачайте APK на свой телефон (или скиньте файл с ПК).',
+      'Откройте APK — Android предложит установить.',
+      'Если система блокирует установку, разрешите «Установка из неизвестных источников» для браузера или файлового менеджера.',
+      'Войдите по email и паролю — список детей подтянется автоматически.',
+    ],
+  },
+  {
+    title: 'Приложение для телефона ребёнка',
+    description:
+      'Установите на телефон ребёнка и привяжите его QR-кодом из родительского кабинета.',
+    app: 'gmd-child',
+    instructions: [
+      'Скачайте APK на ПК или прямо в браузере телефона ребёнка.',
+      'Если скачивали на ПК — перенесите файл на телефон (кабель, Telegram, облако).',
+      'Откройте APK-файл на телефоне ребёнка — Android предложит установить.',
+      'Если система блокирует установку, включите «Установка из неизвестных источников».',
+      'После установки родитель в кабинете создаёт QR-код, ребёнок сканирует его в приложении.',
+    ],
+  },
+];
 
-  // Оставляем только последнюю версию приложения ребёнка. Файлы уже отсортированы
-  // на сервере (app → version desc → abi).
-  const childFiles = files.filter((f) => f.app === 'gmd-child');
-  const latestVersion = childFiles[0]?.version;
-  const latestFiles = childFiles.filter((f) => f.version === latestVersion);
+function pickLatest(
+  files: DownloadFile[],
+  app: 'gmd-parent' | 'gmd-child',
+): {
+  version: string | undefined;
+  abis: DownloadFile[];
+} {
+  const byApp = files.filter((f) => f.app === app);
+  const version = byApp[0]?.version; // server отсортировал app → version desc → abi
+  const abis = byApp.filter((f) => f.version === version);
+  return { version, abis };
+}
 
-  if (loading) {
-    return <div className="mx-auto max-w-3xl px-6 py-8 text-sm text-zinc-500">Загрузка…</div>;
-  }
-
-  if (error) {
-    return (
-      <div className="mx-auto max-w-3xl px-6 py-8">
-        <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-          Не удалось загрузить список релизов: {error}
-        </div>
-      </div>
-    );
-  }
-
+function AppCard({
+  section,
+  latest,
+}: {
+  section: AppSection;
+  latest: ReturnType<typeof pickLatest>;
+}): ReactElement {
   return (
-    <div className="mx-auto max-w-3xl px-6 py-10">
-      <h1 className="mb-2 text-3xl font-semibold text-zinc-900">Приложение для телефона ребёнка</h1>
-      <p className="mb-8 text-zinc-600">
-        Скачайте APK-файл на телефон ребёнка и установите. Разрешите установку из неизвестных
-        источников, если Android попросит.
-      </p>
+    <section className="mb-8 rounded-lg border border-zinc-200 bg-white p-6 shadow-sm">
+      <h2 className="text-xl font-semibold text-zinc-900">{section.title}</h2>
+      <p className="mt-1 mb-5 text-sm text-zinc-600">{section.description}</p>
 
-      {latestFiles.length === 0 ? (
-        <div className="rounded-md border border-zinc-200 bg-white p-6 text-sm text-zinc-600">
+      {latest.abis.length === 0 ? (
+        <div className="rounded-md border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600">
           Релизов пока нет.
         </div>
       ) : (
-        <section className="mb-8 rounded-lg border border-zinc-200 bg-white p-6 shadow-sm">
-          <div className="mb-4 flex items-baseline justify-between">
-            <h2 className="text-lg font-medium text-zinc-900">
-              Актуальная версия — v{latestVersion}
-            </h2>
+        <>
+          <div className="mb-3 flex items-baseline justify-between">
+            <span className="text-sm font-medium text-zinc-900">
+              Актуальная версия — v{latest.version}
+            </span>
             <span className="text-xs text-zinc-500">
-              {new Date(latestFiles[0].uploadedAt).toLocaleString('ru')}
+              {new Date(latest.abis[0].uploadedAt).toLocaleString('ru')}
             </span>
           </div>
           <div className="space-y-2">
-            {latestFiles.map((f) => (
+            {latest.abis.map((f) => (
               <a
                 key={f.filename}
                 href={`/api/public/download/${encodeURIComponent(f.filename)}`}
@@ -106,22 +122,61 @@ export default function DownloadPublicClient(): ReactElement {
               </a>
             ))}
           </div>
-        </section>
+        </>
       )}
 
-      <div className="rounded-md border border-zinc-200 bg-white p-5 text-sm text-zinc-600">
-        <div className="mb-2 font-medium text-zinc-800">Как установить на телефон ребёнка</div>
-        <ol className="list-decimal space-y-1 pl-5">
-          <li>Скачайте APK на ПК или прямо в браузере телефона.</li>
-          <li>Если скачивали на ПК — перенесите файл на телефон (кабель, Telegram, облако).</li>
-          <li>Откройте APK-файл на телефоне — Android предложит установить.</li>
-          <li>
-            Если система блокирует установку, включите «Установка из неизвестных источников» для
-            браузера или файлового менеджера.
-          </li>
-          <li>После установки попросите родителя войти в кабинет и создать QR-код для привязки.</li>
+      <details className="mt-5 text-sm text-zinc-600">
+        <summary className="cursor-pointer font-medium text-zinc-800">Как установить</summary>
+        <ol className="mt-2 list-decimal space-y-1 pl-5">
+          {section.instructions.map((step) => (
+            <li key={step}>{step}</li>
+          ))}
         </ol>
+      </details>
+    </section>
+  );
+}
+
+export default function DownloadPublicClient(): ReactElement {
+  const [files, setFiles] = useState<DownloadFile[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/public/download', { cache: 'no-store' })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const body = (await res.json()) as { files: DownloadFile[] };
+        setFiles(body.files ?? []);
+      })
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : 'Ошибка загрузки'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return <div className="mx-auto max-w-3xl px-6 py-8 text-sm text-zinc-500">Загрузка…</div>;
+  }
+
+  if (error) {
+    return (
+      <div className="mx-auto max-w-3xl px-6 py-8">
+        <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          Не удалось загрузить список релизов: {error}
+        </div>
       </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto max-w-3xl px-6 py-10">
+      <h1 className="mb-2 text-3xl font-semibold text-zinc-900">Скачать GMD</h1>
+      <p className="mb-8 text-zinc-600">
+        Два приложения: одно для своего телефона (родителю), второе — на телефон ребёнка.
+      </p>
+
+      {SECTIONS.map((section) => (
+        <AppCard key={section.app} section={section} latest={pickLatest(files, section.app)} />
+      ))}
     </div>
   );
 }
