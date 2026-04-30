@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import type { PrismaService } from '../prisma/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { FcmService } from '../fcm/fcm.service';
 import { ParentDevicesService } from '../parent-devices/parent-devices.service';
 
@@ -33,6 +33,7 @@ export class ZoneDetectionService {
   constructor(
     @Inject(FcmService) private readonly fcm: FcmService,
     @Inject(ParentDevicesService) private readonly parentDevices: ParentDevicesService,
+    @Inject(PrismaService) private readonly prisma: PrismaService,
   ) {}
 
   async findCandidateZones(
@@ -200,16 +201,25 @@ export class ZoneDetectionService {
   }): Promise<void> {
     const devices = await this.parentDevices.findActiveByFamilyId(args.familyId);
     if (devices.length === 0) return;
-    // Резолвим имена. processPoint работает без injected PrismaService —
-    // используем лёгкий fallback через ParentDevicesService.prisma не годится;
-    // достанем через первый device-record уже в memory caller'а нет, так что
-    // простой запрос здесь. Оставлено явно, чтобы не передавать zoneName/childName
-    // через всю цепочку processPoint.
+    // Резолвим имена ребёнка и зоны — без них родитель видит generic
+    // «Ребёнок вошёл в одну из геозон» и не понимает, кто и куда.
+    const [child, zone] = await Promise.all([
+      this.prisma.child.findUnique({
+        where: { id: args.childId },
+        select: { name: true },
+      }),
+      this.prisma.zone.findUnique({
+        where: { id: args.zoneId },
+        select: { name: true },
+      }),
+    ]);
     const fcmService = this.fcm;
     const data: Record<string, string> = {
       type: args.eventType === 'entry' ? 'GEOFENCE_ENTER' : 'GEOFENCE_EXIT',
       childId: args.childId,
+      childName: child?.name ?? '',
       zoneId: args.zoneId,
+      zoneName: zone?.name ?? '',
       recordedAt: args.recordedAt.toISOString(),
     };
     await Promise.all(

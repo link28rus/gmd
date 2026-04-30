@@ -92,17 +92,26 @@ class ParentFirebaseMessagingService : FirebaseMessagingService() {
     )
 
     private fun render(type: String, data: Map<String, String>): Render? {
-        val childName = data["childName"] ?: "Ребёнок"
+        val childName = data["childName"]?.takeIf { it.isNotBlank() } ?: "Ребёнок"
+        val zoneName = data["zoneName"]?.takeIf { it.isNotBlank() }
         return when (type) {
             "GEOFENCE_ENTER" -> Render(
-                title = "Вход в зону",
-                body = "$childName вошёл в одну из геозон.",
+                title = if (zoneName != null) "Вход в зону «$zoneName»" else "Вход в зону",
+                body = if (zoneName != null) {
+                    "$childName вошёл в зону «$zoneName»."
+                } else {
+                    "$childName вошёл в одну из геозон."
+                },
                 channelId = CHANNEL_EVENTS,
                 importance = NotificationCompat.PRIORITY_DEFAULT,
             )
             "GEOFENCE_EXIT" -> Render(
-                title = "Выход из зоны",
-                body = "$childName вышел из одной из геозон.",
+                title = if (zoneName != null) "Выход из зоны «$zoneName»" else "Выход из зоны",
+                body = if (zoneName != null) {
+                    "$childName вышел из зоны «$zoneName»."
+                } else {
+                    "$childName вышел из одной из геозон."
+                },
                 channelId = CHANNEL_EVENTS,
                 importance = NotificationCompat.PRIORITY_DEFAULT,
             )
