@@ -32,6 +32,7 @@ class ChildActionSheet extends ConsumerStatefulWidget {
 
 class _ChildActionSheetState extends ConsumerState<ChildActionSheet> {
   bool _signalSending = false;
+  bool _protectionToggling = false;
 
   @override
   Widget build(BuildContext context) {
@@ -90,11 +91,23 @@ class _ChildActionSheetState extends ConsumerState<ChildActionSheet> {
           _ActionTile(
             icon: Icons.lock_outline,
             label: 'Защита от удаления',
-            trailing: Switch(
-              value: widget.child.protectionEnabled,
-              onChanged: (_) =>
-                  _showSnack('Переключатель защиты — на следующем этапе'),
-            ),
+            trailing: _protectionToggling
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: Padding(
+                      padding: EdgeInsets.all(4),
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : Switch(
+                    value: widget.child.protectionEnabled,
+                    // disabled когда у ребёнка нет привязанного устройства —
+                    // переключать флаг без device бессмысленно (нечего защищать).
+                    onChanged: widget.child.device == null
+                        ? null
+                        : (next) => _onProtectionToggle(next),
+                  ),
             onTap: null,
           ),
           _ActionTile(
@@ -124,6 +137,57 @@ class _ChildActionSheetState extends ConsumerState<ChildActionSheet> {
         ],
       ),
     );
+  }
+
+  Future<void> _onProtectionToggle(bool next) async {
+    final childName = widget.child.name;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(next ? 'Включить защиту от удаления?' : 'Отключить защиту?'),
+        content: Text(
+          next
+              ? '$childName не сможет удалить или отключить приложение GMD на '
+                  'своём устройстве. Применится в течение нескольких секунд.'
+              : '$childName сможет удалить приложение GMD со своего устройства.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(next ? 'Включить' : 'Отключить'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _protectionToggling = true);
+    try {
+      await ref
+          .read(childrenRepositoryProvider)
+          .setProtection(widget.child.id, enabled: next);
+      // childrenListProvider — источник истины для protectionEnabled
+      // (`child.protectionEnabled` приходит в `GET /family/children`).
+      // Invalidate чтобы Switch отобразил новое состояние.
+      ref.invalidate(childrenListProvider);
+      if (!mounted) return;
+      _showSnack(next
+          ? 'Защита от удаления включена'
+          : 'Защита от удаления выключена');
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      _showSnack(e.message ?? 'Не удалось обновить защиту (код ${e.status})',
+          error: true);
+    } catch (e) {
+      if (!mounted) return;
+      _showSnack('Не удалось обновить защиту: $e', error: true);
+    } finally {
+      if (mounted) setState(() => _protectionToggling = false);
+    }
   }
 
   void _onListenAudio() {

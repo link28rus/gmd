@@ -45,6 +45,20 @@ class ChildrenRepository {
     );
   }
 
+  /// Включить/выключить «защиту от удаления». При enabled=true приложение
+  /// ребёнка не должно позволять себя удалить или отключить (Device Admin /
+  /// Accessibility-сторож на стороне mobile-child). На MVP backend просто
+  /// хранит флаг + рассылает FCM-команду устройству.
+  ///
+  /// `PATCH /family/children/:id/protection {enabled}` → 200 ProtectionState.
+  /// Возможные ошибки: `child_not_found` (404), 4xx/5xx как обычно.
+  Future<void> setProtection(String childId, {required bool enabled}) async {
+    await _dio.patch<dynamic>(
+      '/family/children/$childId/protection',
+      data: {'enabled': enabled},
+    );
+  }
+
   /// История точек за период. По умолчанию backend отдаёт ~24 часа.
   Future<List<ChildLocation>> locations(
     String childId, {
