@@ -18,7 +18,6 @@ interface BackendMeResponse {
   user: { id: string; email: string; name: string | null; locale: string };
   isAdmin: boolean;
   hasPassword: boolean;
-  hasPin: boolean;
 }
 
 const REFRESH_COOKIE = 'gmd_refresh';
@@ -41,7 +40,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           ...user,
           isAdmin: me.body.isAdmin ?? false,
           hasPassword: me.body.hasPassword ?? false,
-          hasPin: me.body.hasPin ?? false,
         }
       : user;
   const isMobile = req.headers.get('x-client')?.startsWith('mobile') ?? false;

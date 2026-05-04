@@ -3,13 +3,11 @@ import { ChildDeviceService } from './child-device.service';
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { ConsentService } from '../consent/consent.service';
-import type { PinService } from '../auth/pin.service';
 
 interface MockPrisma {
   _invites: any[];
   _children: any[];
   _devices: any[];
-  _users: any[];
   invite: { findFirst: jest.Mock; update: jest.Mock };
   childDevice: {
     findFirst: jest.Mock;
@@ -18,7 +16,6 @@ interface MockPrisma {
     deleteMany: jest.Mock;
   };
   child: { findFirst: jest.Mock };
-  user: { findMany: jest.Mock };
   $transaction: jest.Mock;
   $queryRawUnsafe: jest.Mock;
 }
@@ -27,12 +24,10 @@ function makePrismaMock(): MockPrisma {
   const invites: any[] = [];
   const children: any[] = [];
   const devices: any[] = [];
-  const users: any[] = [];
   const api: MockPrisma = {
     _invites: invites,
     _children: children,
     _devices: devices,
-    _users: users,
     invite: {
       findFirst: jest.fn(({ where }: any) =>
         Promise.resolve(invites.find((i) => i.id === where.id) ?? null),
@@ -89,19 +84,6 @@ function makePrismaMock(): MockPrisma {
         ),
       ),
     },
-    user: {
-      findMany: jest.fn(({ where }: any) => {
-        return Promise.resolve(
-          users.filter((u) => {
-            if (where?.deletedAt === null && u.deletedAt !== null) return false;
-            if (where?.pinHash?.not === null && u.pinHash === null) return false;
-            const familyId = where?.memberships?.some?.familyId;
-            if (familyId && !u.familyIds?.includes(familyId)) return false;
-            return true;
-          }),
-        );
-      }),
-    },
     $transaction: jest.fn((fn: any) => fn(api)),
     $queryRawUnsafe: jest.fn((_sql: string, code: string) => {
       const row = invites.find(
@@ -119,25 +101,8 @@ function makeConsentMock() {
   } as unknown as ConsentService;
 }
 
-function makePinMock() {
-  return {
-    hash: jest.fn().mockResolvedValue('h'),
-    verify: jest.fn().mockResolvedValue(false),
-    isLocked: jest.fn().mockResolvedValue({ locked: false, retryAfterSec: 0 }),
-    recordFailure: jest.fn().mockResolvedValue({ locked: false, retryAfterSec: 0 }),
-    clearFailures: jest.fn().mockResolvedValue(undefined),
-    markVerified: jest.fn().mockResolvedValue(undefined),
-    isVerified: jest.fn().mockResolvedValue(false),
-    clearVerified: jest.fn().mockResolvedValue(undefined),
-  } as unknown as PinService;
-}
-
-function makeSvc(p: MockPrisma, consent?: ConsentService, pin?: PinService) {
-  return new ChildDeviceService(
-    p as unknown as PrismaService,
-    consent ?? makeConsentMock(),
-    pin ?? makePinMock(),
-  );
+function makeSvc(p: MockPrisma, consent?: ConsentService) {
+  return new ChildDeviceService(p as unknown as PrismaService, consent ?? makeConsentMock());
 }
 
 /** Returns a Date object representing `yearsAgo` years before today */
@@ -396,62 +361,5 @@ describe('ChildDeviceService.verifyToken', () => {
     const svc = makeSvc(p);
     const ctx = await svc.verifyToken('completely-fake-token');
     expect(ctx).toBeNull();
-  });
-
-  describe('verifyParentPin', () => {
-    it('ok когда один из родителей семьи имеет matching PIN', async () => {
-      const p = makePrismaMock();
-      const pin = makePinMock();
-      (pin.verify as jest.Mock).mockImplementation(async (hash: string, plain: string) => {
-        return hash === 'ok-hash' && plain === '1234';
-      });
-      p._users.push(
-        { id: 'u1', deletedAt: null, pinHash: 'wrong', familyIds: ['f1'] },
-        { id: 'u2', deletedAt: null, pinHash: 'ok-hash', familyIds: ['f1'] },
-      );
-      const svc = makeSvc(p, undefined, pin);
-      const res = await svc.verifyParentPin({
-        deviceId: 'd1',
-        childId: 'c1',
-        familyId: 'f1',
-        pin: '1234',
-      });
-      expect(res.ok).toBe(true);
-      expect(pin.clearFailures).toHaveBeenCalledWith('child-device:d1');
-    });
-
-    it('401 invalid_pin когда PIN не совпадает ни с одним родителем', async () => {
-      const p = makePrismaMock();
-      const pin = makePinMock();
-      (pin.verify as jest.Mock).mockResolvedValue(false);
-      p._users.push({ id: 'u1', deletedAt: null, pinHash: 'h', familyIds: ['f1'] });
-      const svc = makeSvc(p, undefined, pin);
-      await expect(
-        svc.verifyParentPin({ deviceId: 'd1', childId: 'c1', familyId: 'f1', pin: '0000' }),
-      ).rejects.toMatchObject({ status: 401 });
-      expect(pin.recordFailure).toHaveBeenCalledWith('child-device:d1');
-    });
-
-    it('401 no_parent_pin когда ни у одного родителя не задан PIN', async () => {
-      const p = makePrismaMock();
-      const pin = makePinMock();
-      const svc = makeSvc(p, undefined, pin);
-      await expect(
-        svc.verifyParentPin({ deviceId: 'd1', childId: 'c1', familyId: 'f1', pin: '1234' }),
-      ).rejects.toMatchObject({
-        response: expect.objectContaining({ code: 'no_parent_pin' }),
-      });
-    });
-
-    it('429 pin_locked при текущей блокировке', async () => {
-      const p = makePrismaMock();
-      const pin = makePinMock();
-      (pin.isLocked as jest.Mock).mockResolvedValue({ locked: true, retryAfterSec: 600 });
-      p._users.push({ id: 'u1', deletedAt: null, pinHash: 'h', familyIds: ['f1'] });
-      const svc = makeSvc(p, undefined, pin);
-      await expect(
-        svc.verifyParentPin({ deviceId: 'd1', childId: 'c1', familyId: 'f1', pin: '1234' }),
-      ).rejects.toMatchObject({ status: 429 });
-    });
   });
 });

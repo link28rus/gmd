@@ -7,7 +7,6 @@ interface MockPrisma {
   _children: any[];
   _devices: any[];
   _invites: any[];
-  _users: any[];
   child: {
     create: jest.Mock;
     findFirst: jest.Mock;
@@ -16,7 +15,6 @@ interface MockPrisma {
   };
   childDevice: { updateMany: jest.Mock };
   invite: { updateMany: jest.Mock };
-  user: { findUnique: jest.Mock };
   $transaction: jest.Mock;
 }
 
@@ -24,12 +22,10 @@ function makePrismaMock(): MockPrisma {
   const children: any[] = [];
   const devices: any[] = [];
   const invites: any[] = [];
-  const users: any[] = [];
   const api: MockPrisma = {
     _children: children,
     _devices: devices,
     _invites: invites,
-    _users: users,
     child: {
       create: jest.fn(({ data }: any) => {
         const row = {
@@ -90,11 +86,6 @@ function makePrismaMock(): MockPrisma {
         });
         return Promise.resolve({ count });
       }),
-    },
-    user: {
-      findUnique: jest.fn(({ where }: any) =>
-        Promise.resolve(users.find((u) => u.id === where.id) ?? null),
-      ),
     },
     $transaction: jest.fn((ops: any[] | ((tx: any) => unknown)) => {
       if (typeof ops === 'function') return ops(api);
@@ -201,7 +192,7 @@ describe('ChildrenService', () => {
       await expect(svc.getProtection('f1', 'missing')).rejects.toThrow(NotFoundException);
     });
 
-    it('setProtection enable=true без pinHash → включает защиту (L1-only, без PIN-gate)', async () => {
+    it('setProtection enable=true → сохраняет enabled+At+By', async () => {
       const p = makePrismaMock();
       const svc = new ChildrenService(p as unknown as PrismaService);
       p._children.push({
@@ -212,25 +203,6 @@ describe('ChildrenService', () => {
         protectionEnabledAt: null,
         protectionEnabledBy: null,
       });
-      p._users.push({ id: 'u1', pinHash: null });
-      const s = await svc.setProtection('f1', 'c1', true, 'u1');
-      expect(s.enabled).toBe(true);
-      expect(s.enabledBy).toBe('u1');
-      expect(p._children[0].protectionEnabled).toBe(true);
-    });
-
-    it('setProtection enable=true с pinHash → сохраняет enabled+At+By', async () => {
-      const p = makePrismaMock();
-      const svc = new ChildrenService(p as unknown as PrismaService);
-      p._children.push({
-        id: 'c1',
-        familyId: 'f1',
-        deletedAt: null,
-        protectionEnabled: false,
-        protectionEnabledAt: null,
-        protectionEnabledBy: null,
-      });
-      p._users.push({ id: 'u1', pinHash: 'hash' });
       const s = await svc.setProtection('f1', 'c1', true, 'u1');
       expect(s.enabled).toBe(true);
       expect(s.enabledBy).toBe('u1');
@@ -238,7 +210,7 @@ describe('ChildrenService', () => {
       expect(p._children[0].protectionEnabled).toBe(true);
     });
 
-    it('setProtection enable=false не проверяет pinHash, зануляет At/By', async () => {
+    it('setProtection enable=false зануляет At/By', async () => {
       const p = makePrismaMock();
       const svc = new ChildrenService(p as unknown as PrismaService);
       p._children.push({

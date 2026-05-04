@@ -152,14 +152,6 @@ export function CabinetHeader(): ReactElement {
                 >
                   {user.hasPassword ? 'Сменить пароль' : 'Установить пароль'}
                 </Link>
-                <Link
-                  href="/cabinet/pin"
-                  className="block px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
-                  role="menuitem"
-                  onMouseDown={(e) => e.preventDefault()}
-                >
-                  {user.hasPin ? 'Сменить PIN' : 'Задать PIN родителя'}
-                </Link>
                 <button
                   type="button"
                   onMouseDown={(e) => e.preventDefault()}

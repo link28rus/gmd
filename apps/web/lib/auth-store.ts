@@ -10,12 +10,10 @@ export interface AuthUser {
   locale: string;
   isAdmin?: boolean;
   hasPassword?: boolean;
-  hasPin?: boolean;
 }
 
 interface AuthUserPatch {
   hasPassword?: boolean;
-  hasPin?: boolean;
   name?: string | null;
   locale?: string;
 }

@@ -1,19 +1,10 @@
-import {
-  BadRequestException,
-  ConflictException,
-  HttpException,
-  HttpStatus,
-  Inject,
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { BadRequestException, ConflictException, Inject, Injectable } from '@nestjs/common';
 import { createHash, randomBytes } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { normalizeInviteCode } from '../invites/lib/code-generator';
 import { computeAgeYears } from '../common/age';
 import { ConsentService } from '../consent/consent.service';
-import { PinService } from '../auth/pin.service';
 
 export interface ClaimMeta {
   deviceName?: string;
@@ -46,7 +37,6 @@ export class ChildDeviceService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(ConsentService) private readonly consent: ConsentService,
-    @Inject(PinService) private readonly pin: PinService,
   ) {}
 
   async claim(rawCode: string, meta: ClaimMeta): Promise<ClaimResult> {
@@ -136,66 +126,6 @@ export class ChildDeviceService {
       child: result.child,
       device: result.device,
     };
-  }
-
-  // L2 PIN-lock: ребёнок в момент попытки деактивации Device Admin вводит PIN,
-  // AccessibilityService отправляет сюда. Проверяем PIN против хешей ВСЕХ
-  // родителей в семье (в семье могут быть несколько — любой из них валиден).
-  // Rate-limit per-childDevice, чтобы подбор на одном устройстве не сказывался
-  // на нормальном login у родителей.
-  async verifyParentPin(params: {
-    deviceId: string;
-    childId: string;
-    familyId: string;
-    pin: string;
-  }): Promise<{ ok: true }> {
-    const lockKey = `child-device:${params.deviceId}`;
-    const lock = await this.pin.isLocked(lockKey);
-    if (lock.locked) {
-      throw new HttpException(
-        {
-          code: 'pin_locked',
-          message: 'Too many failed attempts',
-          retryAfterSec: lock.retryAfterSec,
-        },
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
-    }
-
-    const parents = await this.prisma.user.findMany({
-      where: {
-        deletedAt: null,
-        pinHash: { not: null },
-        memberships: { some: { familyId: params.familyId } },
-      },
-      select: { id: true, pinHash: true },
-    });
-
-    if (parents.length === 0) {
-      // Ни у одного родителя семьи нет PIN — на устройстве ребёнка защиту
-      // всё равно выключить нельзя (некем верифицировать). Сигнал для UI.
-      throw new UnauthorizedException({
-        code: 'no_parent_pin',
-        message: 'No parent in family has PIN set',
-      });
-    }
-
-    for (const parent of parents) {
-      if (parent.pinHash && (await this.pin.verify(parent.pinHash, params.pin))) {
-        await this.pin.clearFailures(lockKey);
-        return { ok: true };
-      }
-    }
-
-    const status = await this.pin.recordFailure(lockKey);
-    throw new HttpException(
-      {
-        code: status.locked ? 'pin_locked' : 'invalid_pin',
-        message: status.locked ? 'Too many failed attempts' : 'Invalid PIN',
-        retryAfterSec: status.retryAfterSec,
-      },
-      status.locked ? HttpStatus.TOO_MANY_REQUESTS : HttpStatus.UNAUTHORIZED,
-    );
   }
 
   // Короткий запрос protection-state для mobile-child: возвращает только

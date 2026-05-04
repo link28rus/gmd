@@ -18,7 +18,6 @@ interface BackendMeResponse {
   user: { id: string; email: string; name: string | null; locale: string };
   isAdmin: boolean;
   hasPassword: boolean;
-  hasPin: boolean;
 }
 
 const REFRESH_COOKIE = 'gmd_refresh';
@@ -34,9 +33,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json(r.body ?? {}, { status: r.status });
   }
   const { accessToken, refreshToken, user, family } = r.body;
-  // Обогащаем user полями isAdmin/hasPassword/hasPin — backend
+  // Обогащаем user полями isAdmin/hasPassword — backend
   // /auth/login-password их не возвращает, а frontend хранит их в
-  // auth-store (меню профиля, страницы /cabinet/password и /cabinet/pin).
+  // auth-store (меню профиля, страница /cabinet/password).
   const me = await backend<BackendMeResponse>('GET', '/me', undefined, accessToken);
   const enrichedUser =
     me.status === 200 && me.body
@@ -44,7 +43,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           ...user,
           isAdmin: me.body.isAdmin ?? false,
           hasPassword: me.body.hasPassword ?? false,
-          hasPin: me.body.hasPin ?? false,
         }
       : user;
   const isMobile = req.headers.get('x-client')?.startsWith('mobile') ?? false;

@@ -55,8 +55,6 @@ model User {
   locale                       String    @default("ru")
   acceptedPrivacyPolicyVersion String?
   passwordHash                 String?
-  pinHash                      String?
-  pinUpdatedAt                 DateTime?
   role                         UserRole  @default(parent)
   blockedAt                    DateTime?
   blockedReason                String?
@@ -209,10 +207,9 @@ model Child {
   dateOfBirth          DateTime?
   avatarKey            String?
   // Защита от удаления приложения (Device Admin на mobile-child).
-  // Включается/выключается родителем из web-кабинета и требует установленного
-  // User.pinHash — тем же PIN ребёнок потом подтверждает деактивацию в
-  // системном диалоге Android. protectionEnabledBy хранит userId родителя для
-  // аудита (важно в семьях с несколькими родителями).
+  // Включается/выключается родителем из web-кабинета (простой тумблер,
+  // без PIN — отменили в v0.29.x). protectionEnabledBy хранит userId родителя
+  // для аудита (важно в семьях с несколькими родителями).
   protectionEnabled    Boolean   @default(false)
   protectionEnabledAt  DateTime?
   protectionEnabledBy  String?
