@@ -13,3 +13,6 @@ apps/mobile-parent/
 apps/mobile-child/
 packages/shared-dart/
 CHANGELOG.md
+
+# Managed by gmd-taskmaster MCP — formatter would fight with taskmaster's inline arrays
+.taskmaster/tasks/tasks.json
