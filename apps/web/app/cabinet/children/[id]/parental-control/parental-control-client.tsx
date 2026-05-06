@@ -784,15 +784,14 @@ function AppRuleRow({
   busy: boolean;
 }): ReactElement {
   const proxiedIcon = rewriteIconUrl(item.iconUrl);
+  const timePart = item.seconds > 0 ? ` · ${fmtMinutes(item.seconds)}` : '';
   const subtitle = item.hardcoded
-    ? 'Системное · нельзя заблокировать'
+    ? 'Системное · нельзя заблокировать' + timePart
     : item.systemDefault
-      ? 'По умолчанию разрешено системой'
+      ? 'По умолчанию разрешено системой' + timePart
       : item.category !== null
-        ? CATEGORY_LABELS[item.category] +
-          (item.isSystem ? ' · системное' : '') +
-          (item.seconds > 0 ? ` · ${fmtMinutes(item.seconds)}` : '')
-        : item.packageName;
+        ? CATEGORY_LABELS[item.category] + (item.isSystem ? ' · системное' : '') + timePart
+        : item.packageName + timePart;
 
   return (
     <li className="flex items-center gap-3 rounded-xl border border-border bg-card p-3">
