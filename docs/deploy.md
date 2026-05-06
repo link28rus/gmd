@@ -173,16 +173,19 @@ ssh gmd-prod 'cd /opt/gmd/docker && docker compose --env-file /opt/gmd/.env.prod
 - `/opt/gmd/.env.prod` — секреты (на сервере, 600).
 - `/opt/gmd/backups/postgres/` — ежедневные бэкапы PG (Task 15).
 
-## Ключ Яндекс.Карт
+## Ключ Яндекс-Геокодера
 
-Web-кабинет использует Яндекс.Карты v3 JS API. Ключ получить:
+Карты в кабинете рендерятся через OpenStreetMap (`react-leaflet`) — публичный ключ Яндекса для них **не нужен**. Но в редакторе геозон используется поиск по адресу через серверный `/api/geocode`, который ходит в **HTTP Геокодер Яндекса** (это отдельный продукт, отдельный лимит). Ключ нужен только для него; работает на server-side, в браузер не попадает.
+
+Получить ключ:
 
 1. Открыть https://developer.tech.yandex.ru
 2. Войти под yandex-аккаунтом организации.
-3. Создать API-ключ для «JavaScript API и HTTP Геокодер».
-4. Указать разрешённые HTTP-рефереры: `https://gmd.link28rus.ru/*` + `http://localhost:3003/*` для dev.
+3. Создать API-ключ для **«HTTP Геокодер»** (JavaScript API не нужен).
+4. В кабинете Яндекса ограничить ключ по HTTP Referer: `https://gmd.link28rus.ru/*` (+ `http://localhost:3003/*` для dev).
 5. Положить ключ в `apps/web/.env.local` (dev) или в prod `.env` через `infra/deploy/deploy.sh`:
    ```
-   NEXT_PUBLIC_YANDEX_MAPS_API_KEY=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+   YANDEX_GEOCODER_API_KEY=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
    ```
-6. Бесплатный тариф: 25 000 загрузок карты в сутки — достаточно для MVP на 1000 DAU.
+
+Без ключа `/api/geocode` отвечает `503 geocoder_not_configured`, а в редакторе зон поиск по адресу показывает «поиск недоступен» — остальная функциональность (drag-маркеры, вёрстка зоны вручную) работает.

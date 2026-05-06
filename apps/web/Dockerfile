@@ -16,9 +16,6 @@ COPY apps/web/ apps/web/
 # NEXT_STANDALONE=true включает output: 'standalone' в next.config.ts
 # (локально не делаем standalone из-за Windows EPERM на symlinks).
 ENV NEXT_STANDALONE=true
-# NEXT_PUBLIC_* inline'ятся при `next build` — прокидываем через build-arg.
-ARG NEXT_PUBLIC_YANDEX_MAPS_API_KEY=
-ENV NEXT_PUBLIC_YANDEX_MAPS_API_KEY=$NEXT_PUBLIC_YANDEX_MAPS_API_KEY
 RUN pnpm --filter @gmd/web build
 
 FROM node:22-alpine AS runner

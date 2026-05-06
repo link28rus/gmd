@@ -18,17 +18,17 @@
 
 ## Технологический стек
 
-| Слой     | Технология                                                                          |
-| -------- | ----------------------------------------------------------------------------------- |
-| Mobile   | Flutter 3.x, Riverpod, Dio, Drift, yandex_mapkit, firebase_messaging + RuStore Push |
-| Web      | Next.js 15 (App Router), TypeScript, Tailwind, shadcn/ui, Zod                       |
-| Backend  | NestJS, PostgreSQL 16 + PostGIS + pg_cron, Redis, MinIO                             |
-| API      | REST + OpenAPI 3.1, codegen TS + Dart                                               |
-| Auth     | JWT (access 15m + refresh 30d) + long-lived device-token для детей                  |
-| Realtime | Short-polling + FCM/RuStore push (без WebSocket на MVP)                             |
-| Infra    | Docker Compose, Caddy, GlitchTip, Uptime Kuma, Grafana+Loki+Prometheus              |
-| Карты    | Яндекс.Карты                                                                        |
-| Оплаты   | ❌ на MVP (монетизация после сбора аудитории)                                       |
+| Слой     | Технология                                                                              |
+| -------- | --------------------------------------------------------------------------------------- |
+| Mobile   | Flutter 3.x, Riverpod, Dio, Drift, flutter_map (OSM), firebase_messaging + RuStore Push |
+| Web      | Next.js 15 (App Router), TypeScript, Tailwind, shadcn/ui, Zod                           |
+| Backend  | NestJS, PostgreSQL 16 + PostGIS + pg_cron, Redis, MinIO                                 |
+| API      | REST + OpenAPI 3.1, codegen TS + Dart                                                   |
+| Auth     | JWT (access 15m + refresh 30d) + long-lived device-token для детей                      |
+| Realtime | Short-polling + FCM/RuStore push (без WebSocket на MVP)                                 |
+| Infra    | Docker Compose, Caddy, GlitchTip, Uptime Kuma, Grafana+Loki+Prometheus                  |
+| Карты    | OpenStreetMap (mobile: `flutter_map`, web: `react-leaflet`)                             |
+| Оплаты   | ❌ на MVP (монетизация после сбора аудитории)                                           |
 
 ## Монорепо
 
@@ -97,6 +97,9 @@ docs/superpowers/specs  design docs
 11. **«Как у конкурентов» — вместе с их ограничениями.** При задаче «сделай как Pingo / Где мои дети» изучить их платформо-специфичные ограничения, а не только happy-path. Они скорее всего приняли те же trade-offs — воспроизводить полностью, включая known limitations. Не имитировать полную защиту когда базовая технология её не даёт (protection theatre хуже честной защиты с документированным ограничением).
 12. **APK install на устройство пользователя — только после проверки подписи.** `flutter install` ВНУТРИ делает `adb uninstall` если подписи различаются → **сносит локальные данные пользователя** (refresh-токены, кэш, настройки). Никогда не использовать `flutter install` на чужом устройстве. Только: (а) `flutter build apk` + `apksigner verify --print-certs` нового APK + `adb shell dumpsys package <id> | grep signatures` сравнить SHA-1; (б) если совпадает — `adb install -r` (reinstall без uninstall, без data loss); (в) если разные — СПРОСИТЬ пользователя, не делать install автоматом. Override versionCode без правки pubspec: `flutter build apk --build-number=N`. Для downgrade: `adb install -r -d`. **Инцидент 2026-05-06:** не проверил подпись → flutter install сделал uninstall → данные снеслись.
 13. **Не доверять taskmaster-статусам — проверять реальное состояние.** taskmaster может показывать pending для давно сделанной задачи. Перед `set_task_status in-progress` — короткая разведка через Glob/Grep по описанным файлам/функциям. Если фича уже в коде — пометить done и взять следующую, не дублировать работу.
+14. **APK naming — pubspec build, не effective.** В именах `gmd-{child,parent}-X.Y.Z+N-<abi>.apk` число N после `+` — это **pubspec build** (то что в `version: X.Y.Z+N`), а НЕ effective versionCode (с ABI offset). Backend [route.ts](apps/web/app/api/public/updates/mobile-{child,parent}/latest/route.ts) парсит regex'ом из [lib/downloads/index.ts:21](apps/web/lib/downloads/index.ts:21) и сам формирует `effectiveBuild = ABI_VERSION[abi]*1000 + pubspecBuild` для сравнения с `PackageInfo.buildNumber` устройства. Если положить в имя effective — endpoint вернёт `effectiveBuild = ABI*1000 + effective`, что всегда больше реального. **Старые v0.46.5 parent APK на проде имели в имени `+2021` (effective)** — это была inconsistency, прокатывавшая только потому что у parent не было auto-update. После v0.47.0 — auto-update появился, convention обязательно pubspec build (как у child). При публикации не путать.
+15. **memory-compiler `finish_task` агрессивно обновляет tracking.** Экстрактор фактов сканирует `content` на IP/URL/версии и подменяет поля в tracking-сущностях (release, infrastructure, deployment). В сессии v0.47.0 я упомянул IP adb-устройства `192.168.77.154` — экстрактор переписал ВСЕ 9 полей `tracking/infrastructure` (server_lan_ip, \_iface, \_gateway, \_domain, …) на это значение. **Mitigation:** (а) перед `finish_task` критически фильтровать `content` — упоминать чужие IP/URL только когда необходимо, либо явно маркировать `adb-устройство 192.168.x.x (НЕ сервер)`; (б) после `finish_task` для нетривиальных задач — `get_current entity=infrastructure` и сверка с CLAUDE.md, восстановить через `save_tracking` если повредилось.
+16. **Релиз web + APK — два независимых шага.** Endpoint `/api/public/updates/<app>/latest` работает только когда сделаны ОБА: (а) `bash infra/deploy/deploy.sh` пересобрал `gmd-web` контейнер с новым route, (б) APK с правильным именем лежит в `/opt/gmd/download/`. Забыл deploy → endpoint 404 (route ещё не задеплоен). Забыл APK → endpoint 204 (нет файла под фильтр). Verify обязательно после публикации: `ssh gmd-prod 'curl -sSk --resolve gmd.link28rus.ru:443:127.0.0.1 https://gmd.link28rus.ru/api/public/updates/mobile-{child,parent}/latest?abi=arm64-v8a'` → корректный JSON с {version, buildNumber, url}.
 
 **Рекомендованный порядок при ручной работе:**
 
@@ -135,22 +138,34 @@ docs/superpowers/specs  design docs
 
 ## Субагенты
 
-| Задача                                  | Агент                                     |
-| --------------------------------------- | ----------------------------------------- |
-| NestJS-модули, бизнес-логика            | `backend-developer`                       |
-| REST/OpenAPI design                     | `api-designer`                            |
-| Next.js 15, кабинет, лендинг            | `nextjs-developer`                        |
-| Сложные TS-типы, codegen                | `typescript-pro`                          |
-| PG-настройки, индексы, PostGIS, pg_cron | `database-administrator` + `sql-pro`      |
-| Dockerfile, compose                     | `docker-expert`                           |
-| CI/CD, Caddy, бэкапы                    | `devops-engineer` / `deployment-engineer` |
-| 152-ФЗ, OWASP, pentests                 | `security-auditor`                        |
-| Перед merge                             | `code-reviewer`                           |
-| Playwright, supertest, integration_test | `test-automator`                          |
-| Баги                                    | `debugger`                                |
-| Flutter/Dart (нет спец. агента)         | `general-purpose`                         |
-| Исследования по кодбазе                 | `Explore`                                 |
-| Планирование крупных изменений          | `Plan`                                    |
+**Принцип:** делегируй субагенту только когда задача >100 строк / >2 файлов / требует узкой экспертизы. Простые правки (CRUD-эндпоинт, одна страница, typo, bump версии) делаем сами в основном потоке — спавн субагента стоит времени и отъедает контекст.
+
+| Задача                                              | Агент                                                                                                                                | Когда НЕ использовать                                                        |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| NestJS-модули, бизнес-логика                        | `backend-developer`                                                                                                                  | Тривиальный CRUD-endpoint в одном файле — пишем сами                         |
+| Фичи backend+web вместе (endpoint + UI кабинета)    | `fullstack-developer`                                                                                                                | Если фича чисто на одном слое — берём `backend-developer`/`nextjs-developer` |
+| REST/OpenAPI design                                 | `api-designer`                                                                                                                       | Добавление одного endpoint в существующий контроллер                         |
+| Next.js 15, кабинет, лендинг                        | `nextjs-developer`                                                                                                                   | Правка текста/стиля в существующем компоненте                                |
+| Сложные React-хуки, оптимизация рендеров            | `react-specialist`                                                                                                                   | Обычная страница без проблем с perf — `nextjs-developer`                     |
+| Сложные TS-типы, codegen                            | `typescript-pro`                                                                                                                     | Обычная типизация props/responses                                            |
+| PG-настройки, индексы, PostGIS, pg_cron             | `database-administrator` + `sql-pro`                                                                                                 | Простая Prisma-миграция (add column, rename) — пишем сами                    |
+| Геозоны, геофенсинг (PostGIS-геометрия + OSM-карты) | `database-administrator`+`sql-pro` (бэк) / `nextjs-developer` (web `react-leaflet`) / `gmd-flutter-developer` (mobile `flutter_map`) | Точечная правка стиля маркера/полигона                                       |
+| Bottlenecks: queries, polling, render perf          | `performance-engineer`                                                                                                               | Пока нет измеренной проблемы — не оптимизируем заранее                       |
+| Крупный рефакторинг легаси (3+ модуля)              | `refactoring-specialist`                                                                                                             | Локальный рефакторинг одного файла                                           |
+| OpenAPI / публичные API doc                         | `documentation-engineer`                                                                                                             | README, CHANGELOG — пишем сами (см. правила документации ниже)               |
+| Dockerfile, compose                                 | `docker-expert`                                                                                                                      | Bump образа, добавление env-переменной                                       |
+| CI/CD, Caddy, бэкапы                                | `devops-engineer` / `deployment-engineer`                                                                                            | Правка одной строки в Caddyfile/workflow                                     |
+| OWASP, pentests, security-аудит                     | `security-auditor`                                                                                                                   | Code review крупной фичи — у него есть `code-reviewer`                       |
+| 152-ФЗ compliance: PII retention, согласия, РКН     | `security-auditor`                                                                                                                   | Уже задокументированный flow без новых данных                                |
+| Перед merge крупной фичи                            | `code-reviewer`                                                                                                                      | Свои мелкие коммиты — review не нужен                                        |
+| Playwright, supertest, integration_test             | `test-automator`                                                                                                                     | Один unit-тест к существующему сьюту                                         |
+| Диагностика бага с неочевидным root-cause           | `debugger`                                                                                                                           | Понятный stack trace — фиксим сами                                           |
+| Flutter 3.x, Riverpod, Drift, flutter_map, RuStore  | `gmd-flutter-developer` (кастомный, см. `.claude/agents/`)                                                                           | Правка одного widget'а / bump pubspec — основной поток                       |
+| Branching, релизные ветки, merge-конфликты          | `git-workflow-manager`                                                                                                               | Пока работаем в master-only — не нужен                                       |
+| Визуальный дизайн UI кабинета (макеты, не вёрстка)  | `ui-designer`                                                                                                                        | Готовый макет → реализация в shadcn — это `nextjs-developer`                 |
+| Настройка hooks, MCP, Claude Code settings          | `claude-code-guide`                                                                                                                  | Простой вопрос «как X в Claude» — отвечаем сами                              |
+| Исследования по кодбазе (>3 запросов)               | `Explore`                                                                                                                            | Точечный grep/glob — делаем сами через Grep/Glob                             |
+| Планирование крупных изменений                      | `Plan`                                                                                                                               | Понятная задача с очевидным планом                                           |
 
 ## MCP-серверы
 
