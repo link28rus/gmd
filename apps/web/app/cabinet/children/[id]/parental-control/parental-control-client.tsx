@@ -1093,14 +1093,28 @@ function ScheduleRow({
           {schedule.crossesMidnight && ' (через полночь)'}
         </p>
       </div>
-      <label className="inline-flex shrink-0 cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+      <label
+        className={
+          'relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors ' +
+          (schedule.enabled ? 'bg-blue-600' : 'bg-muted-foreground/30') +
+          (update.isPending ? ' cursor-wait opacity-60' : '')
+        }
+        title={schedule.enabled ? 'Выключить расписание' : 'Включить расписание'}
+      >
         <input
           type="checkbox"
           checked={schedule.enabled}
           onChange={toggle}
           disabled={update.isPending}
-          className="h-4 w-4 cursor-pointer accent-blue-600"
+          className="peer sr-only"
           aria-label={schedule.enabled ? 'Выключить расписание' : 'Включить расписание'}
+        />
+        <span
+          className={
+            'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ' +
+            (schedule.enabled ? 'translate-x-[18px]' : 'translate-x-0.5')
+          }
+          aria-hidden
         />
       </label>
       <button
