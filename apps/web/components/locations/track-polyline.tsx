@@ -3,7 +3,6 @@ import { useMemo, type ReactElement } from 'react';
 import { Marker, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import type { LocationDto, TripDto } from '@/lib/api/locations';
-import { douglasPeucker } from '@/lib/geo/douglas-peucker';
 
 interface Props {
   items: LocationDto[];
@@ -19,10 +18,6 @@ interface Props {
 // accuracy floor (100м) и мобильного gate (75м); для ухоженных треков
 // — второй слой защиты на уже накопленных старыми версиями данных.
 const UI_ACCURACY_GATE_M = 50;
-
-// Epsilon для Ramer–Douglas–Peucker. 10м = полтора автомобиля — мельче
-// не имеет смысла на городской карте, а визуально убирает дрожь.
-const DP_EPSILON_M = 10;
 
 // Чтобы не перегружать карту при больших треках, показываем кружочки
 // каждую N-ю точку. Первая и последняя — всегда.
@@ -78,21 +73,22 @@ export function TrackPolyline({ items, stops }: Props): ReactElement | null {
     [items],
   );
 
-  // Шаг 2: DP-упрощение по всему отфильтрованному треку.
-  // Возвращаем [lat, lon] — у leaflet порядок именно такой.
-  const simplified = useMemo<Array<[number, number]>>(() => {
-    if (filtered.length < 2) return [];
-    const lonLat: Array<[number, number]> = filtered.map((p) => [p.lon, p.lat]);
-    const dp = douglasPeucker(lonLat, DP_EPSILON_M);
-    return dp.map(([lon, lat]) => [lat, lon]);
-  }, [filtered]);
+  // Шаг 2: координаты polyline — те же отфильтрованные точки, что и
+  // маркеры. Раньше тут было Douglas-Peucker упрощение (epsilon 10м), но
+  // оно «спрямляло» маршрут через 2-3 опорные вершины — линия проходила
+  // мимо реальных маркеров точек. Теперь линия идёт ровно через все
+  // отображаемые точки.
+  const positions = useMemo<Array<[number, number]>>(
+    () => filtered.map((p) => [p.lat, p.lon]),
+    [filtered],
+  );
 
   const stopMarkers = useMemo(() => {
     if (!stops || stops.length === 0) return [] as TripDto[];
     return stops.filter((t) => !t.isActive);
   }, [stops]);
 
-  if (simplified.length < 2 && stopMarkers.length === 0) return null;
+  if (positions.length < 2 && stopMarkers.length === 0) return null;
 
   const first = filtered[0];
   const last = filtered[filtered.length - 1];
@@ -100,9 +96,9 @@ export function TrackPolyline({ items, stops }: Props): ReactElement | null {
 
   return (
     <>
-      {simplified.length >= 2 && (
+      {positions.length >= 2 && (
         <Polyline
-          positions={simplified}
+          positions={positions}
           pathOptions={{ color: '#2563eb', weight: 3, dashArray: '8 6' }}
         />
       )}
