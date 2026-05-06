@@ -10,6 +10,10 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  # Русская локализация для встроенных виджетов (DatePicker, MaterialLocalizations).
+  # Без него DatePicker отрисуется на английском даже в RU-системе.
+  flutter_localizations:
+    sdk: flutter
   cupertino_icons: ^1.0.8
 
   # State management
@@ -32,7 +36,8 @@ dependencies:
   latlong2: ^0.9.1
 
   # Misc
-  intl: ^0.19.0
+  # 0.20.x — требуется flutter_localizations (SDK pin'нит intl=0.20.2).
+  intl: ^0.20.2
   package_info_plus: ^8.1.0
   device_info_plus: ^11.1.0
   connectivity_plus: ^6.0.5
@@ -48,6 +53,10 @@ dependencies:
   # потом можно заменить на нативный декодер.
   webview_flutter: ^4.10.0
   webview_flutter_android: ^4.0.0
+
+  # QR-коды для экрана «Добавить ребёнка» (показываем invite QR, ребёнок
+  # сканирует в mobile-child).
+  qr_flutter: ^4.1.0
 
 dev_dependencies:
   flutter_test:

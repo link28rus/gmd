@@ -59,6 +59,61 @@ class ChildrenRepository {
     );
   }
 
+  /// Создать нового ребёнка. Backend проверяет лимит (макс 10 на семью)
+  /// и возвращает `{child: {id, name, dateOfBirth, createdAt}}`.
+  ///
+  /// `dateOfBirth` опционален — если задан, отправляем как `YYYY-MM-DD`
+  /// (backend Zod схема требует именно `.date()`).
+  ///
+  /// Возможные [ApiException] коды: `child_limit_reached`, `consent_required`.
+  Future<String> createChild({
+    required String name,
+    DateTime? dateOfBirth,
+  }) async {
+    final body = <String, dynamic>{'name': name};
+    if (dateOfBirth != null) {
+      final y = dateOfBirth.year.toString().padLeft(4, '0');
+      final m = dateOfBirth.month.toString().padLeft(2, '0');
+      final d = dateOfBirth.day.toString().padLeft(2, '0');
+      body['dateOfBirth'] = '$y-$m-$d';
+    }
+    final res = await _dio.post<dynamic>(
+      '/family/children',
+      data: body,
+    );
+    final data = res.data as Map<String, dynamic>;
+    final child = data['child'] as Map<String, dynamic>;
+    return child['id'] as String;
+  }
+
+  /// Создать инвайт-код для привязки устройства ребёнка. Backend генерирует
+  /// 6-символьный код, действует ~10 минут (backend cfg). Возвращает QR-URL
+  /// формата `${landingBaseUrl}/claim/${code}` — это значение и кладётся
+  /// в QR-код, mobile-child сканирует и автоматически связывается.
+  ///
+  /// `consent14PlusGranted` — для детей 14+. Backend проверит при claim:
+  /// если ребёнку >=14 и флаг не выставлен → claim упадёт с
+  /// `consent14plus_required`.
+  ///
+  /// Возможные [ApiException] коды: `child_not_found`, `consent_required`.
+  /// 429 — превышен лимит 10 invites / 10 мин на родителя.
+  Future<InviteResponse> createInvite(
+    String childId, {
+    bool consent14PlusGranted = false,
+  }) async {
+    final res = await _dio.post<dynamic>(
+      '/family/children/$childId/invites',
+      data: {'consent14PlusGranted': consent14PlusGranted},
+    );
+    final data = res.data as Map<String, dynamic>;
+    return InviteResponse(
+      code: data['code'] as String,
+      qrUrl: data['qrUrl'] as String,
+      deepLink: data['deepLink'] as String,
+      expiresIn: (data['expiresIn'] as num).toInt(),
+    );
+  }
+
   /// История точек за период. По умолчанию backend отдаёт ~24 часа.
   Future<List<ChildLocation>> locations(
     String childId, {

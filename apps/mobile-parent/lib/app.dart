@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/api/connection_lifecycle_observer.dart';
@@ -44,6 +45,14 @@ class _GmdParentAppState extends ConsumerState<GmdParentApp> {
         useMaterial3: true,
         colorSchemeSeed: const Color(0xFF2E7D32),
       ),
+      // Русская локализация для DatePicker и других встроенных виджетов.
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [Locale('ru'), Locale('en')],
+      locale: const Locale('ru'),
       routerConfig: _router,
     );
   }

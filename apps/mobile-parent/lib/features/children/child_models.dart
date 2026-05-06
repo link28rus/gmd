@@ -180,3 +180,34 @@ DateTime? _parseDate(Object? raw) {
   if (raw is String && raw.isNotEmpty) return DateTime.parse(raw).toLocal();
   return null;
 }
+
+/// Ответ `POST /family/children/:childId/invites`.
+///
+/// `qrUrl` — то, что кладётся в QR-код (формат `${landingBaseUrl}/claim/${code}`,
+/// например `https://gmd.link28rus.ru/claim/AB12CD`). mobile-child сканирует
+/// QR, парсит URL → извлекает `code` → дёргает `/invites/claim` с device-info.
+///
+/// `deepLink` — альтернатива QR (gmd://claim/AB12CD), для ручного ввода
+/// или нативного intent-открытия. Не используется в mobile-parent UI.
+class InviteResponse {
+  InviteResponse({
+    required this.code,
+    required this.qrUrl,
+    required this.deepLink,
+    required this.expiresIn,
+  });
+
+  /// 6-символьный код привязки (формат `[A-Z0-9]{6}`).
+  final String code;
+
+  /// Полный URL для QR-кода.
+  final String qrUrl;
+
+  /// Deep-link для нативного launch (`gmd://claim/<code>`).
+  final String deepLink;
+
+  /// Сколько секунд ещё действителен код (обычно 600 = 10 минут).
+  final int expiresIn;
+
+  DateTime get expiresAt => DateTime.now().add(Duration(seconds: expiresIn));
+}

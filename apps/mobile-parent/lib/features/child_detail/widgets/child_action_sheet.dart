@@ -86,7 +86,7 @@ class _ChildActionSheetState extends ConsumerState<ChildActionSheet> {
           _ActionTile(
             icon: Icons.shield_outlined,
             label: 'Родительский контроль',
-            onTap: () => _showSnack('Родительский контроль — скоро'),
+            onTap: _onParentalControl,
           ),
           _ActionTile(
             icon: Icons.lock_outline,
@@ -193,6 +193,13 @@ class _ChildActionSheetState extends ConsumerState<ChildActionSheet> {
   void _onListenAudio() {
     final encoded = Uri.encodeQueryComponent(widget.child.name);
     context.push('/home/child/${widget.child.id}/audio?name=$encoded');
+  }
+
+  void _onParentalControl() {
+    final encoded = Uri.encodeQueryComponent(widget.child.name);
+    context.push(
+      '/home/child/${widget.child.id}/parental-control?name=$encoded',
+    );
   }
 
   Future<void> _onSignalTap() async {

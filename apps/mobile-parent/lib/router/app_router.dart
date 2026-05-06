@@ -8,6 +8,7 @@ import '../features/auth/login_screen.dart';
 import '../features/auth/register_screen.dart';
 import '../features/child_detail/child_detail_screen.dart';
 import '../features/home/home_screen.dart';
+import '../features/parental_control/parental_control_screen.dart';
 import '../features/splash/splash_screen.dart';
 
 class AppRouter {
@@ -41,6 +42,14 @@ class AppRouter {
                   // /home/child/:id/audio?name=<urlencoded child name>
                   path: 'audio',
                   builder: (_, state) => AudioListenScreen(
+                    childId: state.pathParameters['id']!,
+                    childName: state.uri.queryParameters['name'] ?? 'Ребёнок',
+                  ),
+                ),
+                GoRoute(
+                  // /home/child/:id/parental-control?name=<urlencoded child name>
+                  path: 'parental-control',
+                  builder: (_, state) => ParentalControlScreen(
                     childId: state.pathParameters['id']!,
                     childName: state.uri.queryParameters['name'] ?? 'Ребёнок',
                   ),

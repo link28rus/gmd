@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/providers.dart';
 import '../children/child_models.dart';
 import '../children/children_providers.dart';
+import '../children/widgets/add_child_flow.dart';
 
 /// Главный экран. Phase A: список детей + быстрые действия (placeholders).
 /// Карта, геозоны, история, звук, app-control — последующие фазы.
@@ -61,11 +62,7 @@ class HomeScreen extends ConsumerWidget {
       floatingActionButton: FloatingActionButton.extended(
         icon: const Icon(Icons.person_add_alt_1),
         label: const Text('Добавить ребёнка'),
-        onPressed: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Добавление по QR — следующая фаза')),
-          );
-        },
+        onPressed: () => startAddChildFlow(context, ref),
       ),
     );
   }
