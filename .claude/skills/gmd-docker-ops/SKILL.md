@@ -94,7 +94,7 @@ ssh gmd-prod 'cd /opt/gmd/docker && docker compose --env-file /opt/gmd/.env.prod
 ssh gmd-prod 'cd /opt/gmd/docker && docker compose --env-file /opt/gmd/.env.prod -f docker-compose.prod.yml up -d --build web'
 ```
 
-> **Web rebuild дорогой** (~3-5 мин — npm install + next build). Если меняется только env (NEXT*PUBLIC*_) — нужен **именно rebuild**, не restart, потому что `NEXT*PUBLIC*_`инлайнятся в bundle во время`next build`.
+> **Web rebuild дорогой** (~3-5 мин — npm install + next build). Если меняется только env-переменная вида `NEXT_PUBLIC_FOO` — нужен **именно rebuild**, не restart, потому что `NEXT_PUBLIC_*` инлайнятся в bundle во время `next build`.
 
 ### 4. Full stack up/down
 
@@ -184,7 +184,7 @@ docker volume rm gmd-dev_postgres_data
 | ------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
 | `docker compose down -v` на проде                                        | `docker compose down` (без `-v`) — оставит volumes                         |
 | `docker compose restart backend` после code change на проде              | `docker compose up -d --build backend`                                     |
-| `docker compose up -d --build` после edit `.env.prod`                    | `docker compose restart <service>` (если не NEXT*PUBLIC*\*)                |
+| `docker compose up -d --build` после edit `.env.prod`                    | `docker compose restart <service>` (если не `NEXT_PUBLIC_*`)               |
 | Пропустил `--env-file`                                                   | `--env-file /opt/gmd/.env.prod` обязателен на проде                        |
 | Пропустил `-f docker-compose.prod.yml`                                   | Compose ищет `compose.yaml` в `cwd` — на проде это ничего не найдёт        |
 | `psql` локально без `-T` через docker exec                               | `docker compose exec -T postgres psql ...` (no TTY в скриптах)             |
