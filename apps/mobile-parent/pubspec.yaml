@@ -1,7 +1,7 @@
 name: gmd_parent
 description: "GMD — приложение родителя"
 publish_to: 'none'
-version: 0.46.5+20
+version: 0.47.0+20
 
 environment:
   sdk: ^3.11.5
@@ -41,6 +41,11 @@ dependencies:
   package_info_plus: ^8.1.0
   device_info_plus: ^11.1.0
   connectivity_plus: ^6.0.5
+
+  # Auto-update: куда сохранять скачанный APK перед запуском installer'а.
+  # Используется UpdatesService._targetFile (external-cache/updates/) — путь
+  # совпадает с res/xml/file_provider_paths.xml.
+  path_provider: ^2.1.4
 
   # v0.46: Firebase Cloud Messaging — push для событий геозон / SOS / низкого заряда.
   # Versions согласованы с mobile-child (firebase-bom 34.12.0 в gradle).

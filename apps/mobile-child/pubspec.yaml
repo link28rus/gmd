@@ -1,7 +1,7 @@
 name: gmd_child
 description: "GMD — приложение ребёнка"
 publish_to: 'none'
-version: 0.46.5+6069
+version: 0.47.0+6069
 
 environment:
   sdk: ^3.11.5

@@ -3,9 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/providers.dart';
+import '../../core/version/app_version.dart';
 import '../children/child_models.dart';
 import '../children/children_providers.dart';
 import '../children/widgets/add_child_flow.dart';
+import 'update_banner.dart';
 
 /// Главный экран. Phase A: список детей + быстрые действия (placeholders).
 /// Карта, геозоны, история, звук, app-control — последующие фазы.
@@ -21,6 +23,16 @@ class HomeScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Мои дети'),
         actions: [
+          // Версия + long-press → /debug. Аналог mobile-child header'а.
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Center(
+              child: GestureDetector(
+                onLongPress: () => context.push('/debug'),
+                child: const AppVersionLabel(),
+              ),
+            ),
+          ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert),
             onSelected: (value) async {
@@ -47,17 +59,27 @@ class HomeScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: () async => ref.invalidate(childrenListProvider),
-        child: childrenAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => _ErrorView(
-            error: e,
-            onRetry: () => ref.invalidate(childrenListProvider),
+      body: Column(
+        children: [
+          // Auto-update: показывается ТОЛЬКО когда есть обновление
+          // (Downloading / Downloaded / NeedsPermission / Failed).
+          const UpdateBanner(),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: () async => ref.invalidate(childrenListProvider),
+              child: childrenAsync.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (e, _) => _ErrorView(
+                  error: e,
+                  onRetry: () => ref.invalidate(childrenListProvider),
+                ),
+                data: (children) => children.isEmpty
+                    ? const _EmptyState()
+                    : _ChildrenList(children: children),
+              ),
+            ),
           ),
-          data: (children) =>
-              children.isEmpty ? const _EmptyState() : _ChildrenList(children: children),
-        ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         icon: const Icon(Icons.person_add_alt_1),

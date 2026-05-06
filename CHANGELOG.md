@@ -9,6 +9,23 @@
 
 ---
 
+## v0.47.0 — 2026-05-06 — Версия в UI родителя + автообновление + диагностика
+
+### Новые возможности
+
+- **Версия приложения теперь видна в шапке «Мои дети»** mobile-parent. Лейбл `vX.Y.Z (N)` справа в AppBar — пользователь сразу понимает, какая сборка у него установлена, и может сообщить версию в саппорт без захода в Settings → Apps.
+- **Автообновление APK для приложения родителя.** На каждом запуске mobile-parent ходит на `GET /api/public/updates/mobile-parent/latest`, сравнивает версию и при наличии новее — скачивает APK в external-cache и запускает системный installer (один раз за версию, без install-loop'ов). Если у пользователя не разрешён `REQUEST_INSTALL_PACKAGES` — баннер ведёт в Settings, на resume автоматически перепроверяет permission и продолжает установку. Полный паритет с auto-update mobile-child (v0.40.0).
+- **Диагностический экран `/debug` по long-press на версии.** Долгое нажатие на лейбл версии открывает экран с native + Dart-логами (DiagLog), с действиями «Обновить / Скопировать / Очистить». Доступен и до login (для диагностики проблем входа). Аналог фичи mobile-child — снимать диагностику без adb по скриншоту.
+
+### Изменения
+
+- **Backend:** добавлен публичный endpoint `GET /api/public/updates/mobile-parent/latest?abi=...` рядом с mobile-child-аналогом ([apps/web/app/api/public/updates/mobile-parent/latest/route.ts](apps/web/app/api/public/updates/mobile-parent/latest/route.ts)). Использует ту же `listDownloadFiles` + parser имени `gmd-parent-X.Y.Z+N-<abi>.apk` (уже поддерживался в `lib/downloads/index.ts`).
+- **Native Android (parent):** добавлены `DiagLog.kt`, `InstallerNative.kt` + 2 MethodChannel'а в `MainActivity.kt` (`ru.link28rus.gmd.parent/diag`, `ru.link28rus.gmd.parent/installer`), permission `REQUEST_INSTALL_PACKAGES`, FileProvider authority `${applicationId}.fileprovider` с external-cache путями.
+- **Dart (parent):** добавлены `core/version/app_version.dart`, `core/diag/diag_channel.dart`, `core/updates/*` (controller, service, info, installer_channel), `features/home/update_banner.dart`, `features/debug/debug_screen.dart`. UpdateController использует `shared_preferences` (а не `flutter_secure_storage`) для per-filename installer-attempted флага — соответствует политике parent (см. lesson про MIUI MasterKey loss).
+- **pubspec parent:** добавлен `path_provider: ^2.1.4` для external-cache.
+
+---
+
 ## v0.46.5 — 2026-05-06 — Время также в карточках системных приложений
 
 ### Исправления

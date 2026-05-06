@@ -5,6 +5,11 @@
          и keep-screen-awake (для high-priority data-message в Doze). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <!-- Auto-update mobile-parent: после скачивания APK через Dio app дёргает
+         системный installer (ACTION_VIEW + FileProvider URI). Special access,
+         грантится один раз на наш package. Без него ACTION_VIEW показывает
+         блокирующий «Запретить установку», а не наш installer. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
 
     <application
         android:name="${applicationName}"
@@ -62,6 +67,20 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <!-- Auto-update: FileProvider для передачи скачанного APK системному
+             installer'у через content:// URI. Authority "${applicationId}.fileprovider"
+             используется в InstallerNative.kt. Пути ограничены external-cache/updates/
+             (см. res/xml/file_provider_paths.xml). -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_provider_paths" />
+        </provider>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

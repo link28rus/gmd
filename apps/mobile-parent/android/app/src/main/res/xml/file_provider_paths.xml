@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Auto-update mobile-parent: FileProvider пути для шаринга скачанного APK
+  системному installer'у (ACTION_VIEW + content:// URI).
+
+  external-cache-path/updates/ — куда InstallerNative.installApk + Dart Dio.download
+  кладут <filename>.apk. external-cache потому что:
+    - НЕ требует WRITE_EXTERNAL_STORAGE
+    - очищается системой при нехватке места (ок, после install APK не нужен)
+    - доступен FileProvider'у без MANAGE_EXTERNAL_STORAGE
+-->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+  <external-cache-path
+    name="updates"
+    path="updates/" />
+</paths>

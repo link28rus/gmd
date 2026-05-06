@@ -7,6 +7,7 @@ import '../features/audio/audio_listen_screen.dart';
 import '../features/auth/login_screen.dart';
 import '../features/auth/register_screen.dart';
 import '../features/child_detail/child_detail_screen.dart';
+import '../features/debug/debug_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/parental_control/parental_control_screen.dart';
 import '../features/splash/splash_screen.dart';
@@ -21,6 +22,7 @@ class AppRouter {
         final session = ref.read(authSessionProvider);
         final loc = state.matchedLocation;
         if (loc == '/splash') return null; // splash сам управляет навигацией
+        if (loc == '/debug') return null; // /debug доступен всегда — нужен для диагностики login-проблем
         final isAuthRoute = loc == '/login' || loc == '/register';
         if (session == null && !isAuthRoute) return '/login';
         return null;
@@ -29,6 +31,10 @@ class AppRouter {
         GoRoute(path: '/splash', builder: (_, _) => const SplashScreen()),
         GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
         GoRoute(path: '/register', builder: (_, _) => const RegisterScreen()),
+        // Скрытый диагностический экран — открывается долгим нажатием на
+        // лейбле версии в AppBar /home. Доступен из любого состояния auth,
+        // включая когда session == null (для диагностики проблем входа).
+        GoRoute(path: '/debug', builder: (_, _) => const DebugScreen()),
         GoRoute(
           path: '/home',
           builder: (_, _) => const HomeScreen(),
