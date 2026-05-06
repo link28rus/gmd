@@ -86,6 +86,7 @@ phase1.1-web-*.png
 
 # Claude Code local config
 .claude/settings.local.json
+.claude/worktrees/
 
 # Временные скриншоты / эксперименты во время разработки
 tmp-*/

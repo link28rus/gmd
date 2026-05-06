@@ -76,10 +76,11 @@ docs/superpowers/specs  design docs
 **Что остаётся обязательным всегда (без superpowers):**
 
 1. Перед действием — подтянуть контекст из memory-compiler (`start_task` / `search` / `get_active_context`).
-2. После нетривиальной задачи — `finish_task` + при необходимости `save_decision` / `save_runbook` / `save_tracking`.
-3. Перед коммитом — реально запустить то, что менял, и убедиться что работает (без формального скила verification).
-4. Документация и CHANGELOG обновляются в том же коммите (см. раздел ниже).
-5. **НЕ работать в worktree.** Все правки кода — только в основном чекауте `D:/Project/GMD/`. Если харнесс автоматически запустил тебя в `.claude/worktrees/<name>/` — игнорируй worktree-cwd и оперируй абсолютными путями к основному репо: `Read`/`Edit`/`Write` `D:/Project/GMD/...`, `Bash` команды через `cd D:/Project/GMD && ...`. **Причина:** в worktree не попадает untracked-работа пользователя (новые файлы, незакоммиченные правки), из-за чего ты будешь видеть «фантомные заглушки» там, где фича уже реализована в working tree основного репо. Если хочется изоляции — заведи feature-branch в основном чекауте, а не worktree.
+2. **Все нетривиальные задачи — через `gmd-taskmaster`.** Любая фича/баг/рефакторинг/деплой = задача в `.taskmaster/tasks/tasks.json`. ПЕРВЫМ действием — `mcp__gmd-taskmaster__next_task` (если работаем по плану) или `mcp__gmd-taskmaster__add_task` (если задача новая, не в плане). В процессе — `set_task_status in-progress` → `update_subtask` (логировать факты) → `set_task_status done`. **Исключения** (без задачи): однострочный typo-fix, опечатка в README, `git push` уже готовых коммитов, ответ на вопрос пользователя без правок кода. Подробности: skill `gmd-development` + `.taskmaster/CLAUDE.md`.
+3. После нетривиальной задачи — `finish_task` в memory-compiler + при необходимости `save_decision` / `save_runbook` / `save_tracking`.
+4. Перед коммитом — реально запустить то, что менял, и убедиться что работает (без формального скила verification).
+5. Документация и CHANGELOG обновляются в том же коммите (см. раздел ниже).
+6. **НЕ работать в worktree.** Все правки кода — только в основном чекауте `D:/Project/GMD/`. Если харнесс автоматически запустил тебя в `.claude/worktrees/<name>/` — игнорируй worktree-cwd и оперируй абсолютными путями к основному репо: `Read`/`Edit`/`Write` `D:/Project/GMD/...`, `Bash` команды через `cd D:/Project/GMD && ...`. **Причина:** в worktree не попадает untracked-работа пользователя (новые файлы, незакоммиченные правки), из-за чего ты будешь видеть «фантомные заглушки» там, где фича уже реализована в working tree основного репо. Если хочется изоляции — заведи feature-branch в основном чекауте, а не worktree.
 
 **Best-practices (уроки из прошлых сессий — НЕ повторять):**
 
@@ -110,6 +111,7 @@ docs/superpowers/specs  design docs
 ### Используем регулярно
 
 - `memory-autopilot` — всегда, контекст между сессиями
+- `gmd-development` — проект, пути, конвенции, dev/prod-команды, common mistakes (auto-load для GMD)
 - `superpowers:*` — **только по явному запросу пользователя** (см. «Рабочий процесс»)
 - `frontend-design:frontend-design` — UI кабинета родителя, лендинг
 - `design:design-system`, `design:accessibility-review`, `design:ux-copy`, `design:design-handoff`
@@ -122,7 +124,6 @@ docs/superpowers/specs  design docs
 
 ### Нужно создать (через `anthropic-skills:skill-creator`)
 
-- `gmd-development` — проект, пути, конвенции, dev-запуск (аналог `aquastart-development`)
 - `gmd-docker-ops` — compose up/down/logs/exec на 192.168.1.23
 - `gmd-db-backup` — pg_dump + restore + anonymize для dev
 - `gmd-deploy` — SSH-деплой + healthcheck
