@@ -3,13 +3,8 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthStore, type AuthUser, type AuthFamily } from '@/lib/auth-store';
-
-interface RefreshResponse {
-  accessToken: string;
-  user?: AuthUser & { isAdmin?: boolean };
-  family?: AuthFamily;
-}
+import { useAuthStore } from '@/lib/auth-store';
+import { refreshAccessToken } from '@/lib/auth/refresh-singleflight';
 
 interface Props {
   children: ReactNode;
@@ -38,14 +33,9 @@ export function AdminClient({ children }: Props) {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch('/api/auth/refresh', { method: 'POST' });
-        if (!res.ok) {
-          router.replace('/login');
-          return;
-        }
-        const data = (await res.json()) as RefreshResponse;
+        const data = await refreshAccessToken();
         if (cancelled) return;
-        if (!data.user || !data.family) {
+        if (!data || !data.user || !data.family) {
           router.replace('/login');
           return;
         }

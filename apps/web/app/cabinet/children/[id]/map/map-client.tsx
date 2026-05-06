@@ -4,11 +4,12 @@ import { useEffect, useState, type ReactElement } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { useAuthStore, type AuthUser, type AuthFamily } from '@/lib/auth-store';
+import { useAuthStore } from '@/lib/auth-store';
 import { useChildren } from '@/lib/hooks/use-children';
 import { useLatestLocation } from '@/lib/hooks/use-latest-location';
 import { useLocationHistory } from '@/lib/hooks/use-location-history';
 import { useTripsList } from '@/lib/hooks/use-trips-list';
+import { refreshAccessToken } from '@/lib/auth/refresh-singleflight';
 import { ChildMap } from '@/components/locations/child-map';
 import { ChildStatusCard } from '@/components/locations/child-status-card';
 import { DateSelector } from '@/components/locations/date-selector';
@@ -16,12 +17,6 @@ import { TrackTruncatedBanner } from '@/components/locations/track-truncated-ban
 import { MapErrorFallback } from '@/components/locations/map-error-fallback';
 import { todayIso } from '@/lib/date/day-bounds';
 import { ApiError } from '@/lib/api/client';
-
-interface RefreshResponse {
-  accessToken: string;
-  user?: AuthUser;
-  family?: AuthFamily;
-}
 
 interface Props {
   childId: string;
@@ -43,14 +38,9 @@ export default function MapClient({ childId }: Props): ReactElement {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch('/api/auth/refresh', { method: 'POST' });
-        if (!res.ok) {
-          router.replace('/login');
-          return;
-        }
-        const data = (await res.json()) as RefreshResponse;
+        const data = await refreshAccessToken();
         if (cancelled) return;
-        if (!data.user || !data.family) {
+        if (!data || !data.user || !data.family) {
           router.replace('/login');
           return;
         }

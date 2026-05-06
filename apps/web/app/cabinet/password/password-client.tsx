@@ -4,13 +4,8 @@ import { useEffect, useState, type FormEvent, type ReactElement } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { useAuthStore, type AuthUser, type AuthFamily } from '@/lib/auth-store';
-
-interface RefreshResponse {
-  accessToken: string;
-  user?: AuthUser;
-  family?: AuthFamily;
-}
+import { useAuthStore } from '@/lib/auth-store';
+import { refreshAccessToken } from '@/lib/auth/refresh-singleflight';
 
 const MIN_LEN = 8;
 const MAX_LEN = 128;
@@ -35,14 +30,9 @@ export default function PasswordClient(): ReactElement {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch('/api/auth/refresh', { method: 'POST' });
-        if (!res.ok) {
-          router.replace('/login');
-          return;
-        }
-        const data = (await res.json()) as RefreshResponse;
+        const data = await refreshAccessToken();
         if (cancelled) return;
-        if (!data.user || !data.family) {
+        if (!data || !data.user || !data.family) {
           router.replace('/login');
           return;
         }

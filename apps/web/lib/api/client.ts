@@ -2,6 +2,7 @@
 'use client';
 
 import { useAuthStore } from '@/lib/auth-store';
+import { refreshAccessToken } from '@/lib/auth/refresh-singleflight';
 
 export class ApiError extends Error {
   constructor(
@@ -12,12 +13,6 @@ export class ApiError extends Error {
     super(message);
     this.name = 'ApiError';
   }
-}
-
-interface RefreshResponse {
-  accessToken: string;
-  user?: { id: string; email: string; name: string | null; locale: string };
-  family?: { id: string; name: string };
 }
 
 async function doFetch(path: string, init: RequestInit, token: string | null): Promise<Response> {
@@ -36,9 +31,8 @@ export async function apiFetch<T = unknown>(path: string, init: RequestInit = {}
   let res = await doFetch(path, init, store.accessToken);
 
   if (res.status === 401) {
-    const r = await fetch('/api/auth/refresh', { method: 'POST' });
-    if (r.ok) {
-      const data = (await r.json()) as RefreshResponse;
+    const data = await refreshAccessToken();
+    if (data) {
       if (data.user && data.family) {
         useAuthStore.getState().setAll({
           accessToken: data.accessToken,

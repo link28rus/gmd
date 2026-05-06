@@ -9,6 +9,16 @@
 
 ---
 
+## v0.47.1 — 2026-05-06 — Стабильная сессия в web-кабинете между вкладками
+
+### Исправления
+
+- **Убрали ложное «Войдите ещё раз» при открытии новой вкладки кабинета** — пользователю больше не нужно вводить пароль каждый раз при открытии `/cabinet`, `/cabinet/zones`, `/cabinet/children/[id]/map` и т.п. на уже залогиненном компьютере. Сессия живёт штатные 30 дней refresh-токена.
+- fix(auth): backend больше не отзывает всю цепочку refresh-токенов при race condition — добавлено 10-секундное grace-окно после ротации, в пределах которого повторное использование старого токена считается race из параллельных вкладок, а не replay-attack ([apps/backend/src/auth/refresh-token.service.ts](apps/backend/src/auth/refresh-token.service.ts)). Защита от настоящего replay-attack (минуты/часы спустя) сохранена.
+- fix(web): single-flight `/api/auth/refresh` — все клиентские бутстрапы кабинета (`cabinet/`, `cabinet/zones/`, `cabinet/children/`, `cabinet/children/[id]/map/`, `cabinet/password/`, `admin/`) и `apiFetch` идут через общий [lib/auth/refresh-singleflight.ts](apps/web/lib/auth/refresh-singleflight.ts) с `navigator.locks` — гарантированно ровно один refresh в полёте на весь браузер, а не N параллельных от каждой вкладки.
+
+---
+
 ## v0.47.0 — 2026-05-06 — Версия в UI родителя + автообновление + диагностика
 
 ### Новые возможности

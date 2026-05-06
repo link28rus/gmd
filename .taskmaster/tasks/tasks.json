@@ -20,7 +20,9 @@
         "details": "Plan Task 2. Depends on Task 1.",
         "testStrategy": "pnpm install без ошибок; pnpm-lock.yaml создан",
         "status": "done",
-        "dependencies": ["1"],
+        "dependencies": [
+          "1"
+        ],
         "priority": "high",
         "subtasks": [],
         "updatedAt": "2026-04-18T03:46:44.153Z"
@@ -32,7 +34,9 @@
         "details": "Plan Task 3. Зависит от 2.",
         "testStrategy": "commitlint блокирует плохое сообщение; pre-commit хук работает",
         "status": "done",
-        "dependencies": ["2"],
+        "dependencies": [
+          "2"
+        ],
         "priority": "high",
         "subtasks": [],
         "updatedAt": "2026-04-18T03:46:44.155Z"
@@ -44,7 +48,9 @@
         "details": "Plan Task 4. Зависит от 2.",
         "testStrategy": "Jest: 2 passed; curl /healthz → {status:ok}",
         "status": "done",
-        "dependencies": ["2"],
+        "dependencies": [
+          "2"
+        ],
         "priority": "high",
         "subtasks": [],
         "updatedAt": "2026-04-18T03:46:44.157Z"
@@ -56,7 +62,9 @@
         "details": "Plan Task 5. Зависит от 4.",
         "testStrategy": "prisma generate успешен; .env не попадает в коммит",
         "status": "done",
-        "dependencies": ["4"],
+        "dependencies": [
+          "4"
+        ],
         "priority": "high",
         "subtasks": [],
         "updatedAt": "2026-04-18T03:48:16.751Z"
@@ -68,7 +76,9 @@
         "details": "Plan Task 6. Зависит от 3.",
         "testStrategy": "next dev -p 3000; curl /api/healthz → {status:ok}",
         "status": "done",
-        "dependencies": ["3"],
+        "dependencies": [
+          "3"
+        ],
         "priority": "high",
         "subtasks": [],
         "updatedAt": "2026-04-18T03:54:45.021Z"
@@ -80,7 +90,9 @@
         "details": "Plan Task 7. Зависит от 2.",
         "testStrategy": "pnpm typecheck зелёный во всех workspace-пакетах",
         "status": "done",
-        "dependencies": ["2"],
+        "dependencies": [
+          "2"
+        ],
         "priority": "medium",
         "subtasks": [],
         "updatedAt": "2026-04-18T03:57:05.445Z"
@@ -92,7 +104,9 @@
         "details": "Plan Task 8. Зависит от 7. Требует установленный Flutter SDK.",
         "testStrategy": "melos run analyze → No issues found",
         "status": "done",
-        "dependencies": ["7"],
+        "dependencies": [
+          "7"
+        ],
         "priority": "medium",
         "subtasks": [],
         "updatedAt": "2026-04-18T04:00:18.887Z"
@@ -104,7 +118,11 @@
         "details": "Plan Task 9. Зависит от 5, 6, 8.",
         "testStrategy": "git tag v0.1.0 создан; все smoke-проверки pass",
         "status": "done",
-        "dependencies": ["5", "6", "8"],
+        "dependencies": [
+          "5",
+          "6",
+          "8"
+        ],
         "priority": "high",
         "subtasks": [],
         "updatedAt": "2026-04-18T04:09:01.957Z"
@@ -116,7 +134,9 @@
         "details": "Plan Task 1. Files: infra/docker/docker-compose.dev.yml, .env.dev.example, postgres/init.sql, docker-compose.prod.yml (stub), .gitignore.",
         "testStrategy": "git check-ignore infra/docker/.env.dev → IGNORED_OK",
         "status": "done",
-        "dependencies": ["9"],
+        "dependencies": [
+          "9"
+        ],
         "priority": "high",
         "subtasks": [],
         "updatedAt": "2026-04-18T04:20:33.844Z"
@@ -128,7 +148,9 @@
         "details": "Plan: docs/superpowers/plans/2026-04-18-gmd-phase0.3-server-deploy.md (Task 1).",
         "testStrategy": "df -hT / → /dev/sda2 ~79G",
         "status": "done",
-        "dependencies": ["10"],
+        "dependencies": [
+          "10"
+        ],
         "priority": "high",
         "subtasks": [],
         "updatedAt": "2026-04-18T05:14:04.358Z"
@@ -140,7 +162,9 @@
         "details": "Plan Task 2. Идемпотентный скрипт, коммитится в репо.",
         "testStrategy": "hostnamectl → gmd-prod; swapon --show → /swapfile 4G; timedatectl → Europe/Moscow",
         "status": "done",
-        "dependencies": ["11"],
+        "dependencies": [
+          "11"
+        ],
         "priority": "high",
         "subtasks": [],
         "updatedAt": "2026-04-18T05:16:24.093Z"
@@ -152,7 +176,9 @@
         "details": "Plan Task 3. Деструктив — держать бэкап до завершения Task 14.",
         "testStrategy": "ss -tlnp | grep -E ':3000|:5000' → ports free",
         "status": "done",
-        "dependencies": ["12"],
+        "dependencies": [
+          "12"
+        ],
         "priority": "high",
         "subtasks": [],
         "updatedAt": "2026-04-18T05:17:29.061Z"
@@ -164,7 +190,9 @@
         "details": "Plan Task 4. Контейнерный Postgres в Task 10.",
         "testStrategy": "ss -tlnp | grep :5432 → пусто; which node → пусто",
         "status": "done",
-        "dependencies": ["13"],
+        "dependencies": [
+          "13"
+        ],
         "priority": "high",
         "subtasks": [],
         "updatedAt": "2026-04-18T05:18:09.828Z"
@@ -176,7 +204,9 @@
         "details": "Plan Task 5. Обязательно верифицировать вход по ключу ДО Task 6 (иначе отрежет доступ).",
         "testStrategy": "ssh -o PasswordAuthentication=no gmd-prod 'echo ok' → ok",
         "status": "done",
-        "dependencies": ["14"],
+        "dependencies": [
+          "14"
+        ],
         "priority": "high",
         "subtasks": [],
         "updatedAt": "2026-04-18T05:18:48.454Z"
@@ -188,7 +218,9 @@
         "details": "Plan Task 6. После этого шага вход по паролю невозможен.",
         "testStrategy": "Попытка sshpass-логина падает с Permission denied; ssh по ключу работает",
         "status": "done",
-        "dependencies": ["15"],
+        "dependencies": [
+          "15"
+        ],
         "priority": "high",
         "subtasks": [],
         "updatedAt": "2026-04-18T05:19:47.205Z"
@@ -200,7 +232,9 @@
         "details": "Plan Task 7.",
         "testStrategy": "ufw status → active; fail2ban-client status sshd → jail active",
         "status": "done",
-        "dependencies": ["16"],
+        "dependencies": [
+          "16"
+        ],
         "priority": "high",
         "subtasks": [],
         "updatedAt": "2026-04-18T05:20:42.495Z"
@@ -212,7 +246,9 @@
         "details": "Plan Task 8.",
         "testStrategy": "docker version → 27+; docker compose version → v2+; docker run --rm hello-world → Hello from Docker",
         "status": "done",
-        "dependencies": ["17"],
+        "dependencies": [
+          "17"
+        ],
         "priority": "high",
         "subtasks": [],
         "updatedAt": "2026-04-18T05:22:13.547Z"
@@ -224,7 +260,9 @@
         "details": "Plan Task 9. Секреты в memory-compiler save_secret.",
         "testStrategy": "ls /opt/gmd/.env.prod → 600; структура /opt/gmd существует",
         "status": "done",
-        "dependencies": ["18"],
+        "dependencies": [
+          "18"
+        ],
         "priority": "high",
         "subtasks": [],
         "updatedAt": "2026-04-18T05:25:16.939Z"
@@ -236,7 +274,9 @@
         "details": "Plan Task 10. Реальная регистрация pg_cron job выполнится после Prisma-миграции Phase 1 (там появится таблица locations).",
         "testStrategy": "docker build + smoke run → SELECT extname FROM pg_extension содержит postgis и pg_cron",
         "status": "done",
-        "dependencies": ["19"],
+        "dependencies": [
+          "19"
+        ],
         "priority": "high",
         "subtasks": [],
         "updatedAt": "2026-04-18T05:26:18.304Z"
@@ -248,7 +288,9 @@
         "details": "Plan Task 11. Наружу торчат только caddy:80/443. Для Next.js standalone-режим.",
         "testStrategy": "docker compose config валиден; build backend/web проходит локально",
         "status": "done",
-        "dependencies": ["20"],
+        "dependencies": [
+          "20"
+        ],
         "priority": "high",
         "subtasks": [],
         "updatedAt": "2026-04-18T05:27:20.308Z"
@@ -260,7 +302,9 @@
         "details": "Plan Task 12. Валидация caddy validate.",
         "testStrategy": "docker run caddy validate → Valid configuration",
         "status": "done",
-        "dependencies": ["21"],
+        "dependencies": [
+          "21"
+        ],
         "priority": "high",
         "subtasks": [],
         "updatedAt": "2026-04-18T05:27:58.452Z"
@@ -272,7 +316,9 @@
         "details": "Plan Task 13. Идемпотентный, без реестра (build на сервере).",
         "testStrategy": "bash -n deploy.sh → syntax OK",
         "status": "done",
-        "dependencies": ["22"],
+        "dependencies": [
+          "22"
+        ],
         "priority": "high",
         "subtasks": [],
         "updatedAt": "2026-04-18T05:29:18.269Z"
@@ -284,7 +330,9 @@
         "details": "Plan Task 14. Блокирует DNS и проброс 80/443 — за пользователем.",
         "testStrategy": "curl -I https://gmd.link28rus.ru/healthz → HTTP/2 200; readyz {db:up,redis:up}",
         "status": "done",
-        "dependencies": ["23"],
+        "dependencies": [
+          "23"
+        ],
         "priority": "high",
         "subtasks": [],
         "updatedAt": "2026-04-18T12:20:07.648Z"
@@ -296,7 +344,9 @@
         "details": "Plan Task 15. 40-backups-install.sh монтирует всё на сервер.",
         "testStrategy": "systemctl list-timers pg-*; /opt/gmd/backups/postgres/*.dump.zst создан",
         "status": "done",
-        "dependencies": ["24"],
+        "dependencies": [
+          "24"
+        ],
         "priority": "high",
         "subtasks": [],
         "updatedAt": "2026-04-18T06:06:40.339Z"
@@ -308,7 +358,9 @@
         "details": "Plan Task 16.",
         "testStrategy": "https://errors.gmd.link28rus.ru/ доступен под basic-auth; тестовая ошибка появляется в UI",
         "status": "deferred",
-        "dependencies": ["24"],
+        "dependencies": [
+          "24"
+        ],
         "priority": "high",
         "subtasks": [],
         "updatedAt": "2026-04-18T12:20:07.674Z"
@@ -320,7 +372,9 @@
         "details": "Plan Task 17.",
         "testStrategy": "https://status.gmd.link28rus.ru/ доступен; 3 monitor = UP",
         "status": "deferred",
-        "dependencies": ["26"],
+        "dependencies": [
+          "26"
+        ],
         "priority": "medium",
         "subtasks": [],
         "updatedAt": "2026-04-18T12:20:07.688Z"
@@ -332,7 +386,10 @@
         "details": "Plan Task 18.",
         "testStrategy": "git tag --list v0.3.0 → присутствует; CHANGELOG содержит v0.3.0 запись",
         "status": "done",
-        "dependencies": ["25", "27"],
+        "dependencies": [
+          "25",
+          "27"
+        ],
         "priority": "high",
         "subtasks": [],
         "updatedAt": "2026-04-18T12:23:26.701Z"
@@ -344,7 +401,9 @@
         "details": "Plan Task 19.",
         "testStrategy": "Все 7 проверок Task 19 Step 1-6 зелёные",
         "status": "done",
-        "dependencies": ["28"],
+        "dependencies": [
+          "28"
+        ],
         "priority": "high",
         "subtasks": [],
         "updatedAt": "2026-04-18T12:23:26.705Z"
@@ -696,14 +755,28 @@
         "priority": "medium",
         "subtasks": [],
         "updatedAt": "2026-05-06T07:02:04.474Z"
+      },
+      {
+        "id": "59",
+        "title": "Web-кабинет: сессия не сохраняется между вкладками/страницами на gmd.link28rus.ru",
+        "description": "При открытии новой страницы (или новой вкладки) на https://gmd.link28rus.ru/ пользователю каждый раз приходится логиниться заново на одном и том же компьютере. Сессия не персистится между навигациями — должна жить минимум refresh-token TTL (30 дней).",
+        "details": "## Симптом\nПользователь (link28rus@gmail.com, prod-кабинет https://gmd.link28rus.ru/) сообщает: при открытии **новой страницы** или **новой вкладки** в браузере на одном и том же компьютере просят ввести логин/пароль каждый раз. Ожидаемое поведение — JWT access (15m) автоматически продлевается через refresh (30d), пользователь остаётся залогинен.\n\n## Где искать причину (по порядку вероятности)\n1. **HttpOnly refresh-cookie** — проверить флаги `Secure`, `SameSite`, `Domain`, `Path`, `Expires` на проде в `Set-Cookie`. Самая частая причина — `SameSite=Strict` или отсутствие `Domain=gmd.link28rus.ru` → cookie не отдаётся при cross-tab навигации или ставится только на `/api/auth/*` path.\n2. **Next.js middleware / SSR redirect** — если `middleware.ts` редиректит на `/login` при отсутствии access-токена в memory-стейте (а refresh-flow на клиенте не успел отработать), каждая полная навигация = новый редирект. Проверить, что middleware читает refresh-cookie на сервере и пытается обменять на access ДО редиректа.\n3. **Storage стратегия access-токена** — если access живёт только в React-state / SWR-cache, при F5 / новой вкладке он теряется и клиент должен дёрнуть `/api/auth/refresh` с cookie. Проверить bootstrap-флоу клиента: есть ли немой `refresh` при mount + правильный fallback на `/login` ТОЛЬКО при 401 от refresh.\n4. **Caddy / reverse-proxy** — режет ли Caddy `Set-Cookie` или меняет `Domain`? Проверить headers в `infra/caddy/Caddyfile`.\n5. **CSRF / double-submit** — если CSRF-токен в localStorage и при новой вкладке его нет, refresh-endpoint может 403.\n\n## Исторический контекст\n- В memory-compiler есть lesson «mobile-parent persistent login: refreshToken терялся через web /api/auth/*» (2026-04-29) — мобильное приложение через web BFF теряло refresh-token. Возможна та же первопричина в самом web-кабинете.\n- Auth-флоу был перередизайнен в v0.20.2→v0.22.2 (2026-04-22). Стоит свериться, нет ли регрессии после последующих релизов.\n\n## Файлы-кандидаты\n- `apps/web/middleware.ts` — auth-redirect логика\n- `apps/web/app/api/auth/login/route.ts` — выставление cookie\n- `apps/web/app/api/auth/refresh/route.ts` — обновление access по refresh-cookie\n- `apps/web/lib/auth/*` — клиентский bootstrap, useSession-хук\n- `apps/backend/src/auth/*` — issue/verify токенов\n- `infra/caddy/Caddyfile` — reverse-proxy headers\n\n## Артефакты для дебага (попросить у пользователя ИЛИ собрать самим)\n- DevTools → Application → Cookies → `https://gmd.link28rus.ru` — какие cookies стоят, флаги, expires\n- DevTools → Network → отфильтровать по `auth` — что возвращает `/api/auth/refresh` при открытии новой вкладки (200/401/403?), какие cookies уходят в Request Headers\n- Console errors при открытии новой вкладки\n- Воспроизводится только в одном браузере или во всех? (incognito-режим — отдельный jar и норм поведение там подскажет на cookies vs localStorage)",
+        "testStrategy": "## План проверки фикса\n1. **Локально:** воспроизвести на dev-стенде (`pnpm dev`, http://localhost:3000) — залогиниться, открыть новую вкладку с тем же origin, убедиться что сессия жива.\n2. **На прод-копии (staging либо deploy.sh):**\n   - Залогиниться на https://gmd.link28rus.ru/\n   - Открыть новую вкладку → перейти на /dashboard → не должно быть редиректа на /login\n   - Закрыть вкладку, через 5 минут открыть заново → не должно быть редиректа (access обновляется через refresh)\n   - F5 на /dashboard → не должно быть редиректа\n   - Через 31 день (или подделав expires) — должен быть редирект на /login (refresh истёк, ожидаемо)\n3. **DevTools-проверка после фикса:**\n   - `Set-Cookie` для `refresh_token` имеет `HttpOnly; Secure; SameSite=Lax; Path=/; Domain=.gmd.link28rus.ru; Max-Age=2592000` (или равноценные параметры)\n   - Запрос `POST /api/auth/refresh` отправляет cookie в Request Headers и возвращает 200 + новый access\n4. **Регресс mobile-parent persistent login:** убедиться, что фикс не сломал кейс из lesson 2026-04-29 (BFF-flow для мобилки).",
+        "status": "in-progress",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": [],
+        "updatedAt": "2026-05-06T11:09:23.371Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-05-06T07:02:04.474Z",
-      "taskCount": 58,
+      "lastModified": "2026-05-06T11:09:23.371Z",
+      "taskCount": 59,
       "completedCount": 52,
-      "tags": ["master"]
+      "tags": [
+        "master"
+      ]
     }
   }
 }

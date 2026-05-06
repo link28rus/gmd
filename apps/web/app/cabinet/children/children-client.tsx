@@ -3,16 +3,11 @@
 
 import { useEffect, useState, type ReactElement } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthStore, type AuthUser, type AuthFamily } from '@/lib/auth-store';
+import { useAuthStore } from '@/lib/auth-store';
 import { useChildren } from '@/lib/hooks/use-children';
+import { refreshAccessToken } from '@/lib/auth/refresh-singleflight';
 import { ChildCard } from '@/components/children/child-card';
 import { CreateChildDialog } from '@/components/children/create-child-dialog';
-
-interface RefreshResponse {
-  accessToken: string;
-  user?: AuthUser;
-  family?: AuthFamily;
-}
 
 export default function ChildrenClient(): ReactElement {
   const router = useRouter();
@@ -28,14 +23,9 @@ export default function ChildrenClient(): ReactElement {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch('/api/auth/refresh', { method: 'POST' });
-        if (!res.ok) {
-          router.replace('/login');
-          return;
-        }
-        const data = (await res.json()) as RefreshResponse;
+        const data = await refreshAccessToken();
         if (cancelled) return;
-        if (!data.user || !data.family) {
+        if (!data || !data.user || !data.family) {
           router.replace('/login');
           return;
         }

@@ -83,11 +83,14 @@ describe('RefreshTokenService', () => {
     expect(r.ok).toBe(false);
   });
 
-  it('replay detection: повторная rotate старого token → revoke всей цепочки user', async () => {
+  it('replay detection: rotate старого token спустя > grace → revoke всей цепочки user', async () => {
     const p = makePrismaMock();
     const svc = new RefreshTokenService(p as unknown as PrismaService, cfg);
     const { token: t1 } = await svc.create('user-1', {});
     await svc.rotate(t1, {});
+    // Подделываем revokedAt в прошлое за пределы grace-окна (10s)
+    const old = new Date(Date.now() - 11_000);
+    p._rows[0].revokedAt = old;
     const r = await svc.rotate(t1, {});
     expect(r.ok).toBe(false);
     if (r.ok) return;
@@ -95,6 +98,20 @@ describe('RefreshTokenService', () => {
     for (const row of p._rows.filter((x: any) => x.userId === 'user-1')) {
       expect(row.revokedAt).not.toBeNull();
     }
+  });
+
+  it('race grace: повторная rotate старого token в пределах grace-окна → ok:false без revoke-all', async () => {
+    const p = makePrismaMock();
+    const svc = new RefreshTokenService(p as unknown as PrismaService, cfg);
+    const { token: t1 } = await svc.create('user-1', {});
+    await svc.rotate(t1, {}); // T1 → T2, T1.revokedAt = now
+    const r = await svc.rotate(t1, {}); // race: вторая вкладка с тем же T1 миллисекунды спустя
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.replay).toBeUndefined();
+    // Цепочка НЕ revoked-all: T2 (созданный первой rotate) остаётся активным
+    const t2Row = p._rows[1];
+    expect(t2Row.revokedAt).toBeNull();
   });
 
   it('revoke сбрасывает конкретный token', async () => {
