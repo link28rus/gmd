@@ -7,6 +7,7 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../../core/native/app_control_channel.dart';
 import '../../core/native/device_admin_channel.dart';
+import '../claim/claim_controller.dart';
 
 /// Задача #61: активный rescue после автообновления APK.
 ///
@@ -34,12 +35,26 @@ import '../../core/native/device_admin_channel.dart';
 /// Идемпотентен: native flag clear'ится при первом consume (даже если в
 /// этот момент permissions всё ещё ОК — модал просто не показывается, но
 /// флаг съеден). Повторное обновление APK снова поставит флаг.
+///
+/// **v0.50.1 hotfix:** добавлен fallback path для случая uninstall+install
+/// (вместо in-place auto-update). При fresh install SharedPreferences
+/// `gmd_post_update` сбрасывается → native pending=null. Но `flutter_secure_storage`
+/// через Android Keystore часто переживает reinstall (auto-backup + key restore),
+/// поэтому если `deviceToken` в secure storage есть И critical permissions
+/// слетели — показываем модал даже без post-update флага. Защита от спама
+/// через static [_shownInSession] — модал показывается ровно один раз
+/// за процесс приложения.
 class PostUpdateRescueGate extends ConsumerStatefulWidget {
   const PostUpdateRescueGate({super.key});
 
   @override
   ConsumerState<PostUpdateRescueGate> createState() =>
       _PostUpdateRescueGateState();
+
+  /// Static флаг — true после первого показа диалога в текущем процессе.
+  /// Защита от повторного показа при home re-mount (lifecycle resume,
+  /// route change). Сбрасывается только при kill app'а.
+  static bool _shownInSession = false;
 }
 
 class _PostUpdateRescueGateState extends ConsumerState<PostUpdateRescueGate> {
@@ -58,14 +73,35 @@ class _PostUpdateRescueGateState extends ConsumerState<PostUpdateRescueGate> {
   Future<void> _runOnce() async {
     if (_checked) return;
     _checked = true;
-    final PostUpdateInfo? info;
+    if (PostUpdateRescueGate._shownInSession) return; // уже показывали в этом процессе
+
+    PostUpdateInfo? info;
     try {
       info = await AppControlChannel.consumePostUpdateFlag();
     } on Object {
-      // Channel-error на iOS / web / без native-side — silent skip.
-      return;
+      // Channel-error на iOS / web / без native-side — silent skip,
+      // но всё равно проверяем fallback path ниже.
+      info = null;
     }
-    if (info == null) return; // Не первый запуск после обновления.
+
+    // Fallback (v0.50.1): если post-update флага нет — это могло быть
+    // fresh install (uninstall+install), который сносит SharedPreferences.
+    // Проверяем: token в secure storage есть → onboarding уже пройден →
+    // это reinstall, не первый install → если permissions слетели,
+    // показываем модал.
+    if (info == null) {
+      if (!mounted) return;
+      final storage = ref.read(secureStorageProvider);
+      final token = await storage.readDeviceToken();
+      if (token == null || token.isEmpty) {
+        // True first install (или onboarding не пройден) — wizard сам всё проведёт.
+        return;
+      }
+      // Не знаем точно «откуда» обновились (reinstall стирает saved version),
+      // показываем placeholder. UI ниже подставит «?» если versionName пуст.
+      info = const PostUpdateInfo(fromVersionName: '', toVersionName: '');
+    }
+
     if (!mounted) return;
 
     // Проверяем те permissions которые ИЗВЕСТНО слетают на HyperOS/MIUI.
@@ -126,6 +162,9 @@ class _PostUpdateRescueGateState extends ConsumerState<PostUpdateRescueGate> {
     }
     if (!mounted) return;
 
+    // Помечаем что модал был показан в этой сессии — защита от повторного
+    // показа при home re-mount (например, lifecycle resume).
+    PostUpdateRescueGate._shownInSession = true;
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -199,23 +238,27 @@ class _RescueDialog extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final from = info.fromVersionName.isNotEmpty ? info.fromVersionName : '?';
-    final to = info.toVersionName.isNotEmpty ? info.toVersionName : '?';
+    // v0.50.1: при reinstall (uninstall+install) `from` неизвестен — флаг
+    // PostUpdateGuard'а уехал вместе со SharedPreferences. Показываем
+    // generic-message без точных версий.
+    final hasVersions = info.fromVersionName.isNotEmpty;
+    final intro = hasVersions
+        ? 'Приложение обновилось с v${info.fromVersionName} на v${info.toVersionName}. '
+            'На некоторых телефонах (Xiaomi/Redmi/HyperOS) после обновления '
+            'система выключает часть разрешений — это нужно исправить, '
+            'иначе родительский контроль перестанет работать.'
+        : 'После переустановки приложения система выключила часть разрешений. '
+            'Это типично для Xiaomi/Redmi/HyperOS — нужно дать их заново, '
+            'иначе родительский контроль перестанет работать.';
     return AlertDialog(
       icon: Icon(Icons.system_update_alt, color: Colors.orange.shade700, size: 36),
-      title: const Text('После обновления слетели разрешения'),
+      title: const Text('Не все разрешения активны'),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Приложение обновилось с v$from на v$to. '
-              'На некоторых телефонах (Xiaomi/Redmi/HyperOS) после обновления '
-              'система выключает часть разрешений — это нужно исправить, '
-              'иначе родительский контроль перестанет работать.',
-              style: const TextStyle(fontSize: 13.5),
-            ),
+            Text(intro, style: const TextStyle(fontSize: 13.5)),
             const SizedBox(height: 16),
             for (final item in items) ...[
               _ItemTile(
