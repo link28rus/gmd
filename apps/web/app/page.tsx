@@ -1,4 +1,6 @@
 import Link from 'next/link';
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 import type { ReactElement } from 'react';
 
 const APP_VERSION = process.env.APP_VERSION ?? '';
@@ -16,7 +18,13 @@ const MARKERS: Array<{ x: number; y: number; delay: number }> = [
   { x: 245, y: 735, delay: 2.5 },
 ];
 
-export default function HomePage(): ReactElement {
+export default async function HomePage(): Promise<ReactElement> {
+  // Если пользователь уже залогинен (есть refresh-cookie) — сразу в кабинет,
+  // не показываем landing с CTA «Войти». Симметрично /cabinet → /login.
+  const cookieStore = await cookies();
+  if (cookieStore.get('gmd_refresh')?.value) {
+    redirect('/cabinet');
+  }
   return (
     <div className="relative h-screen overflow-hidden bg-[#050a15] text-slate-100">
       {/* Фон: карта + анимация. Всё в одном SVG с preserveAspectRatio="slice"
