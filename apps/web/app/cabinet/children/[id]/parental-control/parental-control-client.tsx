@@ -75,7 +75,19 @@ function ymdInTz(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
-export default function ParentalControlClient({ childId }: { childId: string }): ReactElement {
+export default function ParentalControlClient({
+  childId,
+  onBack,
+}: {
+  childId: string;
+  /**
+   * Если задан — кнопка «Назад» становится `<button>` и вызывает onBack()
+   * вместо ссылки на /cabinet. Используется в embed-режиме (WebView mobile-
+   * parent) — там Link на /cabinet нежелателен (история back уезжает на
+   * страницу авторизации, а нам нужно закрыть всю WebView).
+   */
+  onBack?: () => void;
+}): ReactElement {
   const [tab, setTab] = useState<RangeTab>('today');
   const [blockDialogOpen, setBlockDialogOpen] = useState(false);
 
@@ -113,13 +125,25 @@ export default function ParentalControlClient({ childId }: { childId: string }):
   return (
     <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6">
       <div className="mb-6 flex items-center gap-3">
-        <Link
-          href="/cabinet"
-          className="flex h-9 w-9 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-muted"
-          title="Назад"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Link>
+        {onBack ? (
+          <button
+            type="button"
+            onClick={onBack}
+            className="flex h-9 w-9 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-muted"
+            title="Закрыть"
+            aria-label="Закрыть"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+        ) : (
+          <Link
+            href="/cabinet"
+            className="flex h-9 w-9 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-muted"
+            title="Назад"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Link>
+        )}
         <h1 className="text-2xl font-semibold text-foreground">Родительский контроль</h1>
       </div>
 
@@ -154,6 +178,7 @@ export default function ParentalControlClient({ childId }: { childId: string }):
         childId={childId}
         apps={apps}
         rules={rules}
+        usage={range ?? null}
         loading={appsQ.isPending || rulesQ.isPending}
       />
 
@@ -456,8 +481,9 @@ interface RuleViewModel {
   hardcoded: boolean;
   /** SYSTEM_DEFAULT — auto-разрешено системой, родитель может переопределить. */
   systemDefault: boolean;
-  /** Активность для приоритезации в сортировке (выше = сверху). */
-  todaySeconds: number;
+  /** Активность за выбранный диапазон (today/yesterday/week). Используется
+   *  как для сортировки, так и для отображения времени в карточке app. */
+  seconds: number;
 }
 
 /**
@@ -484,11 +510,13 @@ function AppRulesSection({
   childId,
   apps,
   rules,
+  usage,
   loading,
 }: {
   childId: string;
   apps: InstalledAppDto[];
   rules: { packageName: string; mode: string; source: string }[];
+  usage: UsageRangeDto | null;
   loading: boolean;
 }): ReactElement {
   const upsert = useUpsertAppRule(childId);
@@ -506,6 +534,18 @@ function AppRulesSection({
     for (const r of rules) map.set(r.packageName, { mode: r.mode, source: r.source });
     return map;
   }, [rules]);
+
+  // Время за выбранный диапазон (today/yesterday/week) — приходит в
+  // usage.byPackage. Map pkg → seconds используется и в карточке app, и в
+  // сортировке. Если usage ещё не загрузился — fallback на todaySeconds
+  // (актуально только для today; для yesterday/week — 0 пока ждём ответ).
+  const secondsByPkg = useMemo(() => {
+    const map = new Map<string, number>();
+    if (usage) {
+      for (const p of usage.byPackage) map.set(p.packageName, p.seconds);
+    }
+    return map;
+  }, [usage]);
 
   // Собираем единый список: HARDCODED + все apps + любые rules без installed-app
   // (на случай если правило сохранено для удалённого app — пусть родитель
@@ -534,45 +574,40 @@ function AppRulesSection({
         mode = 'DEFAULT';
       }
 
+      // Активность за выбранный диапазон. Для today fallback на
+      // todaySeconds (если range ещё не пришёл). Для yesterday/week без
+      // ответа usage — 0.
+      const seconds = secondsByPkg.get(pkg) ?? (usage ? 0 : (a?.todaySeconds ?? 0));
+
       out.push({
         packageName: pkg,
         appLabel: a?.appLabel ?? pkg,
         category: a?.category ?? null,
         iconUrl: a?.iconUrl ?? null,
         isSystem: a?.isSystem ?? false,
-        todaySeconds: a?.todaySeconds ?? 0,
+        seconds,
         mode,
         hardcoded: isHardcoded,
         systemDefault: isSystemDefault,
       });
     };
 
-    // Порядок добавления — он же fallback при равенстве сортировки:
+    // Порядок добавления — fallback при равенстве сортировки:
     // hardcoded сверху, затем installed apps, затем «orphan» rules.
     for (const pkg of HARDCODED_ALLOWED_PACKAGES) push(pkg);
     for (const a of apps) push(a.packageName);
     for (const r of rules) push(r.packageName);
 
     return out;
-  }, [apps, appByPkg, rules, ruleByPkg]);
+  }, [apps, appByPkg, rules, ruleByPkg, secondsByPkg, usage]);
 
-  // Сортировка финального списка для UI: hardcoded → ALWAYS_BLOCKED →
-  // ALWAYS_ALLOWED → DEFAULT с активностью → DEFAULT остальные. Это даёт
-  // быстрый взгляд: «что я уже настроил» сверху.
+  // Сортировка: hardcoded (системные неблокируемые) сверху → дальше по
+  // активности за выбранный диапазон (самые «горячие» первыми) → алфавитно
+  // среди приложений с одинаковыми (или нулевыми) секундами.
   const sortedItems = useMemo(() => {
-    const order: Record<AppRuleMode, number> = {
-      ALWAYS_BLOCKED: 0,
-      ALWAYS_ALLOWED: 1,
-      DEFAULT: 2,
-    };
     return [...items].sort((a, b) => {
-      // hardcoded всегда первыми
       if (a.hardcoded !== b.hardcoded) return a.hardcoded ? -1 : 1;
-      // затем по mode (заблокированные → разрешённые → default)
-      if (a.mode !== b.mode) return order[a.mode] - order[b.mode];
-      // затем по активности (active apps выше)
-      if (b.todaySeconds !== a.todaySeconds) return b.todaySeconds - a.todaySeconds;
-      // затем алфавитно
+      if (b.seconds !== a.seconds) return b.seconds - a.seconds;
       return a.appLabel.localeCompare(b.appLabel, 'ru');
     });
   }, [items]);
@@ -756,7 +791,7 @@ function AppRuleRow({
       : item.category !== null
         ? CATEGORY_LABELS[item.category] +
           (item.isSystem ? ' · системное' : '') +
-          (item.todaySeconds > 0 ? ` · ${fmtMinutes(item.todaySeconds)}` : '')
+          (item.seconds > 0 ? ` · ${fmtMinutes(item.seconds)}` : '')
         : item.packageName;
 
   return (

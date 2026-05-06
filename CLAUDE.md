@@ -49,7 +49,11 @@ docs/superpowers/specs  design docs
 
 ## Инфраструктура
 
-- **Сервер:** 192.168.1.23 (internal), 95.104.240.99 (external) — проброс портов
+- **Сервер:** ровно два сетевых интерфейса, других IP нет:
+  - `ens160` = **192.168.1.23/24** (LAN, default-route через 192.168.1.1, через него идёт SSH из локалки)
+  - `ens192` = **95.104.240.111/27** (внешний, прямо у провайдера без NAT-роутера, шлюз 95.104.240.97)
+  - Служебное на сервере: loopback (127.0.0.1) и docker bridges (172.17.0.0/16, 172.18.0.0/16) — виртуальные сети контейнеров, не трогать.
+  - Asymmetric routing для входящего на ens192 — починен через CONNMARK fwmark 0x2 + ip rule в netplan + iptables-persistent. Runbook в memory-compiler «Asymmetric routing fix на gmd-prod (multi-WAN)».
 - **Домен:** gmd.link28rus.ru
 - **Регион данных:** РФ (152-ФЗ)
 - **SSH credentials:** см. memory-compiler (secret). TODO: перейти на SSH-ключи, отключить password auth.
@@ -75,6 +79,7 @@ docs/superpowers/specs  design docs
 2. После нетривиальной задачи — `finish_task` + при необходимости `save_decision` / `save_runbook` / `save_tracking`.
 3. Перед коммитом — реально запустить то, что менял, и убедиться что работает (без формального скила verification).
 4. Документация и CHANGELOG обновляются в том же коммите (см. раздел ниже).
+5. **НЕ работать в worktree.** Все правки кода — только в основном чекауте `D:/Project/GMD/`. Если харнесс автоматически запустил тебя в `.claude/worktrees/<name>/` — игнорируй worktree-cwd и оперируй абсолютными путями к основному репо: `Read`/`Edit`/`Write` `D:/Project/GMD/...`, `Bash` команды через `cd D:/Project/GMD && ...`. **Причина:** в worktree не попадает untracked-работа пользователя (новые файлы, незакоммиченные правки), из-за чего ты будешь видеть «фантомные заглушки» там, где фича уже реализована в working tree основного репо. Если хочется изоляции — заведи feature-branch в основном чекауте, а не worktree.
 
 **Best-practices (уроки из прошлых сессий — НЕ повторять):**
 
@@ -334,7 +339,7 @@ ssh gmd-prod 'systemctl list-timers | grep pg-'
 ssh gmd-prod 'ls /opt/gmd/backups/postgres/'
 ```
 
-Сервер доступен по `http://192.168.1.23/` (внешний IP `95.104.240.99`, TLS настраивается в Phase 0.4).
+Сервер доступен по `https://gmd.link28rus.ru/` (DNS A → 95.104.240.111, прямой публичный IP на интерфейсе `ens192`, без NAT-роутера). LAN-доступ — `http://192.168.1.23/`.
 
 ## Память и секреты
 
