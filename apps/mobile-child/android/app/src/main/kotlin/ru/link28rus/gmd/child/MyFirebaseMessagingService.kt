@@ -59,6 +59,8 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             "BLOCK_APPS" -> handleBlockApps(data)
             "UNBLOCK_APPS" -> handleUnblockApps(data)
             "SYNC_RULES" -> handleSyncRules()
+            // v0.49 Phase 6.x — расписание автоблокировки
+            "SYNC_SCHEDULES" -> handleSyncSchedules()
             // v0.43 — мгновенный сигнал «найди телефон» от родителя.
             "PLAY_SIGNAL" -> handlePlaySignal(data)
             else -> DiagLog.write(this, "fcm", "unknown type=$type — ignored")
@@ -157,6 +159,28 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
                 }
             } catch (e: Throwable) {
                 DiagLog.write(this, "fcm", "SYNC_RULES exception: ${e.javaClass.simpleName}: ${e.message}")
+            }
+        }.start()
+    }
+
+    /**
+     * v0.49 Phase 6.x: backend сообщил что список расписаний изменился (CRUD
+     * на /family/children/:id/app-control/schedules). Тянем GET /child/schedules
+     * и переписываем локальную копию в SharedPreferences. AccessibilityService
+     * сразу подхватит новые расписания через [BlockManager.isBlocked].
+     */
+    private fun handleSyncSchedules() {
+        DiagLog.write(this, "fcm", "SYNC_SCHEDULES via FCM — pulling /child/schedules")
+        Thread {
+            try {
+                val res = AppControlHttp.getSchedules(applicationContext)
+                if (res.ok && res.bodyJson != null) {
+                    BlockManager.applySchedulesFromJsonObject(applicationContext, res.bodyJson)
+                } else {
+                    DiagLog.write(this, "fcm", "SYNC_SCHEDULES pull failed: status=${res.statusCode}")
+                }
+            } catch (e: Throwable) {
+                DiagLog.write(this, "fcm", "SYNC_SCHEDULES exception: ${e.javaClass.simpleName}: ${e.message}")
             }
         }.start()
     }

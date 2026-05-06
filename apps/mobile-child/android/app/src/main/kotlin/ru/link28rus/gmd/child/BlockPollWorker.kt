@@ -62,6 +62,18 @@ class BlockPollWorker(
             DiagLog.write(ctx, TAG, "app-rules exception: ${e.javaClass.simpleName}: ${e.message}")
         }
 
+        // 3) Schedules sync (v0.49 Phase 6.x).
+        try {
+            val res = AppControlHttp.getSchedules(ctx)
+            if (res.ok && res.bodyJson != null) {
+                BlockManager.applySchedulesFromJsonObject(ctx, res.bodyJson)
+            } else {
+                DiagLog.write(ctx, TAG, "schedules GET failed: status=${res.statusCode}")
+            }
+        } catch (e: Throwable) {
+            DiagLog.write(ctx, TAG, "schedules exception: ${e.javaClass.simpleName}: ${e.message}")
+        }
+
         return Result.success()
     }
 

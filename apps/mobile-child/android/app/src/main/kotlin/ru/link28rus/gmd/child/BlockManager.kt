@@ -34,6 +34,8 @@ object BlockManager {
     private const val KEY_ACTIVE_SESSION_ID = "active_session_id"
     private const val KEY_ACTIVE_ENDS_AT_MS = "active_ends_at_ms"
     private const val KEY_RULES_JSON = "rules_json"
+    // v0.49 Phase 6.x — расписание автоблокировки (FCM SYNC_SCHEDULES).
+    private const val KEY_SCHEDULES_JSON = "schedules_json"
 
     /** Зашиты намертво, не переопределяются ни PARENT, ни SYSTEM_DEFAULT правилами. */
     private val HARDCODED_ALLOWED = setOf(
@@ -101,6 +103,17 @@ object BlockManager {
     enum class Mode { DEFAULT, ALWAYS_ALLOWED, ALWAYS_BLOCKED }
 
     data class ActiveBlock(val sessionId: String, val endsAtMs: Long)
+
+    /**
+     * Активное расписание + момент окончания текущего временного окна.
+     * Используется AccessibilityService чтобы показать overlay с countdown'ом
+     * до конца окна, а не до конца «всего расписания» (расписание повторяется).
+     */
+    data class ActiveSchedule(
+        val scheduleId: String,
+        val name: String,
+        val endsAtMs: Long,
+    )
 
     @Synchronized
     fun setActiveBlock(ctx: Context, sessionId: String, endsAtMs: Long) {
@@ -221,7 +234,7 @@ object BlockManager {
      *   1) HARDCODED / SAFETY_ALLOWED → false (никогда не блокируем)
      *   2) Mode.ALWAYS_ALLOWED → false (явный whitelist)
      *   3) Mode.ALWAYS_BLOCKED → true (постоянно заблокировано, v0.40)
-     *   4) Mode.DEFAULT → true только если есть активная BlockSession
+     *   4) Mode.DEFAULT → true если активна BlockSession ИЛИ активно расписание (v0.49)
      */
     @Synchronized
     fun isBlocked(ctx: Context, packageName: String): Boolean {
@@ -229,7 +242,7 @@ object BlockManager {
         return when (mode) {
             Mode.ALWAYS_ALLOWED -> false
             Mode.ALWAYS_BLOCKED -> true
-            Mode.DEFAULT -> getActiveBlock(ctx) != null
+            Mode.DEFAULT -> getActiveBlock(ctx) != null || getActiveSchedule(ctx) != null
         }
     }
 
@@ -237,6 +250,73 @@ object BlockManager {
     fun applyRulesFromJsonObject(ctx: Context, body: JSONObject) {
         val rules = body.optJSONArray("rules") ?: JSONArray()
         setRules(ctx, rules)
+    }
+
+    // ─── v0.49 Phase 6.x — расписание автоблокировки ───────────────────────
+
+    /**
+     * Заменить локальный список расписаний целиком (FULL replace).
+     * `schedulesJson` — массив объектов вида backend ScheduleDto:
+     *   {id, name, enabled, daysMask, startMin, endMin, mode, …}
+     */
+    @Synchronized
+    fun setSchedules(ctx: Context, schedulesJson: JSONArray) {
+        prefs(ctx).edit().putString(KEY_SCHEDULES_JSON, schedulesJson.toString()).apply()
+        DiagLog.write(ctx, TAG, "setSchedules count=${schedulesJson.length()}")
+    }
+
+    @Synchronized
+    fun applySchedulesFromJsonObject(ctx: Context, body: JSONObject) {
+        val arr = body.optJSONArray("schedules") ?: JSONArray()
+        setSchedules(ctx, arr)
+    }
+
+    /**
+     * Загруженный список расписаний (parsed). Пустой если SYNC_SCHEDULES ещё
+     * не приходил или JSON повреждён.
+     */
+    @Synchronized
+    fun getSchedules(ctx: Context): List<ScheduleEvaluator.Schedule> {
+        val raw = prefs(ctx).getString(KEY_SCHEDULES_JSON, null) ?: return emptyList()
+        val arr = try {
+            JSONArray(raw)
+        } catch (_: Throwable) {
+            return emptyList()
+        }
+        return ScheduleEvaluator.parseFromJsonArray(arr)
+    }
+
+    /**
+     * Первое активное расписание сейчас (или null). Активность вычисляется
+     * через [ScheduleEvaluator.isActiveAt] в TZ устройства
+     * (`TimeZone.getDefault().id` — обычно совпадает с TZ ребёнка).
+     *
+     * `endsAtMs` — момент окончания текущего временного окна (для overlay
+     * countdown). После окончания окна следующий tick перепроверит и снимет
+     * overlay, если новое окно ещё не началось.
+     */
+    @Synchronized
+    fun getActiveSchedule(ctx: Context): ActiveSchedule? {
+        val list = getSchedules(ctx)
+        if (list.isEmpty()) return null
+        val nowMs = System.currentTimeMillis()
+        val tzId = java.util.TimeZone.getDefault().id
+        val active = ScheduleEvaluator.firstActive(list, nowMs, tzId) ?: return null
+        val endMs = ScheduleEvaluator.windowEndMs(active, nowMs, tzId)
+        return ActiveSchedule(scheduleId = active.id, name = active.name, endsAtMs = endMs)
+    }
+
+    /**
+     * Combined «когда закончится текущая блокировка» — максимум из
+     * (BlockSession.endsAtMs, активное расписание endsAtMs) или 0 если оба null.
+     *
+     * Используется AccessibilityService и OverlayManager для countdown'а.
+     */
+    @Synchronized
+    fun getCurrentBlockEndsAtMs(ctx: Context): Long {
+        val active = getActiveBlock(ctx)?.endsAtMs ?: 0L
+        val schedule = getActiveSchedule(ctx)?.endsAtMs ?: 0L
+        return maxOf(active, schedule)
     }
 
     private fun prefs(ctx: Context) =

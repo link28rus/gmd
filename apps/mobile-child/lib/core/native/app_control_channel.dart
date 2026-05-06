@@ -59,6 +59,25 @@ class AppControlChannel {
     await _ch.invokeMethod<void>('openOverlaySettings');
   }
 
+  /// Задача #61: one-shot consume флага «первый запуск после обновления APK».
+  /// Native [PostUpdateGuard] детектит смену versionCode в `MainActivity.onCreate`
+  /// и выставляет flag pending=true. Этот метод возвращает [PostUpdateInfo]
+  /// с from/to versionName ОДИН РАЗ, потом флаг очищается. Если обновления
+  /// не было (или флаг уже consume'нут) → null.
+  ///
+  /// На HyperOS/MIUI после sideload-обновления слетают AccessibilityService и
+  /// Device Admin (известный bug OS). Caller использует этот флаг как trigger
+  /// для активного rescue-flow вместо пассивного баннера.
+  static Future<PostUpdateInfo?> consumePostUpdateFlag() async {
+    final raw =
+        await _ch.invokeMethod<Map<dynamic, dynamic>>('consumePostUpdateFlag');
+    if (raw == null) return null;
+    return PostUpdateInfo(
+      fromVersionName: raw['fromVersionName'] as String? ?? '',
+      toVersionName: raw['toVersionName'] as String? ?? '',
+    );
+  }
+
   /// IANA timezone устройства (например "Europe/Moscow").
   /// Шлётся в payload installed-apps / usage-reports.
   static Future<String> deviceTimezone() async {
@@ -123,6 +142,20 @@ class AppControlChannel {
         .map(UsageBucketNative.fromMap)
         .toList();
   }
+}
+
+/// Задача #61: payload one-shot pending-флага после обновления APK.
+class PostUpdateInfo {
+  const PostUpdateInfo({
+    required this.fromVersionName,
+    required this.toVersionName,
+  });
+
+  final String fromVersionName;
+  final String toVersionName;
+
+  @override
+  String toString() => 'PostUpdateInfo($fromVersionName → $toVersionName)';
 }
 
 /// Один установленный app с иконкой. Иконка — raw PNG bytes (96x96 RGBA).

@@ -28,6 +28,16 @@ private const val REQUEST_CODE_ADD_ADMIN = 8101
 class MainActivity : FlutterActivity() {
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
+        // Задача #61: детект первого запуска после обновления APK. Если versionCode
+        // изменился с прошлого запуска — выставляется flag pending, который Dart
+        // подхватит через consumePostUpdateFlag и покажет «Восстановить разрешения»
+        // модал (на HyperOS/MIUI после sideload-update слетают a11y и Device Admin).
+        // Идемпотентно, side-effect-free для нормального запуска.
+        try {
+            PostUpdateGuard.recordCurrentVersion(this)
+        } catch (e: Throwable) {
+            DiagLog.write(this, "ui", "PostUpdateGuard.recordCurrentVersion failed: ${e.message}")
+        }
         // v0.38 Phase 6.1: при наличии device-token поднимаем periodic workers
         // (UsageStatsReportWorker 15-min + InstalledAppsReportWorker 24h +
         //  EscapeProbeWorker 1h).
@@ -300,6 +310,12 @@ class MainActivity : FlutterActivity() {
                             result.error("open_settings_failed", e.message, null)
                         }
                     }
+                    // Задача #61: one-shot consume флага «первый запуск после
+                    // обновления APK». Возвращает map {fromVersionName, toVersionName}
+                    // если флаг был выставлен (PostUpdateGuard детектит смену
+                    // versionCode в onCreate), иначе null. Сразу очищает state.
+                    "consumePostUpdateFlag" ->
+                        result.success(PostUpdateGuard.consumePending(this))
                     // v0.39.5 Phase 6.2 fix: SAW для visual blocking overlay
                     "canDrawOverlays" ->
                         result.success(AppControlNative.canDrawOverlays(this))

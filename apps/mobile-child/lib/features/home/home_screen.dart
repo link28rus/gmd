@@ -8,6 +8,7 @@ import 'home_controller.dart';
 import 'location_profile_indicator.dart';
 import 'microphone_permission_guard.dart';
 import 'permission_health_banner.dart';
+import 'post_update_rescue.dart';
 import 'protection_banner.dart';
 import 'update_banner.dart';
 
@@ -78,6 +79,13 @@ class HomeScreen extends ConsumerWidget {
           // v0.41.0 — невидимый guard: при init и lifecycle resume проверяет
           // RECORD_AUDIO. Если denied → показывает блокирующий AlertDialog.
           const MicrophonePermissionGuard(),
+          // Задача #61 — активный rescue после автообновления APK. Невидимый
+          // виджет: при init дёргает one-shot native-flag «первый запуск
+          // после смены versionCode», и если хоть одно critical permission
+          // (a11y/Device Admin/overlay/notif) слетело — показывает модал
+          // «Восстанови разрешения» с shortcut'ами в нужные настройки. На
+          // HyperOS/MIUI это известный bug OS, технически не предотвращается.
+          const PostUpdateRescueGate(),
           const ProtectionBanner(),
           const PermissionHealthBanner(),
           const ActivityRecognitionBanner(),

@@ -60,10 +60,11 @@ class GmdAccessibilityService : AccessibilityService() {
             lastBlockedPkg = pkg
             lastOverlayLaunchMs = now
 
-            val active = BlockManager.getActiveBlock(applicationContext)
-            // ALWAYS_BLOCKED не имеет endsAt — берём «бесконечность» = +1 час
-            // (overlay всё равно перепроверит и сам зачистит когда сессия снимется).
-            val endsAt = active?.endsAtMs ?: (now + 3600_000L)
+            // v0.49 Phase 6.x: endsAt = max(BlockSession.endsAt, активное расписание endsAt).
+            // Если оба null (= ALWAYS_BLOCKED), ставим +1 час, overlay всё равно
+            // перепроверит и сам зачистит при следующем tick'е если правило снимется.
+            val combinedEndsAt = BlockManager.getCurrentBlockEndsAtMs(applicationContext)
+            val endsAt = if (combinedEndsAt > 0L) combinedEndsAt else (now + 3600_000L)
 
             // STEP 1: Visual overlay через TYPE_APPLICATION_OVERLAY (v0.39.5).
             // Не Activity → BAL ограничения не распространяются. Требует SAW perm,

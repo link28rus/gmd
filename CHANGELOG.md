@@ -9,6 +9,33 @@
 
 ---
 
+## v0.50.0 — 2026-05-07 — Активное восстановление разрешений после автообновления APK ребёнка
+
+### Новые возможности
+
+- **Когда после обновления приложения слетают разрешения — ребёнок сразу видит, что нужно сделать.** На некоторых телефонах (Xiaomi/Redmi/POCO с MIUI и HyperOS) система при обновлении из неофициального источника (наш self-hosted endpoint) выключает «Спецвозможности» (нужны для блокировки приложений) и иногда «Администратор устройства» (нужен для защиты от удаления). Это известное поведение OS, технически не предотвращается без размещения в RuStore. Раньше ребёнок видел лишь пассивные баннеры на главном экране и мог их не заметить. Теперь при первом запуске после обновления автоматически открывается диалог «После обновления слетели разрешения» с явным списком конкретных проблем и кнопкой-ярлыком в нужные системные настройки по каждой из них. Если разрешения сохранились — диалог не показывается.
+
+### Изменения
+
+- **Mobile-child native (Kotlin):** новый объект `PostUpdateGuard` ([android/.../PostUpdateGuard.kt](apps/mobile-child/android/app/src/main/kotlin/ru/link28rus/gmd/child/PostUpdateGuard.kt)) — хранит `last_seen_version_code` в SharedPreferences `gmd_post_update`, в `MainActivity.onCreate` при детекте смены versionCode выставляет one-shot flag `post_update_pending`. Метод `consumePending(ctx)` отдаёт `{fromVersionName, toVersionName}` ровно один раз и сразу очищает state. Idempotent при повторных вызовах в той же версии.
+- **Mobile-child Dart:** в `AppControlChannel` добавлен метод `consumePostUpdateFlag()` — bridge к native one-shot flag. Новый виджет `PostUpdateRescueGate` ([lib/features/home/post_update_rescue.dart](apps/mobile-child/lib/features/home/post_update_rescue.dart)) — невидимый guard на home-экране, на `addPostFrameCallback` дёргает консьюм флага, проверяет 4 critical permissions (a11y, Device Admin, SAW overlay, notifications) и при найденных проблемах показывает `AlertDialog` с прямыми shortcut'ами в нужные onboarding-step'ы (`/permissions/accessibility`, `/permissions/overlay`, `/permissions/notifications`) либо в `_AdminWizard` через `ProtectionBanner` для Device Admin'а.
+- **Диагностика по задаче #61:** перед реализацией исключены гипотезы «разные подписи APK между релизами» (keystore стабилен с 21 апреля, иначе install бы вообще не проходил) и «изменение метаданных `<accessibility-service>`/`<device-admin>` XML» (последняя правка XML — v0.39 / v0.26, между v0.40 и v0.50 эти блоки в Manifest нетронуты). Root-cause — поведение MIUI/HyperOS при sideload-обновлении (Restricted Settings и автоматическая деактивация Accessibility/Device Admin для приложений вне Mi App Store). Технически закрыть полностью можно только переходом в RuStore.
+
+---
+
+## v0.49.0 — 2026-05-06 — Расписание автоблокировки приложений (фаза 2: mobile-child)
+
+### Новые возможности
+
+- **Расписание блокировки теперь реально работает на устройстве ребёнка.** Заданные в кабинете родителя временные окна (например, «Сон Пн–Вс 22:00–08:00» или «Школа Пн–Пт 09:00–14:00») при наступлении срабатывают на телефоне ребёнка идентично ручной блок-сессии: при попытке открыть DEFAULT-приложение поднимается полноэкранный overlay с таймером до конца окна, кнопка «Закрыть» возвращает на главный экран. Whitelisted приложения (ALWAYS_ALLOWED, родная gmd-child, телефон/контакты, лаунчеры) обходят блокировку как обычно. Когда окно заканчивается, overlay автоматически снимается без принудительного закрытия уже открытых приложений.
+
+### Изменения
+
+- **Mobile-child native (Kotlin):** новый объект `ScheduleEvaluator` с pure-функцией `isActiveAt(schedule, nowMs, tzId)` — Dart/Kotlin-port `ScheduleService.isActiveAt` с полным parity (32 JUnit-теста повторяют 28 кейсов backend spec, плюс 4 на `windowEndMs` и `formatMinutes`). `BlockManager` расширен методами `setSchedules / getSchedules / getActiveSchedule / getCurrentBlockEndsAtMs` (хранение в SharedPreferences `gmd_block_state.schedules_json`); `isBlocked` теперь учитывает OR `(active session OR active schedule)`. `AppControlHttp.getSchedules()` дёргает `GET /child/schedules`. `MyFirebaseMessagingService` обрабатывает FCM data-message `type=SYNC_SCHEDULES` (high-priority data-only) → пулит свежий список. `BlockPollWorker` (15-мин fallback) вместе с active-block и app-rules теперь синхронизирует и расписания. `GmdAccessibilityService` использует combined `endsAt` (max из BlockSession и активного окна расписания) для overlay countdown'а; `OverlayManager` пересчитывает endsAt каждый тик и больше не сносит активную BlockSession при `tick-expired`, если активно расписание (новое окно естественно закончилось — overlay уберётся, но сессия остаётся).
+- **TZ-источник на устройстве:** `TimeZone.getDefault().id` (системная IANA-таймзона устройства). В типичных РФ-кейсах совпадает с `ChildDevice.timezone` на сервере. Если родитель в одной TZ а ребёнок в другой — приоритет за TZ устройства, потому что именно она определяет «во сколько у ребёнка сейчас».
+
+---
+
 ## v0.48.0 — 2026-05-06 — Расписание автоблокировки приложений (фаза 1: backend + web)
 
 ### Новые возможности

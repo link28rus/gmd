@@ -88,4 +88,11 @@ dependencies {
     // installer'у. Тянется транзитивно через workmanager, но явно фиксируем —
     // имя класса androidx.core.content.FileProvider используется в манифесте.
     implementation("androidx.core:core-ktx:1.13.1")
+    // v0.49 Phase 6.x: unit-тесты для ScheduleEvaluator (parity с backend
+    // ScheduleService.isActiveAt). org.json уже доступен в android.jar для
+    // unit-тестов через robolectric/inline jar. На JUnit 4 хватает —
+    // тесты pure (Instant + ZoneId без Android SDK), запуск через
+    // `gradlew :app:testDebugUnitTest`.
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
 }

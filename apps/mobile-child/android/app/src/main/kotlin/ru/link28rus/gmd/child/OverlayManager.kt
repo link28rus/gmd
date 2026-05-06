@@ -54,13 +54,34 @@ object OverlayManager {
             val v = view ?: return
             val ctx = v.context.applicationContext
             val now = System.currentTimeMillis()
-            val remainingMs = endsAtMs - now
-            if (endsAtMs > 0L && remainingMs <= 0L) {
-                // Сессия истекла, чистим backend-state и убираем overlay.
-                BlockManager.clearActiveBlock(ctx, "overlay-tick-expired")
+
+            // v0.49 Phase 6.x: пересчитываем combined endsAt каждый тик, потому
+            // что активное расписание может «съехать» (одно окно закончилось,
+            // другое не наступило), а BlockSession независимо может expire.
+            val combinedEndsAt = BlockManager.getCurrentBlockEndsAtMs(ctx)
+            val activeBlock = BlockManager.getActiveBlock(ctx)
+            val activeSchedule = BlockManager.getActiveSchedule(ctx)
+
+            if (combinedEndsAt <= 0L) {
+                // Никакой активной блокировки — снимаем overlay.
+                // BlockSession.expire авто-чистится в getActiveBlock.
+                hide(ctx, "tick-no-active")
+                return
+            }
+
+            val remainingMs = combinedEndsAt - now
+            if (remainingMs <= 0L) {
+                // Текущее окно закончилось. Если активная сессия — её auto-cleanup
+                // в getActiveBlock уже сработал. Если расписание — окно естественно
+                // закончилось, новый tick (через 1с) пересчитает.
+                if (activeBlock != null && activeBlock.endsAtMs <= now && activeSchedule == null) {
+                    BlockManager.clearActiveBlock(ctx, "overlay-tick-expired")
+                }
                 hide(ctx, "tick-expired")
                 return
             }
+
+            endsAtMs = combinedEndsAt
             v.findViewById<TextView>(R.id.block_overlay_remaining)?.text =
                 formatRemaining(remainingMs)
             handler.postDelayed(this, 1000L)

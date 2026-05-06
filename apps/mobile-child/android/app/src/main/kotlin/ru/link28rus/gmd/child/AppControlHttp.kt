@@ -139,6 +139,16 @@ object AppControlHttp {
   fun getAppRules(ctx: Context): Result =
     doGet(ctx, "/child/app-rules")
 
+  /**
+   * v0.49 Phase 6.x — расписание автоблокировки.
+   *
+   * GET /child/schedules
+   * Возвращает {schedules: [{id, name, enabled, daysMask, startMin, endMin, mode, …}]}.
+   * Тянется при FCM SYNC_SCHEDULES, при старте app, раз в 15 мин (BlockPollWorker).
+   */
+  fun getSchedules(ctx: Context): Result =
+    doGet(ctx, "/child/schedules")
+
   private fun doGet(ctx: Context, path: String): Result {
     val token = NativeCreds.getToken(ctx)
     val baseUrl = NativeCreds.getApiBaseUrl(ctx)
