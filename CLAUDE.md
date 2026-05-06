@@ -116,7 +116,7 @@ docs/superpowers/specs  design docs
 ### Используем регулярно
 
 - `memory-autopilot` — всегда, контекст между сессиями
-- `gmd-development` — проект, пути, конвенции, dev/prod-команды, common mistakes (auto-load для GMD)
+- `gmd-development` (project-level, [.claude/skills/gmd-development/SKILL.md](.claude/skills/gmd-development/SKILL.md)) — проект, пути, конвенции, dev/prod-команды, common mistakes (auto-load для GMD)
 - `superpowers:*` — **только по явному запросу пользователя** (см. «Рабочий процесс»)
 - `frontend-design:frontend-design` — UI кабинета родителя, лендинг
 - `design:design-system`, `design:accessibility-review`, `design:ux-copy`, `design:design-handoff`
@@ -127,10 +127,10 @@ docs/superpowers/specs  design docs
 - `anthropic-skills:docx`, `anthropic-skills:pdf` — юр. документы
 - `update-config` — хуки, permissions, env
 - `gmd-deploy` (project-level, [.claude/skills/gmd-deploy/SKILL.md](.claude/skills/gmd-deploy/SKILL.md)) — полный релизный flow: bump версий, web-deploy, build APK, publish, verify endpoint. Закрывает грабли из lessons #12, #14, #16.
+- `gmd-docker-ops` (project-level, [.claude/skills/gmd-docker-ops/SKILL.md](.claude/skills/gmd-docker-ops/SKILL.md)) — compose logs/restart/rebuild/exec для local dev и prod gmd-prod. Включает known bug «postgres cold-start fast shutdown».
 
 ### Нужно создать (через `anthropic-skills:skill-creator`)
 
-- `gmd-docker-ops` — compose up/down/logs/exec на 192.168.1.23
 - `gmd-db-backup` — pg_dump + restore + anonymize для dev
 - `gmd-mobile-flutter` — Flutter-конвенции, melos, codegen, релиз-процесс
 - `gmd-ssh` — SSH на сервер с учётом проброса + non-root user
