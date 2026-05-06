@@ -126,12 +126,12 @@ docs/superpowers/specs  design docs
 - `doc-coauthoring` — политика конфиденциальности, EULA, РКН-уведомление
 - `anthropic-skills:docx`, `anthropic-skills:pdf` — юр. документы
 - `update-config` — хуки, permissions, env
+- `gmd-deploy` (project-level, [.claude/skills/gmd-deploy/SKILL.md](.claude/skills/gmd-deploy/SKILL.md)) — полный релизный flow: bump версий, web-deploy, build APK, publish, verify endpoint. Закрывает грабли из lessons #12, #14, #16.
 
 ### Нужно создать (через `anthropic-skills:skill-creator`)
 
 - `gmd-docker-ops` — compose up/down/logs/exec на 192.168.1.23
 - `gmd-db-backup` — pg_dump + restore + anonymize для dev
-- `gmd-deploy` — SSH-деплой + healthcheck
 - `gmd-mobile-flutter` — Flutter-конвенции, melos, codegen, релиз-процесс
 - `gmd-ssh` — SSH на сервер с учётом проброса + non-root user
 - `gmd-152fz-compliance` — чеклист при добавлении новых данных/эндпоинтов
@@ -170,11 +170,13 @@ docs/superpowers/specs  design docs
 ## MCP-серверы
 
 - ✅ `memory-compiler` — контекст проекта, решения, секреты
-- ✅ `gmd-taskmaster` — задачи/PRD
+- ✅ `gmd-taskmaster` — задачи/PRD ([.mcp.json](.mcp.json))
+- ✅ `gmd-postgres` — read-only SQL к локальному `gmd_dev` ([.mcp.json](.mcp.json), `@modelcontextprotocol/server-postgres`). Удобно для отладки PostGIS-геометрии, индексов, аналитики локаций без `docker exec`.
 - ✅ `filesystem`
 - ✅ `chrome-devtools-mcp`, `playwright` — отладка и тесты web
 - ✅ `shadcn-ui` — компоненты
-- ⏳ Добавить: `postgres` MCP (прямые запросы при отладке), `github`/`gitea` MCP (после выбора git-хостинга)
+- ✅ `context7` — актуальная документация библиотек (Riverpod, Prisma, Next.js, dio, drift, flutter_map и т.п.)
+- ⏳ Добавить (когда дойдёт очередь): `github` MCP (PR/issues из чата), GlitchTip/Sentry MCP (prod-ошибки без SSH-туннеля)
 
 ## Открытые вопросы (решить в writing-plans)
 

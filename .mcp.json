@@ -7,6 +7,15 @@
       "env": {
         "TASK_MASTER_TOOLS": "all"
       }
+    },
+    "gmd-postgres": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-postgres",
+        "postgresql://gmd:gmd_dev_password@localhost:54320/gmd_dev"
+      ]
     }
   }
 }
