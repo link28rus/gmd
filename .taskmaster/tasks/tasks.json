@@ -547,10 +547,11 @@
         "description": "tests/e2e/children.spec.ts: login → create → QR → edit → delete. Требует backend dev-last-otp (проверить наличие).",
         "details": "",
         "testStrategy": "",
-        "status": "pending",
+        "status": "deferred",
         "dependencies": [],
         "priority": "low",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-05-06T05:56:46.986Z"
       },
       {
         "id": "47",
@@ -654,10 +655,11 @@
         "description": "Закоммитить и довести до релиза WIP «Родительский контроль» в mobile-parent (этап 6 из 7 плана child-detail redesign). Сейчас в untracked основного чекаута.",
         "details": "**Контекст:** decision 2026-04-29 «Child-detail screen mobile-parent: hybrid native + WebView embed». Этап 6/7 — Parental control тайл в ChildActionSheet → открывает embed-страницу веб-кабинета в WebView (паттерн уже отлажен на «Звуке вокруг», v0.46.0).\n\n**Untracked-файлы (готовы, нужен коммит + verify):**\n- `apps/mobile-parent/lib/features/parental_control/parental_control_screen.dart` — экран с WebView, JS-bridge `GmdHost.postMessage('close')`, токен через URL hash `#t=...&u=...&e=...&f=...&fn=...`\n- `apps/web/app/embed/parental-control/[childId]/page.tsx` — embed-страница: парсит hash → кладёт в `useAuthStore` → монтирует `ParentalControlClient` с `onBack` → чистит hash через `history.replaceState`\n\n**Modified-файлы (соединяющий клей):**\n- `apps/mobile-parent/lib/features/child_detail/widgets/child_action_sheet.dart` — добавлен тайл «Родительский контроль»\n- `apps/mobile-parent/lib/router/app_router.dart` — роут на ParentalControlScreen\n- `apps/mobile-parent/lib/app.dart`, `lib/features/home/home_screen.dart` — связки\n- `apps/mobile-parent/pubspec.yaml/lock` — добавлен webview_flutter (+ android backend)\n- `apps/web/app/cabinet/children/[id]/parental-control/parental-control-client.tsx` — уже в main HEAD (v0.46.4/v0.46.5), `onBack` опциональный пропс\n\n**Что осталось:**\n1. flutter analyze + flutter run на устройстве — проверить, что embed открывается, токен прокидывается, кнопка «Назад» закрывает WebView, hash чистится.\n2. Проверить все 3 ABI APK сборки (см. правило: bump build number = APK на прод).\n3. Bump версии до v0.50.0 (root package.json + `pnpm version:sync`).\n4. CHANGELOG.md: «Новые возможности → Родительский контроль на мобильном — открывается в одно касание из карточки ребёнка».\n5. Коммит, push, deploy на prod, smoke на устройстве.\n6. `finish_task` в memory-compiler + закрыть план редизайна (этап 7 — последний).",
         "testStrategy": "Manual smoke на Android-устройстве:\n1. mobile-parent v0.50.0 → открыть карточку ребёнка → тапнуть «Родительский контроль».\n2. Должен открыться WebView с usage chart, категориями и app-rules — БЕЗ редиректа на /cabinet auth (токен принят из hash).\n3. URL в WebView должен быть очищен от hash (открыть DevTools через chrome://inspect).\n4. Кнопка «Назад» в верхнем левом углу embed-страницы → должна закрыть WebView и вернуть в карточку ребёнка (НЕ перейти на /cabinet).\n5. Изменить app-rule (block/allow) → mobile-child должен получить новое правило при следующей синхронизации.\n6. Сравнить с v0.39.x на web-кабинете в браузере — функциональность должна быть идентичной.",
-        "status": "pending",
+        "status": "review",
         "dependencies": [],
         "priority": "high",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-05-06T06:01:59.524Z"
       },
       {
         "id": "56",
@@ -665,10 +667,11 @@
         "description": "Закоммитить и доделать WIP two-step bottom-sheet flow добавления ребёнка в mobile-parent с генерацией QR-инвайта.",
         "details": "**Untracked:** `apps/mobile-parent/lib/features/children/widgets/add_child_flow.dart` — функция `startAddChildFlow(context, ref)`, два modal bottom-sheet:\n1. `_CreateChildSheet` — форма (имя + дата рождения опционально). POST /family/children → returns childId.\n2. invite QR-sheet — POST /family/children/:id/invites → показывает QR-код через qr_flutter. Для детей 14+ требует чекбокс согласия 152-ФЗ.\n\n**Modified-зависимости:**\n- `apps/mobile-parent/lib/features/children/child_models.dart` — DTO для child + invite (+31 строка)\n- `apps/mobile-parent/lib/features/children/children_repository.dart` — методы createChild + createInvite (+55 строк)\n- `apps/mobile-parent/lib/features/home/home_screen.dart` — CTA «+» вызывает startAddChildFlow\n\n**Что осталось:**\n1. flutter analyze + run on device.\n2. Проверить что после успешного добавления `childrenListProvider` инвалидируется и новый ребёнок появляется в HomeScreen.\n3. Edge: 14+ checkbox обязателен → без него POST не уходит.\n4. Edge: backend errors (duplicate name, invite already active) корректно показываются в bottom-sheet.\n5. Коммит вместе с parental-control v0.50.0 либо отдельным релизом v0.50.1.",
         "testStrategy": "Manual on Android device:\n1. Главный экран → CTA «+» → форма «Добавить ребёнка» → ввести «Тест» + dob 2015-01-01 → Сохранить.\n2. Появляется второй sheet с QR-кодом → отсканировать через mobile-child → claim invite → ребёнок появляется в HomeScreen mobile-parent.\n3. 14+ ребёнок (dob 2010): чекбокс согласия должен быть обязательным.\n4. Дубль имени → backend 409 → ошибка показана в форме без закрытия sheet.",
-        "status": "pending",
+        "status": "review",
         "dependencies": [],
         "priority": "medium",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-05-06T06:01:59.527Z"
       },
       {
         "id": "57",
@@ -676,17 +679,18 @@
         "description": "В `apps/web/components/locations/track-polyline.tsx` 9 строк modified без явного контекста (28 строк изменено в diff stat). Прочитать diff, понять зачем, либо закоммитить, либо откатить.",
         "details": "git diff apps/web/components/locations/track-polyline.tsx покажет суть. Возможно остаток рефакторинга или полировка визуала трека. Решить: PR/коммит «refactor(web): track-polyline ...» либо `git checkout HEAD --` если случайная правка.",
         "testStrategy": "Открыть страницу /cabinet/children/[id]/locations в dev → проверить, что polyline трека рисуется корректно после правки. Сравнить визуально с прошлым видом (можно через git stash + reload).",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "low",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-05-06T05:56:46.971Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-05-06T05:53:07.518Z",
+      "lastModified": "2026-05-06T06:01:59.527Z",
       "taskCount": 57,
-      "completedCount": 51,
+      "completedCount": 52,
       "tags": ["master"]
     }
   }
