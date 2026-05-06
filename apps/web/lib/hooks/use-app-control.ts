@@ -1,7 +1,13 @@
 // v0.38 Phase 6.1: TanStack Query hooks для «Родительский контроль».
 // v0.39 Phase 6.2: + App Blocking (BlockSession, AppRule).
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { appControlApi, type AppRuleMode, type BlockSessionDto } from '../api/app-control';
+import {
+  appControlApi,
+  type AppRuleMode,
+  type BlockSessionDto,
+  type CreateScheduleBody,
+  type UpdateScheduleBody,
+} from '../api/app-control';
 
 export function useInstalledApps(childId: string | null) {
   return useQuery({
@@ -91,6 +97,52 @@ export function useUpsertAppRule(childId: string) {
       appControlApi.putAppRule(childId, params.packageName, params.mode),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['app-control', 'app-rules', childId] });
+    },
+  });
+}
+
+// ─── Phase 6.x (v0.48): Schedules ───────────────────────────────────────
+
+const schedulesKey = (childId: string | null) => ['app-control', 'schedules', childId] as const;
+
+export function useSchedules(childId: string | null) {
+  return useQuery({
+    queryKey: schedulesKey(childId),
+    queryFn: () => appControlApi.listSchedules(childId!),
+    enabled: childId !== null,
+    // Список меняется только при действиях родителя — staleTime повыше,
+    // refetch on mount достаточно.
+    staleTime: 60_000,
+  });
+}
+
+export function useCreateSchedule(childId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CreateScheduleBody) => appControlApi.createSchedule(childId, body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: schedulesKey(childId) });
+    },
+  });
+}
+
+export function useUpdateSchedule(childId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (params: { scheduleId: string; body: UpdateScheduleBody }) =>
+      appControlApi.updateSchedule(childId, params.scheduleId, params.body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: schedulesKey(childId) });
+    },
+  });
+}
+
+export function useDeleteSchedule(childId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (scheduleId: string) => appControlApi.deleteSchedule(childId, scheduleId),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: schedulesKey(childId) });
     },
   });
 }

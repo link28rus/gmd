@@ -3,11 +3,27 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useEffect, useMemo, useState, type ReactElement } from 'react';
-import { ArrowLeft, Ban, Check, Lock, Search, ShieldCheck, Smartphone, Unlock } from 'lucide-react';
+import {
+  ArrowLeft,
+  Ban,
+  CalendarClock,
+  Check,
+  Lock,
+  Pencil,
+  Plus,
+  Search,
+  ShieldCheck,
+  Smartphone,
+  Trash2,
+  Unlock,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import {
+  formatDaysMask,
   HARDCODED_ALLOWED_PACKAGES,
+  isScheduleActiveAt,
   rewriteIconUrl,
+  type AppBlockScheduleDto,
   type AppCategory,
   type AppRuleMode,
   type BlockSessionDto,
@@ -17,13 +33,17 @@ import {
 import {
   useActiveBlock,
   useAppRules,
+  useDeleteSchedule,
   useInstalledApps,
+  useSchedules,
   useStopBlock,
+  useUpdateSchedule,
   useUpsertAppRule,
   useUsage,
 } from '@/lib/hooks/use-app-control';
 import { ApiError } from '@/lib/api/client';
 import { BlockDialog } from '@/components/children/block-dialog';
+import { ScheduleDialog } from '@/components/children/schedule-dialog';
 import { useChildren } from '@/lib/hooks/use-children';
 
 type RangeTab = 'today' | 'yesterday' | 'week';
@@ -171,6 +191,9 @@ export default function ParentalControlClient({
       {!activeBlock && (
         <BlockButton disabled={appsQ.isPending} onClick={() => setBlockDialogOpen(true)} />
       )}
+
+      {/* v0.48: расписания автоблокировки (по дням и времени). */}
+      <SchedulesSection childId={childId} />
 
       {/* v0.39.2: убрали отдельный AppsList — статистика и список приложений
           теперь в AppRulesSection (одна секция). */}
@@ -919,5 +942,186 @@ function ModeSegmented({
         );
       })}
     </div>
+  );
+}
+
+// ─── Schedules section (v0.48) ─────────────────────────────────────────
+
+/**
+ * Секция «Расписание блокировки» — список карточек расписаний + кнопка добавить.
+ *
+ * TZ ребёнка пока не пробрасывается на web (хранится в ChildDevice.timezone, не
+ * в ChildDto). Для бейджа «Сейчас активно» используем TZ браузера родителя как
+ * приближение — в типичном случае РФ-семьи родитель и ребёнок в одной TZ.
+ * Реальное определение «попало ли в окно» делает устройство ребёнка локально
+ * со своей TZ. Если родитель в другом TZ, бейдж может «опаздывать», но фактическая
+ * блокировка корректна.
+ */
+function SchedulesSection({ childId }: { childId: string }): ReactElement {
+  const q = useSchedules(childId);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<AppBlockScheduleDto | undefined>(undefined);
+
+  const schedules = q.data?.schedules ?? [];
+
+  function openCreate(): void {
+    setEditing(undefined);
+    setDialogOpen(true);
+  }
+  function openEdit(s: AppBlockScheduleDto): void {
+    setEditing(s);
+    setDialogOpen(true);
+  }
+
+  return (
+    <div className="mt-8">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          <span className="inline-flex items-center gap-2">
+            <CalendarClock className="h-4 w-4" />
+            Расписание блокировки
+            {schedules.length > 0 && (
+              <span className="text-muted-foreground">({schedules.length})</span>
+            )}
+          </span>
+        </h2>
+        <button
+          type="button"
+          onClick={openCreate}
+          className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+        >
+          <Plus className="h-3.5 w-3.5" /> Добавить
+        </button>
+      </div>
+
+      <p className="mb-3 text-xs text-muted-foreground">
+        Автоматическая блокировка приложений в указанные дни и часы. Whitelist (всегда разрешённые)
+        и системные приложения работают; звонки и SMS — тоже.
+      </p>
+
+      {q.isPending && <p className="text-sm text-muted-foreground">Загрузка…</p>}
+      {q.isError && (
+        <p className="text-sm text-red-600">
+          Не удалось загрузить расписания: {q.error instanceof Error ? q.error.message : 'ошибка'}
+        </p>
+      )}
+      {!q.isPending && schedules.length === 0 && (
+        <div className="rounded-2xl border border-dashed border-border bg-card/50 p-5 text-sm text-muted-foreground">
+          Расписаний ещё нет. Например, можно добавить «Сон — каждый день с 22:00 до 08:00».
+        </div>
+      )}
+
+      {schedules.length > 0 && (
+        <ul className="space-y-2">
+          {schedules.map((s) => (
+            <ScheduleRow key={s.id} childId={childId} schedule={s} onEdit={() => openEdit(s)} />
+          ))}
+        </ul>
+      )}
+
+      <ScheduleDialog
+        childId={childId}
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        schedule={editing}
+      />
+    </div>
+  );
+}
+
+function ScheduleRow({
+  childId,
+  schedule,
+  onEdit,
+}: {
+  childId: string;
+  schedule: AppBlockScheduleDto;
+  onEdit: () => void;
+}): ReactElement {
+  const update = useUpdateSchedule(childId);
+  const del = useDeleteSchedule(childId);
+
+  // Локальное «сейчас активно» — пересчитываем каждые 30 сек, плюс при mount.
+  // TZ браузера родителя (см. комментарий выше).
+  const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  const [now, setNow] = useState<Date>(() => new Date());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(new Date()), 30_000);
+    return () => window.clearInterval(id);
+  }, []);
+  const activeNow = isScheduleActiveAt(schedule, now, browserTz);
+
+  function toggle(): void {
+    if (update.isPending) return;
+    update.mutate(
+      { scheduleId: schedule.id, body: { enabled: !schedule.enabled } },
+      {
+        onError: (err: unknown) =>
+          toast.error(err instanceof Error ? err.message : 'Не удалось изменить'),
+      },
+    );
+  }
+
+  function onDelete(): void {
+    if (del.isPending) return;
+    if (!window.confirm(`Удалить расписание «${schedule.name}»?`)) return;
+    del.mutate(schedule.id, {
+      onSuccess: () => toast.success('Расписание удалено'),
+      onError: (err: unknown) =>
+        toast.error(err instanceof Error ? err.message : 'Не удалось удалить'),
+    });
+  }
+
+  return (
+    <li
+      className={
+        'flex items-start gap-3 rounded-xl border bg-card p-3 ' +
+        (schedule.enabled ? 'border-border' : 'border-dashed border-border/60 opacity-60')
+      }
+    >
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <p className="truncate text-sm font-medium text-foreground">{schedule.name}</p>
+          {activeNow && schedule.enabled && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-900 dark:bg-amber-900/40 dark:text-amber-200">
+              <Lock className="h-2.5 w-2.5" /> Сейчас активно
+            </span>
+          )}
+        </div>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {formatDaysMask(schedule.daysMask)} · {schedule.startTime}—{schedule.endTime}
+          {schedule.crossesMidnight && ' (через полночь)'}
+        </p>
+      </div>
+      <label className="inline-flex shrink-0 cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+        <input
+          type="checkbox"
+          checked={schedule.enabled}
+          onChange={toggle}
+          disabled={update.isPending}
+          className="h-4 w-4 cursor-pointer accent-blue-600"
+          aria-label={schedule.enabled ? 'Выключить расписание' : 'Включить расписание'}
+        />
+      </label>
+      <button
+        type="button"
+        onClick={onEdit}
+        className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        title="Изменить"
+        aria-label="Изменить расписание"
+      >
+        <Pencil className="h-3.5 w-3.5" />
+      </button>
+      <button
+        type="button"
+        onClick={onDelete}
+        disabled={del.isPending}
+        className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-wait dark:hover:bg-red-950/40"
+        title="Удалить"
+        aria-label="Удалить расписание"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </button>
+    </li>
   );
 }

@@ -8,6 +8,7 @@ import { AppControlParentController } from './app-control-parent.controller';
 import { AppIconsPublicController } from './app-icons-public.controller';
 import { AppControlService } from './app-control.service';
 import { AppBlockingService } from './app-blocking.service';
+import { ScheduleService } from './schedule.service';
 import { CategoryResolver } from './category-resolver.service';
 
 /**
@@ -21,6 +22,7 @@ import { CategoryResolver } from './category-resolver.service';
  *     POST /child/usage-reports       — часовые bucket'ы за дату                 (v0.38)
  *     GET  /child/app-rules           — effective whitelist + hardcoded         (v0.39)
  *     GET  /child/active-block        — активная BlockSession (или null)         (v0.39)
+ *     GET  /child/schedules           — расписания автоблокировки                (v0.48)
  *
  *   Parent (Bearer JWT):
  *     GET    /family/children/:id/app-control/installed-apps                     (v0.38)
@@ -30,6 +32,10 @@ import { CategoryResolver } from './category-resolver.service';
  *     POST   /family/children/:id/app-control/block-sessions                     (v0.39)
  *     GET    /family/children/:id/app-control/block-sessions/active              (v0.39)
  *     DELETE /family/children/:id/app-control/block-sessions/:sessionId          (v0.39)
+ *     GET    /family/children/:id/app-control/schedules                          (v0.48)
+ *     POST   /family/children/:id/app-control/schedules                          (v0.48)
+ *     PATCH  /family/children/:id/app-control/schedules/:scheduleId              (v0.48)
+ *     DELETE /family/children/:id/app-control/schedules/:scheduleId              (v0.48)
  *
  *   Public:
  *     GET  /app-icons/:sha256          — content-addressable, immutable cache
@@ -37,7 +43,7 @@ import { CategoryResolver } from './category-resolver.service';
 @Module({
   imports: [PrismaModule, AuthModule, ChildDeviceModule, FcmModule],
   controllers: [AppControlChildController, AppControlParentController, AppIconsPublicController],
-  providers: [AppControlService, AppBlockingService, CategoryResolver],
-  exports: [AppControlService, AppBlockingService, CategoryResolver],
+  providers: [AppControlService, AppBlockingService, ScheduleService, CategoryResolver],
+  exports: [AppControlService, AppBlockingService, ScheduleService, CategoryResolver],
 })
 export class AppControlModule {}

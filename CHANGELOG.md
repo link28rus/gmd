@@ -9,6 +9,20 @@
 
 ---
 
+## v0.48.0 — 2026-05-06 — Расписание автоблокировки приложений (фаза 1: backend + web)
+
+### Новые возможности
+
+- **Расписание автоблокировки приложений по дням и времени** — родитель в кабинете на странице «Родительский контроль» может задать декларативные временные окна, в которые на устройстве ребёнка все приложения блокируются (кроме whitelist'а и системных). Например, «Сон — каждый день с 22:00 до 08:00» или «Школа — Пн–Пт с 09:00 до 14:00». Поддерживаются окна через полночь (start > end), быстрые шорткаты «Будни / Выходные / Каждый день», тумблер enabled и бейдж «Сейчас активно». Лимит — 10 расписаний на ребёнка.
+
+### Изменения
+
+- **Backend:** новая модель `AppBlockSchedule` ([apps/backend/prisma/schema.prisma](apps/backend/prisma/schema.prisma)), миграция `20260506220500_phase6_app_block_schedules`. CRUD-эндпоинты под `/family/children/:childId/app-control/schedules` + child-side `GET /child/schedules`. FCM-сигнал `SYNC_SCHEDULES` для устройства при любом изменении (по аналогии с `SYNC_RULES`). Pure-функция `ScheduleService.isActiveAt(schedule, now, tz)` — учитывает IANA-таймзону ребёнка из `ChildDevice.timezone`, корректно обрабатывает cross-midnight окна и DST. Покрыто 28 unit-тестами.
+- **Web:** новая секция «Расписание блокировки» в [parental-control-client.tsx](apps/web/app/cabinet/children/[id]/parental-control/parental-control-client.tsx) между кнопкой «Заблокировать» и списком приложений. Диалог создания/редактирования с time-picker'ами и multi-select по дням ([components/children/schedule-dialog.tsx](apps/web/components/children/schedule-dialog.tsx)). React Query hooks `useSchedules / useCreateSchedule / useUpdateSchedule / useDeleteSchedule`. Бейдж «Сейчас активно» пересчитывается на клиенте раз в 30 сек.
+- **Mobile-child (фаза 2 — отдельным релизом):** Drift-таблица + ScheduleEvaluator + интеграция с существующим overlay'ем. На v0.48.0 устройство ещё не поддерживает расписания — родитель может их задавать в кабинете заранее, фактическая блокировка появится после релиза mobile-child.
+
+---
+
 ## v0.47.2 — 2026-05-06 — Залогиненный пользователь больше не видит форму входа
 
 ### Исправления

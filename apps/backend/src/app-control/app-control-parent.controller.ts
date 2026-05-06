@@ -9,6 +9,7 @@ import {
   Inject,
   NotFoundException,
   Param,
+  Patch,
   Post,
   Put,
   Query,
@@ -21,8 +22,18 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ZodValidationPipe } from '../common/zod/zod-validation.pipe';
 import { AppControlService } from './app-control.service';
 import { AppBlockingService } from './app-blocking.service';
+import { ScheduleService } from './schedule.service';
 import { CreateBlockSessionSchema, type CreateBlockSessionBody } from './dto/block-session.dto';
 import { PutAppRuleSchema, type PutAppRuleBody } from './dto/app-rule.dto';
+import {
+  CreateScheduleSchema,
+  UpdateScheduleSchema,
+  formatHHMM,
+  type AppBlockScheduleDto,
+  type CreateScheduleBody,
+  type UpdateScheduleBody,
+} from './dto/schedule.dto';
+import type { AppBlockSchedule } from '@prisma/client';
 
 interface AuthedRequest extends Request {
   user: { userId: string; familyId: string; role: 'owner' | 'parent' | 'admin' };
@@ -39,6 +50,7 @@ export class AppControlParentController {
   constructor(
     @Inject(AppControlService) private readonly svc: AppControlService,
     @Inject(AppBlockingService) private readonly blocking: AppBlockingService,
+    @Inject(ScheduleService) private readonly schedules: ScheduleService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
   ) {}
 
@@ -180,6 +192,73 @@ export class AppControlParentController {
     return { packageName: rule.packageName, mode: rule.mode, source: rule.source };
   }
 
+  // ─── Phase 6.x (v0.48): App Block Schedules ─────────────────────────────
+
+  /**
+   * Список расписаний автоблокировки для ребёнка.
+   * 200 + {schedules: AppBlockScheduleDto[]}. Пустой список если устройства нет.
+   */
+  @Get('schedules')
+  async listSchedules(
+    @Req() req: AuthedRequest,
+    @Param('childId') childId: string,
+  ): Promise<{ schedules: AppBlockScheduleDto[] }> {
+    await this.assertChildInFamily(req.user.familyId, childId);
+    const list = await this.schedules.listForChild(childId);
+    return { schedules: list.map(toDto) };
+  }
+
+  /**
+   * Создать новое расписание. 201 + созданный объект.
+   * 403 schedule_limit_reached — превышен лимит на ребёнка (10).
+   * 404 no_active_device — у ребёнка нет привязанного устройства.
+   */
+  @Post('schedules')
+  @HttpCode(HttpStatus.CREATED)
+  async createSchedule(
+    @Req() req: AuthedRequest,
+    @Param('childId') childId: string,
+    @Body(new ZodValidationPipe(CreateScheduleSchema)) dto: CreateScheduleBody,
+  ): Promise<AppBlockScheduleDto> {
+    await this.assertChildInFamily(req.user.familyId, childId);
+    const created = await this.schedules.createForChild({
+      childId,
+      createdByUserId: req.user.userId,
+      body: dto,
+    });
+    return toDto(created);
+  }
+
+  /**
+   * Частичный апдейт расписания (включая тумблер enabled).
+   * 200 + обновлённый объект.
+   */
+  @Patch('schedules/:scheduleId')
+  async updateSchedule(
+    @Req() req: AuthedRequest,
+    @Param('childId') childId: string,
+    @Param('scheduleId') scheduleId: string,
+    @Body(new ZodValidationPipe(UpdateScheduleSchema)) dto: UpdateScheduleBody,
+  ): Promise<AppBlockScheduleDto> {
+    await this.assertChildInFamily(req.user.familyId, childId);
+    const updated = await this.schedules.updateForChild({ childId, scheduleId, body: dto });
+    return toDto(updated);
+  }
+
+  /**
+   * Удалить расписание. 204.
+   */
+  @Delete('schedules/:scheduleId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteSchedule(
+    @Req() req: AuthedRequest,
+    @Param('childId') childId: string,
+    @Param('scheduleId') scheduleId: string,
+  ): Promise<void> {
+    await this.assertChildInFamily(req.user.familyId, childId);
+    await this.schedules.deleteForChild({ childId, scheduleId });
+  }
+
   // ─── Helpers ────────────────────────────────────────────────────────────
 
   private async assertChildInFamily(familyId: string, childId: string): Promise<void> {
@@ -203,4 +282,21 @@ export class AppControlParentController {
       (req.headers['x-forwarded-host'] as string | undefined) ?? req.headers.host ?? 'localhost';
     return `${proto}://${host}`;
   }
+}
+
+function toDto(s: AppBlockSchedule): AppBlockScheduleDto {
+  return {
+    id: s.id,
+    name: s.name,
+    enabled: s.enabled,
+    daysMask: s.daysMask,
+    startMin: s.startMin,
+    endMin: s.endMin,
+    startTime: formatHHMM(s.startMin),
+    endTime: formatHHMM(s.endMin),
+    crossesMidnight: s.startMin > s.endMin,
+    mode: s.mode,
+    createdAt: s.createdAt.toISOString(),
+    updatedAt: s.updatedAt.toISOString(),
+  };
 }

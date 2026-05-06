@@ -16,9 +16,11 @@ import type { ChildAuthContext } from '../child-device/child-device.service';
 import { ZodValidationPipe } from '../common/zod/zod-validation.pipe';
 import { AppControlService } from './app-control.service';
 import { AppBlockingService } from './app-blocking.service';
+import { ScheduleService } from './schedule.service';
 import { InstalledAppsBodySchema, type InstalledAppsBody } from './dto/installed-apps.dto';
 import { UsageReportBodySchema, type UsageReportBody } from './dto/usage-report.dto';
 import { AppIconsBodySchema, type AppIconsBody } from './dto/app-icons.dto';
+import { formatHHMM, type AppBlockScheduleDto } from './dto/schedule.dto';
 
 interface ChildRequest extends Request {
   childDevice: ChildAuthContext;
@@ -39,6 +41,7 @@ export class AppControlChildController {
   constructor(
     @Inject(AppControlService) private readonly svc: AppControlService,
     @Inject(AppBlockingService) private readonly blocking: AppBlockingService,
+    @Inject(ScheduleService) private readonly schedules: ScheduleService,
   ) {}
 
   @Post('installed-apps')
@@ -105,6 +108,35 @@ export class AppControlChildController {
         startedAt: session.startedAt.toISOString(),
         endsAt: session.endsAt.toISOString(),
       },
+    };
+  }
+
+  /**
+   * Список расписаний автоблокировки для устройства. Дёргается:
+   *   - при старте app
+   *   - после FCM SYNC_SCHEDULES
+   *   - раз в 15 мин fallback poll (на случай пропущенного push)
+   * Throttle 60/час (≈ 1 раз в минуту с запасом).
+   */
+  @Get('schedules')
+  @Throttle({ default: { ttl: 3600_000, limit: 60 } })
+  async getSchedules(@Req() req: ChildRequest): Promise<{ schedules: AppBlockScheduleDto[] }> {
+    const list = await this.schedules.listForDevice(req.childDevice.deviceId);
+    return {
+      schedules: list.map((s) => ({
+        id: s.id,
+        name: s.name,
+        enabled: s.enabled,
+        daysMask: s.daysMask,
+        startMin: s.startMin,
+        endMin: s.endMin,
+        startTime: formatHHMM(s.startMin),
+        endTime: formatHHMM(s.endMin),
+        crossesMidnight: s.startMin > s.endMin,
+        mode: s.mode,
+        createdAt: s.createdAt.toISOString(),
+        updatedAt: s.updatedAt.toISOString(),
+      })),
     };
   }
 }

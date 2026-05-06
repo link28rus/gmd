@@ -66,6 +66,50 @@ export interface BlockSessionDto {
   endsAt: string; // ISO
 }
 
+// ─── Phase 6.x (v0.48): App Block Schedules ─────────────────────────────
+//
+// Расписание автоблокировки: дни недели + временное окно. Дополняет разовые
+// BlockSession. Пока единственный mode — BLOCK_NON_ALLOWED (whitelist-based,
+// идентично сессии).
+
+export type AppBlockScheduleMode = 'BLOCK_NON_ALLOWED';
+
+export interface AppBlockScheduleDto {
+  id: string;
+  name: string;
+  enabled: boolean;
+  /** 7-битная маска ISO weekday: 1=ПН … 7=ВС, bit i-1. Будни=31, выходные=96, ежедневно=127. */
+  daysMask: number;
+  startMin: number;
+  endMin: number;
+  /** "HH:MM" представление startMin (для UI без повторного форматирования). */
+  startTime: string;
+  endTime: string;
+  /** true если startMin > endMin (окно через полночь). */
+  crossesMidnight: boolean;
+  mode: AppBlockScheduleMode;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateScheduleBody {
+  name: string;
+  daysMask: number;
+  startMin: number;
+  endMin: number;
+  enabled?: boolean;
+  mode?: AppBlockScheduleMode;
+}
+
+export interface UpdateScheduleBody {
+  name?: string;
+  daysMask?: number;
+  startMin?: number;
+  endMin?: number;
+  enabled?: boolean;
+  mode?: AppBlockScheduleMode;
+}
+
 export const appControlApi = {
   installedApps: (childId: string) =>
     apiFetch<{ apps: InstalledAppDto[] }>(`/api/children/${childId}/app-control/installed-apps`),
@@ -113,7 +157,107 @@ export const appControlApi = {
         body: JSON.stringify({ mode }),
       },
     ),
+
+  // ─── Schedules ─────────────────────────────────────────────────────────
+  listSchedules: (childId: string) =>
+    apiFetch<{ schedules: AppBlockScheduleDto[] }>(
+      `/api/children/${childId}/app-control/schedules`,
+    ),
+  createSchedule: (childId: string, body: CreateScheduleBody) =>
+    apiFetch<AppBlockScheduleDto>(`/api/children/${childId}/app-control/schedules`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  updateSchedule: (childId: string, scheduleId: string, body: UpdateScheduleBody) =>
+    apiFetch<AppBlockScheduleDto>(`/api/children/${childId}/app-control/schedules/${scheduleId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  deleteSchedule: (childId: string, scheduleId: string) =>
+    apiFetch<void>(`/api/children/${childId}/app-control/schedules/${scheduleId}`, {
+      method: 'DELETE',
+    }),
 };
+
+// ─── Schedule helpers (для UI) ─────────────────────────────────────────────
+
+export const ISO_WEEKDAY_LABELS_RU = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'] as const;
+export const DAYS_MASK_WEEKDAYS = 0b0011111; // 31
+export const DAYS_MASK_WEEKEND = 0b1100000; // 96
+export const DAYS_MASK_ALL = 0b1111111; // 127
+
+/** Bit-маска → массив ISO weekday индексов (1..7). */
+export function daysMaskToList(mask: number): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < 7; i++) {
+    if ((mask & (1 << i)) !== 0) out.push(i + 1);
+  }
+  return out;
+}
+
+/** Человекочитаемое короткое описание дней. */
+export function formatDaysMask(mask: number): string {
+  if (mask === DAYS_MASK_ALL) return 'Каждый день';
+  if (mask === DAYS_MASK_WEEKDAYS) return 'Будни';
+  if (mask === DAYS_MASK_WEEKEND) return 'Выходные';
+  return daysMaskToList(mask)
+    .map((d) => ISO_WEEKDAY_LABELS_RU[d - 1])
+    .join(', ');
+}
+
+/**
+ * Активно ли расписание в момент `now` для устройства с TZ `tz`?
+ * Реализация совпадает с backend ScheduleService.isActiveAt — нужна для
+ * бейджа «Сейчас активно» на карточке. На сервере вычисляется при ответе,
+ * но для real-time UI считаем на клиенте каждую минуту.
+ */
+export function isScheduleActiveAt(
+  schedule: Pick<AppBlockScheduleDto, 'enabled' | 'daysMask' | 'startMin' | 'endMin'>,
+  now: Date,
+  tz: string,
+): boolean {
+  if (!schedule.enabled) return false;
+  if (schedule.startMin === schedule.endMin) return false;
+  const local = getLocalParts(now, tz);
+  const todayBit = 1 << (local.weekday - 1);
+  const yesterdayBit = 1 << ((local.weekday === 1 ? 7 : local.weekday - 1) - 1);
+  if (schedule.startMin < schedule.endMin) {
+    return (
+      (schedule.daysMask & todayBit) !== 0 &&
+      local.minute >= schedule.startMin &&
+      local.minute < schedule.endMin
+    );
+  }
+  const tail = (schedule.daysMask & yesterdayBit) !== 0 && local.minute < schedule.endMin;
+  const head = (schedule.daysMask & todayBit) !== 0 && local.minute >= schedule.startMin;
+  return tail || head;
+}
+
+interface LocalParts {
+  weekday: number;
+  minute: number;
+}
+
+function getLocalParts(now: Date, tz: string): LocalParts {
+  const fmt = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz,
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  const parts = fmt.formatToParts(now);
+  let weekdayStr = '';
+  let hour = 0;
+  let minute = 0;
+  for (const p of parts) {
+    if (p.type === 'weekday') weekdayStr = p.value;
+    else if (p.type === 'hour') hour = Number.parseInt(p.value, 10) % 24;
+    else if (p.type === 'minute') minute = Number.parseInt(p.value, 10);
+  }
+  const map: Record<string, number> = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 };
+  return { weekday: map[weekdayStr] ?? 1, minute: hour * 60 + minute };
+}
 
 /**
  * Backend возвращает iconUrl типа `https://api.gmd.../app-icons/<sha256>` —

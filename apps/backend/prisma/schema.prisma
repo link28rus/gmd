@@ -73,6 +73,7 @@ model User {
   passwordResetTokens      PasswordResetToken[]
   audioSessionsRequested   AudioSession[]
   blockSessionsCreated     BlockSession[]
+  appBlockSchedulesCreated AppBlockSchedule[]
   parentDevices            ParentDevice[]
 
   @@index([email])
@@ -290,6 +291,7 @@ model ChildDevice {
   usageBuckets  UsageBucket[]
   appRules      AppRule[]
   blockSessions BlockSession[]
+  appBlockSchedules AppBlockSchedule[]
 
   @@map("child_devices")
 }
@@ -760,4 +762,49 @@ model BlockSession {
   @@index([childDeviceId, state])
   @@index([endsAt])  // для cron auto-expire / OnModuleInit cleanup
   @@map("block_sessions")
+}
+
+// Phase 6.x (v0.48): расписание автоблокировки приложений.
+//
+// Декларативные временные окна: «ПН–ПТ 22:00 → 08:00 — заблокировать всё кроме
+// whitelist'а». Дополняет разовые BlockSession (ручные «заблокировать сейчас»).
+// Расписание и сессия независимы; фактическая блокировка на устройстве =
+// (active_session OR active_schedule) AND NOT (ALWAYS_ALLOWED OR HARDCODED).
+//
+// Время хранится как минуты с полуночи (Int 0..1439, exclusive end). TZ берём
+// из ChildDevice.timezone (IANA, заполняется child'ом при usage-reports).
+// Если start > end — расписание пересекает полночь (22:00 → 08:00).
+//
+// daysMask — 7-битная маска по ISO weekday (1=ПН … 7=ВС, bit i-1 = day i):
+//   будни   = 0b0011111 = 31
+//   выходные = 0b1100000 = 96
+//   ежедневно = 0b1111111 = 127
+enum AppBlockScheduleMode {
+  // Блокировать всё кроме ALWAYS_ALLOWED + HARDCODED. Текущее (и единственное)
+  // поведение, симметрично BlockSession. v2 может добавить BLOCK_LISTED.
+  BLOCK_NON_ALLOWED
+}
+
+model AppBlockSchedule {
+  id              String               @id @default(cuid())
+  childDeviceId   String
+  createdByUserId String
+
+  name            String               @db.VarChar(64)
+  enabled         Boolean              @default(true)
+
+  daysMask        Int                  // 1..127 (см. выше)
+  startMin        Int                  // 0..1439 (минуты с полуночи в TZ ребёнка)
+  endMin          Int                  // 0..1439, exclusive; startMin == endMin запрещён DTO
+
+  mode            AppBlockScheduleMode @default(BLOCK_NON_ALLOWED)
+
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  childDevice   ChildDevice @relation(fields: [childDeviceId], references: [id], onDelete: Cascade)
+  createdByUser User        @relation(fields: [createdByUserId], references: [id])
+
+  @@index([childDeviceId, enabled])
+  @@map("app_block_schedules")
 }
