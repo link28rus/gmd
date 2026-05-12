@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 };
 
 export default async function PrivacyPage(): Promise<React.ReactElement> {
-  const filePath = path.join(process.cwd(), 'content', 'legal', 'privacy-policy-v1.0.md');
+  const filePath = path.join(process.cwd(), 'content', 'legal', 'privacy-policy-v1.1.md');
   const content = await fs.readFile(filePath, 'utf-8');
 
   return (
@@ -19,38 +19,38 @@ export default async function PrivacyPage(): Promise<React.ReactElement> {
         remarkPlugins={[remarkGfm]}
         components={{
           h1: ({ children }) => (
-            <h1 className="mb-6 text-3xl font-bold text-zinc-900">{children}</h1>
+            <h1 className="mb-6 text-3xl font-bold text-zinc-50">{children}</h1>
           ),
           h2: ({ children }) => (
-            <h2 className="mb-3 mt-8 text-xl font-semibold text-zinc-900">{children}</h2>
+            <h2 className="mb-3 mt-8 text-xl font-semibold text-zinc-50">{children}</h2>
           ),
           h3: ({ children }) => (
-            <h3 className="mb-2 mt-6 text-lg font-semibold text-zinc-800">{children}</h3>
+            <h3 className="mb-2 mt-6 text-lg font-semibold text-zinc-100">{children}</h3>
           ),
-          p: ({ children }) => <p className="mb-4 leading-relaxed text-zinc-700">{children}</p>,
+          p: ({ children }) => <p className="mb-4 leading-relaxed text-zinc-300">{children}</p>,
           ul: ({ children }) => (
-            <ul className="mb-4 list-disc space-y-1 pl-6 text-zinc-700">{children}</ul>
+            <ul className="mb-4 list-disc space-y-1 pl-6 text-zinc-300">{children}</ul>
           ),
           ol: ({ children }) => (
-            <ol className="mb-4 list-decimal space-y-1 pl-6 text-zinc-700">{children}</ol>
+            <ol className="mb-4 list-decimal space-y-1 pl-6 text-zinc-300">{children}</ol>
           ),
           li: ({ children }) => <li className="leading-relaxed">{children}</li>,
           a: ({ href, children }) => (
-            <a href={href} className="text-zinc-900 underline hover:no-underline">
+            <a href={href} className="text-zinc-100 underline hover:no-underline">
               {children}
             </a>
           ),
           strong: ({ children }) => (
-            <strong className="font-semibold text-zinc-900">{children}</strong>
+            <strong className="font-semibold text-zinc-50">{children}</strong>
           ),
-          hr: () => <hr className="my-8 border-zinc-200" />,
+          hr: () => <hr className="my-8 border-zinc-700" />,
           code: ({ children }) => (
-            <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-sm text-zinc-800">
+            <code className="rounded bg-zinc-800 px-1.5 py-0.5 text-sm text-zinc-200">
               {children}
             </code>
           ),
           blockquote: ({ children }) => (
-            <blockquote className="my-4 border-l-4 border-zinc-300 pl-4 text-zinc-600 italic">
+            <blockquote className="my-4 border-l-4 border-zinc-600 pl-4 text-zinc-400 italic">
               {children}
             </blockquote>
           ),
