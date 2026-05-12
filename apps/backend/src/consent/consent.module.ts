@@ -17,7 +17,7 @@ export type { ConsentConfig };
     {
       provide: CONSENT_CONFIG,
       useFactory: (): ConsentConfig => ({
-        privacyPolicyVersion: process.env.PRIVACY_POLICY_VERSION || '1.1',
+        privacyPolicyVersion: process.env.PRIVACY_POLICY_VERSION || '1.2',
       }),
     },
     ConsentService,
