@@ -1,3 +1,6 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -6,6 +9,15 @@ plugins {
     // v0.46: применяем google-services plugin (читает google-services.json,
     // генерирует Firebase config classes для FirebaseMessaging init).
     id("com.google.gms.google-services")
+}
+
+// Загружаем release-signing конфиг из android/key.properties (в git не хранится).
+// Если файла нет — release-build будет невозможен, но debug продолжит работать.
+val keystoreProperties = Properties().apply {
+    val propsFile = rootProject.file("key.properties")
+    if (propsFile.exists()) {
+        load(FileInputStream(propsFile))
+    }
 }
 
 android {
@@ -30,11 +42,27 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        create("release") {
+            val storeFileName = keystoreProperties.getProperty("storeFile")
+            if (storeFileName != null) {
+                storeFile = rootProject.file(storeFileName)
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: добавить настоящий signingConfig для prod-релиза.
-            // Пока подписывается debug-ключом, чтобы `flutter run --release` работал.
-            signingConfig = signingConfigs.getByName("debug")
+            // Если key.properties отсутствует — падаем обратно на debug keys
+            // (для CI/локальной сборки без релизного ключа).
+            signingConfig = if (keystoreProperties.isNotEmpty()) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 }

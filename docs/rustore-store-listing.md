@@ -24,7 +24,7 @@
 
 ## App 1: GMD — Родительский контроль (mobile-parent)
 
-**Package:** `ru.link28rus.gmd.parent`
+**Package:** `ru.link28rus.gmd.gmd_parent`
 **Возрастной рейтинг:** 0+
 
 ### Имя приложения (≤50 chars)
@@ -239,7 +239,7 @@ GMD для ребёнка — устройство-спутник в соста�
 
 ```bash
 # После approval RuStore вернёт публичные URL:
-# https://www.rustore.ru/catalog/app/ru.link28rus.gmd.parent
+# https://www.rustore.ru/catalog/app/ru.link28rus.gmd.gmd_parent
 # https://www.rustore.ru/catalog/app/ru.link28rus.gmd.child
 
 # Sanity-check открыть оба — описания, скриншоты, иконка корректные.
