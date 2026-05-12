@@ -9,13 +9,18 @@ description: Use when releasing a new version of GMD — bumping versions, build
 
 ## Когда что нужно
 
-| Изменение                                | Bump            | Web deploy                 | APK build & publish |
-| ---------------------------------------- | --------------- | -------------------------- | ------------------- |
-| Только backend/web (без mobile)          | PATCH или MINOR | ✅                         | ❌                  |
-| Только mobile-parent (UI)                | PATCH или MINOR | ❌ (если route не менялся) | ✅ parent only      |
-| Только mobile-child                      | PATCH или MINOR | ❌                         | ✅ child only       |
-| Backend route + mobile (consume new API) | MINOR           | ✅                         | ✅                  |
-| Breaking change (API контракт)           | MAJOR           | ✅                         | ✅                  |
+Mobile-релиз идёт по двум каналам параллельно:
+
+1. **Self-hosted APK** в `/opt/gmd/download/` → endpoint `/api/public/updates/<app>/latest` (legacy upgrade-path для уже установленных пользователей).
+2. **AAB в RuStore** через RuStore Console (основной канал для новых пользователей; не сбрасывает permissions при auto-update на MIUI/HyperOS — см. lessons #23-24).
+
+| Изменение                                | Bump            | Web deploy                 | APK self-hosted | AAB → RuStore |
+| ---------------------------------------- | --------------- | -------------------------- | --------------- | ------------- |
+| Только backend/web (без mobile)          | PATCH или MINOR | ✅                         | ❌              | ❌            |
+| Только mobile-parent (UI)                | PATCH или MINOR | ❌ (если route не менялся) | ✅ parent only  | ✅ parent     |
+| Только mobile-child                      | PATCH или MINOR | ❌                         | ✅ child only   | ✅ child      |
+| Backend route + mobile (consume new API) | MINOR           | ✅                         | ✅              | ✅            |
+| Breaking change (API контракт)           | MAJOR           | ✅                         | ✅              | ✅            |
 
 > **Note:** route `/api/public/updates/<app>/latest` сам читает APK из `/opt/gmd/download/`, поэтому если меняется только APK (не код роута) — web-deploy не обязателен. Но если правил `lib/downloads/index.ts` или сам route — обязательно `deploy.sh`, иначе старый контейнер вернёт устаревший JSON.
 
@@ -147,6 +152,63 @@ ssh gmd-prod 'ls -t /opt/gmd/download/gmd-child-*.apk  | tail -n +7 | xargs -r r
 ssh gmd-prod 'ls -lh /opt/gmd/download/'
 ```
 
+## Шаг 5а: Build AAB для RuStore (если релиз mobile)
+
+RuStore принимает APK split-per-abi и AAB. Используем AAB — RuStore сам делит по device, один файл вместо трёх.
+
+AAB подписывается тем же `android/key.properties` keystore что и APK (signingConfig в `build.gradle.kts` общий для всех вариантов сборки). Подпись v2/v3 — out-of-the-box у Flutter.
+
+`versionCode` для AAB = `flutter.versionCode` = pubspec build (`+N`). RuStore требует **strictly increasing** versionCode для каждой загрузки — следить чтобы новая загрузка имела `+N` больше предыдущей. ABI-offset трюк (lesson #14) к AAB не применяется — там одно значение versionCode на bundle.
+
+```bash
+export PATH="/d/flutter/bin:$PATH"
+
+# Mobile-parent
+cd D:/Project/GMD/apps/mobile-parent
+flutter build appbundle --release
+ls build/app/outputs/bundle/release/
+# app-release.aab
+
+# Mobile-child
+cd D:/Project/GMD/apps/mobile-child
+flutter build appbundle --release
+ls build/app/outputs/bundle/release/
+# app-release.aab
+```
+
+Verify подписи AAB:
+
+```bash
+# AAB подписывается JarSigner (apksigner для AAB не работает — он для APK).
+# Проверить что bundletool сгенерирует APK с нужной подписью:
+"D:/Android/sdk/build-tools/<ver>/jarsigner.exe" -verify -verbose -certs \
+  build/app/outputs/bundle/release/app-release.aab | grep -E "X.509|SHA"
+# SHA-1 должен совпадать с тем что вышло у production APK
+# (sanity-check — иначе RuStore при первом upload не примет, и потом
+#  пользователи не смогут получить in-place update).
+```
+
+Переименование с pubspec build (та же конвенция что у APK, но без ABI):
+
+```bash
+PUBSPEC_BUILD=$(grep '^version:' pubspec.yaml | cut -d'+' -f2)
+VERSION=$(grep '^version:' pubspec.yaml | sed -E 's/version: ([0-9.]+).*/\1/')
+
+# Складываем в local out/, не на прод (RuStore Console upload — manual)
+mkdir -p D:/Project/GMD/build/aab
+cp build/app/outputs/bundle/release/app-release.aab \
+   "D:/Project/GMD/build/aab/gmd-parent-${VERSION}+${PUBSPEC_BUILD}.aab"
+```
+
+Upload в RuStore Console — **manual** на старте (RuStore Public API для автоматизации submission'а доступно по запросу, отдельная задача):
+
+1. https://console.rustore.ru → Приложения → mobile-{parent,child} → Релизы → Создать новый релиз.
+2. Upload `gmd-{parent,child}-X.Y.Z+N.aab` из `D:/Project/GMD/build/aab/`.
+3. Changelog (RUS, ≤4000 chars) — copy блок `## vX.Y.Z` из CHANGELOG.md.
+4. Submit на модерацию (1-3 рабочих дня типично).
+
+> **Lesson #15:** RuStore project IDs / API tokens / package signatures — НЕ упоминать в memory-compiler `finish_task` content. Хранить через `mcp__memory-compiler__save_secret`.
+
 ## Шаг 6: Verify auto-update endpoint (ОБЯЗАТЕЛЬНО)
 
 Lesson #16: web без APK = endpoint 204; APK без web-deploy (если route менялся) = 404. Проверять надо ОБЕ ветки:
@@ -208,10 +270,11 @@ adb install -r gmd-parent-X.Y.Z+N-arm64-v8a.apk
 
 1. **НЕ `flutter install`** на чужом устройстве — он делает `adb uninstall` если подписи разные → wipes user data (lesson #12). Только `apksigner verify` + `adb install -r`.
 2. **APK naming = pubspec build, не effective** (lesson #14). N после `+` в имени файла — это значение в `pubspec.yaml`, не результат вычисления `ABI*1000 + N`.
-3. **Версии монотонно растут** для RuStore (`+N` per ABI). Не откатывать `+N` обратно.
-4. **Verify endpoint после публикации** — три ABI × два приложения = 6 curl-запросов. Без этого деплой считать неуспешным (lesson #16).
-5. **Push после verify**, а не до. Если deploy упал — rollback тегу проще, чем по push'у.
-6. **Backup БД перед миграцией** — `deploy.sh` запускает `prisma migrate deploy`, и если миграция деструктивная, должен быть свежий dump на gmd-prod (`/opt/gmd/backups/postgres/`).
+3. **Версии монотонно растут** для RuStore (`+N` strictly increasing). Не откатывать `+N` обратно — RuStore Console при upload AAB с versionCode ≤ предыдущего отвергнет release.
+4. **Подпись AAB и APK = один keystore.** RuStore-канал и self-hosted-канал должны идти от одного `android/key.properties`. Иначе пользователь, мигрирующий с self-hosted на RuStore, получит INSTALL_FAILED через `adb install -r` (signature mismatch). Verify через `jarsigner -verify` для AAB и `apksigner verify` для APK — SHA-1 одинаковые.
+5. **Verify endpoint после публикации** — три ABI × два приложения = 6 curl-запросов. Без этого деплой считать неуспешным (lesson #16).
+6. **Push после verify**, а не до. Если deploy упал — rollback тегу проще, чем по push'у.
+7. **Backup БД перед миграцией** — `deploy.sh` запускает `prisma migrate deploy`, и если миграция деструктивная, должен быть свежий dump на gmd-prod (`/opt/gmd/backups/postgres/`).
 
 ## Common Pitfalls
 
@@ -224,6 +287,8 @@ adb install -r gmd-parent-X.Y.Z+N-arm64-v8a.apk
 | Auto-update предлагает downgrade                 | На устройстве `+N` больше чем на проде    | Bump pubspec build, пересобрать                                  |
 | `flutter` в `which` не находится                 | PATH в git-bash                           | `export PATH="/d/flutter/bin:$PATH"`                             |
 | `apksigner verify` SHA-1 разный                  | Подписан debug ключом                     | Использовать upload-keystore, см. `android/app/build.gradle.kts` |
+| RuStore Console: «версия не больше предыдущей»   | versionCode ≤ предыдущего загруженного    | Bump pubspec `+N`, пересобрать AAB                               |
+| RuStore первый upload: SHA-1 не совпадает        | AAB подписан debug-keystore               | Verify `key.properties`, пересобрать `flutter build appbundle`   |
 
 ## Quick Reference
 
@@ -238,11 +303,14 @@ pnpm version:sync && pnpm version:check
 git commit -am "chore: release vX.Y.Z" && git tag vX.Y.Z
 # 4. Web deploy
 bash infra/deploy/deploy.sh
-# 5. APK build
+# 5. APK build (self-hosted)
 export PATH="/d/flutter/bin:$PATH"
 (cd apps/mobile-parent && flutter build apk --release --split-per-abi)
 (cd apps/mobile-child  && flutter build apk --release --split-per-abi)
-# 6. Rename + upload (см. Шаг 5 выше)
+# 5а. AAB build (RuStore)
+(cd apps/mobile-parent && flutter build appbundle --release)
+(cd apps/mobile-child  && flutter build appbundle --release)
+# 6. Rename + upload APK (см. Шаг 5) + AAB → build/aab/ (см. Шаг 5а) + manual submit RuStore Console
 # 7. Verify endpoint (Шаг 6)
 # 8. Push
 git push origin main vX.Y.Z
