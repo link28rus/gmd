@@ -13,6 +13,7 @@
 
 ### Улучшения
 
+- **Фирменная иконка на вкладке сайта.** В `apps/web/app/` добавлены `favicon.ico` (16/32/48), `icon.png` (512×512), `apple-icon.png` (180×180, с padding для iOS rounded mask) и `icon.svg` — Next.js 15 App Router сам инжектит `<link rel="icon">` и `<link rel="apple-touch-icon">` из convention. Палитра consistent с landing'ом и promo-карточками RuStore (фон `#0a1628`, accent sky-400 `#38bdf8`, белая буква G). Дефолтного глобуса в табе больше нет. Расширен генератор `tools/icons/generate_app_icons.py` функцией `render_favicon()`.
 - **Страницы `/terms` и `/privacy` теперь читаемы на тёмном фоне.** Body лендинга оформлен в тёмной палитре (`#0a0a0a`), а markdown-рендер юридических текстов был зашит на `text-zinc-700/800/900` — тёмный на тёмном. Перекрасил заголовки в `zinc-50`, основной текст в `zinc-300`, разделители/код/цитаты — в тёмносоответствующие тона. Контрасты соответствуют WCAG AA.
 
 ### Изменения
