@@ -294,6 +294,30 @@ class ChildApi {
     }
   }
 
+  // v0.51 RuStore Push (lesson #24): параллельный канал для устройств без GMS
+  // и для bypass MIUI Restricted Settings. Backend хранит rustorePushToken
+  // отдельно от fcmToken; при отправке предпочитает RuStore (он не сбрасывается
+  // при sideload-update). null = устройство потеряло RuStore client / удалило
+  // токен — backend очищает запись.
+  Future<void> setRustorePushToken({
+    required String? rustorePushToken,
+    required String deviceToken,
+  }) async {
+    try {
+      await _dio.post(
+        '/child/devices/rustore-token',
+        data: {'rustorePushToken': rustorePushToken},
+        options: Options(headers: {'X-Child-Token': deviceToken}),
+      );
+    } on DioException catch (e) {
+      final status = e.response?.statusCode;
+      if (status == 401 || status == 403) {
+        throw const UnauthorizedException();
+      }
+      throw NetworkException(e.message ?? 'Network');
+    }
+  }
+
   // ─── v0.38 Phase 6.1: screen-time reporting ─────────────────────────────
 
   /// POST snapshot установленных apps + IANA timezone.

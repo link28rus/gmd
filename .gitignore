@@ -28,6 +28,11 @@ infra/docker/.env.prod
 **/google-services.json
 **/GoogleService-Info.plist
 
+# Python tooling cache (tools/icons/, tools/rustore/ — генераторы скринов и иконок)
+__pycache__/
+*.pyc
+*.pyo
+
 # IDE
 .idea/
 .vscode/*

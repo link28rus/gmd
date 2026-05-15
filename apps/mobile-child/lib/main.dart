@@ -8,6 +8,7 @@ import 'background/location_entry.dart' as bg;
 import 'core/diag/diag_channel.dart';
 import 'core/fcm/fcm_registrar.dart';
 import 'core/native/escape_channel.dart';
+import 'core/push/rustore_push_registrar.dart';
 import 'core/storage/secure_storage_service.dart';
 import 'features/sound_around/sound_around_entry.dart' as sa;
 
@@ -57,6 +58,9 @@ void main() async {
   // Регистрирует только если есть device-token (т.е. claim уже был).
   if (hasToken) {
     unawaited(FcmRegistrar.registerInBackground());
+    // v0.51 (lesson #24): параллельно регистрируем RuStore Push token, если
+    // на устройстве есть RuStore client. Не блокирует startup.
+    unawaited(RuStorePushRegistrar.registerInBackground());
   }
   final initialLocation = hasToken ? '/home' : '/onboarding';
   runApp(ProviderScope(child: GmdChildApp(initialLocation: initialLocation)));

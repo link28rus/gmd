@@ -27,7 +27,7 @@ export class InvitesService {
     familyId: string,
     childId: string,
     createdBy: string,
-    opts: { consent14PlusGranted?: boolean } = {},
+    opts: { consent14PlusGranted?: boolean; maxUses?: number; ttlSec?: number } = {},
   ): Promise<InviteResult> {
     const child = await this.prisma.child.findFirst({
       where: { id: childId, familyId, deletedAt: null },
@@ -35,17 +35,26 @@ export class InvitesService {
     if (!child) {
       throw new NotFoundException({ code: 'child_not_found', message: 'Child not found' });
     }
-    const activeDevice = await this.prisma.childDevice.findFirst({
-      where: { childId, revokedAt: null },
-    });
-    if (activeDevice) {
-      throw new ConflictException({
-        code: 'child_has_device',
-        message: 'Child already has an active device; reset first',
+    const maxUses = Math.max(1, Math.min(1000, opts.maxUses ?? 1));
+    // Multi-use invites (maxUses > 1) разрешены, даже если у ребёнка уже есть
+    // активное устройство — claim авторевокает старое (это нужно для тест-
+    // аккаунта модерации RuStore: каждый новый модератор приходит "на свежее"
+    // привязанное устройство). Single-use invites (maxUses=1) сохраняют
+    // классическое поведение: блокируются если уже привязано.
+    if (maxUses === 1) {
+      const activeDevice = await this.prisma.childDevice.findFirst({
+        where: { childId, revokedAt: null },
       });
+      if (activeDevice) {
+        throw new ConflictException({
+          code: 'child_has_device',
+          message: 'Child already has an active device; reset first',
+        });
+      }
     }
     const code = generateInviteCode();
-    const expiresAt = new Date(Date.now() + this.cfg.ttlSec * 1000);
+    const ttlSec = Math.max(60, opts.ttlSec ?? this.cfg.ttlSec);
+    const expiresAt = new Date(Date.now() + ttlSec * 1000);
     await this.prisma.invite.create({
       data: {
         familyId,
@@ -54,13 +63,14 @@ export class InvitesService {
         expiresAt,
         createdBy,
         consent14PlusGranted: opts.consent14PlusGranted === true,
+        maxUses,
       },
     });
     return {
       code,
       qrUrl: `${this.cfg.landingBaseUrl}/claim/${code}`,
       deepLink: `gmd://claim/${code}`,
-      expiresIn: this.cfg.ttlSec,
+      expiresIn: ttlSec,
     };
   }
 

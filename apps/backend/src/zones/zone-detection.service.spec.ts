@@ -23,12 +23,19 @@ describe('ZoneDetectionService.findCandidateZones', () => {
       providers: [
         ZoneDetectionService,
         { provide: PrismaService, useValue: prismaMock },
-        { provide: FcmService, useValue: { sendToToken: jest.fn().mockResolvedValue(true) } },
+        {
+          provide: FcmService,
+          useValue: {
+            sendToToken: jest.fn().mockResolvedValue(true),
+            sendHybridToToken: jest.fn().mockResolvedValue(true),
+          },
+        },
         {
           provide: ParentDevicesService,
           useValue: {
             findActiveByFamilyId: jest.fn().mockResolvedValue([]),
             clearTokenByExpired: jest.fn().mockResolvedValue(undefined),
+            clearRustoreByExpired: jest.fn().mockResolvedValue(undefined),
           },
         },
       ],
@@ -52,12 +59,19 @@ describe('ZoneDetectionService.processPoint', () => {
       providers: [
         ZoneDetectionService,
         { provide: PrismaService, useValue: prismaMock },
-        { provide: FcmService, useValue: { sendToToken: jest.fn().mockResolvedValue(true) } },
+        {
+          provide: FcmService,
+          useValue: {
+            sendToToken: jest.fn().mockResolvedValue(true),
+            sendHybridToToken: jest.fn().mockResolvedValue(true),
+          },
+        },
         {
           provide: ParentDevicesService,
           useValue: {
             findActiveByFamilyId: jest.fn().mockResolvedValue([]),
             clearTokenByExpired: jest.fn().mockResolvedValue(undefined),
+            clearRustoreByExpired: jest.fn().mockResolvedValue(undefined),
           },
         },
       ],

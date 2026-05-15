@@ -5,7 +5,6 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 private const val DIAG_METHOD_CHANNEL = "ru.link28rus.gmd.parent/diag"
-private const val INSTALLER_METHOD_CHANNEL = "ru.link28rus.gmd.parent/installer"
 
 class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -28,43 +27,8 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
-
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, INSTALLER_METHOD_CHANNEL)
-            .setMethodCallHandler { call, result ->
-                when (call.method) {
-                    "canRequestInstall" ->
-                        result.success(InstallerNative.canRequestInstall(this))
-                    "openInstallSourceSettings" -> {
-                        try {
-                            InstallerNative.openInstallSourceSettings(this)
-                            result.success(null)
-                        } catch (e: Throwable) {
-                            result.error("open_settings_failed", e.message, null)
-                        }
-                    }
-                    "installApk" -> {
-                        val path = call.argument<String>("path")
-                        if (path.isNullOrEmpty()) {
-                            result.error("bad_arg", "path is required", null)
-                            return@setMethodCallHandler
-                        }
-                        try {
-                            val ok = InstallerNative.installApk(this, path)
-                            result.success(ok)
-                        } catch (e: Throwable) {
-                            result.error("install_failed", e.message, null)
-                        }
-                    }
-                    "cleanupCache" -> {
-                        try {
-                            InstallerNative.cleanupCache(this)
-                            result.success(null)
-                        } catch (e: Throwable) {
-                            result.error("cleanup_failed", e.message, null)
-                        }
-                    }
-                    else -> result.notImplemented()
-                }
-            }
+        // Самопальный installer-channel удалён в v0.50.4 (lesson #24:
+        // RuStore модерация запретила REQUEST_INSTALL_PACKAGES). Auto-update
+        // через `flutter_rustore_update` SDK — см. lib/core/updates/.
     }
 }

@@ -5,15 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/updates/update_controller.dart';
 
-/// Auto-update mobile-parent — баннер на главной.
-///
-/// Показывается ТОЛЬКО когда есть обновление (Downloading / Downloaded /
-/// NeedsPermission / Failed). Idle / Checking / NotNeeded / InstallerLaunched —
-/// SizedBox.shrink().
-///
-/// Lifecycle: на init дёргает `checkAndAutoInstall()` один раз. На resume
-/// перепроверяет permission (если user только что разрешил «Установка из
-/// неизвестных источников»).
+/// Auto-update — баннер на главной. После перехода на RuStore SDK
+/// (lesson #24) сам процесс update'а — модальный SDK-экран RuStore, баннер
+/// нужен только для UpdateFailed: если SDK threw — кнопка «Повторить».
+/// Idle / Checking / NotNeeded — SizedBox.shrink().
 class UpdateBanner extends ConsumerStatefulWidget {
   const UpdateBanner({super.key});
 
@@ -21,30 +16,13 @@ class UpdateBanner extends ConsumerStatefulWidget {
   ConsumerState<UpdateBanner> createState() => _UpdateBannerState();
 }
 
-class _UpdateBannerState extends ConsumerState<UpdateBanner>
-    with WidgetsBindingObserver {
+class _UpdateBannerState extends ConsumerState<UpdateBanner> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(ref.read(updateControllerProvider.notifier).checkAndAutoInstall());
     });
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      unawaited(
-        ref.read(updateControllerProvider.notifier).recheckPermissionIfPending(),
-      );
-    }
   }
 
   @override
@@ -53,46 +31,13 @@ class _UpdateBannerState extends ConsumerState<UpdateBanner>
     final notifier = ref.read(updateControllerProvider.notifier);
 
     return switch (state) {
-      UpdateIdle() ||
-      UpdateChecking() ||
-      UpdateNotNeeded() ||
-      UpdateInstallerLaunched() =>
+      UpdateIdle() || UpdateChecking() || UpdateNotNeeded() =>
         const SizedBox.shrink(),
-      UpdateDownloading() => _Card(
-          color: Colors.blue.shade50,
-          icon: Icons.cloud_download_outlined,
-          iconColor: Colors.blue.shade700,
-          title: 'Скачиваем обновление ${state.info.displayVersion}',
-          subtitle:
-              '${state.percent}% • ${state.info.sizeHumanReadable} • установится автоматически',
-          progress: state.progress,
-        ),
-      UpdateDownloaded(:final info) => _Card(
-          color: Colors.green.shade50,
-          icon: Icons.check_circle_outline,
-          iconColor: Colors.green.shade700,
-          title: 'Обновление готово ${info.displayVersion}',
-          subtitle: 'Открой системный установщик чтобы поставить',
-          actionLabel: 'Установить',
-          onAction: () => notifier.launchInstaller(),
-        ),
-      UpdateNeedsPermission(:final info) => _Card(
-          color: Colors.orange.shade50,
-          icon: Icons.security,
-          iconColor: Colors.orange.shade800,
-          title: 'Нужно разрешение',
-          subtitle:
-              'Чтобы установить обновление ${info.displayVersion}, разреши установку из этого приложения в системных настройках',
-          actionLabel: 'Открыть настройки',
-          onAction: () => notifier.openInstallSourceSettings(),
-        ),
-      UpdateFailed(:final message, :final info) => _Card(
+      UpdateFailed(:final message) => _Card(
           color: Colors.red.shade50,
           icon: Icons.error_outline,
           iconColor: Colors.red.shade700,
-          title: info != null
-              ? 'Не удалось обновить до ${info.displayVersion}'
-              : 'Не удалось проверить обновления',
+          title: 'Не удалось проверить обновления',
           subtitle: message,
           actionLabel: 'Повторить',
           onAction: () => notifier.retry(),
@@ -108,7 +53,6 @@ class _Card extends StatelessWidget {
     required this.iconColor,
     required this.title,
     required this.subtitle,
-    this.progress,
     this.actionLabel,
     this.onAction,
   });
@@ -118,7 +62,6 @@ class _Card extends StatelessWidget {
   final Color iconColor;
   final String title;
   final String subtitle;
-  final double? progress;
   final String? actionLabel;
   final VoidCallback? onAction;
 
@@ -155,18 +98,6 @@ class _Card extends StatelessWidget {
                         fontSize: 12,
                       ),
                     ),
-                    if (progress != null || actionLabel == null) ...[
-                      const SizedBox(height: 8),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: LinearProgressIndicator(
-                          value: progress,
-                          minHeight: 6,
-                          color: iconColor,
-                          backgroundColor: iconColor.withValues(alpha: 0.15),
-                        ),
-                      ),
-                    ],
                   ],
                 ),
               ),

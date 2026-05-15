@@ -176,14 +176,8 @@ class LocationForegroundService : Service() {
         fused = LocationServices.getFusedLocationProviderClient(this)
         createChannel()
         ensureBackgroundEngine()
-        // v0.44: страховка для случая когда юзер не открывает MainActivity
-        // месяцами — periodic update-check всё равно поднимется при первом
-        // запуске сервиса (autostart на boot или возврат после кила).
-        try {
-            UpdateCheckScheduler.schedule(this)
-        } catch (e: Throwable) {
-            log("UpdateCheck schedule failed: ${e.message}")
-        }
+        // v0.50.4 (lesson #24): UpdateCheckScheduler удалён — auto-update
+        // полностью через `flutter_rustore_update` SDK на Dart-слое.
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -389,6 +383,18 @@ class LocationForegroundService : Service() {
 
     private fun start() {
         log("start()")
+        // v0.50.2 — permission gate. На Android 14+ (targetSdk=34) startForeground
+        // с FGS_TYPE_LOCATION требует granted ACCESS_*_LOCATION, иначе
+        // ActivityThread бросает SecurityException и процесс крашится. Это
+        // ловит свежеустановленные устройства (claim flow ещё не пройден,
+        // permissions ещё не запрошены). BootReceiver уже гейтит, но сервис
+        // может быть стартован и из других точек (FCM message handler,
+        // MainActivity), поэтому дублируем защиту здесь.
+        if (!hasLocationPermission()) {
+            log("start: SKIPPED (no ACCESS_*_LOCATION permission); stopSelf")
+            stopSelf()
+            return
+        }
         startForeground(NOTIF_ID, buildNotification())
         acquireWakeLock()
         ensureBackgroundEngine()
@@ -428,6 +434,16 @@ class LocationForegroundService : Service() {
         // Pre-Android-10 permission не существует в runtime-модели, считаем granted.
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return true
         return checkSelfPermission(android.Manifest.permission.ACTIVITY_RECOGNITION) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+    }
+
+    // v0.50.2 — проверка location permission'ов (любого из двух). Используется
+    // в [start] чтобы не падать с SecurityException при startForeground для
+    // FGS_TYPE_LOCATION без granted permission. См. также BootReceiver.
+    private fun hasLocationPermission(): Boolean {
+        return checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED ||
+            checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION) ==
             android.content.pm.PackageManager.PERMISSION_GRANTED
     }
 

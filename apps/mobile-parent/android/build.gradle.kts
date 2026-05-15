@@ -2,6 +2,12 @@ allprojects {
     repositories {
         google()
         mavenCentral()
+        // RuStore SDKs (flutter_rustore_push, flutter_rustore_update) тянут
+        // нативные артефакты `ru.rustore.sdk:*` отсюда — внешнее зеркало VK
+        // Partner-репозитория, единственный публичный mirror.
+        maven {
+            url = uri("https://artifactory-external.vkpartner.ru/artifactory/maven")
+        }
     }
 }
 

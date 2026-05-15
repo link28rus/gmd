@@ -215,15 +215,19 @@ export class AudioService implements OnModuleInit {
     // всё равно заберёт START_AUDIO при следующем poll'е (как в v0.36).
     // FCM-payload идентичен payload'у в DeviceCommand.
     void this.fcm
-      .sendDataMessage(device.id, device.fcmToken, {
-        type: 'START_AUDIO',
-        sessionId: session.id,
-        wsUrl: childWs.url,
-        wsToken: childWs.token,
-        ttlSec: String(childWs.ttlSec),
-        durationSec: String(durationSec),
-      })
-      .catch((err) => this.logger.warn(`FCM push START_AUDIO failed: ${String(err)}`));
+      .sendHybridDataMessage(
+        device.id,
+        { fcmToken: device.fcmToken, rustorePushToken: device.rustorePushToken },
+        {
+          type: 'START_AUDIO',
+          sessionId: session.id,
+          wsUrl: childWs.url,
+          wsToken: childWs.token,
+          ttlSec: String(childWs.ttlSec),
+          durationSec: String(durationSec),
+        },
+      )
+      .catch((err) => this.logger.warn(`push START_AUDIO failed: ${String(err)}`));
 
     await this.prisma.audioAuditLog.create({
       data: {
@@ -320,14 +324,21 @@ export class AudioService implements OnModuleInit {
       // v0.37: FCM push STOP — мгновенно прервать stream на child'е.
       const device = await this.prisma.childDevice.findUnique({
         where: { id: session.childDeviceId },
-        select: { fcmToken: true },
+        select: { fcmToken: true, rustorePushToken: true },
       });
       void this.fcm
-        .sendDataMessage(session.childDeviceId, device?.fcmToken ?? null, {
-          type: 'STOP_AUDIO',
-          sessionId,
-        })
-        .catch((err) => this.logger.warn(`FCM push STOP_AUDIO failed: ${String(err)}`));
+        .sendHybridDataMessage(
+          session.childDeviceId,
+          {
+            fcmToken: device?.fcmToken ?? null,
+            rustorePushToken: device?.rustorePushToken ?? null,
+          },
+          {
+            type: 'STOP_AUDIO',
+            sessionId,
+          },
+        )
+        .catch((err) => this.logger.warn(`push STOP_AUDIO failed: ${String(err)}`));
     }
   }
 
@@ -425,16 +436,21 @@ export class AudioService implements OnModuleInit {
       // v0.37: FCM push STOP — мгновенно прервать stream на child'е (parent stop / auto-end).
       const device = await this.prisma.childDevice.findUnique({
         where: { id: session.childDeviceId },
-        select: { fcmToken: true },
+        select: { fcmToken: true, rustorePushToken: true },
       });
       void this.fcm
-        .sendDataMessage(session.childDeviceId, device?.fcmToken ?? null, {
-          type: 'STOP_AUDIO',
-          sessionId,
-        })
-        .catch((err) =>
-          this.logger.warn(`FCM push STOP_AUDIO (endSession) failed: ${String(err)}`),
-        );
+        .sendHybridDataMessage(
+          session.childDeviceId,
+          {
+            fcmToken: device?.fcmToken ?? null,
+            rustorePushToken: device?.rustorePushToken ?? null,
+          },
+          {
+            type: 'STOP_AUDIO',
+            sessionId,
+          },
+        )
+        .catch((err) => this.logger.warn(`push STOP_AUDIO (endSession) failed: ${String(err)}`));
     }
     this.relay.terminate(sessionId, 4008, 'session_ended');
   }

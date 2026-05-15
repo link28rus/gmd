@@ -58,11 +58,15 @@ export class DeviceCommandsService {
       // Дублирующий клик в течение TTL — всё равно толкаем FCM, на случай
       // если первый push не доехал до устройства (offline на момент создания).
       void this.fcm
-        .sendDataMessage(device.id, device.fcmToken, {
-          type: 'PLAY_SIGNAL',
-          commandId: existing.id,
-        })
-        .catch((err) => this.logger.warn(`FCM PLAY_SIGNAL retry failed: ${String(err)}`));
+        .sendHybridDataMessage(
+          device.id,
+          { fcmToken: device.fcmToken, rustorePushToken: device.rustorePushToken },
+          {
+            type: 'PLAY_SIGNAL',
+            commandId: existing.id,
+          },
+        )
+        .catch((err) => this.logger.warn(`push PLAY_SIGNAL retry failed: ${String(err)}`));
       return { commandId: existing.id, expiresAt: existing.expiresAt.toISOString() };
     }
 
@@ -82,11 +86,15 @@ export class DeviceCommandsService {
     // токена/устройство offline >60с TTL, child заберёт PLAY_SIGNAL
     // при следующем poll'е через /child/commands/pending.
     void this.fcm
-      .sendDataMessage(device.id, device.fcmToken, {
-        type: 'PLAY_SIGNAL',
-        commandId: cmd.id,
-      })
-      .catch((err) => this.logger.warn(`FCM PLAY_SIGNAL push failed: ${String(err)}`));
+      .sendHybridDataMessage(
+        device.id,
+        { fcmToken: device.fcmToken, rustorePushToken: device.rustorePushToken },
+        {
+          type: 'PLAY_SIGNAL',
+          commandId: cmd.id,
+        },
+      )
+      .catch((err) => this.logger.warn(`push PLAY_SIGNAL push failed: ${String(err)}`));
 
     return { commandId: cmd.id, expiresAt: cmd.expiresAt.toISOString() };
   }

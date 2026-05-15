@@ -20,6 +20,18 @@ val keystoreProperties = Properties().apply {
     }
 }
 
+// RuStore Push project id (см. android/rustore.properties.example). Файл
+// `rustore.properties` в .gitignore; если его нет — берём пустое значение,
+// и RustorePushClient.getToken() при первом запуске вернёт ошибку
+// «project id is not provided» (логируем, fallback на FCM).
+val rustoreProperties = Properties().apply {
+    val propsFile = rootProject.file("rustore.properties")
+    if (propsFile.exists()) {
+        load(FileInputStream(propsFile))
+    }
+}
+val rustorePushProjectId: String = rustoreProperties.getProperty("rustorePushProjectId", "")
+
 android {
     namespace = "ru.link28rus.gmd.child"
     compileSdk = 36
@@ -43,6 +55,11 @@ android {
         // / `flutter.versionName`, так что bump pubspec → bump APK.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        // Подставляется в AndroidManifest meta-data
+        // `ru.rustore.sdk.pushclient.project_id` (см. AndroidManifest.xml).
+        // Пустая строка допустима для CI без секрета — runtime SDK тогда no-op'нется.
+        manifestPlaceholders["rustorePushProjectId"] = rustorePushProjectId
     }
 
     signingConfigs {

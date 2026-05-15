@@ -22,6 +22,7 @@ interface PrismaMock {
 
 interface FcmMock {
   sendDataMessage: jest.Mock;
+  sendHybridDataMessage: jest.Mock;
 }
 
 function makePrisma(): PrismaMock {
@@ -43,7 +44,10 @@ function makePrisma(): PrismaMock {
 }
 
 function makeFcm(): FcmMock {
-  return { sendDataMessage: jest.fn().mockResolvedValue(true) };
+  return {
+    sendDataMessage: jest.fn().mockResolvedValue(true),
+    sendHybridDataMessage: jest.fn().mockResolvedValue(true),
+  };
 }
 
 async function buildService(prisma: PrismaMock, fcm: FcmMock): Promise<AppBlockingService> {
@@ -62,7 +66,11 @@ describe('AppBlockingService', () => {
     it('создаёт ACTIVE сессию + шлёт FCM BLOCK_APPS', async () => {
       const prisma = makePrisma();
       const fcm = makeFcm();
-      prisma.childDevice.findFirst.mockResolvedValue({ id: 'dev1', fcmToken: 'tok1' });
+      prisma.childDevice.findFirst.mockResolvedValue({
+        id: 'dev1',
+        fcmToken: 'tok1',
+        rustorePushToken: null,
+      });
       prisma.blockSession.findFirst.mockResolvedValue(null);
       prisma.blockSession.create.mockImplementation(({ data }) =>
         Promise.resolve({ id: 'sess1', ...data }),
@@ -86,9 +94,9 @@ describe('AppBlockingService', () => {
       });
       // FCM шлётся fire-and-forget — даём микротаску завершиться
       await new Promise((r) => setImmediate(r));
-      expect(fcm.sendDataMessage).toHaveBeenCalledWith(
+      expect(fcm.sendHybridDataMessage).toHaveBeenCalledWith(
         'dev1',
-        'tok1',
+        { fcmToken: 'tok1', rustorePushToken: null },
         expect.objectContaining({ type: 'BLOCK_APPS', sessionId: 'sess1' }),
       );
     });
@@ -96,7 +104,11 @@ describe('AppBlockingService', () => {
     it('отказывает 409 если уже есть активная сессия', async () => {
       const prisma = makePrisma();
       const fcm = makeFcm();
-      prisma.childDevice.findFirst.mockResolvedValue({ id: 'dev1', fcmToken: null });
+      prisma.childDevice.findFirst.mockResolvedValue({
+        id: 'dev1',
+        fcmToken: null,
+        rustorePushToken: null,
+      });
       prisma.blockSession.findFirst.mockResolvedValue({
         id: 'sess_existing',
         endsAt: new Date(Date.now() + 60_000),
@@ -107,7 +119,7 @@ describe('AppBlockingService', () => {
         svc.createSession({ childId: 'c1', createdByUserId: 'u1', durationMin: 60 }),
       ).rejects.toBeInstanceOf(ConflictException);
       expect(prisma.blockSession.create).not.toHaveBeenCalled();
-      expect(fcm.sendDataMessage).not.toHaveBeenCalled();
+      expect(fcm.sendHybridDataMessage).not.toHaveBeenCalled();
     });
 
     it('404 no_active_device если у ребёнка нет устройства', async () => {
@@ -130,7 +142,7 @@ describe('AppBlockingService', () => {
         id: 'sess1',
         childDeviceId: 'dev1',
         state: 'ACTIVE',
-        childDevice: { childId: 'c1', fcmToken: 'tok1' },
+        childDevice: { childId: 'c1', fcmToken: 'tok1', rustorePushToken: null },
       });
       prisma.blockSession.update.mockResolvedValue({});
       const svc = await buildService(prisma, fcm);
@@ -142,9 +154,9 @@ describe('AppBlockingService', () => {
         data: expect.objectContaining({ state: 'ENDED', endReason: 'PARENT_STOPPED' }),
       });
       await new Promise((r) => setImmediate(r));
-      expect(fcm.sendDataMessage).toHaveBeenCalledWith(
+      expect(fcm.sendHybridDataMessage).toHaveBeenCalledWith(
         'dev1',
-        'tok1',
+        { fcmToken: 'tok1', rustorePushToken: null },
         expect.objectContaining({ type: 'UNBLOCK_APPS', sessionId: 'sess1' }),
       );
     });
@@ -156,14 +168,14 @@ describe('AppBlockingService', () => {
         id: 'sess1',
         childDeviceId: 'dev1',
         state: 'ENDED',
-        childDevice: { childId: 'c1', fcmToken: 'tok1' },
+        childDevice: { childId: 'c1', fcmToken: 'tok1', rustorePushToken: null },
       });
       const svc = await buildService(prisma, fcm);
 
       await svc.stopSession({ childId: 'c1', sessionId: 'sess1', stoppedByUserId: 'u1' });
 
       expect(prisma.blockSession.update).not.toHaveBeenCalled();
-      expect(fcm.sendDataMessage).not.toHaveBeenCalled();
+      expect(fcm.sendHybridDataMessage).not.toHaveBeenCalled();
     });
 
     it('403 при попытке stop сессии чужого ребёнка', async () => {
@@ -173,7 +185,7 @@ describe('AppBlockingService', () => {
         id: 'sess1',
         childDeviceId: 'dev_other',
         state: 'ACTIVE',
-        childDevice: { childId: 'OTHER_CHILD', fcmToken: null },
+        childDevice: { childId: 'OTHER_CHILD', fcmToken: null, rustorePushToken: null },
       });
       const svc = await buildService(prisma, fcm);
 
@@ -230,7 +242,11 @@ describe('AppBlockingService', () => {
     it('UPSERT + FCM SYNC_RULES', async () => {
       const prisma = makePrisma();
       const fcm = makeFcm();
-      prisma.childDevice.findFirst.mockResolvedValue({ id: 'dev1', fcmToken: 'tok1' });
+      prisma.childDevice.findFirst.mockResolvedValue({
+        id: 'dev1',
+        fcmToken: 'tok1',
+        rustorePushToken: null,
+      });
       prisma.appRule.upsert.mockResolvedValue({
         id: 'r1',
         packageName: 'com.tiktok',
@@ -252,9 +268,9 @@ describe('AppBlockingService', () => {
         update: expect.objectContaining({ mode: 'ALWAYS_ALLOWED', source: 'PARENT' }),
       });
       await new Promise((r) => setImmediate(r));
-      expect(fcm.sendDataMessage).toHaveBeenCalledWith(
+      expect(fcm.sendHybridDataMessage).toHaveBeenCalledWith(
         'dev1',
-        'tok1',
+        { fcmToken: 'tok1', rustorePushToken: null },
         expect.objectContaining({ type: 'SYNC_RULES' }),
       );
     });

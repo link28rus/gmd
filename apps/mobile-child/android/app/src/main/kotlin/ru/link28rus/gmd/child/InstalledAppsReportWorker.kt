@@ -38,9 +38,12 @@ class InstalledAppsReportWorker(
     val apps = AppControlNative.collectInstalledApps(ctx)
     DiagLog.write(ctx, TAG, "collected ${apps.size} apps (tz=$tz)")
     if (apps.isEmpty()) {
-      // Может означать что нет QUERY_ALL_PACKAGES — Android 11+ при отсутствии
-      // permission возвращает только наш package. Раз мы skip own — пусто.
-      DiagLog.write(ctx, TAG, "no apps — likely missing QUERY_ALL_PACKAGES on API 30+")
+      // v0.50.6: ушли с QUERY_ALL_PACKAGES на <queries> MAIN/LAUNCHER. Пустой
+      // список здесь маловероятен — на любом устройстве есть как минимум
+      // launcher / Settings / Phone apps с launcher activity. Возможные
+      // причины: 1) OEM с урезанным `<queries>` matching (редко); 2) early-
+      // boot до PackageManager scan'а (workmanager обычно запускается позже).
+      DiagLog.write(ctx, TAG, "no launchable apps — unexpected, check <queries> manifest block")
       return Result.success()
     }
 

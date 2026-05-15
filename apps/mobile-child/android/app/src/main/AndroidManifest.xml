@@ -43,16 +43,19 @@
          переключать FLP в режим 5-мин интервала и экономить батарею ребёнка.
          Permission optional: при отказе сервис работает в active-only режиме. -->
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION"/>
-    <!-- v0.38 Phase 6.1: screen-time reporting.
+    <!-- v0.38 Phase 6.1 / v0.50.6: screen-time reporting.
          PACKAGE_USAGE_STATS — special access (Settings → Special access → Usage data),
          используется UsageStatsManager.queryEvents для часовых bucket'ов.
-         QUERY_ALL_PACKAGES — Android 11+ (API 30) требуется для PackageManager
-         .getInstalledApplications чтобы вернуть полный список (не только наш).
-         Парент-контроль — оправданное use-case по политике RuStore. -->
+
+         QUERY_ALL_PACKAGES (Android 11+) — УДАЛЁН в v0.50.6 после отказа RuStore-
+         модерации (lesson 2026-05-14). Вместо broad permission используем `<queries>`
+         с intent-filter MAIN/LAUNCHER (см. ниже) — это RuStore-friendly способ
+         enumerate launchable apps через PackageManager.queryIntentActivities, без
+         выдачи доступа ко ВСЕМ установленным пакетам. Покрывает 99% use-case
+         (системные служебные apps без launcher activity и так не блокируются
+         ребёнком). -->
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
         tools:ignore="ProtectedPermissions"/>
-    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
-        tools:ignore="QueryAllPackagesPermission"/>
     <!-- v0.39.4 Phase 6.2 fix: Android 12+ HyperOS блокирует startActivity()
          из background даже из AccessibilityService (Abort background activity
          starts). SYSTEM_ALERT_WINDOW даёт нашему процессу exemption на BAL +
@@ -61,12 +64,6 @@
          не runtime. Без него блокировка деградирует до GLOBAL_ACTION_HOME
          (выкидывает на launcher без визуального overlay'а). -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
-    <!-- v0.40 auto-update: после скачивания APK через Dio app дёргает системный
-         installer (ACTION_VIEW + FileProvider URI). REQUEST_INSTALL_PACKAGES —
-         special access (Settings → Установка из неизвестных источников),
-         грантится один раз на наш package. Без него ACTION_VIEW показывает
-         блокирующий «Запретить установку», а не наш installer. -->
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
     <application
         android:label="gmd_child"
         android:name="${applicationName}"
@@ -98,6 +95,15 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <!-- RuStore Push SDK (flutter_rustore_push). Project id берётся из
+             android/rustore.properties через manifestPlaceholders (см.
+             android/app/build.gradle.kts). Если значение пустое — runtime
+             RustorePushClient.getToken() вернёт ошибку, мы это поймаем и
+             деградируем на FCM-only push (см. core/push/rustore_push_registrar.dart). -->
+        <meta-data
+            android:name="ru.rustore.sdk.pushclient.project_id"
+            android:value="${rustorePushProjectId}" />
         <service
             android:name=".LocationForegroundService"
             android:enabled="true"
@@ -206,20 +212,6 @@
                 android:resource="@xml/accessibility_service_config" />
         </service>
 
-        <!-- v0.40 auto-update: FileProvider для передачи скачанного APK
-             системному installer'у через content:// URI. Authority строго
-             "${packageName}.fileprovider" (используется в InstallerNative.kt).
-             Пути ограничены external-cache/updates/ (см. res/xml/file_provider_paths.xml). -->
-        <provider
-            android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.fileprovider"
-            android:exported="false"
-            android:grantUriPermissions="true">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/file_provider_paths" />
-        </provider>
-
         <!-- v0.39 Phase 6.2: full-screen overlay при попытке открыть заблокированное app.
              excludeFromRecents=true — оверлей не висит в недавних задачах.
              showWhenLocked=true (manifest + setShowWhenLocked в Activity) — overlay
@@ -243,6 +235,17 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- v0.50.6: enumerate launchable apps без QUERY_ALL_PACKAGES.
+             pm.queryIntentActivities(Intent(ACTION_MAIN).addCategory(CATEGORY_LAUNCHER))
+             вернёт все apps с launcher activity — практически все user-facing apps
+             которые ребёнок может запустить (то что показывается в drawer'е).
+             Используется в AppControlNative.collectInstalledApps для screen-time
+             reporting и app-blocking allowlist. RuStore-friendly: narrow visibility
+             без broad QUERY_ALL_PACKAGES permission. -->
+        <intent>
+            <action android:name="android.intent.action.MAIN"/>
+            <category android:name="android.intent.category.LAUNCHER"/>
         </intent>
     </queries>
 </manifest>

@@ -12,3 +12,8 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+
+# RuStore Push project id и опциональные настройки — не секрет в строгом смысле,
+# но индивидуальны для разработчика/инстанса (Console → Push Notifications). См.
+# rustore.properties.example.
+rustore.properties

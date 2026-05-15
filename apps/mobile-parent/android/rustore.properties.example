@@ -1,0 +1,16 @@
+# RuStore Push project id для mobile-parent.
+#
+# Где взять:
+#   RuStore Console → приложение «GMD Родитель» (id 2063713895) →
+#   раздел «Push Notifications». Это длинная буквенно-цифровая строка.
+#
+# Назначение:
+#   На уровне Gradle строка пробрасывается в `manifestPlaceholders` и
+#   подставляется в AndroidManifest meta-data
+#   `ru.rustore.sdk.pushclient.project_id` (см. android/app/build.gradle.kts +
+#   AndroidManifest.xml). Без неё RustorePushClient.getToken() кидает
+#   "RuStore project id is not provided" и runtime no-op'ит.
+#
+# Скопируй этот файл в `rustore.properties` (тот же каталог) и заполни.
+# Сам `rustore.properties` — в .gitignore, не коммитится.
+rustorePushProjectId=
