@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import type { RegisterFcmTokenDto } from './dto/register-fcm-token.dto';
+import type { RegisterRustoreTokenDto } from './dto/register-rustore-token.dto';
 
 /**
  * v0.46: Регистрация FCM-токенов мобильных устройств родителя.
@@ -64,7 +65,65 @@ export class ParentDevicesService {
     await this.revokeByToken(fcmToken);
   }
 
-  async findActiveByFamilyId(familyId: string): Promise<Array<{ id: string; fcmToken: string }>> {
+  /**
+   * v0.51 RuStore Push: регистрирует rustorePushToken parent-устройства.
+   *
+   * Семантика upsert'а — по полю rustorePushToken. Если на этот же user
+   * уже есть запись с fcmToken и приходит RuStore-токен — мы создаём
+   * вторую запись (отдельное устройство в нашей логике), потому что нет
+   * способа сопоставить FCM и RuStore токены без передачи fcmToken
+   * клиентом. Дубль приемлем на MVP — push.service.ts шлёт через каждый
+   * канал отдельно, и устройство решает какой канал у него реально
+   * доставляется (он подписан на оба).
+   */
+  async registerRustore(userId: string, dto: RegisterRustoreTokenDto): Promise<{ id: string }> {
+    const now = new Date();
+    const result = await this.prisma.parentDevice.upsert({
+      where: { rustorePushToken: dto.rustorePushToken },
+      create: {
+        userId,
+        rustorePushToken: dto.rustorePushToken,
+        platform: dto.platform,
+        deviceName: dto.deviceName ?? null,
+        appVersion: dto.appVersion ?? null,
+        rustorePushTokenUpdatedAt: now,
+        lastSeenAt: now,
+      },
+      update: {
+        userId,
+        platform: dto.platform,
+        deviceName: dto.deviceName ?? null,
+        appVersion: dto.appVersion ?? null,
+        rustorePushTokenUpdatedAt: now,
+        lastSeenAt: now,
+        revokedAt: null,
+      },
+    });
+    this.logger.log(
+      `parent-device rustore registered id=${result.id} user=${userId} platform=${dto.platform}`,
+    );
+    return { id: result.id };
+  }
+
+  async revokeRustore(userId: string, rustorePushToken: string): Promise<void> {
+    await this.prisma.parentDevice.updateMany({
+      where: { userId, rustorePushToken, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+  }
+
+  async clearRustoreByExpired(rustorePushToken: string): Promise<void> {
+    await this.prisma.parentDevice
+      .updateMany({
+        where: { rustorePushToken, revokedAt: null },
+        data: { revokedAt: new Date() },
+      })
+      .catch(() => undefined);
+  }
+
+  async findActiveByFamilyId(
+    familyId: string,
+  ): Promise<Array<{ id: string; fcmToken: string | null; rustorePushToken: string | null }>> {
     const memberships = await this.prisma.membership.findMany({
       where: { familyId },
       select: { userId: true },
@@ -75,7 +134,7 @@ export class ParentDevicesService {
         userId: { in: memberships.map((m) => m.userId) },
         revokedAt: null,
       },
-      select: { id: true, fcmToken: true },
+      select: { id: true, fcmToken: true, rustorePushToken: true },
     });
     return rows;
   }

@@ -67,6 +67,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     // FCM re-register на каждом старте — токен мог обновиться когда app
     // был выключен. Fire-and-forget, не блокирует переход на /home.
     unawaited(ref.read(parentFcmRegistrarProvider).register());
+    // v0.51 (lesson #24): параллельно RuStore Push token.
+    unawaited(ref.read(parentRuStorePushRegistrarProvider).register());
     _go('/home');
   }
 

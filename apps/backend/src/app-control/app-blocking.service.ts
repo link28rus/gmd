@@ -90,7 +90,7 @@ export class AppBlockingService implements OnModuleInit {
   }): Promise<{ sessionId: string; startedAt: Date; endsAt: Date }> {
     const device = await this.prisma.childDevice.findFirst({
       where: { childId: params.childId, revokedAt: null },
-      select: { id: true, fcmToken: true },
+      select: { id: true, fcmToken: true, rustorePushToken: true },
     });
     if (!device) {
       throw new NotFoundException({
@@ -128,12 +128,16 @@ export class AppBlockingService implements OnModuleInit {
     // FCM fire-and-forget. Если token null или FCM disabled — child через poll
     // (GET /child/active-block) подтянет в ближайший цикл.
     void this.fcm
-      .sendDataMessage(device.id, device.fcmToken, {
-        type: 'BLOCK_APPS',
-        sessionId: session.id,
-        endsAt: endsAt.toISOString(),
-      })
-      .catch((err) => this.logger.warn(`FCM BLOCK_APPS failed for ${device.id}: ${String(err)}`));
+      .sendHybridDataMessage(
+        device.id,
+        { fcmToken: device.fcmToken, rustorePushToken: device.rustorePushToken },
+        {
+          type: 'BLOCK_APPS',
+          sessionId: session.id,
+          endsAt: endsAt.toISOString(),
+        },
+      )
+      .catch((err) => this.logger.warn(`push BLOCK_APPS failed for ${device.id}: ${String(err)}`));
 
     this.logger.log(
       `block-session created id=${session.id} child=${params.childId} duration=${params.durationMin}min`,
@@ -156,7 +160,7 @@ export class AppBlockingService implements OnModuleInit {
         id: true,
         childDeviceId: true,
         state: true,
-        childDevice: { select: { childId: true, fcmToken: true } },
+        childDevice: { select: { childId: true, fcmToken: true, rustorePushToken: true } },
       },
     });
     if (!session) {
@@ -180,12 +184,19 @@ export class AppBlockingService implements OnModuleInit {
     });
 
     void this.fcm
-      .sendDataMessage(session.childDeviceId, session.childDevice.fcmToken, {
-        type: 'UNBLOCK_APPS',
-        sessionId: session.id,
-      })
+      .sendHybridDataMessage(
+        session.childDeviceId,
+        {
+          fcmToken: session.childDevice.fcmToken,
+          rustorePushToken: session.childDevice.rustorePushToken,
+        },
+        {
+          type: 'UNBLOCK_APPS',
+          sessionId: session.id,
+        },
+      )
       .catch((err) =>
-        this.logger.warn(`FCM UNBLOCK_APPS failed for ${session.childDeviceId}: ${String(err)}`),
+        this.logger.warn(`push UNBLOCK_APPS failed for ${session.childDeviceId}: ${String(err)}`),
       );
 
     this.logger.log(
@@ -243,7 +254,7 @@ export class AppBlockingService implements OnModuleInit {
   }): Promise<AppRule> {
     const device = await this.prisma.childDevice.findFirst({
       where: { childId: params.childId, revokedAt: null },
-      select: { id: true, fcmToken: true },
+      select: { id: true, fcmToken: true, rustorePushToken: true },
     });
     if (!device) {
       throw new NotFoundException({
@@ -269,10 +280,12 @@ export class AppBlockingService implements OnModuleInit {
     });
 
     void this.fcm
-      .sendDataMessage(device.id, device.fcmToken, {
-        type: 'SYNC_RULES',
-      })
-      .catch((err) => this.logger.warn(`FCM SYNC_RULES failed for ${device.id}: ${String(err)}`));
+      .sendHybridDataMessage(
+        device.id,
+        { fcmToken: device.fcmToken, rustorePushToken: device.rustorePushToken },
+        { type: 'SYNC_RULES' },
+      )
+      .catch((err) => this.logger.warn(`push SYNC_RULES failed for ${device.id}: ${String(err)}`));
 
     return rule;
   }

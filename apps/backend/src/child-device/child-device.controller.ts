@@ -24,6 +24,12 @@ import type { ClaimDto } from './dto/claim.dto';
 // 140-200 char; даём разумный max 4096 на всякий случай.
 const FcmTokenSchema = z.object({ fcmToken: z.string().min(10).max(4096).nullable() }).strict();
 
+// v0.51 RuStore Push (lesson #24): параллельный канал для устройств без GMS
+// и для bypass MIUI Restricted Settings — токен от RustorePushClient.getToken().
+const RustoreTokenSchema = z
+  .object({ rustorePushToken: z.string().min(10).max(4096).nullable() })
+  .strict();
+
 // v0.38 escape hatch: child устройство периодически проверяет, валиден ли
 // его device-token. Body `{deviceToken}` (а не header X-Child-Token, чтобы
 // случайно не получить 401 от ChildAuthGuard вместо JSON-ответа).
@@ -116,5 +122,19 @@ export class ChildDeviceController {
     @Body(new ZodValidationPipe(FcmTokenSchema)) dto: z.infer<typeof FcmTokenSchema>,
   ): Promise<void> {
     await this.svc.setFcmToken(req.childDevice.deviceId, dto.fcmToken);
+  }
+
+  // v0.51 RuStore Push (lesson #24): отдельный endpoint для RuStore-токена.
+  // Параллельный FCM, ничего не пересекается семантически. Backend хранит
+  // оба и предпочитает RuStore (он не глушится MIUI Restricted Settings).
+  @Post('devices/rustore-token')
+  @UseGuards(ChildAuthGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Throttle({ default: { ttl: 60_000, limit: 10 } })
+  async setRustoreToken(
+    @Req() req: ChildRequest,
+    @Body(new ZodValidationPipe(RustoreTokenSchema)) dto: z.infer<typeof RustoreTokenSchema>,
+  ): Promise<void> {
+    await this.svc.setRustorePushToken(req.childDevice.deviceId, dto.rustorePushToken);
   }
 }

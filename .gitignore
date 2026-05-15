@@ -28,14 +28,10 @@ infra/docker/.env.prod
 **/google-services.json
 **/GoogleService-Info.plist
 
-# Python tooling cache (tools/icons/, tools/rustore/)
+# Python tooling cache (tools/icons/, tools/rustore/ — генераторы скринов и иконок)
 __pycache__/
 *.pyc
 *.pyo
-
-# Pending merge from chore/rustore-push-wip — не tracked в main до merge
-# (содержит releases/rustore/ tracked в feature-ветке, deploy.sh читает с диска)
-releases/
 
 # IDE
 .idea/

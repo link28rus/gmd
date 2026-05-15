@@ -67,11 +67,12 @@ export class SosService {
           };
           await Promise.all(
             devices.map((d) =>
-              this.fcm.sendToToken({
-                fcmToken: d.fcmToken,
+              this.fcm.sendHybridToToken({
+                tokens: { fcmToken: d.fcmToken, rustorePushToken: d.rustorePushToken },
                 data,
                 label: `SOS child=${ctx.childId}`,
-                onInvalidToken: (token) => this.parentDevices.clearTokenByExpired(token),
+                onInvalidFcmToken: (token) => this.parentDevices.clearTokenByExpired(token),
+                onInvalidRustoreToken: (token) => this.parentDevices.clearRustoreByExpired(token),
               }),
             ),
           );

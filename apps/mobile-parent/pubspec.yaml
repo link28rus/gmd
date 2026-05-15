@@ -42,11 +42,6 @@ dependencies:
   device_info_plus: ^11.1.0
   connectivity_plus: ^6.0.5
 
-  # Auto-update: куда сохранять скачанный APK перед запуском installer'а.
-  # Используется UpdatesService._targetFile (external-cache/updates/) — путь
-  # совпадает с res/xml/file_provider_paths.xml.
-  path_provider: ^2.1.4
-
   # v0.46: Firebase Cloud Messaging — push для событий геозон / SOS / низкого заряда.
   # Versions согласованы с mobile-child (firebase-bom 34.12.0 в gradle).
   firebase_core: ^3.8.0
@@ -62,6 +57,16 @@ dependencies:
   # QR-коды для экрана «Добавить ребёнка» (показываем invite QR, ребёнок
   # сканирует в mobile-child).
   qr_flutter: ^4.1.0
+
+  # v0.51: RuStore SDKs — единственный канал distribution для РФ-рынка
+  # (lessons #24 + #26). `flutter_rustore_push` — параллельный FCM транспорт
+  # push'ей; нужен для устройств без Google Play Services (HMS Huawei, чистые
+  # AOSP). Backend выбирает канал по deviceCapabilities, см. push.service.ts.
+  # `flutter_rustore_update` — In-App Update SDK. С v0.50.4 — без fallback'а
+  # на ACTION_VIEW: RuStore модерация требует, чтобы все обновления шли
+  # централизованно через store.
+  flutter_rustore_push: ^7.2.0
+  flutter_rustore_update: ^10.3.0
 
 dev_dependencies:
   flutter_test:

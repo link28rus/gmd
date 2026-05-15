@@ -20,8 +20,6 @@ private const val PROTECTION_METHOD_CHANNEL = "ru.link28rus.gmd.child/protection
 private const val APP_CONTROL_METHOD_CHANNEL = "ru.link28rus.gmd.child/app_control"
 // v0.38 escape hatch: probe + status check + open uninstall.
 private const val ESCAPE_METHOD_CHANNEL = "ru.link28rus.gmd.child/escape"
-// v0.40 auto-update: проверка REQUEST_INSTALL_PACKAGES + запуск системного installer.
-private const val INSTALLER_METHOD_CHANNEL = "ru.link28rus.gmd.child/installer"
 
 private const val REQUEST_CODE_ADD_ADMIN = 8101
 
@@ -44,15 +42,9 @@ class MainActivity : FlutterActivity() {
         // Идемпотентно (KEEP-policy) — повторные вызовы безопасны. Если token
         // ещё не сохранён (первый запуск до claim'а) — workers запустятся
         // после saveNativeCreds через protection channel (см. ниже).
-        // v0.44: фоновая проверка обновлений — поднимается даже без device-token,
-        // потому что endpoint /api/public/updates/ публичный и работает до claim'а.
-        // Внутри worker'а проверяется apiBaseUrl (если не сохранён — no-op).
-        try {
-            UpdateCheckScheduler.schedule(this)
-            UpdateCheckScheduler.runNow(this)
-        } catch (e: Throwable) {
-            DiagLog.write(this, "ui", "UpdateCheck schedule failed: ${e.message}")
-        }
+        // Самопальный self-hosted UpdateCheckWorker удалён в v0.50.4 (lesson #24:
+        // RuStore модерация запретила REQUEST_INSTALL_PACKAGES). Auto-update идёт
+        // через `flutter_rustore_update` SDK на Dart-слое (см. core/updates/).
 
         try {
             if (!NativeCreds.getToken(this).isNullOrEmpty()) {
@@ -398,45 +390,6 @@ class MainActivity : FlutterActivity() {
                             result.success(null)
                         } catch (e: Throwable) {
                             result.error("run_failed", e.message, null)
-                        }
-                    }
-                    else -> result.notImplemented()
-                }
-            }
-
-        // v0.40 auto-update channel: проверка special-access + запуск installer.
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, INSTALLER_METHOD_CHANNEL)
-            .setMethodCallHandler { call, result ->
-                when (call.method) {
-                    "canRequestInstall" ->
-                        result.success(InstallerNative.canRequestInstall(this))
-                    "openInstallSourceSettings" -> {
-                        try {
-                            InstallerNative.openInstallSourceSettings(this)
-                            result.success(null)
-                        } catch (e: Throwable) {
-                            result.error("open_settings_failed", e.message, null)
-                        }
-                    }
-                    "installApk" -> {
-                        val path = call.argument<String>("path")
-                        if (path.isNullOrEmpty()) {
-                            result.error("bad_arg", "path is required", null)
-                            return@setMethodCallHandler
-                        }
-                        try {
-                            val ok = InstallerNative.installApk(this, path)
-                            result.success(ok)
-                        } catch (e: Throwable) {
-                            result.error("install_failed", e.message, null)
-                        }
-                    }
-                    "cleanupCache" -> {
-                        try {
-                            InstallerNative.cleanupCache(this)
-                            result.success(null)
-                        } catch (e: Throwable) {
-                            result.error("cleanup_failed", e.message, null)
                         }
                     }
                     else -> result.notImplemented()

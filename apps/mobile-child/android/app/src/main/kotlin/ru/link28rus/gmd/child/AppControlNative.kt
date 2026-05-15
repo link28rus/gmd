@@ -24,13 +24,21 @@ import java.time.format.DateTimeFormatter
 import java.util.TimeZone
 
 /**
- * Phase 6.1 (v0.38) native helpers для screen-time reporting.
+ * Phase 6.1 (v0.38) / v0.50.6 native helpers для screen-time reporting.
  *
  * Источник правды:
  *   - `UsageStatsManager` — событийный поток ACTIVITY_RESUMED/PAUSED, агрегируем
  *     в часовые bucket'ы по local-date в TZ устройства.
- *   - `PackageManager.getInstalledApplications` — снапшот установленных apps,
- *     с иконками 96x96 PNG (sha256-dedupe). Требует QUERY_ALL_PACKAGES (Android 11+).
+ *   - `PackageManager.queryIntentActivities(Intent(ACTION_MAIN, CATEGORY_LAUNCHER))` —
+ *     снапшот **launchable** apps с иконками 96x96 PNG (sha256-dedupe).
+ *
+ * v0.50.6: ушли с `QUERY_ALL_PACKAGES` + `getInstalledApplications` на narrow
+ * `<queries>` intent-filter (MAIN/LAUNCHER) после отказа RuStore-модерации.
+ * Это даёт практически тот же набор apps (всё что ребёнок видит в drawer'е),
+ * без broad-permission который trustworthy stores не принимают. Системные
+ * apps без launcher activity (телефонная служба, services и т.п.) пропадают
+ * из списка — это OK для app-blocking allowlist и screen-time reporting,
+ * пользователь их и так запустить не может.
  *
  * Permission `PACKAGE_USAGE_STATS` — special access. Грантится в Settings →
  * Special access → Usage data. Без него `queryEvents` возвращает пустой курсор
@@ -177,7 +185,7 @@ object AppControlNative {
   )
 
   /**
-   * Снапшот всех установленных apps.
+   * Снапшот всех **launchable** apps (с launcher activity в drawer'е).
    *
    * Включает label, isSystem flag, иконку 96x96 PNG + sha256.
    * Иконки рисуются из `PackageManager.getApplicationIcon` через Canvas
@@ -185,28 +193,38 @@ object AppControlNative {
    *
    * Не возвращает наш own package (фильтруется заранее).
    *
-   * Возвращает пустой список если нет permission `QUERY_ALL_PACKAGES`
-   * (Android 11+ может вернуть только наш package, тогда список будет почти пустой).
+   * v0.50.6: использует `queryIntentActivities(ACTION_MAIN, CATEGORY_LAUNCHER)`
+   * вместо `getInstalledApplications()`. Соответствующий `<queries>` блок
+   * объявлен в манifest'е. Это narrow visibility — без QUERY_ALL_PACKAGES.
+   * Системные служебные apps без launcher activity (телефонные службы,
+   * inputmethods и т.п.) в результат не попадают — для app-blocking
+   * allowlist и screen-time это OK, такие apps ребёнок и так запустить
+   * не может.
+   *
+   * dedupe по packageName: один package может иметь несколько launcher
+   * activity (rare), берём первую.
    */
   fun collectInstalledApps(ctx: Context): List<InstalledAppPayload> {
     val pm = ctx.packageManager
-    val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-      PackageManager.ApplicationInfoFlags.of(0L)
+    val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+    val resolveInfos = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      pm.queryIntentActivities(
+        launcherIntent,
+        PackageManager.ResolveInfoFlags.of(0L),
+      )
     } else {
-      null
+      @Suppress("DEPRECATION")
+      pm.queryIntentActivities(launcherIntent, 0)
     }
-    val all: List<ApplicationInfo> =
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        pm.getInstalledApplications(flags!!)
-      } else {
-        @Suppress("DEPRECATION")
-        pm.getInstalledApplications(0)
-      }
 
-    val result = ArrayList<InstalledAppPayload>(all.size)
-    for (ai in all) {
+    val seenPackages = HashSet<String>(resolveInfos.size)
+    val result = ArrayList<InstalledAppPayload>(resolveInfos.size)
+    for (ri in resolveInfos) {
+      val ai: ApplicationInfo = ri.activityInfo?.applicationInfo ?: continue
       // Skip own package
       if (ai.packageName == ctx.packageName) continue
+      // Dedupe по packageName (одно app может иметь несколько launcher activity)
+      if (!seenPackages.add(ai.packageName)) continue
       try {
         val label = pm.getApplicationLabel(ai).toString()
         val drawable = pm.getApplicationIcon(ai)
@@ -231,7 +249,7 @@ object AppControlNative {
         DiagLog.write(ctx, TAG, "skip ${ai.packageName} — ${e.javaClass.simpleName}: ${e.message}")
       }
     }
-    DiagLog.write(ctx, TAG, "collectInstalledApps: ${result.size} apps")
+    DiagLog.write(ctx, TAG, "collectInstalledApps: ${result.size} launchable apps")
     return result
   }
 

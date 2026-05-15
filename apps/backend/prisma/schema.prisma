@@ -89,8 +89,17 @@ model User {
 model ParentDevice {
   id                String    @id @default(cuid())
   userId            String
-  fcmToken          String    @unique
+  // v0.51 (lesson #24): fcmToken стал nullable — устройство без Google Play
+  // Services может зарегистрироваться только через RuStore Push. БД CHECK
+  // constraint гарантирует что хотя бы один из (fcmToken, rustorePushToken)
+  // не NULL — см. миграцию 20260512120000_add_rustore_push_token.
+  fcmToken          String?   @unique
   fcmTokenUpdatedAt DateTime  @default(now())
+  // v0.51 RuStore Push (VKPNS) — параллельный канал доставки. Регистрируется
+  // через POST /parents/devices/rustore-token при старте app если устройство
+  // имеет RuStore client (RustorePushClient.available()=true).
+  rustorePushToken           String?   @unique
+  rustorePushTokenUpdatedAt  DateTime?
   platform          String    // "android" | "ios" — на MVP только android
   deviceName        String?   // model + manufacturer ("Xiaomi 22081212UG")
   appVersion        String?   // "0.46.0+1"
@@ -247,6 +256,17 @@ model Invite {
   // claim — если granted=true, телефону ребёнка не требуется передавать
   // consent14Plus в теле запроса (согласие уже зафиксировано родителем).
   consent14PlusGranted Boolean   @default(false)
+  // v0.50.7: multi-use поддержка для тест-инвайтов модерации RuStore.
+  // maxUses=1 (default) — классическое одноразовое поведение: при первом
+  // успешном claim consumedAt=NOW(), повторный claim возвращает invite_invalid.
+  // maxUses>1 — multi-use: claim инкрементит usesCount, consumedAt ставится
+  // только когда usesCount >= maxUses. Если есть active ChildDevice — он
+  // автоматически revoked (это OK для модерации: каждый новый модератор
+  // получает свежее устройство, старая привязка снимается).
+  // Создаётся через docker exec на проде для тест-аккаунта модератора;
+  // обычные родительские invites всегда maxUses=1.
+  maxUses              Int       @default(1)
+  usesCount            Int       @default(0)
   createdBy            String
   createdAt            DateTime  @default(now())
 
@@ -275,6 +295,15 @@ model ChildDevice {
   // backend fallback'ится на poll-команду через DeviceCommand queue.
   fcmToken           String?   @unique
   fcmTokenUpdatedAt  DateTime?
+
+  // v0.51 RuStore Push (lesson #24): параллельный канал доставки для устройств
+  // без GMS (HMS Huawei, чистые AOSP, MIUI без GMS) либо у которых FCM был
+  // зачищен MIUI Restricted Settings после sideload-update (lesson #23 —
+  // решается переходом на RuStore-канал). Регистрируется через
+  // POST /child/devices/rustore-token. push.service.ts шлёт через RuStore Push
+  // API (vkpns.rustore.ru) если токен есть; FCM как fallback.
+  rustorePushToken           String?   @unique
+  rustorePushTokenUpdatedAt  DateTime?
 
   // v0.38: IANA timezone устройства ребёнка ("Europe/Moscow") — нужно для
   // корректной агрегации UsageBucket по local-date. Шлётся child'ом при

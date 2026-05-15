@@ -1,0 +1,4 @@
+# AAB binaries — не коммитим (тяжёлые, ~50MB каждый, регенерируются через
+# flutter build appbundle --release). Метаданные релизов хранятся в README.md.
+*.aab
+*.apk

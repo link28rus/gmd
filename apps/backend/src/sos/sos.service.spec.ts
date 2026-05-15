@@ -48,13 +48,17 @@ function makeMailer(sendImpl?: jest.Mock): any {
 }
 
 function makeFcm(): any {
-  return { sendToToken: jest.fn().mockResolvedValue(true) };
+  return {
+    sendToToken: jest.fn().mockResolvedValue(true),
+    sendHybridToToken: jest.fn().mockResolvedValue(true),
+  };
 }
 
 function makeParentDevices(): any {
   return {
     findActiveByFamilyId: jest.fn().mockResolvedValue([]),
     clearTokenByExpired: jest.fn().mockResolvedValue(undefined),
+    clearRustoreByExpired: jest.fn().mockResolvedValue(undefined),
   };
 }
 

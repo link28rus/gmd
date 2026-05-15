@@ -9,7 +9,7 @@
 
 ---
 
-## v0.51.0 — 2026-05-15 — Миграция на новый VPS и домен gmd-online.ru
+## v0.51.0 — 2026-05-15 — Миграция на новый VPS и домен gmd-online.ru + переход на RuStore Push/Updates
 
 ### Инфраструктура
 
@@ -28,16 +28,137 @@
   не отвечает: mobile-приложения версии ниже v0.51.0 нужно обновить из
   RuStore. Старый сервер планируется к полной остановке через 90 дней.
 
-### Улучшения
+### Новые возможности
 
-- **Фирменная иконка на вкладке сайта.** В `apps/web/app/` добавлены `favicon.ico` (16/32/48), `icon.png` (512×512), `apple-icon.png` (180×180, с padding для iOS rounded mask) и `icon.svg` — Next.js 15 App Router сам инжектит `<link rel="icon">` и `<link rel="apple-touch-icon">` из convention. Палитра consistent с landing'ом и promo-карточками RuStore (фон `#0a1628`, accent sky-400 `#38bdf8`, белая буква G). Дефолтного глобуса в табе больше нет. Расширен генератор `tools/icons/generate_app_icons.py` функцией `render_favicon()`.
-- **Страницы `/terms` и `/privacy` теперь читаемы на тёмном фоне.** Body лендинга оформлен в тёмной палитре (`#0a0a0a`), а markdown-рендер юридических текстов был зашит на `text-zinc-700/800/900` — тёмный на тёмном. Перекрасил заголовки в `zinc-50`, основной текст в `zinc-300`, разделители/код/цитаты — в тёмносоответствующие тона. Контрасты соответствуют WCAG AA.
+- **RuStore Push transport (parent + child).** Параллельный канал push-доставки
+  через RuStore Push SDK (`flutter_rustore_push: ^7.2.0`) — для устройств без
+  Google Play Services (HMS Huawei, чистые AOSP, MIUI без GMS). После старта
+  оба apps регистрируют `RuStorePushRegistrar` → отправляют токен в backend
+  через `POST /api/parent-devices/rustore-push-token` (для родительского
+  устройства) / `POST /api/child-device/rustore-push-token` (для child). На
+  backend в `parent_devices.rustorePushToken` и `child_devices.rustorePushToken`
+  хранится последний токен (миграция `20260512120000_add_rustore_push_token`).
+  Backend выбирает канал по `deviceCapabilities` устройства (FCM первый, RuStore
+  fallback при отсутствии Google Services).
+- **RuStore In-App Updates.** `flutter_rustore_update: ^10.3.0` запускается на
+  старте обоих apps и автоматически предлагает обновиться, если в RuStore Console
+  есть новее версия. Это закрывает проблему `REQUEST_INSTALL_PACKAGES` — обновления
+  централизованно через trusted store (требование модерации RuStore).
 
 ### Изменения
 
-- **Политика конфиденциальности v1.2 и Пользовательское соглашение v1.1 (приведение к фактическому поведению системы и актуальной редакции 152-ФЗ).** По результатам внутреннего pre-legal-аудита (`docs/legal/legal-opinion-2026-05-12-privacy-terms.md`): расширен §3 политики (аудитные журналы), переписан §4.2 (микрофон — режим работы без отдельного уведомления о сессии, со ссылкой на Постановление Конституционного Суда РФ от 12.01.2024 № 1-П), переписан §7 (трансграничная передача push-токенов в Google LLC, США), расширен §8 (сроки хранения для аудит-журналов, refresh-токенов, OTP, журналов блокировок и зоновых событий), расширен §9 (Google LLC и VK Company как получатели push-токенов). В terms — расширены §3 (ответственность за достоверность возраста), §4 (использование исключительно в целях безопасности, запрет распространения данных третьих лиц, отсылка к ст. 137-138 УК РФ), добавлен §5.1 (Сервис не является службой экстренного реагирования). Этот релиз — финальный документальный шаг (#66) задачи на юридическую проверку. Compliance-действия (подача уведомлений в Роскомнадзор по ст. 22 и ст. 12 152-ФЗ, runbook реагирования на утечки, acceptance flow для существующих пользователей) — выделены в отдельный backlog.
-- **Юридические реквизиты Оператора актуализированы.** В разделе «1. Оператор персональных данных» Политики конфиденциальности и в преамбуле/«Терминах» Пользовательского соглашения указано ФИО (Четверик Дмитрий Васильевич) и место нахождения Оператора (Хабаровский край, Хабаровский район, с. Восточное, ул. Центральная, д. 5, кв. 12) — требование 152-ФЗ ст. 18.1.
-- **Файл политики переименован `privacy-policy-v1.0.md` → `privacy-policy-v1.1.md`** — синхронизировано имя файла с внутренней версией («Версия: 1.1», действует с 12 мая 2026 г.). Путь в [apps/web/app/privacy/page.tsx](apps/web/app/privacy/page.tsx) обновлён. Backend `PRIVACY_POLICY_VERSION=1.1` уже соответствует.
+- **Отказ от self-hosted ACTION_VIEW installer'а.** Удалены `InstallerNative.kt`
+  (parent + child), `UpdateCheckWorker.kt` / `UpdateCheckScheduler.kt` (child),
+  `installer_channel.dart`, `updates_service.dart`, `update_info.dart`,
+  `file_provider_paths.xml`. Из манифестов вырезаны `REQUEST_INSTALL_PACKAGES` и
+  блок `<provider FileProvider>` — RuStore модерация требует, чтобы все обновления
+  шли централизованно через store, в обход self-hosted distribution.
+- **Multi-use invites для модераторов RuStore.** В `Invite` добавлены поля
+  `maxUses Int @default(1)` и `usesCount Int @default(0)` (миграция
+  `20260514170000_add_multi_use_invites`). Default `maxUses=1` сохраняет прежнее
+  поведение для всех родительских invites — нулевая регрессия. `maxUses > 1`
+  (создаются вручную через `docker exec` для модераторов) разрешает повторные
+  claim'ы пока `usesCount < maxUses`; при reuse — автоматически revoke + delete
+  старого `ChildDevice`. На проде: invite `AJGD3K2D` (Console ID 2063713899)
+  имеет `maxUses=100`, `expiresAt=2027-05-14`.
+- **Фирменная иконка на вкладке сайта.** В `apps/web/app/` добавлены `favicon.ico`
+  (16/32/48), `icon.png` (512×512), `apple-icon.png` (180×180, с padding для iOS
+  rounded mask) и `icon.svg` — Next.js 15 App Router сам инжектит `<link rel="icon">`
+  и `<link rel="apple-touch-icon">` из convention. Палитра consistent с landing'ом
+  и promo-карточками RuStore (фон `#0a1628`, accent sky-400 `#38bdf8`, белая буква
+  G). Дефолтного глобуса в табе больше нет. Расширен генератор
+  `tools/icons/generate_app_icons.py` функцией `render_favicon()`.
+- **Страницы `/terms` и `/privacy` теперь читаемы на тёмном фоне.** Body лендинга
+  оформлен в тёмной палитре (`#0a0a0a`), а markdown-рендер юридических текстов был
+  зашит на `text-zinc-700/800/900` — тёмный на тёмном. Перекрасил заголовки в
+  `zinc-50`, основной текст в `zinc-300`, разделители/код/цитаты — в
+  тёмносоответствующие тона. Контрасты соответствуют WCAG AA.
+- **Политика конфиденциальности v1.2 и Пользовательское соглашение v1.1 (приведение
+  к фактическому поведению системы и актуальной редакции 152-ФЗ).** По результатам
+  внутреннего pre-legal-аудита (`docs/legal/legal-opinion-2026-05-12-privacy-terms.md`):
+  расширен §3 политики (аудитные журналы), переписан §4.2 (микрофон — режим работы
+  без отдельного уведомления о сессии, со ссылкой на Постановление Конституционного
+  Суда РФ от 12.01.2024 № 1-П), переписан §7 (трансграничная передача push-токенов
+  в Google LLC, США), расширен §8 (сроки хранения для аудит-журналов, refresh-токенов,
+  OTP, журналов блокировок и зоновых событий), расширен §9 (Google LLC и VK Company
+  как получатели push-токенов). В terms — расширены §3 (ответственность за
+  достоверность возраста), §4 (использование исключительно в целях безопасности,
+  запрет распространения данных третьих лиц, отсылка к ст. 137-138 УК РФ), добавлен
+  §5.1 (Сервис не является службой экстренного реагирования). Этот релиз — финальный
+  документальный шаг (#66) задачи на юридическую проверку. Compliance-действия
+  (подача уведомлений в Роскомнадзор по ст. 22 и ст. 12 152-ФЗ, runbook реагирования
+  на утечки, acceptance flow для существующих пользователей) — выделены в отдельный
+  backlog.
+- **Юридические реквизиты Оператора актуализированы.** В разделе «1. Оператор
+  персональных данных» Политики конфиденциальности и в преамбуле/«Терминах»
+  Пользовательского соглашения указано ФИО (Четверик Дмитрий Васильевич) и место
+  нахождения Оператора (Хабаровский край, Хабаровский район, с. Восточное,
+  ул. Центральная, д. 5, кв. 12) — требование 152-ФЗ ст. 18.1.
+- **Файл политики переименован `privacy-policy-v1.0.md` → `privacy-policy-v1.1.md`** —
+  синхронизировано имя файла с внутренней версией («Версия: 1.1», действует с 12 мая
+  2026 г.). Путь в [apps/web/app/privacy/page.tsx](apps/web/app/privacy/page.tsx)
+  обновлён. Backend `PRIVACY_POLICY_VERSION=1.1` уже соответствует.
+
+---
+
+## v0.50.7 — 2026-05-14 — Multi-use invites для модераторов RuStore (фикс невозможности тестирования)
+
+### Изменения
+
+- **Multi-use invites для тест-аккаунтов модерации.** Версия 0.50.6(6086) отклонена модерацией RuStore с формулировкой «Приложение не прошло модерацию из-за невозможности его тестирования. После ввода кода вход не осуществляется». Корень — модель `Invite` была чисто single-use: `consumedAt = NOW()` ставился при первом успешном claim, повторные claims возвращали `invite_invalid`. При первой модерации модератор использовал invite → ChildDevice привязалось → invite consumed. При следующей итерации модерации (новая submission) тот же код уже не работал. Bump до 0.50.7(6087) на mobile-child + backend-фикс.
+- **Prisma schema:** в `Invite` добавлены поля `maxUses Int @default(1)` и `usesCount Int @default(0)` (миграция `20260514170000_add_multi_use_invites`). Default `maxUses=1` сохраняет прежнее поведение для всех родительских invites — нулевая регрессия. `maxUses > 1` (создаются вручную через docker exec для модераторов) разрешает повторные claim'ы пока `usesCount < maxUses`.
+- **`InvitesService.createInvite`** принимает optional `maxUses` параметр (clamp 1–1000). При `maxUses > 1` пропускается проверка `child_has_device` (multi-use code всегда работает, даже если у ребёнка уже есть привязанное устройство — следующий claim авторевокает старое).
+- **`ChildDeviceService.claim`** теперь:
+  - SELECT FOR UPDATE включает `AND "usesCount" < "maxUses"` (multi-use условие).
+  - Если activeDevice есть И `maxUses > 1` — автоматически revoke + delete старое устройство (каждый новый модератор получает свежую привязку, старая снимается).
+  - Если activeDevice есть И `maxUses == 1` — прежнее поведение: throw `child_has_device` ConflictException.
+  - Инкремент `usesCount`; `consumedAt = NOW()` ставится только когда `newUsesCount >= maxUses`.
+- **На проде:** существующий invite `AJGD3K2D` для тестового child'а (Console ID 2063713899) обновлён до multi-use: `maxUses=100`, `expiresAt=2027-05-14`, `consumedAt=NULL`, `usesCount=0`. ChildDevice очищен — модератор начинает с чистого state.
+- **Тесты:** 16/16 в `child-device.service.spec.ts` (включая прежние `child_has_device` для single-use), 13/13 в `invites.service.spec.ts`.
+
+---
+
+## v0.50.6 — 2026-05-14 — Убран QUERY_ALL_PACKAGES (требование RuStore)
+
+### Изменения
+
+- **QUERY_ALL_PACKAGES удалён, enumeration apps через `<queries>` MAIN/LAUNCHER.** Версия 0.50.5(6085) отклонена модерацией RuStore: «Приложение не прошло модерацию, поскольку оно не соответствует нормам информационной безопасности. Необходимо убрать расширение QUERY_ALL_PACKAGES». Из `apps/mobile-child/android/app/src/main/AndroidManifest.xml` вырезана `<uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"/>`; вместо неё в блок `<queries>` добавлен `intent-filter` с `action android:name="android.intent.action.MAIN"` + `category android:name="android.intent.category.LAUNCHER"` — это RuStore-friendly narrow-visibility паттерн. `AppControlNative.collectInstalledApps` переписан с `pm.getInstalledApplications()` на `pm.queryIntentActivities(Intent(ACTION_MAIN).addCategory(CATEGORY_LAUNCHER))` с dedupe по `packageName`. Покрытие — все apps с launcher activity (то что показывается в drawer'е, что ребёнок реально может запустить). Системные служебные apps без launcher (телефонные службы, input methods и т.п.) в список не входят — для app-blocking allowlist и screen-time reporting это OK, такие apps вне сценария блокировки. mobile-parent на 0.50.6(25) — pubspec обновлён только для синхронизации, не пересубмитим (опубликован в v0.50.4).
+
+---
+
+## v0.50.5 — 2026-05-14 — Повторная подача child в RuStore после ошибочного отказа модератора v0.50.4
+
+### Изменения
+
+- **Bump-only release для повторной подачи mobile-child в RuStore.** Версия 0.50.4(6084) была отклонена модерацией со стандартной формулировкой про `REQUEST_INSTALL_PACKAGES`, хотя permission был удалён ещё в v0.50.4 (verify: `aapt2 dump permissions <aab>` показывает 26 разрешений без `REQUEST_INSTALL_PACKAGES`; `dumpsys package ru.link28rus.gmd.child` на устройстве после `adb install` — то же). Размер `5.06 МБ` в карточке RuStore Console — это `base.apk` после AAB split, без native libraries (`libapp.so`, `libflutter.so` идут отдельным `config.<abi>.apk`); реальный install ≈ 41 МБ для arm64. Похоже на шаблонный отказ модератора без реальной проверки v0.50.4 AAB. Перед подачей v0.50.5 — обязательный real-device smoke test child на physical устройстве (новое правило 6 из раздела «RuStore-релизы» CLAUDE.md). mobile-parent на 0.50.4(25) опубликован и не пересубмитим (pubspec обновлён до 0.50.5+25 только для синхронизации монорепо).
+
+---
+
+## v0.50.4 — 2026-05-13 — Отказ от self-hosted ACTION_VIEW installer'а (требование RuStore)
+
+### Изменения
+
+- **REQUEST_INSTALL_PACKAGES удалён, auto-update только через RuStore SDK.** Версии 0.50.3 (child `6083`, parent `24`) были отклонены модерацией RuStore с формулировкой «Разрешение REQUEST_INSTALL_PACKAGES позволяет приложениям устанавливать новые пакеты на устройстве пользователя. Все обновления должны происходить централизовано через RuStore». Из обоих манифестов вырезаны `<uses-permission android:name="REQUEST_INSTALL_PACKAGES"/>` и блок `<provider FileProvider>`; удалены связанные файлы — `lib/core/updates/installer_channel.dart`, `updates_service.dart`, `update_info.dart`, `android/app/src/main/res/xml/file_provider_paths.xml`, native `InstallerNative.kt` (оба apps) + `UpdateCheckWorker.kt`/`UpdateCheckScheduler.kt` (child) и соответствующий installer-channel в `MainActivity.kt`. Контроллер `UpdateController` упрощён до RuStore-only: один вызов `RuStoreUpdates.tryImmediate()` — если SDK доступен и есть обновление, RuStore сам качает и устанавливает; иначе `UpdateNotNeeded` без fallback'а. На устройствах без RuStore client'а пользователь обновляется вручную (переустановкой из RuStore Console).
+
+### Исправления
+
+- **Ошибка модерации «возникает ошибка при попытке добавить ребёнка» (parent).** Корень — `ConsentRequiredGuard` блокировал `POST /family/children` для тестового аккаунта (`acceptedPrivacyPolicyVersion = null`, в БД нет ни одной записи `ConsentRecord`). В mobile-parent отсутствует consent banner (UX-баг отдельной задачей), а в comment модератору не было указания зайти в web-кабинет для принятия политики. На проде вручную приняли consent для тестового аккаунта на текущей версии (`PRIVACY_POLICY` + `TERMS_OF_USE`) — модератор теперь проходит create-child без 403. Создан long-lived invite (TTL 30 дней) для тестового ребёнка вместо стандартных 10 минут.
+
+---
+
+## v0.50.3 — 2026-05-13 — Re-submit в RuStore с тестовыми credentials для модератора
+
+### Изменения
+
+- **Bump-only release для повторной модерации в RuStore.** Версии 0.50.2 (child `6082`, parent `23`) были отклонены модерацией RuStore со стандартной формулировкой «Приложение не прошло модерацию, поскольку нам не удалось его протестировать без данных для входа». Бинарники в порядке (boot-crash из v0.50.2 закрыт), функционально код не изменился — увеличены только `versionCode`, поскольку RuStore не принимает повторную загрузку с тем же `versionCode`. К AAB при загрузке прикладывается комментарий модератору с тестовым логином/паролем родителя (`rustore-moderator@gmd.link28rus.ru`) и указанием на готовую карточку ребёнка с генерируемым claim code. Тестовый аккаунт зафиксирован в memory-compiler как secret. Урок зафиксирован в CLAUDE.md (lesson #26 расширение): для приложений со stalkerware-like permission set credentials в комментарии — обязательный шаг каждой подачи на модерацию, без них модератор по умолчанию вернёт отказ.
+
+---
+
+## v0.50.2 — 2026-05-12 — Fix boot-crash на чистой установке (mobile-child)
+
+### Исправления
+
+- **Crash при первом запуске после установки на Android 14+ (mobile-child).** На чистой установке `BootReceiver` стартовал `LocationForegroundService` ДО того как пользователь дал `ACCESS_*_LOCATION` permission через UI claim-flow. На Android 14+ (targetSdk=34) `startForeground` для `foregroundServiceType=location` без granted location-permission бросает `SecurityException` и крашит процесс. Симптом — модератор RuStore не мог пройти первый экран приложения, ставил отказ модерации с формулировкой «не удалось протестировать». Зафиксирован гейт в `BootReceiver.onReceive` (skip + DiagLog если permission ещё не выдан) и дублирующий гейт в `LocationForegroundService.start` для случаев, когда сервис будет стартован из других точек (FCM handler, MainActivity). После того как пользователь пройдёт claim+permission flow в UI, сервис запустится из MainActivity; следующий boot уже подхватит granted permission и стартанёт через BootReceiver как раньше. Не влияет на устройства, где permissions уже выданы.
 
 ---
 

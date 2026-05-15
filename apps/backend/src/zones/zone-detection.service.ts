@@ -224,11 +224,12 @@ export class ZoneDetectionService {
     };
     await Promise.all(
       devices.map((d) =>
-        fcmService.sendToToken({
-          fcmToken: d.fcmToken,
+        fcmService.sendHybridToToken({
+          tokens: { fcmToken: d.fcmToken, rustorePushToken: d.rustorePushToken },
           data,
           label: `${data.type} child=${args.childId} zone=${args.zoneId}`,
-          onInvalidToken: (token) => this.parentDevices.clearTokenByExpired(token),
+          onInvalidFcmToken: (token) => this.parentDevices.clearTokenByExpired(token),
+          onInvalidRustoreToken: (token) => this.parentDevices.clearRustoreByExpired(token),
         }),
       ),
     );

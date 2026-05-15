@@ -5,6 +5,7 @@ import 'api/dio_client.dart';
 import 'auth/auth_models.dart';
 import 'auth/auth_repository.dart';
 import 'fcm/parent_fcm_registrar.dart';
+import 'push/parent_rustore_push_registrar.dart';
 import 'storage/secure_storage_service.dart';
 
 final secureStorageProvider = Provider<SecureStorageService>(
@@ -34,4 +35,8 @@ final authSessionProvider = StateProvider<AuthSession?>((_) => null);
 
 final parentFcmRegistrarProvider = Provider<ParentFcmRegistrar>((ref) {
   return ParentFcmRegistrar(dio: ref.watch(dioProvider));
+});
+
+final parentRuStorePushRegistrarProvider = Provider<ParentRuStorePushRegistrar>((ref) {
+  return ParentRuStorePushRegistrar(dio: ref.watch(dioProvider));
 });

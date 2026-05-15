@@ -85,13 +85,16 @@ class AppControlChannel {
     return tz ?? 'UTC';
   }
 
-  /// Снапшот установленных apps с иконками.
+  /// Снапшот launchable apps с иконками.
   ///
   /// Тяжёлая операция (~100-500ms на устройстве: PNG-кодирование 100-500 иконок).
   /// Запускается на native background-thread, future resolve когда готово.
   ///
   /// Не включает наш own package (отфильтрован в native).
-  /// Возвращает пустой список если нет QUERY_ALL_PACKAGES permission на API 30+.
+  ///
+  /// v0.50.6: использует `<queries>` MAIN/LAUNCHER вместо QUERY_ALL_PACKAGES
+  /// (RuStore-friendly, см. AndroidManifest.xml). Возвращает только apps
+  /// с launcher activity — системные служебные apps без launcher'а не входят.
   static Future<List<InstalledAppNative>> collectInstalledApps() async {
     final raw = await _ch.invokeMethod<List<dynamic>>('collectInstalledApps');
     if (raw == null) return const [];

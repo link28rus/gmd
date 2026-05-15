@@ -5,7 +5,9 @@ import type { FcmService } from '../fcm/fcm.service';
 // Тесты trogают только listPending, FCM ему не нужен — пустая заглушка.
 const fcmStub = {
   isEnabled: () => false,
+  isRustoreEnabled: () => false,
   sendDataMessage: jest.fn().mockResolvedValue(false),
+  sendHybridDataMessage: jest.fn().mockResolvedValue(false),
 } as unknown as FcmService;
 
 interface MockCmd {

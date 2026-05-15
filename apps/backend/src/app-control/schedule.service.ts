@@ -33,10 +33,12 @@ export class ScheduleService {
    * Резолв активного устройства ребёнка. Если устройств несколько (history),
    * берём не-revoked (logic совпадает с AppBlockingService).
    */
-  private async resolveDevice(childId: string): Promise<{ id: string; fcmToken: string | null }> {
+  private async resolveDevice(
+    childId: string,
+  ): Promise<{ id: string; fcmToken: string | null; rustorePushToken: string | null }> {
     const device = await this.prisma.childDevice.findFirst({
       where: { childId, revokedAt: null },
-      select: { id: true, fcmToken: true },
+      select: { id: true, fcmToken: true, rustorePushToken: true },
     });
     if (!device) {
       throw new NotFoundException({
@@ -89,7 +91,7 @@ export class ScheduleService {
       },
     });
 
-    this.notifyDevice(device.id, device.fcmToken, 'create');
+    this.notifyDevice(device.id, device.fcmToken, device.rustorePushToken, 'create');
     this.logger.log(
       `schedule created id=${schedule.id} child=${params.childId} mask=${params.body.daysMask} ${params.body.startMin}-${params.body.endMin}`,
     );
@@ -117,9 +119,14 @@ export class ScheduleService {
 
     const device = await this.prisma.childDevice.findUnique({
       where: { id: existing.childDeviceId },
-      select: { fcmToken: true },
+      select: { fcmToken: true, rustorePushToken: true },
     });
-    this.notifyDevice(existing.childDeviceId, device?.fcmToken ?? null, 'update');
+    this.notifyDevice(
+      existing.childDeviceId,
+      device?.fcmToken ?? null,
+      device?.rustorePushToken ?? null,
+      'update',
+    );
     return updated;
   }
 
@@ -129,9 +136,14 @@ export class ScheduleService {
 
     const device = await this.prisma.childDevice.findUnique({
       where: { id: existing.childDeviceId },
-      select: { fcmToken: true },
+      select: { fcmToken: true, rustorePushToken: true },
     });
-    this.notifyDevice(existing.childDeviceId, device?.fcmToken ?? null, 'delete');
+    this.notifyDevice(
+      existing.childDeviceId,
+      device?.fcmToken ?? null,
+      device?.rustorePushToken ?? null,
+      'delete',
+    );
   }
 
   // ─── child-side ─────────────────────────────────────────────────────────
@@ -170,11 +182,16 @@ export class ScheduleService {
     return pure as AppBlockSchedule;
   }
 
-  private notifyDevice(deviceId: string, fcmToken: string | null, op: string): void {
+  private notifyDevice(
+    deviceId: string,
+    fcmToken: string | null,
+    rustorePushToken: string | null,
+    op: string,
+  ): void {
     void this.fcm
-      .sendDataMessage(deviceId, fcmToken, { type: 'SYNC_SCHEDULES' })
+      .sendHybridDataMessage(deviceId, { fcmToken, rustorePushToken }, { type: 'SYNC_SCHEDULES' })
       .catch((err) =>
-        this.logger.warn(`FCM SYNC_SCHEDULES (${op}) failed for ${deviceId}: ${String(err)}`),
+        this.logger.warn(`push SYNC_SCHEDULES (${op}) failed for ${deviceId}: ${String(err)}`),
       );
   }
 

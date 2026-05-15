@@ -229,9 +229,14 @@ GMD для ребёнка — устройство-спутник в соста�
 
 ## Featured graphic (1024×500)
 
-→ Отдельная задача дизайн (можно сгенерировать через `tools/icons/generate_app_icons.py` расширив, или сделать в Figma). Тема — карта с маркером, заголовок «GMD — родительский контроль», слоган «Где ребёнок прямо сейчас». Параллельно для child — то же приложение, акцент: «Спутник родительского приложения GMD».
+Файлы готовы (закоммичены в репо):
 
-Фирменный стиль: тёмно-синий фон `#050a15` (как лендинг), акцент sky-400 `#38bdf8` для parent / emerald-400 `#34d399` для child.
+- **parent:** [`docs/rustore-assets/featured-parent.png`](rustore-assets/featured-parent.png) — 1024×500, sky-400 акцент, бейдж «Родителю», title «GMD / Родительский контроль», subtitle «Геолокация ребёнка, геозоны, SOS».
+- **child:** [`docs/rustore-assets/featured-child.png`](rustore-assets/featured-child.png) — 1024×500, emerald-400 акцент, бейдж «Ребёнку», title «GMD / для ребёнка», subtitle «Под защитой родителей».
+
+Дизайн: тёмно-синий radial фон `#0a1628`, GPS-pin с буквой G слева (с pulse-кольцами и glow-aura), текстовый блок справа. Фирменная палитра консистентна с launcher-иконками. Шрифт — Segoe UI Bold (с fallback на Calibri/Arial/DejaVu).
+
+Перегенерация: `python tools/icons/generate_app_icons.py` (требует Pillow). Скрипт также пересоздаёт launcher-иконки в `apps/mobile-{parent,child}/assets/icon/` — при правке featured-graphic эти три файла перерендерятся. Если правишь только баннер — иконки бинарно идентичны (детерминированный рендер), git-diff чистый.
 
 ---
 

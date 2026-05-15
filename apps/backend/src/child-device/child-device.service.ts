@@ -43,8 +43,17 @@ export class ChildDeviceService {
     const code = normalizeInviteCode(rawCode);
 
     const result = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      // v0.50.7: multi-use invites — claim допустим пока usesCount < maxUses
+      // И consumedAt IS NULL. Для single-use (maxUses=1, default) условие
+      // эквивалентно прежнему `consumedAt IS NULL`. Для multi-use (maxUses>1)
+      // consumedAt ставится только когда usesCount достиг maxUses.
       const lockRows = (await tx.$queryRawUnsafe(
-        `SELECT id FROM invites WHERE code = $1 AND "consumedAt" IS NULL AND "expiresAt" > NOW() FOR UPDATE`,
+        `SELECT id FROM invites
+         WHERE code = $1
+           AND "consumedAt" IS NULL
+           AND "expiresAt" > NOW()
+           AND "usesCount" < "maxUses"
+         FOR UPDATE`,
         code,
       )) as Array<{ id: string }>;
       if (lockRows.length === 0) {
@@ -55,20 +64,33 @@ export class ChildDeviceService {
       if (!invite) {
         throw new BadRequestException({ code: 'invite_invalid', message: 'Invite invalid' });
       }
+      // Multi-use invites автоматически revoke'ают activeDevice (поведение
+      // для тест-инвайта модератора RuStore: каждая новая итерация модерации
+      // получает свежее устройство, старая привязка снимается).
+      // Single-use invites сохраняют прежний контракт: claim падает с
+      // child_has_device если для ребёнка уже есть активное устройство.
       const activeDevice = await tx.childDevice.findFirst({
         where: { childId: invite.childId, revokedAt: null },
       });
+      const maxUses = invite.maxUses ?? 1;
+      const usesCount = invite.usesCount ?? 0;
       if (activeDevice) {
-        throw new ConflictException({
-          code: 'child_has_device',
-          message: 'Child already has active device',
+        if (maxUses <= 1) {
+          throw new ConflictException({
+            code: 'child_has_device',
+            message: 'Child already has active device',
+          });
+        }
+        await tx.childDevice.update({
+          where: { id: activeDevice.id },
+          data: { revokedAt: new Date() },
         });
       }
       // `ChildDevice.childId` имеет глобальный `@unique`, не partial — поэтому
-      // старые revoked-записи (после /reset-device) остаются в индексе и
-      // валят следующий claim с P2002. Удаляем их до create (cascade снесёт
-      // старые locations/sos — они уже привязаны к revoked-устройству и
-      // не нужны новому claim'у).
+      // старые revoked-записи (после /reset-device или multi-use auto-revoke)
+      // остаются в индексе и валят следующий claim с P2002. Удаляем их до
+      // create (cascade снесёт старые locations/sos — они уже привязаны к
+      // revoked-устройству и не нужны новому claim'у).
       await tx.childDevice.deleteMany({
         where: { childId: invite.childId, revokedAt: { not: null } },
       });
@@ -102,9 +124,16 @@ export class ChildDeviceService {
           appVersion: meta.appVersion,
         },
       });
+      const newUsesCount = usesCount + 1;
       await tx.invite.update({
         where: { id: invite.id },
-        data: { consumedAt: new Date() },
+        data: {
+          usesCount: newUsesCount,
+          // consumedAt — финальное состояние "больше нельзя claim'ить".
+          // Ставим только когда фактически достигли maxUses (для multi-use)
+          // ИЛИ при первом использовании single-use инвайта.
+          consumedAt: newUsesCount >= maxUses ? new Date() : null,
+        },
       });
       return {
         deviceToken: token,
@@ -218,6 +247,24 @@ export class ChildDeviceService {
     await this.prisma.childDevice.update({
       where: { id: deviceId },
       data: { fcmToken, fcmTokenUpdatedAt: new Date() },
+    });
+  }
+
+  /**
+   * v0.51 RuStore Push (lesson #24): аналогично setFcmToken, но для
+   * rustorePushToken. Логика идентична — если приходит non-null, чистим
+   * коллизии (UNIQUE), затем апдейтим текущее устройство.
+   */
+  async setRustorePushToken(deviceId: string, rustorePushToken: string | null): Promise<void> {
+    if (rustorePushToken !== null) {
+      await this.prisma.childDevice.updateMany({
+        where: { rustorePushToken, NOT: { id: deviceId } },
+        data: { rustorePushToken: null, rustorePushTokenUpdatedAt: new Date() },
+      });
+    }
+    await this.prisma.childDevice.update({
+      where: { id: deviceId },
+      data: { rustorePushToken, rustorePushTokenUpdatedAt: new Date() },
     });
   }
 }

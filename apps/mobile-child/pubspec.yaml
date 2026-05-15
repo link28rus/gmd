@@ -37,6 +37,17 @@ dependencies:
   opus_flutter: ^3.0.3
   web_socket_channel: ^3.0.3
 
+  # v0.51: RuStore SDKs — единственный канал distribution для РФ-рынка
+  # (lessons #24 + #26). `flutter_rustore_push` — параллельный FCM транспорт
+  # push'ей; нужен для устройств без Google Play Services (HMS Huawei, чистые
+  # AOSP, MIUI без GMS) — backend выбирает канал по deviceCapabilities,
+  # см. push.service.ts. `flutter_rustore_update` — In-App Update SDK
+  # (закрывает lesson #23: MIUI не сбрасывает permissions при update через
+  # trusted store API). С v0.50.4 — без fallback'а на ACTION_VIEW: RuStore
+  # модерация требует, чтобы все обновления шли централизованно через store.
+  flutter_rustore_push: ^7.2.0
+  flutter_rustore_update: ^10.3.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
