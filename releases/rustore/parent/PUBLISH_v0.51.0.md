@@ -35,7 +35,7 @@ URL: <https://console.rustore.ru/apps/2063713895/versions/add>
 - **«Комментарий для модератора»** (160/180):
 
   ```
-  Логин: rustore-moderator@gmd.link28rus.ru, пароль: RsM-Test-2026-Md7K3p (gmd-online.ru/login, «По паролю»). Код привязки ребёнка: AJGD3K2D (многоразовый).
+  Логин: rustore-moderator@gmd-online.ru, пароль: RsM-Test-2026-Md7K3p (gmd-online.ru/login, «По паролю»). Код привязки ребёнка: AJGD3K2D (многоразовый).
   ```
 
 ### Шаг 2 — «Безопасность»
@@ -46,7 +46,7 @@ Permission-набор parent app минимальный — sensitive permission
 - **«Обоснование разрешений»** (если RuStore требует — sensitive permissions parent app не запрашивает, поэтому раздел может быть пустым / не показывается):
 
   ```
-  GMD «Родитель» — клиентская часть сервиса родительского контроля gmd-online.ru (аналог «Где мои дети», self-hosted, РФ-рынок).
+  GMD «Родитель» — клиентская часть сервиса родительского контроля gmd-online.ru (self-hosted, инфраструктура полностью в РФ, 152-ФЗ).
 
   Permission-набор parent app минимальный, sensitive permissions не запрашиваются. Используются только INTERNET / ACCESS_NETWORK_STATE / POST_NOTIFICATIONS / WAKE_LOCK / RECEIVE_BOOT_COMPLETED / FOREGROUND_SERVICE / com.google.android.c2dm.permission.RECEIVE.
 
@@ -98,7 +98,7 @@ curl -s https://gmd-online.ru/api/readyz                 # {"status":"ok","db":"
 
 # 2. POST rustore-token endpoint (новый в v0.51.0)
 curl -sS -X POST -H "Content-Type: application/json" \
-     -d '{"email":"rustore-moderator@gmd.link28rus.ru","password":"RsM-Test-2026-Md7K3p"}' \
+     -d '{"email":"rustore-moderator@gmd-online.ru","password":"RsM-Test-2026-Md7K3p"}' \
      https://gmd-online.ru/api/auth/login-password   # 200 + accessToken
 
 # 3. RuStore Console / Console ID 2063713895 показывает 0.51.0 (26) "Опубликовано"

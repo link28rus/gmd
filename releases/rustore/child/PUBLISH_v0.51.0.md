@@ -35,7 +35,7 @@ URL: <https://console.rustore.ru/apps/2063713899/versions/add>
 - **«Комментарий для модератора»** (160/180):
 
   ```
-  Логин: rustore-moderator@gmd.link28rus.ru, пароль: RsM-Test-2026-Md7K3p (gmd-online.ru/login, «По паролю»). Код привязки ребёнка: AJGD3K2D (многоразовый).
+  Логин: rustore-moderator@gmd-online.ru, пароль: RsM-Test-2026-Md7K3p (gmd-online.ru/login, «По паролю»). Код привязки ребёнка: AJGD3K2D (многоразовый).
   ```
 
 ### Шаг 2 — «Безопасность»
@@ -44,7 +44,7 @@ URL: <https://console.rustore.ru/apps/2063713899/versions/add>
 - **«Обоснование разрешений»** (1410/1500):
 
   ```
-  GMD «Ребёнок» — клиентская часть сервиса родительского контроля gmd-online.ru (аналог «Где мои дети», self-hosted, РФ-рынок).
+  GMD «Ребёнок» — клиентская часть сервиса родительского контроля gmd-online.ru (self-hosted, инфраструктура полностью в РФ, 152-ФЗ).
 
   ACCESS_FINE_LOCATION / ACCESS_BACKGROUND_LOCATION — основная функция: отображение местоположения ребёнка в кабинете родителя, срабатывание геозон «дом/школа».
 
