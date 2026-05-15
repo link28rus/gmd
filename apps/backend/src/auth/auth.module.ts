@@ -46,7 +46,7 @@ function asNum(v: string | undefined, def: number): number {
     {
       provide: AUTH_CONFIG,
       useFactory: () => ({
-        privacyPolicyVersion: process.env.PRIVACY_POLICY_VERSION || '1.2',
+        privacyPolicyVersion: process.env.PRIVACY_POLICY_VERSION || '1.3',
       }),
     },
     {
@@ -61,7 +61,7 @@ function asNum(v: string | undefined, def: number): number {
       provide: EMAIL_VERIFICATION_CONFIG,
       useFactory: () => ({
         ttlSec: asNum(process.env.EMAIL_VERIFICATION_TTL_SECONDS, 86400),
-        webBaseUrl: process.env.WEB_BASE_URL?.replace(/\/+$/, '') || 'https://gmd.link28rus.ru',
+        webBaseUrl: process.env.WEB_BASE_URL?.replace(/\/+$/, '') || 'https://gmd-online.ru',
       }),
     },
     SmtpOtpProvider,

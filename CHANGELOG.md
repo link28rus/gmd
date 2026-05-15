@@ -9,7 +9,24 @@
 
 ---
 
-## Не выпущено
+## v0.51.0 — 2026-05-15 — Миграция на новый VPS и домен gmd-online.ru
+
+### Инфраструктура
+
+- **Полный перенос продакшена на новый VPS.** Сервис переехал со старого
+  сервера 192.168.1.23 / 95.104.240.111 (`gmd.link28rus.ru`, dual-WAN
+  ens160/ens192 с asymmetric-routing fix) на единый VPS 45.67.230.87
+  (`gmd-online.ru`, single iface ens3, Ubuntu 24.04 LTS). Базовая
+  безопасность: UFW (22/80/443), fail2ban, SSH key-only без password-auth,
+  non-root sudo-user, unattended-upgrades. SSL автоматический через Caddy +
+  Let's Encrypt. БД, MinIO, secrets и Let's Encrypt-store перенесены без
+  потерь данных через `pg_dump -Fc` + `tar -czf` (task #67).
+- **Старый домен `gmd.link28rus.ru` → 301 redirect на `gmd-online.ru`.**
+  На старом сервере оставлен минимальный nginx с
+  `return 301 https://gmd-online.ru$request_uri` — браузерные ссылки и
+  поисковые индексы переедут автоматически. API на старом домене больше
+  не отвечает: mobile-приложения версии ниже v0.51.0 нужно обновить из
+  RuStore. Старый сервер планируется к полной остановке через 90 дней.
 
 ### Улучшения
 

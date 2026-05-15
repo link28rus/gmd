@@ -49,15 +49,22 @@ docs/superpowers/specs  design docs
 
 ## Инфраструктура
 
-- **Сервер:** ровно два сетевых интерфейса, других IP нет:
-  - `ens160` = **192.168.1.23/24** (LAN, default-route через 192.168.1.1, через него идёт SSH из локалки)
-  - `ens192` = **95.104.240.111/27** (внешний, прямо у провайдера без NAT-роутера, шлюз 95.104.240.97)
-  - Служебное на сервере: loopback (127.0.0.1) и docker bridges (172.17.0.0/16, 172.18.0.0/16) — виртуальные сети контейнеров, не трогать.
-  - Asymmetric routing для входящего на ens192 — починен через CONNMARK fwmark 0x2 + ip rule в netplan + iptables-persistent. Runbook в memory-compiler «Asymmetric routing fix на gmd-prod (multi-WAN)».
-- **Домен:** gmd.link28rus.ru
+- **Сервер (с 2026-05-15, task #67):** VPS 45.67.230.87, Ubuntu 24.04 LTS,
+  4 vCPU / 8 GB RAM / 89 GB disk, единственный публичный интерфейс `ens3`
+  (45.67.230.87/24, прямой IP без NAT). Loopback (127.0.0.1) и docker
+  bridges (172.x) — служебное, не трогать. UFW: только 22/80/443.
+- **Прежний сервер (до 2026-05-15):** dual-WAN 192.168.1.23 (ens160 LAN) +
+  95.104.240.111 (ens192 WAN), потребовал asymmetric-routing fix через
+  CONNMARK fwmark 0x2. Теперь работает только как 301-редирект на
+  gmd-online.ru (см. memory-compiler runbook). После 90 дней — выключение.
+- **Домен:** gmd-online.ru (DNS A → 45.67.230.87, TLS Caddy + Let's Encrypt
+  автоматически через ACME http-01 на :80)
 - **Регион данных:** РФ (152-ФЗ)
-- **SSH credentials:** см. memory-compiler (secret). TODO: перейти на SSH-ключи, отключить password auth.
-- **Мониторинг:** GlitchTip + Uptime Kuma (docs/monitoring.md). Доступ через SSH-tunnel `ssh -N gmd-prod-tunnels`.
+- **SSH (key-only):** алиас `gmd-online` (root + non-root sudo-user `gmd`,
+  оба с ключом `id_ed25519_servers`). Password-auth отключён.
+  fail2ban + UFW активны.
+- **Мониторинг:** GlitchTip + Uptime Kuma (docs/monitoring.md). Доступ через
+  SSH-tunnel `ssh -N gmd-online-tunnels`.
 
 ## 152-ФЗ и приватность
 
@@ -99,8 +106,8 @@ docs/superpowers/specs  design docs
 13. **Не доверять taskmaster-статусам — проверять реальное состояние.** taskmaster может показывать pending для давно сделанной задачи. Перед `set_task_status in-progress` — короткая разведка через Glob/Grep по описанным файлам/функциям. Если фича уже в коде — пометить done и взять следующую, не дублировать работу.
 14. **APK naming — pubspec build, не effective.** В именах `gmd-{child,parent}-X.Y.Z+N-<abi>.apk` число N после `+` — это **pubspec build** (то что в `version: X.Y.Z+N`), а НЕ effective versionCode (с ABI offset). Backend [route.ts](apps/web/app/api/public/updates/mobile-{child,parent}/latest/route.ts) парсит regex'ом из [lib/downloads/index.ts:21](apps/web/lib/downloads/index.ts:21) и сам формирует `effectiveBuild = ABI_VERSION[abi]*1000 + pubspecBuild` для сравнения с `PackageInfo.buildNumber` устройства. Если положить в имя effective — endpoint вернёт `effectiveBuild = ABI*1000 + effective`, что всегда больше реального. **Старые v0.46.5 parent APK на проде имели в имени `+2021` (effective)** — это была inconsistency, прокатывавшая только потому что у parent не было auto-update. После v0.47.0 — auto-update появился, convention обязательно pubspec build (как у child). При публикации не путать.
 15. **memory-compiler `finish_task` агрессивно обновляет tracking.** Экстрактор фактов сканирует `content` на IP/URL/версии и подменяет поля в tracking-сущностях (release, infrastructure, deployment). В сессии v0.47.0 я упомянул IP adb-устройства `192.168.77.154` — экстрактор переписал ВСЕ 9 полей `tracking/infrastructure` (server_lan_ip, \_iface, \_gateway, \_domain, …) на это значение. **Mitigation:** (а) перед `finish_task` критически фильтровать `content` — упоминать чужие IP/URL только когда необходимо, либо явно маркировать `adb-устройство 192.168.x.x (НЕ сервер)`; (б) после `finish_task` для нетривиальных задач — `get_current entity=infrastructure` и сверка с CLAUDE.md, восстановить через `save_tracking` если повредилось.
-16. **Релиз web + APK — два независимых шага.** Endpoint `/api/public/updates/<app>/latest` работает только когда сделаны ОБА: (а) `bash infra/deploy/deploy.sh` пересобрал `gmd-web` контейнер с новым route, (б) APK с правильным именем лежит в `/opt/gmd/download/`. Забыл deploy → endpoint 404 (route ещё не задеплоен). Забыл APK → endpoint 204 (нет файла под фильтр). Verify обязательно после публикации: `ssh gmd-prod 'curl -sSk --resolve gmd.link28rus.ru:443:127.0.0.1 https://gmd.link28rus.ru/api/public/updates/mobile-{child,parent}/latest?abi=arm64-v8a'` → корректный JSON с {version, buildNumber, url}.
-17. **Проверять самому, а не «закрыл, проверь сам».** Unit-тесты с моками + healthz ≠ верификация фичи. Перед `finish_task` для backend-фикса с БД-логикой или security-чувствительной правки — обязательный real-prod integration test. Паттерн для GMD: scratch-`.mjs` → `scp gmd-prod:/tmp/` → `docker cp gmd-backend:/tmp/` → `docker exec gmd-backend node /tmp/script.mjs` → cleanup в try/finally. Внутри: `createRequire('/app/apps/backend/dist/main.js')` → `require('@prisma/client')` + `require('/app/apps/backend/dist/auth/...')`, sandbox-user с уникальным префиксом. Для SSR-редиректов / cookie-check — `node:http` к `web:3000` через Docker network (curl в gmd-backend нет): `http.request({host:'web', port:3000, path, headers:{Host:'gmd.link28rus.ru', Cookie:`gmd_refresh=${token}`}})`. **Инцидент 2026-05-06 (v0.47.1):** закрыл race-condition fix только с unit-тестами + попросил пользователя проверить. Пользователь резонно указал на нарушение правила #5. Прогнал реальный test — фикс работал, но в этот же момент выяснился ВТОРОЙ баг (отсутствие SSR-редиректа), который пользователь увидел сразу — а я бы поймал самостоятельной 30-секундной проверкой через тот же scratch-pattern.
+16. **Релиз web + APK — два независимых шага.** Endpoint `/api/public/updates/<app>/latest` работает только когда сделаны ОБА: (а) `bash infra/deploy/deploy.sh` пересобрал `gmd-web` контейнер с новым route, (б) APK с правильным именем лежит в `/opt/gmd/download/`. Забыл deploy → endpoint 404 (route ещё не задеплоен). Забыл APK → endpoint 204 (нет файла под фильтр). Verify обязательно после публикации: `ssh gmd-online 'curl -sSk --resolve gmd-online.ru:443:127.0.0.1 https://gmd-online.ru/api/public/updates/mobile-{child,parent}/latest?abi=arm64-v8a'` → корректный JSON с {version, buildNumber, url}.
+17. **Проверять самому, а не «закрыл, проверь сам».** Unit-тесты с моками + healthz ≠ верификация фичи. Перед `finish_task` для backend-фикса с БД-логикой или security-чувствительной правки — обязательный real-prod integration test. Паттерн для GMD: scratch-`.mjs` → `scp gmd-online:/tmp/` → `docker cp gmd-backend:/tmp/` → `docker exec gmd-backend node /tmp/script.mjs` → cleanup в try/finally. Внутри: `createRequire('/app/apps/backend/dist/main.js')` → `require('@prisma/client')` + `require('/app/apps/backend/dist/auth/...')`, sandbox-user с уникальным префиксом. Для SSR-редиректов / cookie-check — `node:http` к `web:3000` через Docker network (curl в gmd-backend нет): `http.request({host:'web', port:3000, path, headers:{Host:'gmd-online.ru', Cookie:`gmd_refresh=${token}`}})`. **Инцидент 2026-05-06 (v0.47.1):** закрыл race-condition fix только с unit-тестами + попросил пользователя проверить. Пользователь резонно указал на нарушение правила #5. Прогнал реальный test — фикс работал, но в этот же момент выяснился ВТОРОЙ баг (отсутствие SSR-редиректа), который пользователь увидел сразу — а я бы поймал самостоятельной 30-секундной проверкой через тот же scratch-pattern.
 18. **Симметрия редиректов в Next.js auth — обязательная invariant.** Если есть `/cabinet → redirect('/login') if !cookie`, обязан быть и `/login → redirect('/cabinet') if cookie`. Иначе залогиненный юзер, открывая `/login` или landing с CTA «Войти» из закладки, видит форму и думает что разлогинило. Внешне это выглядит идентично «backend выкинул сессию», но первопричина и фикс — в другом слое. Чек-лист при работе над auth: для каждой страницы с server-side cookie-check спросить «есть ли обратный редирект». При диагностике user-симптома «опять просит логин» — ПЕРВЫМ делом спросить точный URL: `/cabinet` → причина в backend (race / expiry / revoke), `/`, `/login` → UX-баг в frontend (нет редиректа). **Инцидент 2026-05-06 (v0.47.2):** потратил час на race-condition fix, который был корректен, но не лечил симптом пользователя — реальная причина была в `/page.tsx`, `/login/page.tsx`, `/register/page.tsx` без SSR cookie-check.
 19. **Промпт пользователя об архитектуре — гипотеза, не приказ.** Когда промпт детально описывает «как реализовать» (Drift таблица, Riverpod-репозиторий, Repository pattern и т.п.), но реальная кодовая база владеет областью по другому паттерну — следуй кодбазе, не промпту. Промпт может быть устаревшим (написан до того как часть кода ушла в native), общим (для multi-app monorepo без учёта одного app'а), или гипотезой автора без проверки кода. **Сигналы расхождения:** промпт упоминает папки/файлы которых нет (`lib/features/blocking/` при том что блокировка целиком в `android/.../BlockManager.kt`); промпт предлагает Drift-таблицу для state, который уже хранится в SharedPreferences; промпт ссылается на пакеты pubspec которых нет (`timezone` пакет не нужен при minSdk=26 — есть `java.time`). **Действие:** ПЕРВЫЕ 5-10 минут — Read/Glob ключевых файлов из промпта. Если расхождение — явно сказать пользователю «промпт ждал X, реальная архитектура Y, делаю через Y потому что …». Не молчать, не делать «как просили». **Инцидент 2026-05-06 (v0.49.0, фаза 2 расписаний):** промпт ждал Drift+Riverpod на mobile-child, но блокировка живёт в native Kotlin (BlockManager.kt + GmdAccessibilityService.kt + AppControlHttp.kt + MyFirebaseMessagingService.kt), Drift в Dart хранит только locations/audit. Реализация прошла нативно — без Drift-миграций и Dart Repository, новый `ScheduleEvaluator.kt` + расширения существующих Kotlin-файлов; Drift-путь был бы 0% useful, потому что `AccessibilityService.isBlocked()` синхронен и Drift async к нему не применим в принципе.
 20. **Симметрия с существующей фичей в подсистеме — первый источник архитектуры.** Перед реализацией новой state/security-критичной фичи найти ближайшую похожую (та же подсистема, тот же триггер изменений) и скопировать её паттерн ЦЕЛИКОМ: storage layer, sync triggers (FCM message + worker fallback + startup pull), evaluator, integration с overlay/middleware. Расхождение с соседним паттерном = bug-magnet (race на обновлении state, отсутствие fallback'а, неконсистентный startup-sync). Code-review checklist для новой фичи: «**чем я отличаюсь от соседней фичи и почему?**» — каждое отличие должно иметь обоснование лучше чем «потому что Drift/Riverpod/Repository чище». Если не имеет — отличие удалить. **Введение нового паттерна** в подсистеме оправдано только если существующий имеет фундаментальный баг, не чинимый без refactor'а, ИЛИ требования новой фичи фундаментально несовместимы (sub-second latency vs SharedPreferences). В этом случае refactor затрагивает ВСЕ фичи подсистемы, не только новую. **Инцидент 2026-05-06 (v0.49.0):** schedules дублирует паттерн AppRule + BlockSession 1-в-1 — `KEY_SCHEDULES_JSON` рядом с `KEY_RULES_JSON`, FCM `SYNC_SCHEDULES` рядом с `SYNC_RULES`, `handleSyncSchedules` рядом с `handleSyncRules`, 3-й pull-блок в `BlockPollWorker`, OR-логика в `BlockManager.isBlocked`. Каждое отличие от соседней фичи документировано (combined `getCurrentBlockEndsAtMs` для overlay countdown'а — schedule имеет конец окна, не сессии; `OverlayManager.tickRunnable` не сносит активную BlockSession при schedule-only expiry — потому что окно расписания периодично).
@@ -133,7 +140,7 @@ docs/superpowers/specs  design docs
 - `anthropic-skills:docx`, `anthropic-skills:pdf` — юр. документы
 - `update-config` — хуки, permissions, env
 - `gmd-deploy` (project-level, [.claude/skills/gmd-deploy/SKILL.md](.claude/skills/gmd-deploy/SKILL.md)) — полный релизный flow: bump версий, web-deploy, build APK, publish, verify endpoint. Закрывает грабли из lessons #12, #14, #16.
-- `gmd-docker-ops` (project-level, [.claude/skills/gmd-docker-ops/SKILL.md](.claude/skills/gmd-docker-ops/SKILL.md)) — compose logs/restart/rebuild/exec для local dev и prod gmd-prod. Включает known bug «postgres cold-start fast shutdown».
+- `gmd-docker-ops` (project-level, [.claude/skills/gmd-docker-ops/SKILL.md](.claude/skills/gmd-docker-ops/SKILL.md)) — compose logs/restart/rebuild/exec для local dev и prod gmd-online. Включает known bug «postgres cold-start fast shutdown».
 
 ### Нужно создать (через `anthropic-skills:skill-creator`)
 
@@ -353,19 +360,19 @@ melos run analyze
 Подробности: [docs/deploy.md](docs/deploy.md), [docs/backup-restore.md](docs/backup-restore.md), [docs/server-hardening.md](docs/server-hardening.md).
 
 ```bash
-# Деплой актуального кода на gmd-prod (192.168.1.23)
+# Деплой актуального кода на gmd-online (45.67.230.87)
 bash infra/deploy/deploy.sh
 
 # Проверки
-curl http://192.168.1.23/api/readyz                 # {status:ok,db:up,redis:up}
-ssh gmd-prod 'docker ps --format "{{.Names}} {{.Status}}"'
+curl https://gmd-online.ru/api/readyz               # {status:ok,db:up,redis:up}
+ssh gmd-online 'docker ps --format "{{.Names}} {{.Status}}"'
 
 # Бэкапы PG (systemd timers)
-ssh gmd-prod 'systemctl list-timers | grep pg-'
-ssh gmd-prod 'ls /opt/gmd/backups/postgres/'
+ssh gmd-online 'systemctl list-timers | grep pg-'
+ssh gmd-online 'ls /opt/gmd/backups/postgres/'
 ```
 
-Сервер доступен по `https://gmd.link28rus.ru/` (DNS A → 95.104.240.111, прямой публичный IP на интерфейсе `ens192`, без NAT-роутера). LAN-доступ — `http://192.168.1.23/`.
+Сервер доступен по `https://gmd-online.ru/` (DNS A → 45.67.230.87, прямой публичный IP на интерфейсе `ens3`, без NAT). Прежний домен `gmd.link28rus.ru` отвечает 301 редиректом до плановой остановки (90 дней с 2026-05-15).
 
 ## Память и секреты
 

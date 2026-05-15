@@ -18,7 +18,7 @@
 //     version: "0.39.7",
 //     buildNumber: 4060,
 //     filename: "gmd-child-0.39.7+4060-arm64-v8a.apk",
-//     url: "https://gmd.link28rus.ru/api/public/download/gmd-child-0.39.7+4060-arm64-v8a.apk",
+//     url: "https://gmd-online.ru/api/public/download/gmd-child-0.39.7+4060-arm64-v8a.apk",
 //     sizeBytes: 28491233,
 //     mandatory: false
 //   }

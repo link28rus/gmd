@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # GMD prod deploy — запускается с локальной машины (git-bash/msys2 на Windows, либо Linux/Mac).
-# Требует: ssh-alias gmd-prod (см. ~/.ssh/config).
+# Требует: ssh-alias gmd-online (см. ~/.ssh/config).
 #
 # Используем tar-pipe через SSH вместо rsync — rsync 3.4.x на Windows
 # падает с "dup() in/out/err failed" в git-bash pipeline. tar-pipe работает
 # с любым SSH и без отдельного бинарника на хосте.
 set -euo pipefail
 
-SERVER="${GMD_SSH_ALIAS:-gmd-prod}"
+SERVER="${GMD_SSH_ALIAS:-gmd-online}"
 REMOTE_DIR="/opt/gmd"
 REMOTE_DOCKER="${REMOTE_DIR}/docker"
 
@@ -71,4 +71,4 @@ ssh "${SERVER}" "cd ${REMOTE_DOCKER} && for i in \$(seq 1 60); do
 done
 docker compose --env-file ${REMOTE_DIR}/.env.prod -f docker-compose.prod.yml ps"
 
-say "Done. Проверь: curl http://192.168.1.23/api/readyz"
+say "Done. Проверь: curl https://gmd-online.ru/api/readyz"

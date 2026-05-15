@@ -2,10 +2,10 @@
 
 **GMD** — сервис родительского контроля и геолокации детей. Self-hosted аналог [gdemoideti.ru](https://gdemoideti.ru) для РФ-рынка с соответствием 152-ФЗ.
 
-**Current version:** 0.46.0  
+**Current version:** 0.51.0  
 **Repository root:** `D:/Project/GMD`  
-**Production:** gmd.link28rus.ru (192.168.1.23 internal / 95.104.240.99 external)  
-**Last updated:** 2026-04-29
+**Production:** gmd-online.ru (VPS 45.67.230.87, Ubuntu 24.04, single iface ens3)  
+**Last updated:** 2026-05-15
 
 ---
 
@@ -71,7 +71,7 @@ GPS-часы, чат, iOS mobile-child, мониторинг соцсетей, �
 | **Auth method**             | Email + OTP (SMS когда будет Twilio или RuSMS)                                  | Версионированное согласие на регистрацию (152-ФЗ)                      |
 | **Passwords**               | Argon2id (backend hashing)                                                      | ParentPin тоже на User-уровне, Argon2                                  |
 | **Logging**                 | GlitchTip (Sentry-compatible)                                                   | В production; dev → console                                            |
-| **Monitoring**              | Grafana + Loki + Prometheus                                                     | Доступ через SSH-tunnel: `ssh -N gmd-prod-tunnels`                     |
+| **Monitoring**              | Grafana + Loki + Prometheus                                                     | Доступ через SSH-tunnel: `ssh -N gmd-online-tunnels`                   |
 | **Uptime**                  | Uptime Kuma                                                                     | Health endpoints: `/healthz` (liveness), `/readyz` (readiness)         |
 | **Container orchestration** | Docker Compose (production и development)                                       | Нет K8s; Caddy как reverse-proxy + auto-TLS                            |
 | **CI/CD**                   | Husky + lint-staged (pre-commit)                                                | GitHub Actions когда будет выбран git-хостинг                          |
@@ -322,7 +322,7 @@ D:/Project/GMD/
 │   │   ├── Caddyfile                 # Reverse proxy, auto-TLS, middleware
 │   │   └── config.json               # (optional, if config-driven)
 │   └── deploy/
-│       ├── deploy.sh                 # SSH deploy to 192.168.1.23
+│       ├── deploy.sh                 # SSH deploy to 45.67.230.87
 │       ├── backup.sh                 # pg_dump + restore
 │       └── migrate.sh                # Prisma migration on prod
 │
@@ -1041,9 +1041,9 @@ pnpm --filter @gmd/backend prisma studio  # Prisma UI for DB inspection
 
 ### Production Infrastructure
 
-**Server:** 192.168.1.23 (internal) / 95.104.240.99 (external)  
-**Domain:** gmd.link28rus.ru (TLS via Let's Encrypt + Caddy)  
-**SSH:** `gmd-prod` (credentials in memory-compiler secret)
+**Server:** 45.67.230.87 (single public iface, no NAT)  
+**Domain:** gmd-online.ru (TLS via Let's Encrypt + Caddy)  
+**SSH:** `gmd-online` (key-only, non-root user `gmd`, см. memory-compiler secret)
 
 **Docker containers (prod):**
 
@@ -1057,9 +1057,9 @@ pnpm --filter @gmd/backend prisma studio  # Prisma UI for DB inspection
 
 **Health checks:**
 
-- `GET http://192.168.1.23/healthz` — backend liveness
-- `GET http://192.168.1.23/readyz` — backend readiness (checks DB + Redis)
-- `GET http://192.168.1.23/api/healthz` — web BFF
+- `GET http://45.67.230.87/healthz` — backend liveness
+- `GET http://45.67.230.87/readyz` — backend readiness (checks DB + Redis)
+- `GET http://45.67.230.87/api/healthz` — web BFF
 
 ### Deployment
 
@@ -1069,22 +1069,22 @@ pnpm --filter @gmd/backend prisma studio  # Prisma UI for DB inspection
 bash infra/deploy/deploy.sh
 
 # Steps:
-# 1. SSH to gmd-prod
+# 1. SSH to gmd-online
 # 2. git fetch && git checkout <branch>
 # 3. docker compose pull
 # 4. docker compose up -d
 # 5. docker compose exec gmd-backend pnpm prisma migrate deploy
-# 6. Health check POST http://192.168.1.23/readyz
+# 6. Health check POST http://45.67.230.87/readyz
 ```
 
 **Backups:**
 
 ```bash
 # Automatic (systemd timer, daily):
-ssh gmd-prod 'ls /opt/gmd/backups/postgres/'
+ssh gmd-online 'ls /opt/gmd/backups/postgres/'
 
 # Manual backup:
-ssh gmd-prod 'docker exec gmd-postgres pg_dump -U gmd gmd_prod | gzip > /opt/gmd/backups/postgres/backup-manual-$(date +%s).sql.gz'
+ssh gmd-online 'docker exec gmd-postgres pg_dump -U gmd gmd_prod | gzip > /opt/gmd/backups/postgres/backup-manual-$(date +%s).sql.gz'
 
 # Restore:
 gzip -dc backup.sql.gz | docker exec -i gmd-postgres psql -U gmd gmd_prod
@@ -1099,7 +1099,7 @@ gzip -dc backup.sql.gz | docker exec -i gmd-postgres psql -U gmd gmd_prod
 Access via SSH tunnel:
 
 ```bash
-ssh -N gmd-prod-tunnels  # Tunnels port 3000 to GlitchTip, 8787 to Grafana, etc.
+ssh -N gmd-online-tunnels  # Tunnels port 3000 to GlitchTip, 8787 to Grafana, etc.
 # Then visit http://localhost:3000 (GlitchTip), http://localhost:8787 (Grafana)
 ```
 
@@ -1349,11 +1349,11 @@ pnpm version:sync && pnpm version:check
 
 # Production deploy
 bash infra/deploy/deploy.sh
-curl http://192.168.1.23/readyz      # Health check
+curl http://45.67.230.87/readyz      # Health check
 
 # Logs & monitoring
-ssh gmd-prod 'docker compose logs -f backend'
-ssh -N gmd-prod-tunnels              # Monitoring tunnel
+ssh gmd-online 'docker compose logs -f backend'
+ssh -N gmd-online-tunnels              # Monitoring tunnel
 ```
 
 ### Key Endpoints (Backend)

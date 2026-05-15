@@ -184,7 +184,7 @@ DateTime? _parseDate(Object? raw) {
 /// Ответ `POST /family/children/:childId/invites`.
 ///
 /// `qrUrl` — то, что кладётся в QR-код (формат `${landingBaseUrl}/claim/${code}`,
-/// например `https://gmd.link28rus.ru/claim/AB12CD`). mobile-child сканирует
+/// например `https://gmd-online.ru/claim/AB12CD`). mobile-child сканирует
 /// QR, парсит URL → извлекает `code` → дёргает `/invites/claim` с device-info.
 ///
 /// `deepLink` — альтернатива QR (gmd://claim/AB12CD), для ручного ввода

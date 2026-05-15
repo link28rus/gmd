@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
 
   // Ключ в кабинете Яндекса ограничен по HTTP Referer (домен приложения).
   // Без заголовка Referer запросы с backend'а получают 403.
-  const referer = process.env.PUBLIC_SITE_URL ?? 'https://gmd.link28rus.ru/';
+  const referer = process.env.PUBLIC_SITE_URL ?? 'https://gmd-online.ru/';
 
   const res = await fetch(`${YANDEX_GEOCODER_URL}?${params.toString()}`, {
     headers: { Accept: 'application/json', Referer: referer },

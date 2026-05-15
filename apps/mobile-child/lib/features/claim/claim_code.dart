@@ -18,7 +18,7 @@ String normalizeInviteInput(String raw) {
 }
 
 /// Пытается вытащить invite-код из произвольного входа:
-/// - URL `https://gmd.link28rus.ru/claim/6KDM3B1W`
+/// - URL `https://gmd-online.ru/claim/6KDM3B1W`
 /// - Deep-link `gmd://claim/6KDM3B1W`
 /// - Просто код `6KDM3B1W` / `6K-DM-3B-1W` / `6k dm 3b 1w`
 ///

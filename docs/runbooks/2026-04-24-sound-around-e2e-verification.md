@@ -1,18 +1,25 @@
-# «Звук вокруг» — E2E verification runbook (Plan E)
+# «Звук вокруг» — E2E verification runbook (Plan E, historical)
+
+> **Historical (написан 2026-04-24, обновлён 2026-05-15):** runbook для plan A
+> с coturn TURN-сервером. coturn удалён в v0.35.0-rc.4 (Phase E pivot на
+> WebSocket-relay). Адреса/SSH-алиасы обновлены до `gmd-online.ru` /
+> `gmd-online` после миграции на VPS 45.67.230.87 (task #67).
+> Применять только для теоретической справки по WebRTC-пути — реальная
+> процедура для WS-relay в [docs/audio-api.md](../audio-api.md).
 
 **Дата составления:** 2026-04-24
 **Версии:** backend v0.34.1, web v0.34.1, mobile-child v0.33.1
-**Среда:** prod (`gmd-prod` / `85.15.75.126` / роутер → 192.168.1.23)
+**Среда (на момент написания):** prod (`gmd-online` / 45.67.230.87)
 **Тестовое устройство:** Xiaomi HyperOS, Android 15, arm64
 
 ## 0. Предусловия (заполняется перед прогоном)
 
 Отметь что готово. Если хоть один пункт не ✅ — не начинай прогон, пофиксь сначала.
 
-- [ ] `ssh gmd-prod 'docker ps --format "{{.Names}}"' | grep gmd-coturn` → `gmd-coturn`
-- [ ] `ssh gmd-prod 'ss -ulnp | grep 3478'` → `udp UNCONN ... :3478` (UDP-лисенер есть)
+- [ ] `ssh gmd-online 'docker ps --format "{{.Names}}"' | grep gmd-coturn` → `gmd-coturn`
+- [ ] `ssh gmd-online 'ss -ulnp | grep 3478'` → `udp UNCONN ... :3478` (UDP-лисенер есть)
 - [ ] Внешний проброс: с внешней машины `nc -u 85.15.75.126 3478` + отправка любых байт → пакет доходит до coturn. Альтернатива: `adb logcat | grep WebRTC` в Plan B должен показывать `ice candidate type=relay raddr 85.15.75.126` в момент сессии
-- [ ] `curl https://gmd.link28rus.ru/api/readyz` → `{"status":"ok","db":"up","redis":"up"}`
+- [ ] `curl https://gmd-online.ru/api/readyz` → `{"status":"ok","db":"up","redis":"up"}`
 - [ ] Web-версия в sidebar/About: `0.34.1` (значит deploy прошёл и UI обновился)
 - [ ] APK `app-arm64-v8a-release.apk` установлен на Xiaomi поверх старого (без `flutter install` — через файловый менеджер или `adb install -r`)
 - [ ] В mobile-child пройден permission wizard: RECORD_AUDIO granted, FGS microphone ok, Device Admin включён, Accessibility включён, HyperOS «Ограниченные настройки» разрешены, автозапуск в фоне разрешён
@@ -25,7 +32,7 @@
 
 ```bash
 # С локалки, получить JWT через /api/auth/login, потом:
-curl -X POST https://gmd.link28rus.ru/api/audio/sessions \
+curl -X POST https://gmd-online.ru/api/audio/sessions \
   -H "Authorization: Bearer <ACCESS_TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{"childId":"<CHILD_ID>","durationSec":60,"hiddenMode":true}' | jq
@@ -48,7 +55,7 @@ turnutils_uclient -v -t -u <username> -w <password> 85.15.75.126 2>&1 | head -30
 
 ```bash
 curl -N -H "Authorization: Bearer <ACCESS_TOKEN>" \
-  "https://gmd.link28rus.ru/api/audio/sessions/<SESSION_ID>/events"
+  "https://gmd-online.ru/api/audio/sessions/<SESSION_ID>/events"
 ```
 
 Ожидаемо: соединение открывается, ответ `text/event-stream`, шлёт `data: {"state":"PENDING",...}` и остаётся висеть до child-response / timeout 45s.
@@ -62,13 +69,13 @@ curl -N -H "Authorization: Bearer <ACCESS_TOKEN>" \
 **Terminal A (backend logs):**
 
 ```bash
-ssh gmd-prod 'docker logs -f gmd-backend --tail 0'
+ssh gmd-online 'docker logs -f gmd-backend --tail 0'
 ```
 
 **Terminal B (coturn logs):**
 
 ```bash
-ssh gmd-prod 'docker logs -f gmd-coturn --tail 0'
+ssh gmd-online 'docker logs -f gmd-coturn --tail 0'
 ```
 
 **Terminal C (device logcat):** на компьютере с подключённым по USB Xiaomi:
@@ -158,8 +165,8 @@ adb logcat -c && adb logcat -s SoundAroundService:V FlutterWebRTC:V flutter:V Di
 
 1. **Скриншот UI** (+ времена).
 2. **DevTools**: полная лента Network (Preserve log включить!), Console (все errors).
-3. **Backend logs:** `ssh gmd-prod 'docker logs gmd-backend --since 5m'`.
-4. **Coturn logs:** `ssh gmd-prod 'docker logs gmd-coturn --since 5m'`.
+3. **Backend logs:** `ssh gmd-online 'docker logs gmd-backend --since 5m'`.
+4. **Coturn logs:** `ssh gmd-online 'docker logs gmd-coturn --since 5m'`.
 5. **Logcat device:** последние 500 строк `adb logcat -d -t 500`.
 6. **DiagLog mobile-child:** long-press на версии на экране `/debug` → «Copy all» → paste.
 7. **Session id** из backend-логов / DevTools.

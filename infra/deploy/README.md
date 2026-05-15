@@ -1,13 +1,14 @@
 # GMD prod deploy runbook
 
-Цель: за одну команду задеплоить актуальный код на `gmd-prod` (192.168.1.23).
+Цель: за одну команду задеплоить актуальный код на `gmd-online` (45.67.230.87).
 
 ## Prerequisites
 
-- `ssh gmd-prod 'echo ok'` → `ok` (ключ в `~/.ssh/config`, см. Phase 0.3 Task 5)
-- `/opt/gmd/.env.prod` на сервере заполнен (Phase 0.3 Task 9)
-- DNS: `dig +short gmd.link28rus.ru` → `95.104.240.99`
-- Роутер: проброс `95.104.240.99:{80,443} → 192.168.1.23:{80,443}`
+- `ssh gmd-online 'echo ok'` → `ok` (ключ в `~/.ssh/config`, переход с
+  `gmd-prod` выполнен в task #67 — миграция на новый VPS).
+- `/opt/gmd/.env.prod` на сервере заполнен (см. `.env.prod.example`).
+- DNS: `dig +short gmd-online.ru` → `45.67.230.87` (прямой публичный IP, без NAT).
+- UFW: открыты `22/80/443` (см. `infra/server-setup/`).
 
 ## Первый деплой
 

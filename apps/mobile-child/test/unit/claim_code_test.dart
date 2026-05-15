@@ -19,11 +19,11 @@ void main() {
 
     test('извлекает код из URL claim-страницы', () {
       expect(
-        extractInviteCode('https://gmd.link28rus.ru/claim/6KDM3B1W'),
+        extractInviteCode('https://gmd-online.ru/claim/6KDM3B1W'),
         '6KDM3B1W',
       );
       expect(
-        extractInviteCode('http://192.168.1.23/claim/NSZMSK7R'),
+        extractInviteCode('http://45.67.230.87/claim/NSZMSK7R'),
         'NSZMSK7R',
       );
       expect(

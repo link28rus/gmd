@@ -28,7 +28,7 @@ class UpdatesService {
 
   static const _tag = 'updates';
 
-  /// `https://gmd.link28rus.ru/api/public/updates/mobile-child/latest?abi=...`
+  /// `https://gmd-online.ru/api/public/updates/mobile-child/latest?abi=...`
   String _latestUrl(String abi) =>
       '$apiBaseUrl/public/updates/mobile-child/latest?abi=$abi';
 

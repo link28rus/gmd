@@ -1,4 +1,4 @@
-# Production docker-compose для GMD (192.168.1.23 / gmd.link28rus.ru).
+# Production docker-compose для GMD (45.67.230.87 / gmd-online.ru).
 # Запуск с сервера: cd /opt/gmd && docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
 # Все bind-mounts лежат в /opt/gmd/data/<service>/.
 # Наружу открыты только caddy:80/443 (проверяется UFW).
@@ -232,17 +232,17 @@ services:
       REFRESH_TOKEN_TTL_SECONDS: ${REFRESH_TOKEN_TTL_SECONDS:-2592000}
       OTP_TTL_SECONDS: ${OTP_TTL_SECONDS:-600}
       OTP_MAX_ATTEMPTS: ${OTP_MAX_ATTEMPTS:-3}
-      PRIVACY_POLICY_VERSION: ${PRIVACY_POLICY_VERSION:-1.1}
+      PRIVACY_POLICY_VERSION: ${PRIVACY_POLICY_VERSION:-1.3}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
-      SMTP_FROM: ${SMTP_FROM:-GMD <no-reply@gmd.link28rus.ru>}
+      SMTP_FROM: ${SMTP_FROM:-GMD <no-reply@gmd-online.ru>}
       SMTP_SECRET_KEY: ${SMTP_SECRET_KEY:-}
       OTP_LOG_DEV: ${OTP_LOG_DEV:-false}
       OTP_FIXED_DEV: ${OTP_FIXED_DEV:-}
       INVITE_TTL_SECONDS: ${INVITE_TTL_SECONDS:-600}
-      CLAIM_LANDING_BASE_URL: ${CLAIM_LANDING_BASE_URL:-https://gmd.link28rus.ru}
+      CLAIM_LANDING_BASE_URL: ${CLAIM_LANDING_BASE_URL:-https://gmd-online.ru}
       ADMIN_EMAILS: ${ADMIN_EMAILS:-}
       AUTH_DEV_MODE: ${AUTH_DEV_MODE:-false}
       AUTH_DEV_SECRET: ${AUTH_DEV_SECRET:-}
@@ -251,7 +251,7 @@ services:
       SENTRY_DSN: ${SENTRY_DSN_BACKEND}
       PORT: '3001'
       AUDIO_WS_SECRET: ${AUDIO_WS_SECRET}
-      AUDIO_WS_PUBLIC_URL: ${AUDIO_WS_PUBLIC_URL:-wss://gmd.link28rus.ru/audio/ws}
+      AUDIO_WS_PUBLIC_URL: ${AUDIO_WS_PUBLIC_URL:-wss://gmd-online.ru/audio/ws}
       # v0.37: FCM service-account JSON (base64-encoded). Если не задан —
       # FcmService стартует в DISABLED состоянии, push не отправляется,
       # backend fallback'ится на poll-команды через DeviceCommand queue.
@@ -306,10 +306,8 @@ services:
     container_name: gmd-caddy
     ports:
       - '80:80'
-      # v0.35.0-rc.4: Caddy сам терминирует TLS на 95.104.240.111:443 (ACME через :80).
-      # До этого TLS делал внешний nginx 1.24.0 на 95.104.240.99 (через router),
-      # после Plan E DNS gmd.link28rus.ru → 95.104.240.111 (ens192 direct), нужен
-      # отдельный TLS-listener.
+      # Caddy сам терминирует TLS на 45.67.230.87:443 через ACME (http-01 на :80).
+      # Прямой публичный IP без NAT, UFW: только 22/80/443.
       - '443:443'
     environment:
       CADDY_ACME_EMAIL: ${CADDY_ACME_EMAIL}

@@ -2,7 +2,7 @@
 
 Сервис родительского контроля и геолокации детей (клон «Где мои дети»).
 
-- **Домен:** [gmd.link28rus.ru](https://gmd.link28rus.ru)
+- **Домен:** [gmd-online.ru](https://gmd-online.ru)
 - **Документация:** см. [CLAUDE.md](CLAUDE.md) и [docs/](docs/)
 - **Changelog:** [CHANGELOG.md](CHANGELOG.md)
 

@@ -1,21 +1,25 @@
-# GMD — hardening сервера 192.168.1.23
+# GMD — hardening сервера 45.67.230.87 (gmd-online.ru)
 
-Runbook по безопасности production-сервера.
+Runbook по безопасности production-сервера. Сервер развёрнут в task #67
+(миграция с прежнего dual-WAN сервера 192.168.1.23 / 95.104.240.111).
 
-## Что сделано в Phase 0.3
+## Базовая конфигурация (выполнено в task #67)
 
-| Шаг | Что            | Где                                                                                                                                                                                           |
-| --- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| T2  | bootstrap      | hostname `gmd-prod`, TZ `Europe/Moscow`, swap 4G, `unattended-upgrades`                                                                                                                       |
-| T5  | SSH ключи      | `ed25519` pubkey в `/root/.ssh/authorized_keys` + `~/.ssh/config` alias `gmd-prod`                                                                                                            |
-| T6  | SSH hardening  | `PasswordAuthentication no`, `PermitRootLogin prohibit-password`, `AllowTcpForwarding local` + `PermitOpen 127.0.0.1:8000 127.0.0.1:3001` (для admin-доступа к GlitchTip/Kuma через `ssh -L`) |
-| T7  | UFW + fail2ban | default deny in / allow 22,80,443; jail sshd, maxretry=3, bantime=1h                                                                                                                          |
-| T8  | Docker         | официальный Docker CE repo, overlay2, log rotate 10MB × 3 (`/etc/docker/daemon.json`)                                                                                                         |
+| Слой        | Что                                                                                                                                                                  |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| OS          | Ubuntu 24.04.4 LTS, kernel 6.8                                                                                                                                       |
+| `apt`       | `unattended-upgrades` enabled (только security-источник, без auto-reboot)                                                                                            |
+| SSH         | key-only: `PasswordAuthentication no`, `PermitRootLogin prohibit-password`, `PubkeyAuthentication yes`. Алиас `gmd-online` в `~/.ssh/config`                         |
+| User        | non-root `gmd` (uid 1000, в группах `sudo`, `docker`), NOPASSWD-sudo. Тот же SSH-ключ что у root, с `chmod 700` на `~/.ssh`                                          |
+| UFW         | default deny-incoming/allow-outgoing. Открыты: `22/tcp ssh`, `80/tcp http`, `443/tcp https`. enabled                                                                 |
+| fail2ban    | jail `sshd`, `maxretry=5`, `findtime=10m`, `bantime=1h` (через `/etc/fail2ban/jail.d/sshd.local`)                                                                    |
+| Docker      | Docker CE 29.x + compose-plugin 5.x (официальный репозиторий `download.docker.com`)                                                                                  |
+| `/opt/gmd/` | Структура `{docker,backups/postgres,backups/migration-2026-05-15,download,secrets,letsencrypt,logs,data,caddy,apps,packages}`, owner `gmd:gmd`, `secrets/` chmod 700 |
 
 ## Текущий inventory
 
 ```bash
-ssh gmd-prod 'ufw status numbered; echo; systemctl status fail2ban --no-pager -l | head -5; echo; fail2ban-client status sshd'
+ssh gmd-online 'ufw status numbered; echo; systemctl status fail2ban --no-pager -l | head -5; echo; fail2ban-client status sshd'
 ```
 
 Ожидаем:
@@ -27,11 +31,11 @@ ssh gmd-prod 'ufw status numbered; echo; systemctl status fail2ban --no-pager -l
 
 ```bash
 # Попытка входа по паролю должна фейлиться
-ssh -o PubkeyAuthentication=no -o PasswordAuthentication=yes gmd-prod 'echo x'
+ssh -o PubkeyAuthentication=no -o PasswordAuthentication=yes gmd-online 'echo x'
 # Ожидаемо: Permission denied (publickey).
 
 # Вход по ключу — работает
-ssh -o PasswordAuthentication=no gmd-prod 'echo ok'
+ssh -o PasswordAuthentication=no gmd-online 'echo ok'
 # Ожидаемо: ok
 ```
 
@@ -39,15 +43,15 @@ ssh -o PasswordAuthentication=no gmd-prod 'echo ok'
 
 1. На его dev-машине сгенерировать ключ: `ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519_gmd`.
 2. Получить `id_ed25519_gmd.pub`.
-3. На gmd-prod: `cat >> /root/.ssh/authorized_keys` → вставить pubkey.
+3. На gmd-online: `cat >> /root/.ssh/authorized_keys` → вставить pubkey.
 4. Записать секретный pubkey в memory-compiler: `save_secret` в проект `gmd`.
 
 ## Сбросить доступ, если ключ утерян
 
-Только через консоль VMware (не SSH).
+Только через веб-консоль VPS-провайдера (не SSH).
 
-1. Открыть VMware Web Console → VM gmd-prod → Console.
-2. Залогиниться root + пароль (из memory-compiler → `save_secret` с топиком `SSH creds 192.168.1.23`).
+1. Открыть VNC/serial-консоль VPS в панели хостинга.
+2. Залогиниться root + пароль (из memory-compiler → `save_secret` с топиком `SSH creds 45.67.230.87`).
 3. Временно вернуть password auth:
 
 ```bash
@@ -60,7 +64,7 @@ sshd -t && systemctl reload ssh
 4. С dev-машины залить новый ключ:
 
 ```bash
-ssh-copy-id -i ~/.ssh/id_ed25519_gmd.pub root@192.168.1.23
+ssh-copy-id -i ~/.ssh/id_ed25519_gmd.pub root@45.67.230.87
 ```
 
 5. Убрать временный файл и перезагрузить SSH:
@@ -74,10 +78,10 @@ systemctl reload ssh
 
 ```bash
 # Список забаненных IP
-ssh gmd-prod 'fail2ban-client status sshd'
+ssh gmd-online 'fail2ban-client status sshd'
 
 # Разбанить IP вручную
-ssh gmd-prod 'fail2ban-client set sshd unbanip <IP>'
+ssh gmd-online 'fail2ban-client set sshd unbanip <IP>'
 ```
 
 ## Проверка открытых портов снаружи
@@ -85,25 +89,26 @@ ssh gmd-prod 'fail2ban-client set sshd unbanip <IP>'
 С другого хоста:
 
 ```bash
-nmap -p 1-1024 95.104.240.99
+nmap -p 1-1024 45.67.230.87
 ```
 
-Ожидаемо: только 22/80/443 в OPEN (и только если есть проброс на роутере).
+Ожидаемо: только 22/80/443 в OPEN. VPS подключён прямо к публичному IP без NAT,
+поэтому что разрешено в UFW — то и видно снаружи.
 
 ## Апдейты системы
 
 `unattended-upgrades` применяет security-патчи автоматически. Принудительный прогон:
 
 ```bash
-ssh gmd-prod 'sudo unattended-upgrade --debug | tail -20'
+ssh gmd-online 'sudo unattended-upgrade --debug | tail -20'
 ```
 
 Перезагрузка после ядра-апдейта:
 
 ```bash
-ssh gmd-prod 'ls /var/run/reboot-required 2>/dev/null && echo "REBOOT NEEDED"'
+ssh gmd-online 'ls /var/run/reboot-required 2>/dev/null && echo "REBOOT NEEDED"'
 # если нужно:
-ssh gmd-prod 'reboot'
+ssh gmd-online 'reboot'
 ```
 
 ## Секреты

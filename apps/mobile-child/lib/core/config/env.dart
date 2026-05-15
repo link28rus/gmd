@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 // Dev-build (flutter run на эмуляторе) ходит на хост-машину через loopback.
 // Переопределить можно через `--dart-define=API_BASE_URL=...`.
 const _fallbackApiBaseUrl = kReleaseMode
-    ? 'https://gmd.link28rus.ru/api'
+    ? 'https://gmd-online.ru/api'
     : 'http://10.0.2.2:3001';
 
 const apiBaseUrl = String.fromEnvironment(

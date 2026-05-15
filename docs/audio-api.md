@@ -177,7 +177,7 @@ Guards: `JwtAuthGuard`, `ConsentRequiredGuard`
   "state": "PENDING",
   "expiresAt": "2026-04-23T10:45:00.000Z",
   "turnCreds": {
-    "url": "turn:turn.gmd.link28rus.ru:3478",
+    "url": "turn:turn.gmd-online.ru:3478",
     "username": "1745401500:550e8400-e29b-41d4-a716-446655440000",
     "password": "BASE64_HMAC_SHA1_STRING==",
     "ttl": 360
@@ -375,7 +375,7 @@ curl -X POST http://localhost:3001/api/child/audio/sessions/550e8400-.../ready \
 
 ```json
 {
-  "candidate": "candidate:3 1 UDP 33562623 95.104.240.99 51230 typ relay raddr 0.0.0.0 rport 0"
+  "candidate": "candidate:3 1 UDP 33562623 45.67.230.87 51230 typ relay raddr 0.0.0.0 rport 0"
 }
 ```
 
@@ -387,7 +387,7 @@ curl -X POST http://localhost:3001/api/child/audio/sessions/550e8400-.../ready \
 curl -X POST http://localhost:3001/api/child/audio/sessions/550e8400-.../ice \
   -H "X-Child-Token: <device_token>" \
   -H "Content-Type: application/json" \
-  -d '{"candidate":"candidate:3 1 UDP 33562623 95.104.240.99 51230 typ relay..."}'
+  -d '{"candidate":"candidate:3 1 UDP 33562623 45.67.230.87 51230 typ relay..."}'
 ```
 
 ---
@@ -678,7 +678,7 @@ data: {"state":"PENDING","payload":null}
 
 data: {"state":"READY","payload":{"sdp":"v=0\r\no=- 883717 2 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\na=group:BUNDLE 0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111..."}}
 
-data: {"state":"ICE_FROM_CHILD","payload":{"candidate":"candidate:3 1 UDP 33562623 95.104.240.99 51230 typ relay raddr 0.0.0.0 rport 0"}}
+data: {"state":"ICE_FROM_CHILD","payload":{"candidate":"candidate:3 1 UDP 33562623 45.67.230.87 51230 typ relay raddr 0.0.0.0 rport 0"}}
 
 data: {"state":"ACTIVE","payload":null}
 
@@ -733,7 +733,7 @@ Content-Type: application/json
   "state": "PENDING",
   "expiresAt": "2026-04-23T10:45:00.000Z",
   "turnCreds": {
-    "url": "turn:turn.gmd.link28rus.ru:3478",
+    "url": "turn:turn.gmd-online.ru:3478",
     "username": "1745401500:session-uuid-456",
     "password": "Xb3K+q8/mNpZ...",
     "ttl": 360
@@ -748,7 +748,7 @@ Content-Type: application/json
 const pc = new RTCPeerConnection({
   iceServers: [
     {
-      urls: 'turn:turn.gmd.link28rus.ru:3478',
+      urls: 'turn:turn.gmd-online.ru:3478',
       username: '1745401500:session-uuid-456',
       credential: 'Xb3K+q8/mNpZ...',
     },
@@ -918,13 +918,13 @@ const { turnCreds } = createSessionResponse;
 const pc = new RTCPeerConnection({
   iceServers: [
     {
-      urls: turnCreds.url, // "turn:turn.gmd.link28rus.ru:3478"
+      urls: turnCreds.url, // "turn:turn.gmd-online.ru:3478"
       username: turnCreds.username, // "1745401500:session-uuid"
       credential: turnCreds.password, // "BASE64_HMAC=="
     },
     // Опционально TLS для корпоративных сетей:
     {
-      urls: 'turns:turn.gmd.link28rus.ru:5349',
+      urls: 'turns:turn.gmd-online.ru:5349',
       username: turnCreds.username,
       credential: turnCreds.password,
     },

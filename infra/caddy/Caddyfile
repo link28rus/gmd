@@ -1,9 +1,8 @@
 {
 	admin off
-	# auto_https default — Caddy сам выпускает Let's Encrypt cert через ACME http-01
-	# challenge на :80. Раньше был auto_https off (TLS делал внешний nginx 1.24.0
-	# на 95.104.240.99), но v0.35.0-rc.4 переехал на direct prod IP 95.104.240.111
-	# (ens192) — TLS теперь делает Caddy.
+	# auto_https default — Caddy сам выпускает Let's Encrypt cert через ACME
+	# http-01 challenge на :80. На VPS gmd-online.ru открыты только 80/443 через
+	# UFW, прямой публичный IP без NAT/роутера.
 	# HTTP/3 (QUIC) отключён: prod не пробрасывает UDP 443, и Alt-Svc: h3 в headers
 	# заставлял Chrome пытаться QUIC и кэшировать недоступный endpoint.
 	servers {
@@ -12,7 +11,7 @@
 }
 
 # --- Основной кабинет + API ---
-gmd.link28rus.ru {
+gmd-online.ru {
 	encode zstd gzip
 
 	# /healthz — edge liveness (должен идти до всех handle-матчеров)

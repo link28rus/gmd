@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 };
 
 export default async function TermsPage(): Promise<React.ReactElement> {
-  const filePath = path.join(process.cwd(), 'content', 'legal', 'terms-of-use-v1.1.md');
+  const filePath = path.join(process.cwd(), 'content', 'legal', 'terms-of-use-v1.2.md');
   const content = await fs.readFile(filePath, 'utf-8');
 
   return (

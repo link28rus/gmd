@@ -2,7 +2,7 @@
 """
 Bootstrap Uptime Kuma через Socket.IO API (обходит UI setup wizard).
 
-Запуск с dev-машины при открытом SSH-туннеле `ssh -L 3011:127.0.0.1:3001 gmd-prod`:
+Запуск с dev-машины при открытом SSH-туннеле `ssh -L 3011:127.0.0.1:3001 gmd-online`:
   pip install uptime-kuma-api
   python infra/server-setup/scripts/kuma-bootstrap.py
 
@@ -159,7 +159,7 @@ def main() -> int:
             api,
             name="Caddy edge (/healthz)",
             type=MonitorType.HTTP,
-            url="https://gmd.link28rus.ru/healthz",
+            url="https://gmd-online.ru/healthz",
             interval=60,
             maxretries=2,
             notification_ids=warn_chans,
@@ -169,7 +169,7 @@ def main() -> int:
             api,
             name="Web healthz",
             type=MonitorType.HTTP,
-            url="https://gmd.link28rus.ru/api/healthz",
+            url="https://gmd-online.ru/api/healthz",
             interval=60,
             maxretries=2,
             notification_ids=warn_chans,
@@ -179,7 +179,7 @@ def main() -> int:
             api,
             name="Backend readyz",
             type=MonitorType.KEYWORD,
-            url="https://gmd.link28rus.ru/api/readyz",
+            url="https://gmd-online.ru/api/readyz",
             keyword='"status":"ok"',
             interval=60,
             maxretries=2,
@@ -210,9 +210,9 @@ def main() -> int:
         # 6. TLS cert expiry (использует встроенный HTTP monitor + expiry alerts)
         ensure_monitor(
             api,
-            name="TLS cert gmd.link28rus.ru",
+            name="TLS cert gmd-online.ru",
             type=MonitorType.HTTP,
-            url="https://gmd.link28rus.ru/",
+            url="https://gmd-online.ru/",
             interval=86400,
             maxretries=1,
             expiryNotification=True,

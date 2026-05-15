@@ -1,11 +1,11 @@
 # GMD — мониторинг (Phase 0.4)
 
-Два сервиса на prod-сервере `192.168.1.23`: **GlitchTip** (error tracking) и **Uptime Kuma** (uptime + алерты). Оба доступны только через SSH-туннель.
+Два сервиса на prod-сервере `45.67.230.87` (gmd-online.ru): **GlitchTip** (error tracking) и **Uptime Kuma** (uptime + алерты). Оба доступны только через SSH-туннель.
 
 ## Быстрый доступ
 
 ```bash
-ssh -N gmd-prod-tunnels &
+ssh -N gmd-online-tunnels &
 # откроет:
 # - http://localhost:3010 → GlitchTip
 # - http://localhost:3011 → Uptime Kuma
@@ -35,25 +35,25 @@ ssh -N gmd-prod-tunnels &
 
 ### Backend readyz down (Monitor #3)
 
-1. Проверить `ssh gmd-prod 'docker ps | grep gmd-backend'` — контейнер жив?
+1. Проверить `ssh gmd-online 'docker ps | grep gmd-backend'` — контейнер жив?
 2. Если `Exited` → `docker logs gmd-backend --tail 100`.
 3. Если `Up`, но readyz 503 — проверить БД/Redis:
    ```bash
-   ssh gmd-prod 'docker exec gmd-backend wget -qO- http://localhost:3001/readyz'
+   ssh gmd-online 'docker exec gmd-backend wget -qO- http://localhost:3001/readyz'
    ```
-4. Перезапуск: `ssh gmd-prod 'docker restart gmd-backend'`.
+4. Перезапуск: `ssh gmd-online 'docker restart gmd-backend'`.
 5. Если не помогло — см. GlitchTip (project `backend`) за свежими 5xx.
 
 ### Postgres container down (Monitor #4)
 
-1. `ssh gmd-prod 'docker logs gmd-postgres --tail 100'`.
+1. `ssh gmd-online 'docker logs gmd-postgres --tail 100'`.
 2. Типичная причина: OOM → swap full → `dmesg | tail`.
 3. Восстановление: `docker start gmd-postgres`, ждать healthy.
 4. Если не стартует — restore из бэкапа (см. `docs/backup-restore.md`).
 
 ### Disk space warning (Monitor #7)
 
-1. `ssh gmd-prod 'df -h /opt/gmd/data'` — что занимает место?
+1. `ssh gmd-online 'df -h /opt/gmd/data'` — что занимает место?
 2. Типичные причины:
    - GlitchTip-events раздулись → уменьшить `GLITCHTIP_EVENT_RETENTION_DAYS` в `.env.prod`
    - Старые дампы → проверить retention в `pg-backup.sh` и `kuma-backup.sh`
@@ -61,9 +61,9 @@ ssh -N gmd-prod-tunnels &
 
 ### PG backup heartbeat не пришёл > 36h (Monitor #8)
 
-1. Проверить systemd-timer: `ssh gmd-prod 'systemctl list-timers | grep backup'`.
-2. Прогнать вручную: `ssh gmd-prod '/opt/gmd/bin/pg-backup.sh'`.
-3. Логи: `ssh gmd-prod 'journalctl -u pg-backup.service --since "2 days ago"'`.
+1. Проверить systemd-timer: `ssh gmd-online 'systemctl list-timers | grep backup'`.
+2. Прогнать вручную: `ssh gmd-online '/opt/gmd/bin/pg-backup.sh'`.
+3. Логи: `ssh gmd-online 'journalctl -u pg-backup.service --since "2 days ago"'`.
 
 ## Как добавить новый монитор
 
