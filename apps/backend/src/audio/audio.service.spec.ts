@@ -6,6 +6,7 @@ import { AudioTokenService } from './audio-token.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AppSettingsService } from '../app-settings/app-settings.service';
 import { DeviceCommandsService } from '../device-commands/device-commands.service';
+import { FcmService } from '../fcm/fcm.service';
 
 interface PrismaMock {
   child: { findFirst: jest.Mock };
@@ -78,6 +79,18 @@ async function buildService(opts: {
   relay: RelayMock;
   tokens: TokensMock;
 }): Promise<AudioService> {
+  // v0.37 добавил FcmService dependency в AudioService — provider не обновили,
+  // тесты DI-resolve падали. Минимальный mock с no-op методами (`startSession`
+  // и `expireOrFail` вызывают `sendHybridDataMessage` через `void` — ошибки не
+  // мешают логике, но провайдер должен резолвиться).
+  const fcmMock = {
+    sendHybridDataMessage: jest.fn().mockResolvedValue(true),
+    sendDataMessage: jest.fn().mockResolvedValue(true),
+    sendHybridToToken: jest.fn().mockResolvedValue(true),
+    sendToToken: jest.fn().mockResolvedValue(true),
+    isEnabled: jest.fn().mockReturnValue(false),
+    isRustoreEnabled: jest.fn().mockReturnValue(false),
+  };
   const moduleRef = await Test.createTestingModule({
     providers: [
       AudioService,
@@ -86,6 +99,7 @@ async function buildService(opts: {
       { provide: DeviceCommandsService, useValue: opts.commands },
       { provide: AudioRelay, useValue: opts.relay },
       { provide: AudioTokenService, useValue: opts.tokens },
+      { provide: FcmService, useValue: fcmMock },
     ],
   }).compile();
   return moduleRef.get(AudioService);

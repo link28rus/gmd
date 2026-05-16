@@ -10,12 +10,14 @@ import { AudioTokenService, type AudioWsClaims } from './audio-token.service';
 import { AudioService } from './audio.service';
 import type { AudioWsControlMessage, AudioWsHello } from './dto/audio-ws.dto';
 
-// 60s — частота watchdog-сканирования. Глобальный idle-порог 180s — должен быть
-// >= audio.child_ready_timeout_sec (по умолчанию 180s), чтобы PENDING-сессии
-// добивались expireIfStuck'ом БЕЗ enqueueAudioStop, а не watchdog'ом, который
-// enqueue'ит STOP_AUDIO и порождает race START+STOP в command queue для child'а
-// (см. v0.36.0-rc.2 fix в device-commands.service.ts listPending).
-const WATCHDOG_INTERVAL_MS = 60_000;
+// 30s — частота watchdog-сканирования. v0.51.x (task #69): уменьшено с 60с до
+// 30с чтобы быстрее закрывать orphan-сессии (state в БД active, оба WS отвалились).
+// Глобальный idle-порог 180s — должен быть >= audio.child_ready_timeout_sec
+// (по умолчанию 180s), чтобы PENDING-сессии добивались expireIfStuck'ом БЕЗ
+// enqueueAudioStop, а не watchdog'ом, который enqueue'ит STOP_AUDIO и порождает
+// race START+STOP в command queue для child'а (см. v0.36.0-rc.2 fix в
+// device-commands.service.ts listPending).
+const WATCHDOG_INTERVAL_MS = 30_000;
 const SESSION_IDLE_TIMEOUT_MS = 180_000;
 
 interface WsContext {
@@ -54,10 +56,19 @@ export class AudioGateway
         }),
     });
 
-    // Watchdog: раз в минуту смотрим, нет ли сессий без фреймов > 90с.
-    // Закрываем сокеты + помечаем сессию EXPIRED в БД. .unref() чтобы не держать
-    // event loop при graceful shutdown.
+    // Watchdog: раз в 30с делает два шага.
+    // 1. Idle-stuck: сессии живут в relay-map, но lastFrameTs > 180с
+    //    (relay.findIdleSessions). Закрываем WS + БД через relay.terminate +
+    //    expireOrFail.
+    // 2. v0.51.x (task #69) Orphan-cleanup: сессии state ∈ (PENDING/READY/ACTIVE)
+    //    в БД, но ОТСУТСТВУЮТ в relay-map (оба WS уже отвалились). Без этого
+    //    они блокируют новые попытки «Звук вокруг» через unique partial index
+    //    `audio_sessions_child_one_active_uidx` → 409 session_already_active.
+    //    Вызываем AudioService.cleanupOrphans который сам решает причину
+    //    (CHILD_OFFLINE/NETWORK_ERROR/PARENT_TIMEOUT) и шлёт STOP_AUDIO push.
+    // .unref() чтобы не держать event loop при graceful shutdown.
     this.watchdogTimer = setInterval(() => {
+      // Шаг 1: idle relay-sessions.
       const stuck = this.relay.findIdleSessions(SESSION_IDLE_TIMEOUT_MS);
       for (const sid of stuck) {
         this.logger.warn(`session ${sid}: idle > ${SESSION_IDLE_TIMEOUT_MS}ms, terminating`);
@@ -66,6 +77,16 @@ export class AudioGateway
           this.logger.warn(`watchdog expireOrFail(${sid}): ${String(err)}`);
         });
       }
+      // Шаг 2: orphan-cleanup (БД active, нет в relay).
+      const aliveIds = this.relay.activeSessionIds();
+      void this.audio
+        .cleanupOrphans(aliveIds)
+        .then((n) => {
+          if (n > 0) this.logger.warn(`watchdog: cleaned ${n} orphan session(s)`);
+        })
+        .catch((err) => {
+          this.logger.error(`watchdog cleanupOrphans failed: ${String(err)}`);
+        });
     }, WATCHDOG_INTERVAL_MS);
     this.watchdogTimer.unref?.();
   }

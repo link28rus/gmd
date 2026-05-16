@@ -48,6 +48,17 @@ export class AudioRelay {
     return this.sessions.size;
   }
 
+  /**
+   * v0.51.x (task #69): set всех sessionId, которые сейчас живы в relay-map
+   * (есть хотя бы один открытый WS-конец). Используется в
+   * [AudioService.cleanupOrphans] чтобы вычислить orphan-сессии = state ∈
+   * (PENDING/READY/ACTIVE) в БД, но отсутствуют в relay → оба WS отвалились
+   * → надо принудительно закрыть сессию в БД и послать STOP_AUDIO на child.
+   */
+  activeSessionIds(): Set<string> {
+    return new Set(this.sessions.keys());
+  }
+
   /** Снимок состояния сессии. Только для тестов / админ-метрик. */
   snapshot(sessionId: string): Readonly<RelaySession> | null {
     return this.sessions.get(sessionId) ?? null;

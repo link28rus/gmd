@@ -8,7 +8,7 @@ import {
   type OnModuleInit,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import type { AudioSession } from '@prisma/client';
+import type { AudioFailureReason, AudioSession } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AppSettingsService, SETTINGS_KEYS } from '../app-settings/app-settings.service';
 import { DeviceCommandsService } from '../device-commands/device-commands.service';
@@ -287,6 +287,73 @@ export class AudioService implements OnModuleInit {
   }
 
   /**
+   * v0.51.x (task #69): cleanup ghost-сессий, которые потеряли оба WS-конца.
+   *
+   * Существующий watchdog в [AudioGateway] ловит сессии, которые ещё ЖИВУТ в
+   * relay-map (хотя бы один сокет открыт, но lastFrameTs > 90с). Но если оба
+   * конца (producer+consumers) уже отвалились — relay удалил session из map
+   * (см. [AudioRelay.detach]), и БД остаётся с state ∈ (PENDING/READY/ACTIVE)
+   * НАВСЕГДА. Следующий POST /audio/sessions для того же child получает 409.
+   *
+   * Вызывается из watchdog'а каждые 30с (после WATCHDOG_INTERVAL_MS).
+   * Идемпотентно — повторный вызов на той же сессии = no-op (expireOrFail
+   * возвращается early при terminal state).
+   *
+   * Критерии cleanup'а (по приоритету):
+   *   1. Hard expire (safety net) — `startedAt + durationSec + 30s < NOW()`:
+   *      сессия должна была закрыться давно, но не закрылась → DURATION_EXPIRED.
+   *      Не зависит от relay-state, защита от пропавших setTimeout'ов.
+   *   2. PENDING > 60s без перехода в READY/ACTIVE и БЕЗ записи в relay-map:
+   *      child не подключился к WS вовсе → CHILD_OFFLINE.
+   *   3. READY/ACTIVE и БЕЗ записи в relay-map: оба сокета закрылись,
+   *      session не получит больше фреймов → NETWORK_ERROR.
+   *
+   * Cessии которые ЕСТЬ в relay-map не трогаем — за ними следит другой
+   * watchdog через [AudioRelay.findIdleSessions]. Эта функция покрывает
+   * orphan-case когда relay уже её forgot.
+   */
+  async cleanupOrphans(activeRelaySessionIds: Set<string>): Promise<number> {
+    const now = Date.now();
+    const dbActive = await this.prisma.audioSession.findMany({
+      where: { state: { in: ['PENDING', 'READY', 'ACTIVE'] } },
+      select: { id: true, state: true, startedAt: true, durationSec: true },
+    });
+    if (dbActive.length === 0) return 0;
+
+    let cleaned = 0;
+    for (const session of dbActive) {
+      const ageMs = now - session.startedAt.getTime();
+      const hardExpireMs = (session.durationSec + 30) * 1000;
+      const inRelay = activeRelaySessionIds.has(session.id);
+
+      let reason: 'PARENT_TIMEOUT' | 'CHILD_OFFLINE' | 'NETWORK_ERROR' | null = null;
+
+      if (ageMs > hardExpireMs) {
+        // Hard expire safety net — независимо от relay.
+        reason = 'PARENT_TIMEOUT';
+      } else if (!inRelay) {
+        // Orphan: relay уже забыл session.
+        if (session.state === 'PENDING' && ageMs > 60_000) {
+          reason = 'CHILD_OFFLINE';
+        } else if (session.state !== 'PENDING' && ageMs > 30_000) {
+          reason = 'NETWORK_ERROR';
+        }
+      }
+
+      if (reason) {
+        this.logger.warn(
+          `cleanupOrphans: session=${session.id} state=${session.state} ageMs=${ageMs} reason=${reason}`,
+        );
+        await this.expireOrFail(session.id, 'EXPIRED', reason).catch((err) =>
+          this.logger.error(`cleanupOrphans expireOrFail(${session.id}): ${String(err)}`),
+        );
+        cleaned++;
+      }
+    }
+    return cleaned;
+  }
+
+  /**
    * Перевести сессию в EXPIRED/FAILED. Идемпотентно.
    * Используется watchdog'ом (idle timeout в gateway) и parent stop'ом.
    * Не закрывает сокеты сама — это дело caller'а (relay.terminate).
@@ -294,7 +361,7 @@ export class AudioService implements OnModuleInit {
   async expireOrFail(
     sessionId: string,
     finalState: 'EXPIRED' | 'FAILED',
-    failureReason?: ChildErrorCode | 'PARENT_TIMEOUT',
+    failureReason?: AudioFailureReason,
   ): Promise<void> {
     const session = await this.prisma.audioSession.findUnique({ where: { id: sessionId } });
     if (!session) return;
