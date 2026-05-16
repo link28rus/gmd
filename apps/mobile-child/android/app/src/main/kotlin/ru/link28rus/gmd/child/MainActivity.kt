@@ -61,6 +61,11 @@ class MainActivity : FlutterActivity() {
                 // содержать устаревший state (например, родитель остановил блок
                 // пока app был закрыт).
                 AppControlScheduler.runBlockPollNow(this)
+                // v0.51.1 fix регрессии latency push (task #68): на каждом
+                // open app триггерим immediate FCM token refresh. Это
+                // покрывает кейс «ребёнок только что обновил app через RuStore,
+                // FCM rotated токен, periodic worker запустится только через 6ч».
+                AppControlScheduler.runFcmTokenRefreshNow(this)
                 // v0.38 escape hatch: на старте app сразу probe — если ребёнка
                 // удалили пока приложение было закрыто, не ждём периодический час.
                 // Фоновый thread, не блокирует UI.

@@ -43,6 +43,14 @@ class BlockPollWorker(
             val res = AppControlHttp.getActiveBlock(ctx)
             if (res.ok && res.bodyJson != null) {
                 applyActiveBlockResponse(ctx, res.bodyJson)
+                // v0.51.1 (task #68): backend сигналит что у нас orphaned FCM-token
+                // (NULL в БД) — триггерим one-time FcmTokenRefreshWorker. Работает
+                // независимо от того открывает ли ребёнок app (этот worker и так
+                // запускается из foreground service).
+                if (res.bodyJson.optBoolean("forceFcmRefresh", false)) {
+                    DiagLog.write(ctx, TAG, "backend signaled forceFcmRefresh=true — enqueuing FcmTokenRefreshWorker")
+                    AppControlScheduler.runFcmTokenRefreshNow(ctx)
+                }
             } else {
                 DiagLog.write(ctx, TAG, "active-block GET failed: status=${res.statusCode}")
             }

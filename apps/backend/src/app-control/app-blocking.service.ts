@@ -396,6 +396,22 @@ export class AppBlockingService implements OnModuleInit {
   // ─── Helper для других сервисов ─────────────────────────────────────────
 
   /**
+   * v0.51.1 (task #68): snapshot push-токенов устройства для регрессии latency.
+   * Используется в GET /child/active-block чтобы вернуть `forceFcmRefresh=true`
+   * когда `fcmToken IS NULL` — сигнал child'у re-register'нуть токен через
+   * `FcmTokenRefreshWorker`. Без этого orphaned-token после app-update через
+   * RuStore лечится только когда ребёнок откроет app (мог не открывать сутками).
+   */
+  async getDeviceTokensSnapshot(
+    childDeviceId: string,
+  ): Promise<{ fcmToken: string | null; rustorePushToken: string | null } | null> {
+    return this.prisma.childDevice.findUnique({
+      where: { id: childDeviceId },
+      select: { fcmToken: true, rustorePushToken: true },
+    });
+  }
+
+  /**
    * Утилита для child API: проверить активную блокировку по deviceId
    * (без round-trip через childId). Используется в GET /child/active-block.
    */

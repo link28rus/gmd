@@ -37,13 +37,54 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
     override fun onNewToken(token: String) {
         super.onNewToken(token)
         DiagLog.write(this, "fcm", "onNewToken: ${token.take(16)}…")
-        // Сохраняем pending в SharedPreferences. Dart-side при следующем старте
-        // прочитает и попытается зарегистрировать на backend.
-        getSharedPreferences("gmd_fcm", MODE_PRIVATE)
-            .edit()
-            .putString("pending_token", token)
-            .putLong("pending_token_ts", System.currentTimeMillis())
-            .apply()
+        // v0.51.1 fix регрессии latency (task #68): POST'им токен на backend
+        // СРАЗУ из native кода, не дожидаясь Dart isolate. Это критично потому
+        // что onNewToken часто вызывается ПОСЛЕ обновления app через RuStore,
+        // когда ребёнок не открывает app — Dart isolate не запущен, токен
+        // оставался в pending_token до следующего ручного open. До v0.51.1
+        // backend держал старый невалидный токен → push не доставлялись.
+        //
+        // FCM Service имеет ~10с до ANR — HTTP в отдельном Thread, не блокируя
+        // main looper (паттерн handlePlaySignal:103-119).
+        Thread {
+            try {
+                val res = AppControlHttp.postFcmToken(applicationContext, token)
+                if (res.ok) {
+                    // Обновляем кеш в gmd_fcm чтобы FcmTokenRefreshWorker не
+                    // делал лишний POST через ближайшие 6 часов.
+                    applicationContext.getSharedPreferences("gmd_fcm", MODE_PRIVATE)
+                        .edit()
+                        .putString("last_saved_token", token)
+                        .putLong("last_saved_at", System.currentTimeMillis())
+                        .apply()
+                    DiagLog.write(
+                        applicationContext,
+                        "fcm",
+                        "onNewToken: registered on backend (status=${res.statusCode})",
+                    )
+                } else {
+                    // Backend недоступен / 401 (claim не было) / 5xx — fallback
+                    // на pending_token, который Dart прочитает при следующем
+                    // запуске + FcmTokenRefreshWorker через 6 ч.
+                    DiagLog.write(
+                        applicationContext,
+                        "fcm",
+                        "onNewToken: native POST failed status=${res.statusCode} — saved to pending_token for Dart-side retry",
+                    )
+                    applicationContext.getSharedPreferences("gmd_fcm", MODE_PRIVATE)
+                        .edit()
+                        .putString("pending_token", token)
+                        .putLong("pending_token_ts", System.currentTimeMillis())
+                        .apply()
+                }
+            } catch (e: Throwable) {
+                DiagLog.write(
+                    applicationContext,
+                    "fcm",
+                    "onNewToken: native POST exception: ${e.javaClass.simpleName}: ${e.message}",
+                )
+            }
+        }.start()
     }
 
     override fun onMessageReceived(remoteMessage: RemoteMessage) {

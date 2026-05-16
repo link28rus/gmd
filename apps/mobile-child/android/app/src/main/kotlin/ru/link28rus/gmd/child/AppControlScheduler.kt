@@ -87,6 +87,22 @@ object AppControlScheduler {
       .addTag(BlockPollWorker.TAG)
       .build()
 
+    // v0.51.1 fix регрессии latency (task #68 root cause): periodic refresh FCM
+    // token независимо от foreground. Без него токен ротировался при обновлении
+    // app через RuStore и записывался только когда ребёнок открывал app —
+    // push'и не доставлялись часами/днями.
+    val fcmRefreshReq = PeriodicWorkRequestBuilder<FcmTokenRefreshWorker>(
+      6, TimeUnit.HOURS,
+    )
+      .setConstraints(
+        Constraints.Builder()
+          .setRequiredNetworkType(NetworkType.CONNECTED)
+          .build(),
+      )
+      .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 1, TimeUnit.MINUTES)
+      .addTag(FcmTokenRefreshWorker.TAG)
+      .build()
+
     wm.enqueueUniquePeriodicWork(
       UsageStatsReportWorker.UNIQUE_NAME,
       ExistingPeriodicWorkPolicy.KEEP,
@@ -107,10 +123,15 @@ object AppControlScheduler {
       ExistingPeriodicWorkPolicy.KEEP,
       blockPollReq,
     )
+    wm.enqueueUniquePeriodicWork(
+      FcmTokenRefreshWorker.UNIQUE_NAME,
+      ExistingPeriodicWorkPolicy.KEEP,
+      fcmRefreshReq,
+    )
     DiagLog.write(
       ctx,
       TAG,
-      "scheduled UsageStats(15min) + InstalledApps(24h) + EscapeProbe(1h) + BlockPoll(15min) periodic (KEEP)",
+      "scheduled UsageStats(15min) + InstalledApps(24h) + EscapeProbe(1h) + BlockPoll(15min) + FcmRefresh(6h) periodic (KEEP)",
     )
   }
 
@@ -125,8 +146,28 @@ object AppControlScheduler {
     wm.cancelUniqueWork(InstalledAppsReportWorker.UNIQUE_NAME)
     wm.cancelUniqueWork(EscapeProbeWorker.UNIQUE_NAME)
     wm.cancelUniqueWork(BlockPollWorker.UNIQUE_NAME)
+    wm.cancelUniqueWork(FcmTokenRefreshWorker.UNIQUE_NAME)
     DiagLog.write(ctx, TAG, "cancelled existing workers, re-enqueueing")
     scheduleAll(ctx)
+  }
+
+  /**
+   * v0.51.1: триггерит немедленный FCM token refresh. Используется на старте
+   * MainActivity (после Firebase init) чтобы сразу подтянуть/проверить токен,
+   * не ждать 6 ч до первого periodic'а. Без него фикс не помогает существующим
+   * установкам v0.51.0 — periodic запустится только через 6 ч после первого
+   * запуска нового workmanager job'а.
+   */
+  fun runFcmTokenRefreshNow(ctx: Context) {
+    val req = androidx.work.OneTimeWorkRequestBuilder<FcmTokenRefreshWorker>()
+      .setConstraints(
+        Constraints.Builder()
+          .setRequiredNetworkType(NetworkType.CONNECTED)
+          .build(),
+      )
+      .build()
+    WorkManager.getInstance(ctx).enqueue(req)
+    DiagLog.write(ctx, TAG, "enqueued one-time FcmTokenRefresh run (manual trigger)")
   }
 
   /**

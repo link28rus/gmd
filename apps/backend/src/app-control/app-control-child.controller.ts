@@ -94,20 +94,33 @@ export class AppControlChildController {
    * (Не 204 — Dart-клиенту проще обрабатывать unified JSON ответ.)
    * Дёргается при старте app, по FCM BLOCK_APPS, и раз в 60 сек fallback poll.
    * Throttle 120/час (≈ 1 раз в 30 сек).
+   *
+   * v0.51.1 (task #68): добавлено поле `forceFcmRefresh` — сигнал child'у
+   * что у него NULL fcmToken в БД и нужно re-register'нуть. Закрывает кейс
+   * orphaned token после app-update через RuStore: child native worker
+   * `BlockPollWorker` увидит флаг и enqueue'ит one-time `FcmTokenRefreshWorker`
+   * даже если ребёнок не открывает app (foreground services живут всегда).
+   * Старые child'ы (<v0.51.1) поле игнорируют — обратно совместимо.
    */
   @Get('active-block')
   @Throttle({ default: { ttl: 3600_000, limit: 120 } })
-  async getActiveBlock(
-    @Req() req: ChildRequest,
-  ): Promise<{ session: { sessionId: string; startedAt: string; endsAt: string } | null }> {
-    const session = await this.blocking.getActiveSessionByDevice(req.childDevice.deviceId);
-    if (!session) return { session: null };
+  async getActiveBlock(@Req() req: ChildRequest): Promise<{
+    session: { sessionId: string; startedAt: string; endsAt: string } | null;
+    forceFcmRefresh: boolean;
+  }> {
+    const [session, device] = await Promise.all([
+      this.blocking.getActiveSessionByDevice(req.childDevice.deviceId),
+      this.blocking.getDeviceTokensSnapshot(req.childDevice.deviceId),
+    ]);
+    const forceFcmRefresh = device?.fcmToken == null;
+    if (!session) return { session: null, forceFcmRefresh };
     return {
       session: {
         sessionId: session.id,
         startedAt: session.startedAt.toISOString(),
         endsAt: session.endsAt.toISOString(),
       },
+      forceFcmRefresh,
     };
   }
 

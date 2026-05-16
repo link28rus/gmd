@@ -149,6 +149,22 @@ object AppControlHttp {
   fun getSchedules(ctx: Context): Result =
     doGet(ctx, "/child/schedules")
 
+  /**
+   * v0.51.1 fix регрессии latency: POST /child/devices/fcm-token.
+   *
+   * Дублирует [ChildApi.setFcmToken] на native-стороне чтобы worker'ы и
+   * MyFirebaseMessagingService могли обновлять токен без поднятия Dart isolate.
+   * Без этого FCM-токен ротировался при обновлении app через RuStore (lesson),
+   * но регистрировался только когда ребёнок открывал app в foreground.
+   *
+   * `token=null` допустимо — backend интерпретирует как «устройство потеряло
+   * FCM client» и переключается на poll-only (lesson #14, task #68).
+   */
+  fun postFcmToken(ctx: Context, token: String?): Result {
+    val payload = JSONObject().apply { put("fcmToken", token ?: JSONObject.NULL) }
+    return doPost(ctx, "/child/devices/fcm-token", payload)
+  }
+
   private fun doGet(ctx: Context, path: String): Result {
     val token = NativeCreds.getToken(ctx)
     val baseUrl = NativeCreds.getApiBaseUrl(ctx)
