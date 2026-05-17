@@ -37,7 +37,8 @@ class HomeScreen extends ConsumerWidget {
         }
       });
     });
-    ref.watch(homeInitProvider);
+    final homeInit = ref.watch(homeInitProvider);
+    final familyName = homeInit.whenOrNull(data: (r) => r.familyName);
 
     ref.listen<SosState>(sosControllerProvider, (prev, next) {
       if (prev?.status == next.status) return;
@@ -62,7 +63,7 @@ class HomeScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('GMD'),
+        title: const Text('Перископ'),
         actions: [
           const LocationProfileIndicator(),
           Padding(
@@ -100,7 +101,11 @@ class HomeScreen extends ConsumerWidget {
                   const Text('Привет!',
                       style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
-            const Text('Ты подключён к семье'),
+            Text(
+              familyName != null && familyName.isNotEmpty
+                  ? 'Ты подключён к семье «$familyName»'
+                  : 'Ты подключён к семье',
+            ),
             const SizedBox(height: 24),
             Row(children: const [
               Icon(Icons.check_circle, color: Colors.green),

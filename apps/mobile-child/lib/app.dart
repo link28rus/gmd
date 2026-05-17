@@ -10,7 +10,7 @@ class GmdChildApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return MaterialApp.router(
-      title: 'GMD',
+      title: 'Перископ',
       theme: ThemeData(useMaterial3: true, colorSchemeSeed: const Color(0xFF2E7D32)),
       routerConfig: AppRouter.buildRouter(initialLocation: initialLocation),
       debugShowCheckedModeBanner: false,

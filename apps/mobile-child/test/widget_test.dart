@@ -6,6 +6,6 @@ void main() {
   testWidgets('App starts on onboarding screen', (tester) async {
     await tester.pumpWidget(const ProviderScope(child: GmdChildApp()));
     await tester.pumpAndSettle();
-    expect(find.text('Привет! Это GMD'), findsOneWidget);
+    expect(find.text('Привет! Это Перископ'), findsOneWidget);
   });
 }

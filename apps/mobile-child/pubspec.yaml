@@ -1,5 +1,5 @@
 name: gmd_child
-description: "GMD — приложение ребёнка"
+description: "Перископ — приложение ребёнка"
 publish_to: 'none'
 version: 0.51.1+6089
 
@@ -63,3 +63,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/images/

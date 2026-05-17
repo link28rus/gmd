@@ -7,6 +7,7 @@ const ctx: ChildAuthContext = {
   childId: 'c1',
   familyId: 'f1',
   childName: 'Alex',
+  familyName: 'Семья',
 };
 
 function makeService(

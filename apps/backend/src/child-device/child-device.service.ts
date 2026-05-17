@@ -26,6 +26,7 @@ export interface ChildAuthContext {
   childId: string;
   familyId: string;
   childName: string;
+  familyName: string;
 }
 
 function sha256(v: string): string {
@@ -177,13 +178,15 @@ export class ChildDeviceService {
     if (!device) return null;
     const child = await this.prisma.child.findFirst({
       where: { id: device.childId, deletedAt: null },
+      include: { family: { select: { name: true, deletedAt: true } } },
     });
-    if (!child) return null;
+    if (!child || child.family.deletedAt) return null;
     return {
       deviceId: device.id,
       childId: child.id,
       familyId: child.familyId,
       childName: child.name,
+      familyName: child.family.name,
     };
   }
 

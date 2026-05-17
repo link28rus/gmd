@@ -94,7 +94,6 @@ class _ClaimManualScreenState extends ConsumerState<ClaimManualScreen> {
               ),
               decoration: const InputDecoration(
                 border: OutlineInputBorder(),
-                hintText: '6KDM3B1W',
               ),
               onChanged: (v) {
                 // Авто-submit, когда после нормализации набралось ровно 8

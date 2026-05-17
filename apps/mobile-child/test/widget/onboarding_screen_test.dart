@@ -7,7 +7,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: OnboardingScreen(onConnect: () {})),
     );
-    expect(find.text('Привет! Это GMD'), findsOneWidget);
+    expect(find.text('Привет! Это Перископ'), findsOneWidget);
     expect(find.textContaining('Нужно подключиться к семье'), findsOneWidget);
     expect(find.text('Подключиться'), findsOneWidget);
   });

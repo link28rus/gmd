@@ -8,6 +8,7 @@ const ctx: ChildAuthContext = {
   childId: 'child1',
   familyId: 'fam1',
   childName: 'Алёша',
+  familyName: 'Семья',
 };
 
 const validDto: SosDto = {

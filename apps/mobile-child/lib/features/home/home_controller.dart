@@ -28,18 +28,19 @@ final homeInitProvider = FutureProvider<HomeInitResult>((ref) async {
   }
 
   final api = ref.watch(childApiProvider);
-  final valid = await api.verifyToken(token);
-  if (!valid) {
+  final me = await api.fetchMe(token);
+  if (!me.tokenValid) {
     // Токен отозван сервером — чистим secure storage, чтобы на следующем
     // старте hasToken=false и main.dart повёл на /onboarding.
     await storage.clearAll();
     // Параллельно стопаем foreground сервис — он уже без токена бесполезен.
     unawaited(ref.watch(serviceChannelProvider).stopService());
   }
-  return HomeInitResult(tokenValid: valid);
+  return HomeInitResult(tokenValid: me.tokenValid, familyName: me.familyName);
 });
 
 class HomeInitResult {
-  const HomeInitResult({required this.tokenValid});
+  const HomeInitResult({required this.tokenValid, this.familyName});
   final bool tokenValid;
+  final String? familyName;
 }

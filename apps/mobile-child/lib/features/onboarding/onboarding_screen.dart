@@ -15,10 +15,14 @@ class OnboardingScreen extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Icon(Icons.shield_outlined, size: 96, color: Colors.green),
+              Image.asset(
+                'assets/images/onboarding_hero.png',
+                height: 280,
+                fit: BoxFit.contain,
+              ),
               const SizedBox(height: 24),
               Text(
-                'Привет! Это GMD',
+                'Привет! Это Перископ',
                 style: Theme.of(context).textTheme.headlineMedium,
                 textAlign: TextAlign.center,
               ),

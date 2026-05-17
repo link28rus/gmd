@@ -32,6 +32,13 @@ class ClaimResponse {
   final String deviceId;
 }
 
+class ChildMeResult {
+  const ChildMeResult({required this.tokenValid, this.familyName});
+
+  final bool tokenValid;
+  final String? familyName;
+}
+
 class LocationPoint {
   LocationPoint({
     required this.lat,
@@ -166,22 +173,29 @@ class ChildApi {
     }
   }
 
-  // Проверка валидности текущего deviceToken. Возвращает true если токен
-  // живой, false — если сервер вернул 401/403 (устройство отвязано). При
-  // сетевой ошибке возвращает true (не знаем статус, не дёргаем пользователя
-  // зря — подтянем при реальном ingest).
-  Future<bool> verifyToken(String deviceToken) async {
+  // Проверка валидности текущего deviceToken + получение family.name
+  // (нужно home-экрану чтобы показать «Ты подключён к семье <Имя>»).
+  // tokenValid=true если токен живой, false — 401/403 (устройство отвязано).
+  // При сетевой ошибке tokenValid=true (не знаем статус, не дёргаем
+  // пользователя зря — подтянем при реальном ingest), familyName=null.
+  Future<ChildMeResult> fetchMe(String deviceToken) async {
     try {
-      await _dio.get(
+      final resp = await _dio.get(
         '/child/me',
         options: Options(headers: {'X-Child-Token': deviceToken}),
       );
-      return true;
+      final data = resp.data as Map<String, dynamic>?;
+      final family = data?['family'] as Map<String, dynamic>?;
+      return ChildMeResult(
+        tokenValid: true,
+        familyName: family?['name'] as String?,
+      );
     } on DioException catch (e) {
       final status = e.response?.statusCode;
-      if (status == 401 || status == 403) return false;
-      // Network / 5xx — токен может быть валиден, не удаляем.
-      return true;
+      if (status == 401 || status == 403) {
+        return const ChildMeResult(tokenValid: false);
+      }
+      return const ChildMeResult(tokenValid: true);
     }
   }
 

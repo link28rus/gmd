@@ -78,6 +78,10 @@ export class ChildDeviceController {
         name: req.childDevice.childName,
         familyId: req.childDevice.familyId,
       },
+      family: {
+        id: req.childDevice.familyId,
+        name: req.childDevice.familyName,
+      },
       device: { id: req.childDevice.deviceId },
     };
   }
