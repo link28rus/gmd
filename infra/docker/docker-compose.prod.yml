@@ -66,7 +66,15 @@ services:
     <<: [*restart, *logging]
     image: redis:7-alpine
     container_name: gmd-redis
-    command: ['redis-server', '--requirepass', '${REDIS_PASSWORD}', '--appendonly', 'yes']
+    # Redis здесь — ЧИСТО эфемерный TTL-кэш (rate-limit throttler + анти-брутфорс
+    # счётчики pwlock:*). Никаких долговременных данных. Persistence отключена
+    # намеренно: с `--appendonly yes` нечистое завершение (reboot/OOM/power)
+    # повреждало incr-AOF → Redis уходил в crash-loop на старте → backend терял
+    # Redis → /readyz висел → весь API падал (инцидент 2026-05-30, RestartCount=606).
+    # `--save ''` отключает и RDB-снапшоты. Кэш переживает рестарт пустым — это ок,
+    # счётчики и так TTL'ятся и пересоздаются. См. lesson + task #71.
+    command:
+      ['redis-server', '--requirepass', '${REDIS_PASSWORD}', '--appendonly', 'no', '--save', '']
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
     volumes:
@@ -119,7 +127,19 @@ services:
     <<: [*restart, *logging]
     image: redis:7-alpine
     container_name: gmd-glitchtip-redis
-    command: ['redis-server', '--requirepass', '${GLITCHTIP_REDIS_PASSWORD}', '--appendonly', 'yes']
+    # Celery broker/cache GlitchTip'а — тоже эфемерный. Persistence отключена по
+    # той же причине, что и у основного redis (см. выше): битый AOF после нечистого
+    # завершения уводил Redis в crash-loop. GlitchTip переживёт пустой брокер.
+    command:
+      [
+        'redis-server',
+        '--requirepass',
+        '${GLITCHTIP_REDIS_PASSWORD}',
+        '--appendonly',
+        'no',
+        '--save',
+        '',
+      ]
     environment:
       REDIS_PASSWORD: ${GLITCHTIP_REDIS_PASSWORD}
     volumes:
