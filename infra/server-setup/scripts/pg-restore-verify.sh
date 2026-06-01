@@ -11,7 +11,9 @@ if [ -z "${LATEST}" ]; then
   exit 0
 fi
 
-set -a; . /opt/gmd/.env.prod; set +a
+# nounset выключаем на время source: .env.prod содержит bcrypt-хеши ($2y$...),
+# которые иначе ломают `. file` под set -u (см. pg-backup.sh).
+set +u; set -a; . /opt/gmd/.env.prod; set +a; set -u
 
 TMP_CONTAINER=gmd-restore-verify-$$
 TMP_VOLUME=gmd-restore-verify-vol-$$

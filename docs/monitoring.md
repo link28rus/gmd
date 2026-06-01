@@ -16,7 +16,7 @@ ssh -N gmd-online-tunnels &
 
 - `GlitchTip admin credentials`
 - `Uptime Kuma admin credentials`
-- `Telegram alerts bot @gmd_alerts_bot`
+- `Telegram alerts bot @gmd_khv_bot`
 
 ## Что мониторим
 
@@ -71,7 +71,7 @@ ssh -N gmd-online-tunnels &
 
 ## Настройка Telegram-бота
 
-Бот `@gmd_alerts_bot` (создан в Task 17 Phase 0.4). Токен и chat_id — в `/opt/gmd/.env.prod` и memory-compiler.
+Бот `@gmd_khv_bot` (создан в Task 17 Phase 0.4). Токен и chat_id — в `/opt/gmd/.env.prod` и memory-compiler.
 
 Добавить нового получателя алертов:
 
@@ -118,6 +118,39 @@ ssh -N gmd-online-tunnels &
 - Проверить бота: `curl -s "https://api.telegram.org/bot$TOKEN/getMe"` — `{"ok":true}`.
 - Проверить chat_id: `curl -s "https://api.telegram.org/bot$TOKEN/getUpdates"`.
 - Бот заблокирован пользователем → `/start` в чате с ботом.
+
+## Восстановление после миграции (инцидент 2026-06-01, task #72)
+
+Миграция на новый сервер (2026-05-15, task #67) **не перенесла** операционку
+мониторинга. Обнаружено через 2 дня после аутажа Redis (#71), который мониторинг
+проспал. Чек-лист на будущее при переезде:
+
+1. **URL HTTP-мониторов** в Uptime Kuma остались на старом домене
+   `gmd.link28rus.ru` → после переезда DOWN с `ECONNREFUSED`. Так как они уже
+   были DOWN, реальный аутаж не дал смены статуса UP→DOWN → **алерт не сработал**
+   (Kuma шлёт только на смену статуса). **Сломанный монитор маскирует реальный
+   сбой.** Фикс: `UPDATE monitor SET url=replace(url,'старый','новый')` (Kuma
+   остановить → throwaway `sqlite3` на volume → старт).
+2. **Из контейнера Kuma `gmd-online.ru` резолвится в `127.0.1.1`** (hostname
+   сервера в /etc/hosts) → `ECONNREFUSED 127.0.1.1:443`. Фикс: в compose у
+   `uptime-kuma` добавлен `extra_hosts: ['gmd-online.ru:45.67.230.87']`. Hairpin
+   на прямой публичный IP (ens3, без NAT) работает.
+3. **Бэкапы PG не делались 17 дней** — не было `/opt/gmd/bin`, таймеров, дампов.
+   Фикс: `infra/server-setup/40-backups-install.sh` (копировать в `/root/gmd-setup`
+   → запустить). Ставит `pg-backup` (03:15), `kuma-backup` (03:30),
+   `pg-restore-verify` (вс). **Баг скрипта:** `. /opt/gmd/.env.prod` под `set -u`
+   падает на bcrypt-хешах (`$2y$...` → `$2: unbound`). Исправлено: source с
+   временно выключенным `nounset`.
+4. **Push-источники** (#7 диск, #8 pg-backup heartbeat) — `infra/server/bin/
+disk-heartbeat.sh` + systemd; push-токены из Kuma (`monitor.push_token`) в
+   `/etc/default/gmd-disk-heartbeat` (#7) и `KUMA_BACKUP_HEARTBEAT_URL` в
+   `.env.prod` (#8). URL: `http://localhost:3001/api/push/<token>`.
+5. Добавлен docker-монитор `gmd-backend container` (#9) — раньше backend на
+   уровне контейнера не мониторился.
+
+После любого переезда: прогнать `systemctl list-timers | grep -E 'pg-backup|kuma'`,
+проверить `/opt/gmd/backups/postgres` непустой, и что все мониторы Kuma зелёные
+(а не «давно DOWN»).
 
 ## Ссылки
 

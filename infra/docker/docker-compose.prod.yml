@@ -218,6 +218,12 @@ services:
       - /opt/gmd/data/uptime-kuma:/app/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks: [gmd_net]
+    # Из контейнера gmd-online.ru иначе резолвится в 127.0.1.1 (hostname сервера
+    # в /etc/hosts идёт первым) → edge-мониторы #1/2/3/6 падали с ECONNREFUSED
+    # 127.0.1.1:443. Пиним на реальный публичный IP, чтобы мониторы проверяли
+    # полный путь Caddy+TLS+backend. Hairpin работает (прямой публичный IP на ens3).
+    extra_hosts:
+      - 'gmd-online.ru:45.67.230.87'
     ports:
       - '127.0.0.1:3001:3001'
     healthcheck:

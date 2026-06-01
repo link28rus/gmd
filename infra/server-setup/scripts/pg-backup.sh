@@ -13,8 +13,11 @@ mkdir -p "${BACKUP_DIR}"
 exec 9>"$LOCK"
 flock -n 9 || { echo "Another backup in progress; exiting."; exit 0; }
 
-# Загружаем пароль из .env.prod
-set -a; . /opt/gmd/.env.prod; set +a
+# Загружаем нужные переменные из .env.prod.
+# nounset (set -u) выключаем на время source: .env.prod содержит bcrypt-хеши
+# (CADDY_BASIC_AUTH_HASH / DOWNLOAD_PASSWORD_HASH = $2y$...), которые иначе ломают
+# `. file` — токен $2 трактуется как позиционный параметр и падает "unbound variable".
+set +u; set -a; . /opt/gmd/.env.prod; set +a; set -u
 
 docker exec -i gmd-postgres pg_dump -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" -Fc -Z0 > "${FILE}"
 
