@@ -118,6 +118,18 @@ ssh -N gmd-online-tunnels &
 - Проверить бота: `curl -s "https://api.telegram.org/bot$TOKEN/getMe"` — `{"ok":true}`.
 - Проверить chat_id: `curl -s "https://api.telegram.org/bot$TOKEN/getUpdates"`.
 - Бот заблокирован пользователем → `/start` в чате с ботом.
+- **Тестировать egress ИЗНУТРИ контейнера Kuma, не с хоста** (сеть может
+  отличаться). Креды лежат в `notification.config` под ключами
+  `telegramBotToken` / `telegramChatID` (НЕ `botToken`/`chatID`!):
+  `TOKEN=$(docker exec gmd-uptime-kuma sqlite3 /app/data/kuma.db "SELECT config FROM notification WHERE id=1;" | grep -oP '"telegramBotToken":"\K[^"]+')`
+  → `docker exec -e TOK="$TOKEN" gmd-uptime-kuma node -e '...https.request api.telegram.org /bot$TOK/sendMessage...'`.
+- **Kuma логирует только СБОИ отправки** (`[MONITOR] ERROR: Cannot send
+notification to <name>`), успехи — молча. Отсутствие этой строки рядом с
+  DOWN-переходом (`heartbeat.important=1`) = алерт ушёл.
+- **Сквозной тест алерта** (item 4 detection-gap): временный http-монитор на
+  `http://127.0.0.1:9/` (ECONNREFUSED), `maxretries=0` → мгновенный DOWN →
+  убедиться что нет `Cannot send` → удалить монитор (`DELETE FROM heartbeat/
+monitor_notification/monitor WHERE [monitor_]id=N`) + рестарт Kuma.
 
 ## Восстановление после миграции (инцидент 2026-06-01, task #72)
 
