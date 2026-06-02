@@ -20,16 +20,28 @@ ssh -N gmd-online-tunnels &
 
 ## Что мониторим
 
-| #   | Монитор                    | Критичность | Notification       |
-| --- | -------------------------- | ----------- | ------------------ |
-| 1   | Caddy edge (`/healthz`)    | warn        | Telegram           |
-| 2   | Web healthz                | warn        | Telegram           |
-| 3   | Backend readyz             | critical    | Telegram + email   |
-| 4   | Postgres container         | critical    | Telegram + email   |
-| 5   | Redis container            | critical    | Telegram + email   |
-| 6   | TLS cert expiry            | warn        | Telegram (<14d)    |
-| 7   | Disk space `/opt/gmd/data` | warn        | Telegram (push 5m) |
-| 8   | PG backup heartbeat        | critical    | Telegram + email   |
+| #   | Монитор (имя в Kuma)           | Критичность | Notification     |
+| --- | ------------------------------ | ----------- | ---------------- |
+| 1   | Caddy (вход, /healthz)         | warn        | Telegram         |
+| 2   | Веб-сайт (/api/healthz)        | warn        | Telegram         |
+| 3   | Бэкенд API (/api/readyz)       | critical    | Telegram + email |
+| 4   | Контейнер PostgreSQL           | critical    | Telegram + email |
+| 5   | Контейнер Redis                | critical    | Telegram + email |
+| 6   | TLS-сертификат (gmd-online.ru) | warn        | Telegram (<14d)  |
+| 7   | Свободное место на диске       | warn        | Telegram (push)  |
+| 8   | Бэкап БД (ежедневный)          | critical    | Telegram + email |
+| 9   | Контейнер бэкенда              | critical    | Telegram + email |
+
+### Текст уведомлений
+
+Формат сообщения в Kuma 1.23.x зашит в коде: `[<имя монитора>] [🔴 Down / ✅ Up]
+<причина>`. Кастомные шаблоны (Liquid) появились только в Kuma 2.x. Поэтому
+по-русски сделаны управляемые части: **имена мониторов** (см. таблицу) и **тексты
+push-мониторов** #7/#8 (формируются скриптами `disk-heartbeat.sh` /
+`pg-backup.sh`, кодируются через `curl -G --data-urlencode`). Обёртка
+«🔴 Down / ✅ Up» и техническая `<причина>` (`200 - OK`, `connect ECONNREFUSED…`,
+`healthy`) генерируются Kuma и остаются как есть — менять их можно только
+кастомным образом (патч `monitor.js`) или апгрейдом до Kuma 2.x.
 
 ## Как отвечать на алерты
 

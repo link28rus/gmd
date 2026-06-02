@@ -157,7 +157,7 @@ def main() -> int:
         # 1. Caddy edge
         ensure_monitor(
             api,
-            name="Caddy edge (/healthz)",
+            name="Caddy (вход, /healthz)",
             type=MonitorType.HTTP,
             url="https://gmd-online.ru/healthz",
             interval=60,
@@ -167,7 +167,7 @@ def main() -> int:
         # 2. Web healthz
         ensure_monitor(
             api,
-            name="Web healthz",
+            name="Веб-сайт (/api/healthz)",
             type=MonitorType.HTTP,
             url="https://gmd-online.ru/api/healthz",
             interval=60,
@@ -177,7 +177,7 @@ def main() -> int:
         # 3. Backend readyz (critical, keyword)
         ensure_monitor(
             api,
-            name="Backend readyz",
+            name="Бэкенд API (/api/readyz)",
             type=MonitorType.KEYWORD,
             url="https://gmd-online.ru/api/readyz",
             keyword='"status":"ok"',
@@ -188,7 +188,7 @@ def main() -> int:
         # 4. Postgres docker
         ensure_monitor(
             api,
-            name="gmd-postgres container",
+            name="Контейнер PostgreSQL",
             type=MonitorType.DOCKER,
             docker_container="gmd-postgres",
             docker_host=docker_host_id,
@@ -199,9 +199,20 @@ def main() -> int:
         # 5. Redis docker
         ensure_monitor(
             api,
-            name="gmd-redis container",
+            name="Контейнер Redis",
             type=MonitorType.DOCKER,
             docker_container="gmd-redis",
+            docker_host=docker_host_id,
+            interval=120,
+            maxretries=1,
+            notification_ids=crit_chans,
+        )
+        # 5b. Backend docker
+        ensure_monitor(
+            api,
+            name="Контейнер бэкенда",
+            type=MonitorType.DOCKER,
+            docker_container="gmd-backend",
             docker_host=docker_host_id,
             interval=120,
             maxretries=1,
@@ -210,7 +221,7 @@ def main() -> int:
         # 6. TLS cert expiry (использует встроенный HTTP monitor + expiry alerts)
         ensure_monitor(
             api,
-            name="TLS cert gmd-online.ru",
+            name="TLS-сертификат (gmd-online.ru)",
             type=MonitorType.HTTP,
             url="https://gmd-online.ru/",
             interval=86400,
@@ -221,7 +232,7 @@ def main() -> int:
         # 7. Disk-space push
         disk = ensure_monitor(
             api,
-            name="disk-space /opt/gmd/data",
+            name="Свободное место на диске",
             type=MonitorType.PUSH,
             interval=300,
             maxretries=3,
@@ -230,7 +241,7 @@ def main() -> int:
         # 8. PG-backup push heartbeat
         pgbak = ensure_monitor(
             api,
-            name="pg-backup heartbeat",
+            name="Бэкап БД (ежедневный)",
             type=MonitorType.PUSH,
             interval=86400,
             maxretries=0,

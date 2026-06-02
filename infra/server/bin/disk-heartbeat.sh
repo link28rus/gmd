@@ -26,7 +26,8 @@ read -r used_pct <<<"$(df -P "$MOUNT" 2>/dev/null | awk 'NR==2 {gsub(/%/,"",$5);
 
 if [[ -z "$used_pct" ]]; then
   echo "disk-heartbeat: failed to read disk usage for $MOUNT" >&2
-  curl -fsS --max-time 10 "${KUMA_PUSH_URL}?status=down&msg=df-failed&ping=0" >/dev/null || true
+  curl -fsS --max-time 10 -G "${KUMA_PUSH_URL}" \
+    --data-urlencode "status=down" --data-urlencode "msg=ошибка чтения диска" --data-urlencode "ping=0" >/dev/null || true
   exit 2
 fi
 
@@ -35,5 +36,7 @@ if (( used_pct >= THRESHOLD_PCT )); then
   status="down"
 fi
 
-msg="${used_pct}%25%20used%20on%20${MOUNT//\//%2F}"
-curl -fsS --max-time 10 "${KUMA_PUSH_URL}?status=${status}&msg=${msg}&ping=${used_pct}" >/dev/null
+# curl -G сам percent-кодирует кириллицу/пробелы — пишем msg человекочитаемо.
+msg="занято ${used_pct}% на диске ${MOUNT}"
+curl -fsS --max-time 10 -G "${KUMA_PUSH_URL}" \
+  --data-urlencode "status=${status}" --data-urlencode "msg=${msg}" --data-urlencode "ping=${used_pct}" >/dev/null

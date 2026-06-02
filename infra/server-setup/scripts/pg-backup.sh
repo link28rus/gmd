@@ -55,7 +55,8 @@ find "${GT_BACKUP_DIR}" -name 'glitchtip-*.sql.gz' -type f -mtime +7 -delete
 
 # --- Phase 0.4: Heartbeat в Uptime Kuma ---
 if [ -n "${KUMA_BACKUP_HEARTBEAT_URL:-}" ]; then
-  curl -fsS --max-time 10 "${KUMA_BACKUP_HEARTBEAT_URL}&msg=OK" >/dev/null \
+  # -G + --data-urlencode корректно кодирует кириллицу; URL уже несёт ?status=up.
+  curl -fsS --max-time 10 -G "${KUMA_BACKUP_HEARTBEAT_URL}" --data-urlencode "msg=Бэкап выполнен" >/dev/null \
     || echo "WARN: Kuma heartbeat failed (non-fatal)"
 fi
 
