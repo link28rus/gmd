@@ -1,12 +1,12 @@
-# RuStore-релиз: AAB + скриншоты
+# RuStore-релиз: AAB + скриншоты Перископа
 
 Single source of truth для всего, что отправляется в RuStore Console:
-бинарники AAB + скриншоты для wizard'а каждой подачи.
+бинарники AAB + скриншоты для wizard'а каждой подачи Перископа (родитель + ребёнок).
 
 **Сами `.aab` в git НЕ коммитим** (см. `.gitignore`) — они тяжёлые (~50MB)
 и точно воспроизводимы через `flutter build appbundle --release` из того же
 коммита. **Скриншоты — коммитим** (~50-200KB каждый, нужны при каждом
-ресабмите). Локальные AAB лежат в `parent/` и `child/` для быстрого re-upload.
+ресабмите). Локальные AAB Перископа-родителя и Перископа-ребёнка лежат в `parent/` и `child/` для быстрого re-upload.
 
 ## Layout
 
@@ -28,10 +28,10 @@ releases/rustore/
         └── raw/                          ← оригинальные device screencaps
 ```
 
-Имена AAB строго `gmd-{parent,child}-<X.Y.Z>+<N>.aab` — `<X.Y.Z>` из
+Имена AAB для Перископа строго `gmd-{parent,child}-<X.Y.Z>+<N>.aab` — `<X.Y.Z>` из
 корневого `package.json`, `+<N>` из `apps/mobile-{parent,child}/pubspec.yaml`
 (`version: X.Y.Z+N`). Это `pubspec build`, **не** effective versionCode с
-ABI offset (lesson #14).
+ABI offset (lesson #14). (Примечание: префикс `gmd-` в имени артефакта — историческая конвенция до ребрендинга, сохранена для стабильности контрактов имён файлов.)
 
 Имена скриншотов: `{app}-NN-descriptor.{jpg,png}` — порядок NN определяет
 showcase в Console (первая = preview в каталоге RuStore).

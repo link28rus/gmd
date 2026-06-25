@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# GMD prod deploy — запускается с локальной машины (git-bash/msys2 на Windows, либо Linux/Mac).
-# Требует: ssh-alias gmd-online (см. ~/.ssh/config).
+# Перископ prod deploy — запускается с локальной машины (git-bash/msys2 на Windows, либо Linux/Mac).
+# Требует: ssh-alias gmd-online (см. ~/.ssh/config). REMOTE_DIR=/opt/gmd — путь на
+# работающем сервере; переименование пути/алиаса/имени БД — отдельная инфра-миграция.
 #
 # Используем tar-pipe через SSH вместо rsync — rsync 3.4.x на Windows
 # падает с "dup() in/out/err failed" в git-bash pipeline. tar-pipe работает
@@ -71,4 +72,6 @@ ssh "${SERVER}" "cd ${REMOTE_DOCKER} && for i in \$(seq 1 60); do
 done
 docker compose --env-file ${REMOTE_DIR}/.env.prod -f docker-compose.prod.yml ps"
 
-say "Done. Проверь: curl https://gmd-online.ru/api/readyz"
+say "Done. Проверь оба домена:"
+say "  curl https://periscop.pro/api/readyz   (основной)"
+say "  curl https://gmd-online.ru/api/readyz  (legacy-зеркало)"

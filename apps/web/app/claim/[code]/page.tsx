@@ -13,8 +13,8 @@ export default async function ClaimLanding({ params }: Props): Promise<ReactElem
           Привязать устройство ребёнка
         </h1>
         <p className="mb-4 text-sm text-zinc-600">
-          Установите приложение <b>GMD для ребёнка</b> из RuStore или Google Play и отсканируйте
-          QR-код, который показан у родителя.
+          Установите приложение <b>Перископ для ребёнка</b> из RuStore или Google Play и
+          отсканируйте QR-код, который показан у родителя.
         </p>
         <p className="mb-2 text-xs uppercase tracking-wide text-zinc-500">Код приглашения</p>
         <p className="select-all rounded-md bg-zinc-100 px-4 py-3 text-center font-mono text-xl tracking-widest text-zinc-900">

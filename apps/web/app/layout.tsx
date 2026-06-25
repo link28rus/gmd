@@ -12,8 +12,17 @@ import { Footer } from '@/components/layout/footer';
 const geist = Geist({ subsets: ['latin'], variable: '--font-sans' });
 
 export const metadata: Metadata = {
-  title: 'GMD — сервис родительского контроля',
+  title: 'Перископ — сервис родительского контроля',
   description: 'Геолокация детей, геозоны, SOS-кнопка и экранное время',
+  metadataBase: new URL('https://periscop.pro'),
+  openGraph: {
+    title: 'Перископ — сервис родительского контроля',
+    description: 'Геолокация детей, геозоны, SOS-кнопка и экранное время',
+    url: 'https://periscop.pro',
+    siteName: 'Перископ',
+    locale: 'ru_RU',
+    type: 'website',
+  },
 };
 
 export default function RootLayout({

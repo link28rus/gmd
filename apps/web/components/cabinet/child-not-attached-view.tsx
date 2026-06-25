@@ -33,7 +33,7 @@ export function ChildNotAttachedView({ child }: Props): ReactElement {
           </div>
           <div className="px-4 py-4 text-sm text-muted-foreground">
             <p>
-              Установите приложение «GMD для ребёнка» на телефон ребёнка, откройте его и
+              Установите приложение «Перископ для ребёнка» на телефон ребёнка, откройте его и
               отсканируйте QR-код — после этого в кабинете появится карта.
             </p>
             <Button className="mt-4 w-full" onClick={() => setQrOpen(true)}>

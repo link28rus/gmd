@@ -115,7 +115,7 @@ class LocationForegroundService : Service() {
         //   - реальная стоянка (дом, школа на уроках, парковка >15 мин) →
         //     переходим в STILL → батарея экономится
         // Trade-off: расход батареи в режиме «гулял по двору 30 минут» вырастет
-        // (~+1-2%/час), но трек будет читаемый. Это и есть UX «как у Где мои дети».
+        // (~+1-2%/час), но трек будет читаемый — плавный, без разрывов.
         private const val SPEED_MOVING_MS = 2.0f
         private const val SPEED_STILL_MS = 0.5f
         private const val STILL_DEBOUNCE_MS = 15 * 60_000L
@@ -858,7 +858,7 @@ class LocationForegroundService : Service() {
         val intent = packageManager.getLaunchIntentForPackage(packageName)
         val pi = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE)
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("GMD — подключено к семье")
+            .setContentTitle("Перископ — подключено к семье")
             .setContentText("Маме/папе видно твоё местоположение")
             .setSmallIcon(R.drawable.ic_notification)
             .setOngoing(true)
@@ -871,7 +871,7 @@ class LocationForegroundService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val mgr = getSystemService(NotificationManager::class.java)
             mgr.createNotificationChannel(
-                NotificationChannel(CHANNEL_ID, "GMD location", NotificationManager.IMPORTANCE_LOW)
+                NotificationChannel(CHANNEL_ID, "Перископ — геолокация", NotificationManager.IMPORTANCE_LOW)
             )
         }
     }

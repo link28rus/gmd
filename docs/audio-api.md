@@ -1,4 +1,4 @@
-# API «Звук вокруг ребёнка» — документация
+# API «Звук вокруг ребёнка» — документация Перископа
 
 **Версия:** 1.0 (2026-04-23)
 **Статус:** Draft — актуально для Phase 5.2 (backend signaling)
@@ -94,7 +94,7 @@ parent              backend           FCM push          child            TURN
 ### 2.3 Принципы
 
 - **Backend не транслирует аудио.** Он только пересылает SDP/ICE-кандидаты между сторонами. Реальный медиапоток идёт напрямую через TURN.
-- **TURN обязателен на MVP.** Мобильные устройства за CGNAT/симметричным NAT не пробьют STUN. Для child включён force-relay режим (не светит IP родителя).
+- **TURN обязателен на MVP.** Мобильные устройства за CGNAT/симметричным NAT не пробьют STUN. Для Перископа-ребёнка включён force-relay режим (не светит IP родителя).
 - **SSE только для parent.** Child получает сигналы через FCM push (answer SDP, ICE-кандидаты, команда stop).
 
 ---
@@ -904,8 +904,8 @@ ttl = childReadyTimeoutSec + durationSec + 60
    = 45 + 300 + 60 = 405 секунд
 ```
 
-- `unix_timestamp_expiry` = текущее время + TTL. coturn проверяет, что timestamp не истёк.
-- `TURN_SECRET` — shared secret между backend и coturn (env var `COTURN_SECRET`).
+- `unix_timestamp_expiry` = текущее время + TTL. TURN-сервер проверяет, что timestamp не истёк.
+- `TURN_SECRET` — shared secret между backend и TURN-сервером (env var `COTURN_SECRET`).
 - TTL рассчитывается с запасом: `childReadyTimeoutSec + durationSec + 60` — чтобы credentials не протухли пока сессия ещё активна.
 
 ### 10.2 Использование в RTCPeerConnection

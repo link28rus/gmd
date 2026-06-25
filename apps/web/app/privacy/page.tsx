@@ -5,8 +5,8 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 export const metadata: Metadata = {
-  title: 'Политика конфиденциальности — GMD',
-  description: 'Политика конфиденциальности сервиса GMD в соответствии с 152-ФЗ',
+  title: 'Политика конфиденциальности — Перископ',
+  description: 'Политика конфиденциальности сервиса Перископ в соответствии с 152-ФЗ',
 };
 
 export default async function PrivacyPage(): Promise<React.ReactElement> {

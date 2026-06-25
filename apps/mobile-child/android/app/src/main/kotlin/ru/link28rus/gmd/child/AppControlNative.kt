@@ -113,7 +113,7 @@ object AppControlNative {
 
   /**
    * Открыть системные Settings → Accessibility (общий список).
-   * Пользователь должен сам найти «Где мои дети» и включить.
+   * Пользователь должен сам найти «Перископ Ребёнка» и включить.
    *
    * На MIUI/HyperOS перед этим может потребоваться разрешить «Ограниченные
    * настройки» через карточку приложения — см. [openAppDetailsSettings].
@@ -152,7 +152,7 @@ object AppControlNative {
   fun canDrawOverlays(ctx: Context): Boolean = Settings.canDrawOverlays(ctx)
 
   /**
-   * Открыть Settings → Спецдоступ → Поверх других приложений → GMD ребёнок.
+   * Открыть Settings → Спецдоступ → Поверх других приложений → Перископ Ребёнка.
    * Передаём `package:<our package>` — Android открывает уже на нашем app
    * (на большинстве OEM, на некоторых выкидывает в общий список — fallback OK).
    */

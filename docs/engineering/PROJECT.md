@@ -1,11 +1,11 @@
-# GMD Engineering Documentation
+# Перископ Engineering Documentation
 
-**GMD** — сервис родительского контроля и геолокации детей. Self-hosted аналог [gdemoideti.ru](https://gdemoideti.ru) для РФ-рынка с соответствием 152-ФЗ.
+**Перископ** — сервис родительского контроля и геолокации детей. Self-hosted аналог сервиса вроде [gdemoideti.ru](https://gdemoideti.ru) для РФ-рынка с соответствием 152-ФЗ. Бренд-переименование с GMD.
 
 **Current version:** 0.51.0  
 **Repository root:** `D:/Project/GMD`  
-**Production:** gmd-online.ru (VPS 45.67.230.87, Ubuntu 24.04, single iface ens3)  
-**Last updated:** 2026-05-15
+**Production:** periscop.pro (VPS 45.67.230.87, Ubuntu 24.04, single iface ens3); Legacy API: gmd-online.ru  
+**Last updated:** 2026-05-15 (миграция на новый домен и ребрендинг)
 
 ---
 
@@ -30,7 +30,7 @@
 
 ## Обзор продукта
 
-### MVP-фичи
+### MVP-фичи Перископа
 
 Родитель в едином приложении получает:
 
@@ -38,7 +38,7 @@
 2. **Геозоны** с push-уведомлениями при входе/выходе (PostGIS фильтрация, FCM high-priority)
 3. **SOS-кнопка** от ребёнка — родитель получает сирену (sweep 600↔1300 Hz, 12 сек, в DND-режиме)
 4. **Читаемая статистика экранного времени** Android (Usage Stats API, block sessions)
-5. **«Звук вокруг ребёнка»** — аудиомониторинг с микрофона по запросу (Android only), WebSocket relay 5-минутные сессии
+5. **«Звук вокруг ребёнка»** (Перископа) — аудиомониторинг с микрофона по запросу (Android only), WebSocket relay 5-минутные сессии
 6. **Сигнал («Найди телефон»)** — FCM high-priority с fallback на poll-очередь (1–3 сек delivery, 2500/3500 Hz квадратные волны)
 7. **Защита от удаления** (Device Admin + AccessibilityService на mobile-child)
 8. **Web-кабинет** (Next.js 15, TypeScript, responsive, dark theme, Zustand auth)
@@ -905,11 +905,11 @@ WHERE family_id = $1
 
 ---
 
-## Версионирование и релизы
+## Версионирование и релизы Перископа
 
 ### SemVer & Single Source of Truth
 
-**Source:** Root `package.json` field `version: "0.46.0"`
+**Source:** Root `package.json` field `version: "0.51.0"`
 
 **Sync targets:**
 
@@ -931,12 +931,12 @@ Build numbers (Flutter only):
 - Incremented per APK build (must monotonically increase for RuStore)
 - `pnpm version:sync` preserves `+N`, only updates X.Y.Z
 
-### CHANGELOG Format
+### CHANGELOG Format Перископа
 
 **File:** `CHANGELOG.md` (root)
 
 ```markdown
-## v0.46.0 — 2026-04-29 — Push-уведомления для родителя + дошлифовка
+## v0.51.0 — 2026-05-15 — Ребрендинг GMD → Перископ + миграция на periscop.pro
 
 ### Новые возможности
 
@@ -1042,7 +1042,7 @@ pnpm --filter @gmd/backend prisma studio  # Prisma UI for DB inspection
 ### Production Infrastructure
 
 **Server:** 45.67.230.87 (single public iface, no NAT)  
-**Domain:** gmd-online.ru (TLS via Let's Encrypt + Caddy)  
+**Domain:** periscop.pro (TLS via Let's Encrypt + Caddy); Legacy API доступна на gmd-online.ru  
 **SSH:** `gmd-online` (key-only, non-root user `gmd`, см. memory-compiler secret)
 
 **Docker containers (prod):**
@@ -1055,11 +1055,11 @@ pnpm --filter @gmd/backend prisma studio  # Prisma UI for DB inspection
 - `glitchtip` (Error tracking)
 - `uptime-kuma` (Monitoring)
 
-**Health checks:**
+**Health checks Перископа:**
 
-- `GET http://45.67.230.87/healthz` — backend liveness
-- `GET http://45.67.230.87/readyz` — backend readiness (checks DB + Redis)
-- `GET http://45.67.230.87/api/healthz` — web BFF
+- `GET https://periscop.pro/healthz` — backend liveness
+- `GET https://periscop.pro/readyz` — backend readiness (checks DB + Redis)
+- `GET https://periscop.pro/api/healthz` — web BFF
 
 ### Deployment
 

@@ -567,7 +567,7 @@ export class AudioService implements OnModuleInit {
     const url = process.env.AUDIO_WS_PUBLIC_URL;
     if (!url) {
       throw new Error(
-        'AUDIO_WS_PUBLIC_URL env variable must be set (e.g. wss://gmd-online.ru/audio/ws)',
+        'AUDIO_WS_PUBLIC_URL env variable must be set (e.g. wss://periscop.pro/audio/ws)',
       );
     }
     return url;

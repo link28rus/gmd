@@ -37,7 +37,7 @@ export class MailerService {
       this.settings.getString(SETTINGS_KEYS.SMTP_PASS, process.env.SMTP_PASS ?? ''),
       this.settings.getString(
         SETTINGS_KEYS.SMTP_FROM,
-        process.env.SMTP_FROM ?? 'GMD <no-reply@gmd.local>',
+        process.env.SMTP_FROM ?? 'Перископ <no-reply@periscop.pro>',
       ),
     ]);
     const port = Number.parseInt(portStr, 10) || 587;
@@ -96,8 +96,8 @@ export class MailerService {
       const info = await transporter.sendMail({
         from: cfg.from,
         to,
-        subject: 'GMD — проверка SMTP',
-        text: `Это тестовое письмо из админ-панели GMD.\n\nSMTP host: ${cfg.host}:${cfg.port}\nFrom: ${cfg.from}\n\nЕсли вы получили это письмо — конфигурация SMTP работает.`,
+        subject: 'Перископ — проверка SMTP',
+        text: `Это тестовое письмо из админ-панели Перископ.\n\nSMTP host: ${cfg.host}:${cfg.port}\nFrom: ${cfg.from}\n\nЕсли вы получили это письмо — конфигурация SMTP работает.`,
       });
       this.logger.log(`Test mail sent to ${to.slice(0, 3)}*** messageId=${info.messageId}`);
       return { ok: true, messageId: info.messageId };

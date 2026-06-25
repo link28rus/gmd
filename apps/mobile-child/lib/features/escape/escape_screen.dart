@@ -9,7 +9,7 @@ import '../../core/native/escape_channel.dart';
 /// стёр creds — устройство снова можно нормально удалить.
 ///
 /// Экран НЕ блокирует физическое удаление: app можно удалить через
-/// Settings → Apps → GMD → Удалить (кнопка ведёт прямо туда).
+/// Settings → Apps → Перископ Ребёнка → Удалить (кнопка ведёт прямо туда).
 class EscapeScreen extends StatefulWidget {
   const EscapeScreen({super.key});
 

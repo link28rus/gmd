@@ -60,7 +60,7 @@ export function ConsentBanner({ requiresConsent }: ConsentBannerProps): React.Re
       <div className="mx-auto flex max-w-4xl flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-amber-900">
           <span className="mr-1 font-semibold">Политика конфиденциальности обновлена.</span>
-          Чтобы продолжить пользоваться GMD, прочитайте{' '}
+          Чтобы продолжить пользоваться Перископом, прочитайте{' '}
           <Link href="/privacy" className="underline hover:no-underline">
             новую версию
           </Link>{' '}

@@ -15,7 +15,7 @@ void main() {
       child: const MaterialApp(home: HomeScreen()),
     ));
     await tester.pump();
-    expect(find.text('GMD'), findsOneWidget);
+    expect(find.text('Перископ'), findsOneWidget);
     expect(find.text('Привет!'), findsOneWidget);
     expect(find.text('SOS'), findsOneWidget);
   });

@@ -55,7 +55,7 @@ export function CabinetHeader(): ReactElement {
         <div className="flex min-w-0 items-center gap-3 sm:gap-6">
           <Link href="/cabinet" className="flex shrink-0 items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-600 text-white">
-              <span className="text-xs font-bold">GMD</span>
+              <span className="text-xs font-bold">П</span>
             </div>
             {/* Текст лого скрыт на узких экранах — место уходит под nav. */}
             <div className="hidden flex-col leading-tight sm:flex">
@@ -125,7 +125,9 @@ export function CabinetHeader(): ReactElement {
                   {user.name && (
                     <div className="truncate text-xs text-muted-foreground">{user.email}</div>
                   )}
-                  <div className="mt-1 text-[10px] text-muted-foreground">GMD v{APP_VERSION}</div>
+                  <div className="mt-1 text-[10px] text-muted-foreground">
+                    Перископ v{APP_VERSION}
+                  </div>
                 </div>
                 {/* На мобильном показываем «Скачать приложение» тут, плюс
                     переключатель темы (на sm: он уже есть в header'е). */}

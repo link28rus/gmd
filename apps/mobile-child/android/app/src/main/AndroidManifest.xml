@@ -198,7 +198,7 @@
              приложений (PIN-lock остался удалён, защита от удаления — Device Admin L1).
              Ловит TYPE_WINDOW_STATE_CHANGED, проверяет packageName через BlockManager
              и при попадании в blacklist запускает BlockOverlayActivity. Грантится
-             вручную: Settings → Accessibility → "Где мои дети — ребёнок". -->
+             вручную: Settings → Accessibility → "Перископ Ребёнка". -->
         <service
             android:name=".GmdAccessibilityService"
             android:label="@string/accessibility_service_description"

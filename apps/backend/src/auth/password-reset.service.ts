@@ -48,16 +48,16 @@ export class PasswordResetService {
     });
 
     const url = `${this.cfg.webBaseUrl}/reset-password?token=${rawToken}`;
-    const subject = 'Сброс пароля в GMD';
+    const subject = 'Сброс пароля в Перископ';
     const text =
       `Здравствуйте, ${displayName}!\n\n` +
-      `Для вашего аккаунта в GMD был запрошен сброс пароля. Чтобы задать ` +
+      `Для вашего аккаунта в Перископ был запрошен сброс пароля. Чтобы задать ` +
       `новый пароль, перейдите по ссылке:\n\n${url}\n\n` +
       `Ссылка действует 1 час. Если вы не запрашивали сброс — просто ` +
       `проигнорируйте это письмо, текущий пароль продолжит работать.`;
     const html =
       `<p>Здравствуйте, <strong>${escapeHtml(displayName)}</strong>!</p>` +
-      `<p>Для вашего аккаунта в GMD был запрошен сброс пароля. ` +
+      `<p>Для вашего аккаунта в Перископ был запрошен сброс пароля. ` +
       `Чтобы задать новый пароль, нажмите кнопку ниже:</p>` +
       `<p><a href="${escapeHtml(url)}" style="display:inline-block;padding:10px 20px;` +
       `background:#0ea5e9;color:#fff;text-decoration:none;border-radius:6px;` +

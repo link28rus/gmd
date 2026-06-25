@@ -193,7 +193,7 @@ export default function LoginClient(): ReactElement {
           className="w-full max-w-sm rounded-xl border border-slate-700/60 bg-slate-900/70 p-8 shadow-2xl backdrop-blur-xl"
           style={{ animation: 'fade-up 0.6s ease-out both' }}
         >
-          <h1 className="mb-1 text-center text-2xl font-semibold text-white">Вход в GMD</h1>
+          <h1 className="mb-1 text-center text-2xl font-semibold text-white">Вход в Перископ</h1>
           <p className="mb-6 text-center text-xs text-slate-400">
             Родительский контроль и геолокация
           </p>

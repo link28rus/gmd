@@ -45,16 +45,16 @@ export class EmailVerificationService {
     });
 
     const url = `${this.cfg.webBaseUrl}/confirm-email?token=${rawToken}`;
-    const subject = 'Подтвердите регистрацию в GMD';
+    const subject = 'Подтвердите регистрацию в Перископ';
     const text =
       `Здравствуйте, ${fullName}!\n\n` +
-      `Чтобы завершить регистрацию в GMD — сервисе родительского контроля ` +
+      `Чтобы завершить регистрацию в Перископ — сервисе родительского контроля ` +
       `и геолокации детей — подтвердите свой email по ссылке:\n\n${url}\n\n` +
       `Ссылка действует 24 часа. Если вы не регистрировались — просто ` +
       `проигнорируйте это письмо.`;
     const html =
       `<p>Здравствуйте, <strong>${escapeHtml(fullName)}</strong>!</p>` +
-      `<p>Чтобы завершить регистрацию в GMD — сервисе родительского контроля ` +
+      `<p>Чтобы завершить регистрацию в Перископ — сервисе родительского контроля ` +
       `и геолокации детей — подтвердите свой email:</p>` +
       `<p><a href="${escapeHtml(url)}" style="display:inline-block;padding:10px 20px;` +
       `background:#0ea5e9;color:#fff;text-decoration:none;border-radius:6px;` +

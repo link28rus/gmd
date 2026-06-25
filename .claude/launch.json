@@ -4,14 +4,14 @@
     {
       "name": "web (Next.js :3003)",
       "runtimeExecutable": "C:\\Users\\link2\\AppData\\Roaming\\npm\\pnpm.cmd",
-      "runtimeArgs": ["--filter", "@gmd/web", "dev"],
+      "runtimeArgs": ["--filter", "@periscop/web", "dev"],
       "port": 3003,
       "autoPort": true
     },
     {
       "name": "backend (NestJS :3001)",
       "runtimeExecutable": "C:\\Users\\link2\\AppData\\Roaming\\npm\\pnpm.cmd",
-      "runtimeArgs": ["--filter", "@gmd/backend", "dev"],
+      "runtimeArgs": ["--filter", "@periscop/backend", "dev"],
       "port": 3001
     },
     {

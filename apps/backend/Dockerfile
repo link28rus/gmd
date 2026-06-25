@@ -9,13 +9,13 @@ WORKDIR /repo
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml turbo.json tsconfig.base.json ./
 COPY apps/backend/package.json apps/backend/
 COPY packages ./packages
-RUN pnpm install --frozen-lockfile --filter @gmd/backend...
+RUN pnpm install --frozen-lockfile --filter @periscop/backend...
 
 FROM deps AS builder
 WORKDIR /repo
 COPY apps/backend/ apps/backend/
-RUN pnpm --filter @gmd/backend exec prisma generate
-RUN pnpm --filter @gmd/backend build
+RUN pnpm --filter @periscop/backend exec prisma generate
+RUN pnpm --filter @periscop/backend build
 
 FROM node:22-alpine AS runner
 ENV NODE_ENV=production

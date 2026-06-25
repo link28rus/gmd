@@ -126,7 +126,7 @@ function ResetPasswordInner(): ReactElement {
             <>
               <h1 className="mb-1 text-center text-2xl font-semibold text-white">Новый пароль</h1>
               <p className="mb-6 text-center text-xs text-slate-400">
-                Введите новый пароль для вашего аккаунта GMD
+                Введите новый пароль для вашего аккаунта Перископ
               </p>
 
               <form onSubmit={submit} className="space-y-4">

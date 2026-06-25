@@ -61,7 +61,7 @@ function asNum(v: string | undefined, def: number): number {
       provide: EMAIL_VERIFICATION_CONFIG,
       useFactory: () => ({
         ttlSec: asNum(process.env.EMAIL_VERIFICATION_TTL_SECONDS, 86400),
-        webBaseUrl: process.env.WEB_BASE_URL?.replace(/\/+$/, '') || 'https://gmd-online.ru',
+        webBaseUrl: process.env.WEB_BASE_URL?.replace(/\/+$/, '') || 'https://periscop.pro',
       }),
     },
     SmtpOtpProvider,

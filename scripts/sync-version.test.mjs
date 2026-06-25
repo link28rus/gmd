@@ -14,23 +14,23 @@ function makeFakeRepo(version = '1.2.3') {
 
   writeFileSync(
     join(root, 'package.json'),
-    JSON.stringify({ name: 'gmd', version }, null, 2) + '\n'
+    JSON.stringify({ name: 'periscop', version }, null, 2) + '\n'
   );
   writeFileSync(
     join(root, 'apps/web/package.json'),
-    JSON.stringify({ name: '@gmd/web', version: '0.0.0' }, null, 2) + '\n'
+    JSON.stringify({ name: '@periscop/web', version: '0.0.0' }, null, 2) + '\n'
   );
   writeFileSync(
     join(root, 'apps/backend/package.json'),
-    JSON.stringify({ name: '@gmd/backend', version: '0.0.0' }, null, 2) + '\n'
+    JSON.stringify({ name: '@periscop/backend', version: '0.0.0' }, null, 2) + '\n'
   );
   writeFileSync(
     join(root, 'apps/mobile-child/pubspec.yaml'),
-    'name: gmd_child\nversion: 0.0.0+5\n'
+    'name: periscop_child\nversion: 0.0.0+5\n'
   );
   writeFileSync(
     join(root, 'apps/mobile-parent/pubspec.yaml'),
-    'name: gmd_parent\nversion: 0.0.0+1\n'
+    'name: periscop_parent\nversion: 0.0.0+1\n'
   );
   writeFileSync(
     join(root, 'CHANGELOG.md'),
@@ -74,13 +74,13 @@ test('sync сохраняет пустые строки после version в pu
   try {
     writeFileSync(
       join(root, 'apps/mobile-child/pubspec.yaml'),
-      'name: gmd_child\nversion: 0.0.0+5\n\nenvironment:\n  sdk: ^3.11.5\n'
+      'name: periscop_child\nversion: 0.0.0+5\n\nenvironment:\n  sdk: ^3.11.5\n'
     );
     sync(root);
     const child = readFileSync(join(root, 'apps/mobile-child/pubspec.yaml'), 'utf8');
     assert.equal(
       child,
-      'name: gmd_child\nversion: 1.2.3+5\n\nenvironment:\n  sdk: ^3.11.5\n'
+      'name: periscop_child\nversion: 1.2.3+5\n\nenvironment:\n  sdk: ^3.11.5\n'
     );
   } finally {
     cleanup();
@@ -92,7 +92,7 @@ test('sync оставляет pubspec без +N неизменным по час
   try {
     writeFileSync(
       join(root, 'apps/mobile-child/pubspec.yaml'),
-      'name: gmd_child\nversion: 0.0.0\n'
+      'name: periscop_child\nversion: 0.0.0\n'
     );
     sync(root);
     const child = readFileSync(join(root, 'apps/mobile-child/pubspec.yaml'), 'utf8');
@@ -132,7 +132,7 @@ test('check ловит расхождение apps/web/package.json', () => {
     sync(root);
     writeFileSync(
       join(root, 'apps/web/package.json'),
-      JSON.stringify({ name: '@gmd/web', version: '9.9.9' }, null, 2) + '\n'
+      JSON.stringify({ name: '@periscop/web', version: '9.9.9' }, null, 2) + '\n'
     );
     const errors = check(root);
     assert.equal(errors.length, 1);
@@ -150,7 +150,7 @@ test('check ловит расхождение X.Y.Z в pubspec (build number и�
     sync(root);
     writeFileSync(
       join(root, 'apps/mobile-child/pubspec.yaml'),
-      'name: gmd_child\nversion: 0.9.9+5\n'
+      'name: periscop_child\nversion: 0.9.9+5\n'
     );
     const errors = check(root);
     assert.equal(errors.length, 1);
@@ -168,7 +168,7 @@ test('check игнорирует разные build number в pubspec', () => {
     sync(root);
     writeFileSync(
       join(root, 'apps/mobile-child/pubspec.yaml'),
-      'name: gmd_child\nversion: 1.2.3+999\n'
+      'name: periscop_child\nversion: 1.2.3+999\n'
     );
     assert.deepEqual(check(root), []);
   } finally {

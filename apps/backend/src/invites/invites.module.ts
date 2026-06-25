@@ -17,7 +17,7 @@ function asNum(v: string | undefined, def: number): number {
       provide: INVITES_CONFIG,
       useFactory: () => ({
         ttlSec: asNum(process.env.INVITE_TTL_SECONDS, 600),
-        landingBaseUrl: process.env.CLAIM_LANDING_BASE_URL || 'https://gmd-online.ru',
+        landingBaseUrl: process.env.CLAIM_LANDING_BASE_URL || 'https://periscop.pro',
       }),
     },
     InvitesService,

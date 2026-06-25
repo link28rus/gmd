@@ -27,7 +27,7 @@ class EscapeChannel {
     return await _ch.invokeMethod<String>('probeNow');
   }
 
-  /// Открыть Settings → Apps → GMD карточку (для кнопки «Удалить» в EscapeScreen).
+  /// Открыть Settings → Apps → Перископ Ребёнка карточку (для кнопки «Удалить» в EscapeScreen).
   static Future<void> openAppDetails() async {
     await _ch.invokeMethod<void>('openAppDetails');
   }

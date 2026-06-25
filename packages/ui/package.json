@@ -1,5 +1,5 @@
 {
-  "name": "@gmd/ui",
+  "name": "@periscop/ui",
   "version": "0.1.0",
   "private": true,
   "description": "Shared UI primitives (shadcn base) for web",

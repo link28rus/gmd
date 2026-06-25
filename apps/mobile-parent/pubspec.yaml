@@ -1,7 +1,7 @@
 name: gmd_parent
-description: "Перископ — приложение родителя"
+description: "Перископ Родителя — родительский контроль и геолокация ребёнка"
 publish_to: 'none'
-version: 0.51.3+27
+version: 0.52.0+27
 
 environment:
   sdk: ^3.11.5

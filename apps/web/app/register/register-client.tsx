@@ -93,7 +93,7 @@ export default function RegisterClient(): ReactElement {
           ) : (
             <>
               <h1 className="mb-1 text-center text-2xl font-semibold text-white">
-                Регистрация в GMD
+                Регистрация в Перископ
               </h1>
               <p className="mb-6 text-center text-xs text-slate-400">
                 После регистрации отправим ссылку для подтверждения почты

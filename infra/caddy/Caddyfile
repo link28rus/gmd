@@ -1,8 +1,10 @@
 {
 	admin off
 	# auto_https default — Caddy сам выпускает Let's Encrypt cert через ACME
-	# http-01 challenge на :80. На VPS gmd-online.ru открыты только 80/443 через
-	# UFW, прямой публичный IP без NAT/роутера.
+	# http-01 challenge на :80. На VPS открыты только 80/443 через UFW, прямой
+	# публичный IP без NAT/роутера. Обслуживаем ОБА домена: periscop.pro (primary,
+	# после ребрендинга) и gmd-online.ru (legacy-зеркало — старые установленные
+	# mobile-приложения ходят на него за API, пока пользователи не обновятся).
 	# HTTP/3 (QUIC) отключён: prod не пробрасывает UDP 443, и Alt-Svc: h3 в headers
 	# заставлял Chrome пытаться QUIC и кэшировать недоступный endpoint.
 	servers {
@@ -11,7 +13,11 @@
 }
 
 # --- Основной кабинет + API ---
-gmd-online.ru {
+# periscop.pro — основной домен (бренд «Перископ»); gmd-online.ru — legacy-зеркало
+# с идентичным роутингом для уже установленных приложений. Оба получают TLS-cert
+# через ACME http-01. НЕ редиректим gmd-online.ru на periscop.pro — иначе сломается
+# API старых mobile-клиентов (редирект ломает POST/PUT и Authorization-заголовки).
+periscop.pro, gmd-online.ru {
 	encode zstd gzip
 
 	# /healthz — edge liveness (должен идти до всех handle-матчеров)

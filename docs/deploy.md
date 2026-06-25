@@ -1,7 +1,7 @@
-# GMD — prod-деплой
+# Перископ — prod-деплой
 
-Runbook по развёртыванию production-стека GMD на VPS `45.67.230.87`
-(`gmd-online.ru`, Ubuntu 24.04 LTS, single iface ens3).
+Runbook по развёртыванию production-стека Перископ на VPS `45.67.230.87`
+(periscop.pro, Ubuntu 24.04 LTS, single iface ens3). Legacy API-зеркало доступно на gmd-online.ru.
 
 ## Архитектура
 
@@ -49,7 +49,7 @@ bash infra/deploy/deploy.sh
 
 1. `rsync` исходников (apps, packages, infra, root manifests) в `/opt/gmd/` на сервере.
 2. `docker compose build` и `up -d` на сервере.
-3. `docker compose exec backend pnpm --filter @gmd/backend prisma migrate deploy`.
+3. `docker compose exec gmd-backend pnpm --filter @periscop/backend prisma migrate deploy`.
 4. `docker compose ps` для проверки, что все сервисы healthy.
 
 ## Инкрементальный деплой
@@ -71,21 +71,23 @@ bash infra/deploy/deploy.sh
 ssh gmd-online 'cd /opt/gmd/docker && docker compose --env-file /opt/gmd/.env.prod -f docker-compose.prod.yml down'
 ```
 
+(историческая заметка: до 2026-05-15 сервис работал на domain gmd-online.ru; миграция на periscop.pro выполнена с сохранением инфра-имён как gmd-\* для стабильности текущих систем. Legacy API-редирект на gmd-online.ru остаётся активным.)
+
 (В Phase 0.4 — реестр образов и deploy по тегу.)
 
 ## Проверки после deploy
 
 ```bash
 # На dev-машине
-curl -sS http://45.67.230.87/healthz           # Caddy (TODO: directive order)
-curl -sS http://45.67.230.87/api/readyz        # backend → {"status":"ok","db":"up","redis":"up"}
-curl -sSI http://45.67.230.87/                 # web → HTTP/1.1 200 OK
+curl -sS https://periscop.pro/healthz           # Caddy (TODO: directive order)
+curl -sS https://periscop.pro/api/readyz        # backend → {"status":"ok","db":"up","redis":"up"}
+curl -sSI https://periscop.pro/                 # web → HTTP/1.1 200 OK
 
 # На сервере
 ssh gmd-online 'docker ps --format "table {{.Names}}\t{{.Status}}"'
 ```
 
-Ожидаем 6 контейнеров в `Up (healthy)`: `gmd-postgres`, `gmd-redis`, `gmd-minio`, `gmd-backend`, `gmd-web`, `gmd-caddy`.
+Ожидаем 6+ контейнеров в `Up (healthy)`: `gmd-postgres`, `gmd-redis`, `gmd-minio`, `gmd-backend`, `gmd-web`, `gmd-caddy`.
 
 ## Мониторинг
 
@@ -146,7 +148,7 @@ ssh gmd-online 'docker logs gmd-postgres --tail 50'
 `NEXT_PUBLIC_*` переменные запекаются на build-time. После изменения в `.env.prod` пересобрать:
 
 ```bash
-ssh gmd-online 'cd /opt/gmd/docker && docker compose --env-file /opt/gmd/.env.prod -f docker-compose.prod.yml up -d --build web'
+ssh gmd-online 'cd /opt/gmd/docker && docker compose --env-file /opt/gmd/.env.prod -f docker-compose.prod.yml up -d --build gmd-web'
 ```
 
 ## Файлы
@@ -167,7 +169,7 @@ ssh gmd-online 'cd /opt/gmd/docker && docker compose --env-file /opt/gmd/.env.pr
 1. Открыть https://developer.tech.yandex.ru
 2. Войти под yandex-аккаунтом организации.
 3. Создать API-ключ для **«HTTP Геокодер»** (JavaScript API не нужен).
-4. В кабинете Яндекса ограничить ключ по HTTP Referer: `https://gmd-online.ru/*` (+ `http://localhost:3003/*` для dev).
+4. В кабинете Яндекса ограничить ключ по HTTP Referer: `https://periscop.pro/*` (+ `http://localhost:3003/*` для dev).
 5. Положить ключ в `apps/web/.env.local` (dev) или в prod `.env` через `infra/deploy/deploy.sh`:
    ```
    YANDEX_GEOCODER_API_KEY=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx

@@ -18,7 +18,7 @@ class NotificationsPermissionsStep extends StatelessWidget {
       totalSteps: 9,
       title: 'Уведомления',
       description:
-          'Маме/папе нужно знать, если что-то случится. Мы будем показывать уведомления от GMD.',
+          'Маме/папе нужно знать, если что-то случится. Мы будем показывать уведомления от Перископа.',
       onRequest: () => _request(context),
       onSkip: () => context.go('/permissions/location'),
     );

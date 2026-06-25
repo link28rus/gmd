@@ -200,7 +200,7 @@ export default async function HomePage(): Promise<ReactElement> {
           className="bg-gradient-to-b from-white to-sky-200/70 bg-clip-text text-7xl font-bold tracking-tight text-transparent drop-shadow-[0_8px_28px_rgba(56,189,248,0.25)] sm:text-8xl"
           style={{ animation: 'fade-up 0.7s ease-out both' }}
         >
-          GMD
+          Перископ
         </h1>
         <p
           className="mt-4 max-w-xl text-base text-slate-300/90 sm:text-lg"

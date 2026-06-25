@@ -1,6 +1,7 @@
-# GMD — сервис родительского контроля и геолокации детей
+# Перископ — сервис родительского контроля и геолокации детей
 
-Аналог gdemoideti.ru («Где мои дети»), self-hosted, РФ-рынок.
+Self-hosted сервис для РФ-рынка. Бренд — «Перископ», основной домен periscop.pro
+(прежний gmd-online.ru остаётся legacy-зеркалом для уже установленных приложений).
 Дизайн MVP: [docs/superpowers/specs/2026-04-18-gmd-mvp-design.md](docs/superpowers/specs/2026-04-18-gmd-mvp-design.md).
 
 ## Кратко
@@ -11,7 +12,7 @@
 - Геозоны с push при входе/выходе
 - SOS-кнопка от ребёнка
 - Read-only статистика экранного времени Android
-- **«Звук вокруг ребёнка»** — аудиомониторинг окружения с устройства ребёнка по запросу родителя (Android only). Аналог фичи «Где мои дети».
+- **«Звук вокруг ребёнка»** — аудиомониторинг окружения с устройства ребёнка по запросу родителя (Android only).
 - Web-кабинет + мобильные приложения родителя (Android + iOS)
 
 Что в MVP **не делаем**: GPS-часы, чат, iOS-приложение ребёнка, мониторинг соцсетей, платные подписки.
@@ -58,8 +59,10 @@ releases/rustore/       AAB-артефакты для RuStore (см. ниже)
   95.104.240.111 (ens192 WAN), потребовал asymmetric-routing fix через
   CONNMARK fwmark 0x2. Теперь работает только как 301-редирект на
   gmd-online.ru (см. memory-compiler runbook). После 90 дней — выключение.
-- **Домен:** gmd-online.ru (DNS A → 45.67.230.87, TLS Caddy + Let's Encrypt
-  автоматически через ACME http-01 на :80)
+- **Домен:** periscop.pro — основной (DNS A → 45.67.230.87, TLS Caddy + Let's
+  Encrypt автоматически через ACME http-01 на :80). gmd-online.ru обслуживается
+  тем же Caddy как legacy-зеркало (адреса сайтов: `periscop.pro, gmd-online.ru`)
+  для старых установленных mobile-приложений, ходящих на него за API.
 - **Регион данных:** РФ (152-ФЗ)
 - **SSH (key-only):** алиас `gmd-online` (root + non-root sudo-user `gmd`,
   оба с ключом `id_ed25519_servers`). Password-auth отключён.
@@ -423,7 +426,7 @@ ssh gmd-online 'systemctl list-timers | grep pg-'
 ssh gmd-online 'ls /opt/gmd/backups/postgres/'
 ```
 
-Сервер доступен по `https://gmd-online.ru/` (DNS A → 45.67.230.87, прямой публичный IP на интерфейсе `ens3`, без NAT). Прежний домен `gmd.link28rus.ru` отвечает 301 редиректом до плановой остановки (90 дней с 2026-05-15).
+Сервер доступен по `https://periscop.pro/` — основной домен (DNS A → 45.67.230.87, прямой публичный IP на интерфейсе `ens3`, без NAT). `gmd-online.ru` обслуживается тем же Caddy как legacy-зеркало (идентичный роутинг, отдельный TLS-cert) для уже установленных mobile-приложений. Прежний домен `gmd.link28rus.ru` отвечает 301 редиректом до плановой остановки (90 дней с 2026-05-15).
 
 ## RuStore-релизы (`releases/rustore/`)
 

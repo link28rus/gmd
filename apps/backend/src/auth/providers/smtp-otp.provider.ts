@@ -14,11 +14,11 @@ export class SmtpOtpProvider implements OtpDeliveryProvider {
     }
     await this.mailer.send({
       to,
-      subject: 'Код входа в GMD',
+      subject: 'Код входа в Перископ',
       text: `Ваш код входа: ${code}\n\nКод действителен 10 минут. Если вы не пытались войти — проигнорируйте это письмо.`,
       html: `
         <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width:480px;margin:0 auto;padding:24px">
-          <h2 style="color:#111">Код входа в GMD</h2>
+          <h2 style="color:#111">Код входа в Перископ</h2>
           <p style="font-size:32px; letter-spacing:4px; font-weight:700; color:#111; margin:24px 0">${code}</p>
           <p style="color:#555">Код действителен 10 минут. Если вы не пытались войти — проигнорируйте это письмо.</p>
         </div>

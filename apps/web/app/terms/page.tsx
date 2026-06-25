@@ -5,8 +5,8 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 export const metadata: Metadata = {
-  title: 'Пользовательское соглашение — GMD',
-  description: 'Пользовательское соглашение сервиса GMD',
+  title: 'Пользовательское соглашение — Перископ',
+  description: 'Пользовательское соглашение сервиса Перископ',
 };
 
 export default async function TermsPage(): Promise<React.ReactElement> {

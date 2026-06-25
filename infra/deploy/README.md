@@ -1,13 +1,16 @@
-# GMD prod deploy runbook
+# Перископ prod deploy runbook
 
-Цель: за одну команду задеплоить актуальный код на `gmd-online` (45.67.230.87).
+Цель: за одну команду задеплоить актуальный код на сервер (45.67.230.87).
+SSH-алиас `gmd-online` и путь `/opt/gmd` — historical, остаются до отдельной
+инфра-миграции (переименование пути/алиаса). Основной домен — `periscop.pro`.
 
 ## Prerequisites
 
 - `ssh gmd-online 'echo ok'` → `ok` (ключ в `~/.ssh/config`, переход с
   `gmd-prod` выполнен в task #67 — миграция на новый VPS).
 - `/opt/gmd/.env.prod` на сервере заполнен (см. `.env.prod.example`).
-- DNS: `dig +short gmd-online.ru` → `45.67.230.87` (прямой публичный IP, без NAT).
+- DNS: `dig +short periscop.pro` → `45.67.230.87` (основной домен; `gmd-online.ru`
+  тоже резолвится в этот IP — legacy-зеркало для старых mobile-приложений).
 - UFW: открыты `22/80/443` (см. `infra/server-setup/`).
 
 ## Первый деплой

@@ -44,7 +44,7 @@ v0.39 Phase 6.2: full-screen overlay при попытке открыть заб
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Если очень нужно — попроси родителя снять блокировку из приложения GMD."
+        android:text="Если очень нужно — попроси родителя снять блокировку из приложения Перископ."
         android:textColor="#94A3B8"
         android:textSize="14sp"
         android:gravity="center"

@@ -169,7 +169,7 @@ export default function DownloadPublicClient(): ReactElement {
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-10">
-      <h1 className="mb-2 text-3xl font-semibold text-zinc-900">Скачать GMD</h1>
+      <h1 className="mb-2 text-3xl font-semibold text-zinc-900">Скачать Перископ</h1>
       <p className="mb-8 text-zinc-600">
         Два приложения: одно для своего телефона (родителю), второе — на телефон ребёнка.
       </p>

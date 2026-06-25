@@ -1,8 +1,8 @@
-# GMD
+# Перископ
 
 Сервис родительского контроля и геолокации детей.
 
-- **Домен:** [gmd-online.ru](https://gmd-online.ru)
+- **Домен:** [periscop.pro](https://periscop.pro) (прежний адрес работает как legacy-зеркало)
 - **Документация:** см. [CLAUDE.md](CLAUDE.md) и [docs/](docs/)
 - **Changelog:** [CHANGELOG.md](CHANGELOG.md)
 

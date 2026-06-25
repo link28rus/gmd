@@ -8,7 +8,7 @@ WORKDIR /repo
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml turbo.json tsconfig.base.json ./
 COPY apps/web/package.json apps/web/
 COPY packages ./packages
-RUN pnpm install --frozen-lockfile --filter @gmd/web...
+RUN pnpm install --frozen-lockfile --filter @periscop/web...
 
 FROM deps AS builder
 WORKDIR /repo
@@ -16,7 +16,7 @@ COPY apps/web/ apps/web/
 # NEXT_STANDALONE=true включает output: 'standalone' в next.config.ts
 # (локально не делаем standalone из-за Windows EPERM на symlinks).
 ENV NEXT_STANDALONE=true
-RUN pnpm --filter @gmd/web build
+RUN pnpm --filter @periscop/web build
 
 FROM node:22-alpine AS runner
 ENV NODE_ENV=production

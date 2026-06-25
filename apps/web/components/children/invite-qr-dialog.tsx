@@ -81,7 +81,7 @@ export function InviteQrDialog({ child, open, onOpenChange }: Props) {
         <DialogHeader>
           <DialogTitle>Привязка устройства — {child.name}</DialogTitle>
           <DialogDescription>
-            Отсканируйте QR на телефоне ребёнка в приложении «GMD для ребёнка».
+            Отсканируйте QR на телефоне ребёнка в приложении «Перископ для ребёнка».
           </DialogDescription>
         </DialogHeader>
 
@@ -98,7 +98,9 @@ export function InviteQrDialog({ child, open, onOpenChange }: Props) {
                 onChange={(e) => setConsentGranted(e.target.checked)}
                 className="mt-0.5 h-4 w-4"
               />
-              <span>Я получил согласие ребёнка на обработку его геолокации в сервисе GMD.</span>
+              <span>
+                Я получил согласие ребёнка на обработку его геолокации в сервисе Перископ.
+              </span>
             </label>
           </div>
         )}

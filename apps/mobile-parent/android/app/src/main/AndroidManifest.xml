@@ -8,7 +8,7 @@
 
     <application
         android:name="${applicationName}"
-        android:label="Перископ Родитель"
+        android:label="Перископ Родителя"
         android:icon="@mipmap/ic_launcher">
         <activity
             android:name=".MainActivity"

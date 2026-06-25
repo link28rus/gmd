@@ -20,7 +20,7 @@
 //     version: "0.51.0",
 //     buildNumber: 2021,
 //     filename: "gmd-parent-0.51.0+21-arm64-v8a.apk",
-//     url: "https://gmd-online.ru/api/public/download/gmd-parent-0.51.0+21-arm64-v8a.apk",
+//     url: "https://periscop.pro/api/public/download/gmd-parent-0.51.0+21-arm64-v8a.apk",
 //     sizeBytes: 21437891,
 //     mandatory: false
 //   }

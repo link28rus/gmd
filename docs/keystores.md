@@ -1,4 +1,4 @@
-# Android keystore'ы GMD
+# Android keystore'ы Перископа
 
 Подпись релизных AAB/APK для mobile-parent и mobile-child. Keystore'ы и пароли НЕ хранятся в git — только локально на машине разработчика и в encrypted memory-compiler.
 
@@ -15,15 +15,15 @@
 
 | Параметр         | parent                                                                                            | child                                                                                             |
 | ---------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| Alias            | `parent`                                                                                          | `gmd-child`                                                                                       |
+| Alias            | `parent`                                                                                          | `periscop-child`                                                                                  |
 | Algorithm        | RSA 2048-bit (SHA256withRSA)                                                                      | RSA 2048-bit (SHA256withRSA)                                                                      |
 | Validity         | 2026-05-12 → 2053-09-27 (~27 лет)                                                                 | 2026-04-21 → 2056-04-13 (~30 лет)                                                                 |
-| DN               | `CN=GMD Parent, OU=GMD, O=link28rus, L=Khabarovsk, ST=Khabarovsky Krai, C=RU`                     | `CN=GMD Child, OU=GMD, O=link28rus, L=Khabarovsk, ST=Khabarovsky Krai, C=RU`                      |
+| DN               | `CN=Перископ Родитель, OU=Перископ, O=link28rus, L=Khabarovsk, ST=Khabarovsky Krai, C=RU`         | `CN=Перископ Ребёнка, OU=Перископ, O=link28rus, L=Khabarovsk, ST=Khabarovsky Krai, C=RU`          |
 | SHA-1            | `41:F1:1C:56:4D:4D:E6:2B:E4:A3:33:5F:09:10:C3:44:14:04:79:B0`                                     | `C0:E8:42:8B:08:A6:F5:5C:10:BF:F1:2D:B7:2D:16:07:C7:D6:4D:D2`                                     |
 | SHA-256          | `75:32:18:33:C5:32:57:17:25:FB:5D:6B:10:33:8A:EE:DA:03:C5:46:CC:D7:4E:B8:74:B6:4B:B7:BA:80:8D:6A` | `46:43:FB:4D:1B:29:5F:2E:3C:09:8C:BF:3B:CF:9B:CF:9E:D4:9D:A2:A8:19:A4:9F:84:5C:69:70:48:8A:49:C9` |
-| Распространялся? | нет (новый, RuStore-only canal)                                                                   | да — все v0.50.x APK на устройствах подписаны им                                                  |
+| Распространялся? | нет (новый, RuStore-only канал для Перископа)                                                     | да — все v0.50.x+ APK Перископа-ребёнка на устройствах подписаны им                               |
 
-**Critical:** child keystore УЖЕ на устройствах пользователей. Менять его = ломать update path. При публикации в RuStore — использовать именно этот keystore (PEPK ниже).
+**Critical:** child keystore УЖЕ на устройствах пользователей Перископа. Менять его = ломать update path. При публикации в RuStore — использовать именно этот keystore (PEPK ниже).
 
 ## Как Gradle подхватывает signing
 

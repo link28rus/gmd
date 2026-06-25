@@ -1,6 +1,6 @@
-# GMD — мониторинг (Phase 0.4)
+# Перископ — мониторинг (Phase 0.4)
 
-Два сервиса на prod-сервере `45.67.230.87` (gmd-online.ru): **GlitchTip** (error tracking) и **Uptime Kuma** (uptime + алерты). Оба доступны только через SSH-туннель.
+Два сервиса на prod-сервере `45.67.230.87` (periscop.pro, legacy API gmd-online.ru): **GlitchTip** (error tracking) и **Uptime Kuma** (uptime + алерты). Оба доступны только через SSH-туннель.
 
 ## Быстрый доступ
 
@@ -16,21 +16,21 @@ ssh -N gmd-online-tunnels &
 
 - `GlitchTip admin credentials`
 - `Uptime Kuma admin credentials`
-- `Telegram alerts bot @gmd_khv_bot`
+- `Telegram alerts bot @periscop_monitoring_bot`
 
 ## Что мониторим
 
-| #   | Монитор (имя в Kuma)           | Критичность | Notification     |
-| --- | ------------------------------ | ----------- | ---------------- |
-| 1   | Caddy (вход, /healthz)         | warn        | Telegram         |
-| 2   | Веб-сайт (/api/healthz)        | warn        | Telegram         |
-| 3   | Бэкенд API (/api/readyz)       | critical    | Telegram + email |
-| 4   | Контейнер PostgreSQL           | critical    | Telegram + email |
-| 5   | Контейнер Redis                | critical    | Telegram + email |
-| 6   | TLS-сертификат (gmd-online.ru) | warn        | Telegram (<14d)  |
-| 7   | Свободное место на диске       | warn        | Telegram (push)  |
-| 8   | Бэкап БД (ежедневный)          | critical    | Telegram + email |
-| 9   | Контейнер бэкенда              | critical    | Telegram + email |
+| #   | Монитор (имя в Kuma)          | Критичность | Notification     |
+| --- | ----------------------------- | ----------- | ---------------- |
+| 1   | Caddy (вход, /healthz)        | warn        | Telegram         |
+| 2   | Веб-сайт (/api/healthz)       | warn        | Telegram         |
+| 3   | Бэкенд API (/api/readyz)      | critical    | Telegram + email |
+| 4   | Контейнер PostgreSQL          | critical    | Telegram + email |
+| 5   | Контейнер Redis               | critical    | Telegram + email |
+| 6   | TLS-сертификат (periscop.pro) | warn        | Telegram (<14d)  |
+| 7   | Свободное место на диске      | warn        | Telegram (push)  |
+| 8   | Бэкап БД (ежедневный)         | critical    | Telegram + email |
+| 9   | Контейнер бэкенда             | critical    | Telegram + email |
 
 ### Текст уведомлений
 
@@ -145,19 +145,19 @@ monitor_notification/monitor WHERE [monitor_]id=N`) + рестарт Kuma.
 
 ## Восстановление после миграции (инцидент 2026-06-01, task #72)
 
-Миграция на новый сервер (2026-05-15, task #67) **не перенесла** операционку
-мониторинга. Обнаружено через 2 дня после аутажа Redis (#71), который мониторинг
+Миграция на новый сервер (2026-05-15, task #67) — домен перехоз с gmd-online.ru на periscop.pro,
+**не перенесла** операционку мониторинга. Обнаружено через 2 дня после аутажа Redis (#71), который мониторинг
 проспал. Чек-лист на будущее при переезде:
 
 1. **URL HTTP-мониторов** в Uptime Kuma остались на старом домене
-   `gmd.link28rus.ru` → после переезда DOWN с `ECONNREFUSED`. Так как они уже
+   `gmd-online.ru` → после переезда на periscop.pro DOWN с `ECONNREFUSED`. Так как они уже
    были DOWN, реальный аутаж не дал смены статуса UP→DOWN → **алерт не сработал**
    (Kuma шлёт только на смену статуса). **Сломанный монитор маскирует реальный
-   сбой.** Фикс: `UPDATE monitor SET url=replace(url,'старый','новый')` (Kuma
+   сбой.** Фикс: `UPDATE monitor SET url=replace(url,'gmd-online.ru','periscop.pro')` (Kuma
    остановить → throwaway `sqlite3` на volume → старт).
-2. **Из контейнера Kuma `gmd-online.ru` резолвится в `127.0.1.1`** (hostname
+2. **Из контейнера Kuma `periscop.pro` резолвится в `127.0.1.1`** (hostname
    сервера в /etc/hosts) → `ECONNREFUSED 127.0.1.1:443`. Фикс: в compose у
-   `uptime-kuma` добавлен `extra_hosts: ['gmd-online.ru:45.67.230.87']`. Hairpin
+   `gmd-uptime-kuma` добавлен `extra_hosts: ['periscop.pro:45.67.230.87']`. Hairpin
    на прямой публичный IP (ens3, без NAT) работает.
 3. **Бэкапы PG не делались 17 дней** — не было `/opt/gmd/bin`, таймеров, дампов.
    Фикс: `infra/server-setup/40-backups-install.sh` (копировать в `/root/gmd-setup`

@@ -246,7 +246,7 @@ export class AppSettingsService implements OnModuleInit {
       },
       {
         key: SETTINGS_KEYS.SMTP_FROM,
-        value: process.env.SMTP_FROM ?? 'GMD <no-reply@gmd.local>',
+        value: process.env.SMTP_FROM ?? 'Перископ <no-reply@periscop.pro>',
         description: 'Адрес отправителя (From) для всех исходящих писем',
         isSecret: false,
       },

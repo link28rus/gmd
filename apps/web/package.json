@@ -1,8 +1,8 @@
 {
-  "name": "@gmd/web",
-  "version": "0.51.3",
+  "name": "@periscop/web",
+  "version": "0.52.0",
   "private": true,
-  "description": "GMD web — лендинг и кабинет родителя",
+  "description": "Перископ web — лендинг и кабинет родителя",
   "scripts": {
     "dev": "next dev -p 3003",
     "build": "next build",

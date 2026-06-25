@@ -1,4 +1,4 @@
-// SemVer-сравнение для APK-релизов GMD.
+// SemVer-сравнение для APK-релизов Перископ.
 // Формат version-string из имени файла (см. apps/web/lib/downloads/index.ts):
 //   gmd-child-<MAJOR>.<MINOR>.<PATCH>(-<prerelease>)?(+<buildNumber>)?-<abi>.apk
 //

@@ -1,4 +1,4 @@
-# Production docker-compose для GMD (45.67.230.87 / gmd-online.ru).
+# Production docker-compose для Перископ (periscop.pro, gmd-online.ru — legacy-зеркало).
 # Запуск с сервера: cd /opt/gmd && docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
 # Все bind-mounts лежат в /opt/gmd/data/<service>/.
 # Наружу открыты только caddy:80/443 (проверяется UFW).
@@ -218,11 +218,12 @@ services:
       - /opt/gmd/data/uptime-kuma:/app/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks: [gmd_net]
-    # Из контейнера gmd-online.ru иначе резолвится в 127.0.1.1 (hostname сервера
-    # в /etc/hosts идёт первым) → edge-мониторы #1/2/3/6 падали с ECONNREFUSED
-    # 127.0.1.1:443. Пиним на реальный публичный IP, чтобы мониторы проверяли
-    # полный путь Caddy+TLS+backend. Hairpin работает (прямой публичный IP на ens3).
+    # Из контейнера публичный домен иначе резолвится в 127.0.1.1 (hostname сервера
+    # в /etc/hosts идёт первым) → edge-мониторы падали с ECONNREFUSED 127.0.1.1:443.
+    # Пиним оба домена на реальный публичный IP, чтобы мониторы проверяли полный
+    # путь Caddy+TLS+backend. Hairpin работает (прямой публичный IP на ens3).
     extra_hosts:
+      - 'periscop.pro:45.67.230.87'
       - 'gmd-online.ru:45.67.230.87'
     ports:
       - '127.0.0.1:3001:3001'
@@ -263,12 +264,12 @@ services:
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
-      SMTP_FROM: ${SMTP_FROM:-GMD <no-reply@gmd-online.ru>}
+      SMTP_FROM: ${SMTP_FROM:-Перископ <no-reply@periscop.pro>}
       SMTP_SECRET_KEY: ${SMTP_SECRET_KEY:-}
       OTP_LOG_DEV: ${OTP_LOG_DEV:-false}
       OTP_FIXED_DEV: ${OTP_FIXED_DEV:-}
       INVITE_TTL_SECONDS: ${INVITE_TTL_SECONDS:-600}
-      CLAIM_LANDING_BASE_URL: ${CLAIM_LANDING_BASE_URL:-https://gmd-online.ru}
+      CLAIM_LANDING_BASE_URL: ${CLAIM_LANDING_BASE_URL:-https://periscop.pro}
       ADMIN_EMAILS: ${ADMIN_EMAILS:-}
       AUTH_DEV_MODE: ${AUTH_DEV_MODE:-false}
       AUTH_DEV_SECRET: ${AUTH_DEV_SECRET:-}
@@ -277,7 +278,7 @@ services:
       SENTRY_DSN: ${SENTRY_DSN_BACKEND}
       PORT: '3001'
       AUDIO_WS_SECRET: ${AUDIO_WS_SECRET}
-      AUDIO_WS_PUBLIC_URL: ${AUDIO_WS_PUBLIC_URL:-wss://gmd-online.ru/audio/ws}
+      AUDIO_WS_PUBLIC_URL: ${AUDIO_WS_PUBLIC_URL:-wss://periscop.pro/audio/ws}
       # v0.37: FCM service-account JSON (base64-encoded). Если не задан —
       # FcmService стартует в DISABLED состоянии, push не отправляется,
       # backend fallback'ится на poll-команды через DeviceCommand queue.
