@@ -8,7 +8,7 @@
 
     <application
         android:name="${applicationName}"
-        android:label="GMD: родитель"
+        android:label="Перископ Родитель"
         android:icon="@mipmap/ic_launcher">
         <activity
             android:name=".MainActivity"

@@ -177,7 +177,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       const Text(
-                        'Вход в GMD',
+                        'Вход в Перископ',
                         textAlign: TextAlign.center,
                         style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
                       ),

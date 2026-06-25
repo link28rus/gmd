@@ -32,7 +32,7 @@ class AppControlChannel {
   }
 
   /// v0.39 Phase 6.2: открыть Settings → Accessibility (общий список).
-  /// Пользователь сам находит «Где мои дети» и включает.
+  /// Пользователь сам находит «gmd_child» и включает.
   static Future<void> openAccessibilitySettings() async {
     await _ch.invokeMethod<void>('openAccessibilitySettings');
   }

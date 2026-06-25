@@ -375,7 +375,7 @@ class _InviteQrSheetState extends ConsumerState<_InviteQrSheet> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Откройте на телефоне ребёнка приложение «GMD для ребёнка» '
+            'Откройте на телефоне ребёнка приложение «Перископ Ребёнка» '
             'и отсканируйте QR.',
             style: theme.textTheme.bodySmall
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant),

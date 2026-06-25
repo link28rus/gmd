@@ -110,7 +110,7 @@ class _EmptyState extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           'Добавьте первого ребёнка по QR-коду — на телефоне ребёнка установите '
-          'приложение GMD и отсканируйте QR из этого приложения.',
+          'приложение «Перископ Ребёнка» и отсканируйте QR из этого приложения.',
           textAlign: TextAlign.center,
           style: TextStyle(color: Colors.grey.shade700),
         ),

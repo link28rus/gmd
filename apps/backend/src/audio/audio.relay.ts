@@ -59,6 +59,30 @@ export class AudioRelay {
     return new Set(this.sessions.keys());
   }
 
+  /**
+   * DIAG (task #73): краткая статистика по всем живым relay-сессиям для
+   * периодического лога в watchdog'е. Показывает, идут ли фреймы (totalFrames
+   * растёт между тиками) и есть ли consumers, не дожидаясь terminate.
+   */
+  statsSnapshot(): Array<{
+    sessionId: string;
+    frames: number;
+    drops: number;
+    consumers: number;
+    hasProducer: boolean;
+    sinceLastFrameMs: number;
+  }> {
+    const now = Date.now();
+    return Array.from(this.sessions.values()).map((s) => ({
+      sessionId: s.sessionId,
+      frames: s.totalFrames,
+      drops: s.dropCount,
+      consumers: s.consumers.size,
+      hasProducer: s.producer !== null,
+      sinceLastFrameMs: now - s.lastFrameTs,
+    }));
+  }
+
   /** Снимок состояния сессии. Только для тестов / админ-метрик. */
   snapshot(sessionId: string): Readonly<RelaySession> | null {
     return this.sessions.get(sessionId) ?? null;
@@ -97,6 +121,14 @@ export class AudioRelay {
     const s = this.sessions.get(sessionId);
     if (!s) return;
     if (s.producer === ws) {
+      // DIAG (task #73): сколько фреймов успел прислать producer до отвала.
+      // totalFrames=0 → producer подключился, но не отдал ни одного аудио-кадра
+      // (mic не стартовал / headless record молчит / engine убит STOP'ом).
+      const idleMs = Date.now() - s.lastFrameTs;
+      this.logger.warn(
+        `session ${sessionId}: producer detached — totalFrames=${s.totalFrames} ` +
+          `drops=${s.dropCount} consumers=${s.consumers.size} sinceLastFrameMs=${idleMs}`,
+      );
       s.producer = null;
       // Producer ушёл — consumer'ы тоже не могут получать. Закрываем их явно.
       for (const c of s.consumers) {
@@ -127,6 +159,15 @@ export class AudioRelay {
     if (!s) return;
     s.lastFrameTs = Date.now();
     s.totalFrames++;
+
+    // DIAG (task #73): первый фрейм = producer реально начал слать аудио;
+    // периодический лог = поток жив. Раскрывает «ACTIVE но звука нет» —
+    // producer молчит (нет первого фрейма) vs consumer не играет (фреймы идут).
+    if (s.totalFrames === 1 || s.totalFrames % 250 === 0) {
+      this.logger.log(
+        `session ${sessionId}: producer frames=${s.totalFrames} consumers=${s.consumers.size} drops=${s.dropCount}`,
+      );
+    }
 
     if (s.consumers.size === 0) return;
 
@@ -186,6 +227,11 @@ export class AudioRelay {
   terminate(sessionId: string, code: number, reason: string): void {
     const s = this.sessions.get(sessionId);
     if (!s) return;
+    // DIAG (task #73): итог сессии при принудительном закрытии.
+    this.logger.warn(
+      `session ${sessionId}: terminate code=${code} reason=${reason} ` +
+        `totalFrames=${s.totalFrames} drops=${s.dropCount} consumers=${s.consumers.size}`,
+    );
     if (s.producer && s.producer.readyState === WS_OPEN) {
       try {
         s.producer.close(code, reason);

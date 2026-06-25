@@ -59,7 +59,7 @@ export function CabinetHeader(): ReactElement {
             </div>
             {/* Текст лого скрыт на узких экранах — место уходит под nav. */}
             <div className="hidden flex-col leading-tight sm:flex">
-              <span className="text-sm font-semibold text-foreground">Где мои дети</span>
+              <span className="text-sm font-semibold text-foreground">Родительский контроль</span>
               <span className="text-[10px] text-muted-foreground">v{APP_VERSION}</span>
             </div>
           </Link>

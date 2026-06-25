@@ -68,6 +68,15 @@ export class AudioGateway
     //    (CHILD_OFFLINE/NETWORK_ERROR/PARENT_TIMEOUT) и шлёт STOP_AUDIO push.
     // .unref() чтобы не держать event loop при graceful shutdown.
     this.watchdogTimer = setInterval(() => {
+      // DIAG (task #73): снимок живых сессий — видно, растёт ли totalFrames
+      // (producer шлёт аудио) и есть ли consumers, без ожидания terminate.
+      const snap = this.relay.statsSnapshot();
+      for (const st of snap) {
+        this.logger.log(
+          `relay-stats session=${st.sessionId} frames=${st.frames} drops=${st.drops} ` +
+            `consumers=${st.consumers} producer=${st.hasProducer} sinceLastFrameMs=${st.sinceLastFrameMs}`,
+        );
+      }
       // Шаг 1: idle relay-sessions.
       const stuck = this.relay.findIdleSessions(SESSION_IDLE_TIMEOUT_MS);
       for (const sid of stuck) {

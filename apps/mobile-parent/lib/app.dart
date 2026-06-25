@@ -39,7 +39,7 @@ class _GmdParentAppState extends ConsumerState<GmdParentApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
-      title: 'GMD',
+      title: 'Перископ',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,

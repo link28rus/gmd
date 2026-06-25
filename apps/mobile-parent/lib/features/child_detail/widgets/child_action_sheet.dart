@@ -147,9 +147,9 @@ class _ChildActionSheetState extends ConsumerState<ChildActionSheet> {
         title: Text(next ? 'Включить защиту от удаления?' : 'Отключить защиту?'),
         content: Text(
           next
-              ? '$childName не сможет удалить или отключить приложение GMD на '
+              ? '$childName не сможет удалить или отключить приложение «Перископ Ребёнка» на '
                   'своём устройстве. Применится в течение нескольких секунд.'
-              : '$childName сможет удалить приложение GMD со своего устройства.',
+              : '$childName сможет удалить приложение «Перископ Ребёнка» со своего устройства.',
         ),
         actions: [
           TextButton(
@@ -246,7 +246,7 @@ class _ChildActionSheetState extends ConsumerState<ChildActionSheet> {
     if (e.isRateLimited) return 'Слишком частые сигналы. Подождите минуту.';
     switch (e.code) {
       case 'no_active_device':
-        return 'У ребёнка нет активного устройства — приложение GMD не установлено или удалено.';
+        return 'У ребёнка нет активного устройства — приложение «Перископ Ребёнка» не установлено или удалено.';
       case 'child_not_found':
         return 'Ребёнок не найден.';
       case 'consent_required':

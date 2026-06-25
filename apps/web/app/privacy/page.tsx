@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 };
 
 export default async function PrivacyPage(): Promise<React.ReactElement> {
-  const filePath = path.join(process.cwd(), 'content', 'legal', 'privacy-policy-v1.3.md');
+  const filePath = path.join(process.cwd(), 'content', 'legal', 'privacy-policy-v1.6.md');
   const content = await fs.readFile(filePath, 'utf-8');
 
   return (
