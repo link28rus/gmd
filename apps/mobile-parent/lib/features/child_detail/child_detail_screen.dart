@@ -119,7 +119,7 @@ class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen> {
                             key: ValueKey('tile_$_tileGen'),
                             urlTemplate:
                                 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                            userAgentPackageName: 'ru.link28rus.gmd.gmd_parent',
+                            userAgentPackageName: 'pro.periscop.parent',
                             maxNativeZoom: 19,
                             keepBuffer: 4,
                             panBuffer: 2,

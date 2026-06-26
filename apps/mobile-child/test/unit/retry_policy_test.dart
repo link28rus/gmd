@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gmd_child/ingestor/retry_policy.dart';
+import 'package:periscop_child/ingestor/retry_policy.dart';
 
 void main() {
   const p = RetryPolicy(maxAttempts: 5);

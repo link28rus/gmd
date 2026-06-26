@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 ///   2. Открыть карточку приложения чтобы пользователь смог Uninstall
 ///   3. Опционально triggerнуть probe сразу (например при возвращении из background)
 class EscapeChannel {
-  static const MethodChannel _ch = MethodChannel('ru.link28rus.gmd.child/escape');
+  static const MethodChannel _ch = MethodChannel('pro.periscop.child/escape');
 
   /// True если устройство в escape-mode (родитель удалил ребёнка / сделал
   /// reset-device, и backend подтвердил probe'ом). Native снял Device Admin

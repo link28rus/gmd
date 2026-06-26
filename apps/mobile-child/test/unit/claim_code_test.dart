@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gmd_child/features/claim/claim_code.dart';
+import 'package:periscop_child/features/claim/claim_code.dart';
 
 void main() {
   group('normalizeInviteInput', () {

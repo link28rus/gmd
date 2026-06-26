@@ -2,7 +2,7 @@ import 'package:flutter/services.dart';
 
 // Мост в Kotlin-side DiagLog для mobile-parent. Используется из UI-isolate;
 // fallback'ит в no-op если канал недоступен (widget-тесты, web).
-const _channel = MethodChannel('ru.link28rus.gmd.parent/diag');
+const _channel = MethodChannel('pro.periscop.parent/diag');
 
 Future<void> diagLog(String tag, String msg) async {
   try {
