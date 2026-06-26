@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:periscop_child/features/permissions/microphone_step.dart';
+import 'package:gmd_child/features/permissions/microphone_step.dart';
 
 void main() {
   testWidgets('MicrophoneStep renders title, description, and buttons',

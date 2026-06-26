@@ -16,7 +16,7 @@ enum LocationProfile {
 }
 
 class LocationServiceChannel {
-  static const MethodChannel _channel = MethodChannel('pro.periscop.child/location');
+  static const MethodChannel _channel = MethodChannel('ru.link28rus.gmd.child/location');
 
   Future<void> startService() async {
     await _channel.invokeMethod('startService');

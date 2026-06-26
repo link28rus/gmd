@@ -11,7 +11,7 @@ import 'package:flutter/services.dart';
 // сервису и potential native-компонентам без Flutter engine.
 class DeviceAdminChannel {
   static const MethodChannel _channel =
-      MethodChannel('pro.periscop.child/protection');
+      MethodChannel('ru.link28rus.gmd.child/protection');
 
   Future<bool> isActive() async {
     final result = await _channel.invokeMethod<bool>('isActive');

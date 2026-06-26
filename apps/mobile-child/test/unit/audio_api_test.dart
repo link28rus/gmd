@@ -1,8 +1,8 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
-import 'package:periscop_child/core/api/audio_api.dart';
-import 'package:periscop_child/core/api/api_exceptions.dart';
+import 'package:gmd_child/core/api/audio_api.dart';
+import 'package:gmd_child/core/api/api_exceptions.dart';
 
 class _MockDio extends Mock implements Dio {}
 

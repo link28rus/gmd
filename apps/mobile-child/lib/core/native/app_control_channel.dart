@@ -9,7 +9,7 @@ import 'package:flutter/services.dart';
 /// (обычно — DiagLog + skip/retry).
 class AppControlChannel {
   static const MethodChannel _ch =
-      MethodChannel('pro.periscop.child/app_control');
+      MethodChannel('ru.link28rus.gmd.child/app_control');
 
   /// Granted ли PACKAGE_USAGE_STATS permission. На iOS / web — false.
   static Future<bool> hasUsageStatsPermission() async {

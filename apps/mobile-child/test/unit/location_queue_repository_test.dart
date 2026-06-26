@@ -1,7 +1,7 @@
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:periscop_child/data/database.dart';
-import 'package:periscop_child/data/location_queue_repository.dart';
+import 'package:gmd_child/data/database.dart';
+import 'package:gmd_child/data/location_queue_repository.dart';
 
 void main() {
   late AppDatabase db;

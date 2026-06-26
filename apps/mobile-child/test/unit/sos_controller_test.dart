@@ -3,11 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:mocktail/mocktail.dart';
 
-import 'package:periscop_child/core/api/child_api.dart';
-import 'package:periscop_child/core/api/api_exceptions.dart';
-import 'package:periscop_child/core/storage/secure_storage_service.dart';
-import 'package:periscop_child/features/claim/claim_controller.dart';
-import 'package:periscop_child/features/sos/sos_controller.dart';
+import 'package:gmd_child/core/api/child_api.dart';
+import 'package:gmd_child/core/api/api_exceptions.dart';
+import 'package:gmd_child/core/storage/secure_storage_service.dart';
+import 'package:gmd_child/features/claim/claim_controller.dart';
+import 'package:gmd_child/features/sos/sos_controller.dart';
 
 class _MockApi extends Mock implements ChildApi {}
 

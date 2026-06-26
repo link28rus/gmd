@@ -1,4 +1,4 @@
-name: periscop_parent
+name: gmd_parent
 description: "Перископ Родителя — родительский контроль и геолокация ребёнка"
 publish_to: 'none'
 version: 0.52.0+27

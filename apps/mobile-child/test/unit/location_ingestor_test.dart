@@ -1,9 +1,9 @@
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:periscop_child/core/api/child_api.dart';
-import 'package:periscop_child/data/database.dart';
-import 'package:periscop_child/data/location_queue_repository.dart';
-import 'package:periscop_child/ingestor/location_ingestor.dart';
+import 'package:gmd_child/core/api/child_api.dart';
+import 'package:gmd_child/data/database.dart';
+import 'package:gmd_child/data/location_queue_repository.dart';
+import 'package:gmd_child/ingestor/location_ingestor.dart';
 import 'package:mocktail/mocktail.dart';
 
 class _MockApi extends Mock implements ChildApi {}

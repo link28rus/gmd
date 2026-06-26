@@ -33,7 +33,7 @@ val rustoreProperties = Properties().apply {
 val rustorePushProjectId: String = rustoreProperties.getProperty("rustorePushProjectId", "")
 
 android {
-    namespace = "pro.periscop.parent"
+    namespace = "ru.link28rus.gmd.gmd_parent"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -47,7 +47,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "pro.periscop.parent"
+        applicationId = "ru.link28rus.gmd.gmd_parent"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

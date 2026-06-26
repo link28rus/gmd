@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:periscop_child/core/api/child_api.dart';
-import 'package:periscop_child/core/native/sound_around_channel.dart';
-import 'package:periscop_child/features/sound_around/audio_command_handler.dart';
+import 'package:gmd_child/core/api/child_api.dart';
+import 'package:gmd_child/core/native/sound_around_channel.dart';
+import 'package:gmd_child/features/sound_around/audio_command_handler.dart';
 import 'package:mocktail/mocktail.dart';
 
 class _MockChannel extends Mock implements SoundAroundChannel {}

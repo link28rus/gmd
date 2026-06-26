@@ -14,7 +14,7 @@ import 'sound_around_controller.dart';
 /// Регистрируется в native через
 /// `DartExecutor.DartEntrypoint(
 ///    bundlePath,
-///    "package:periscop_child/features/sound_around/sound_around_entry.dart",
+///    "package:gmd_child/features/sound_around/sound_around_entry.dart",
 ///    "soundAroundEntryPoint"
 ///  )`.
 ///
