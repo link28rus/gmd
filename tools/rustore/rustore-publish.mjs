@@ -121,6 +121,10 @@ async function cmdPublish(args) {
   const apkIdx = args.indexOf('--apk');
   const wnIdx = args.indexOf('--whatsnew');
   const whatsNew = wnIdx >= 0 ? args[wnIdx + 1] : null;
+  const miIdx = args.indexOf('--moderinfo');
+  const moderInfoArg = miIdx >= 0 ? args[miIdx + 1] : null;
+  const anIdx = args.indexOf('--appname');
+  const appNameArg = anIdx >= 0 ? args[anIdx + 1] : null;
   const draftOnly = args.includes('--draft-only');
   if (!whatsNew) fail('укажи --whatsnew "текст что нового" (до 5000 симв.)');
   if (aabIdx < 0 && apkIdx < 0) fail('укажи --aab <path> (native) или --apk <path>');
@@ -135,8 +139,11 @@ async function cmdPublish(args) {
   console.log('1/3 Создаю черновик…');
   const draft = await api(token, 'POST', `/public/v1/application/${pkg}/version`, {
     whatsNew,
-    moderInfo: moderInfo(pkg),
+    moderInfo: moderInfoArg || moderInfo(pkg),
     publishType: 'INSTANTLY',
+    // appName задаёт отображаемое в каталоге имя приложения (для смены бренда
+    // существующей записи — напр. «GMD: родительский контроль» → «Перископ Родителя»).
+    ...(appNameArg ? { appName: appNameArg } : {}),
   });
   if (draft.code !== 'OK') {
     // Если черновик уже есть — в message обычно его ID; удалить: delete-draft <id>
