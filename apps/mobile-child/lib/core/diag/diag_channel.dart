@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 // Мост в Kotlin-side DiagLog: native пишет строки в файл и отдаёт их на
 // экран /debug. Используем в обоих Dart-изолятах (UI и headless background).
 // Не падаем если канал недоступен — диагностика не должна ломать продакшен.
-const _channel = MethodChannel('ru.link28rus.gmd.child/diag');
+const _channel = MethodChannel('pro.periscop.child/diag');
 
 Future<void> diagLog(String tag, String msg) async {
   try {

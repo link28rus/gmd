@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gmd_child/features/permissions/permissions_wizard.dart';
+import 'package:periscop_child/features/permissions/permissions_wizard.dart';
 
 void main() {
   testWidgets(
