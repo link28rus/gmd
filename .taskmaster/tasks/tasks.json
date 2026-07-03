@@ -1082,7 +1082,8 @@
             "description": "",
             "details": "",
             "status": "done",
-            "dependencies": []
+            "dependencies": [],
+            "parentId": "undefined"
           },
           {
             "id": 2,
@@ -1090,23 +1091,28 @@
             "description": "",
             "details": "",
             "status": "done",
-            "dependencies": []
+            "dependencies": [],
+            "parentId": "undefined"
           },
           {
             "id": 3,
             "title": "Полная вычистка остаточных GMD-идентификаторов (класс, SharedPrefs, WorkManager, notif-каналы, теги, User-Agent, gmd_shared)",
             "description": "",
             "details": "",
-            "status": "pending",
-            "dependencies": []
+            "status": "done",
+            "dependencies": [],
+            "updatedAt": "2026-07-03T07:55:21.500Z",
+            "parentId": "undefined"
           },
           {
             "id": 4,
             "title": "Сборка AAB (child+parent) + AVD smoke",
             "description": "",
             "details": "",
-            "status": "pending",
-            "dependencies": []
+            "status": "done",
+            "dependencies": [],
+            "parentId": "undefined",
+            "updatedAt": "2026-07-03T07:55:21.620Z"
           },
           {
             "id": 5,
@@ -1114,16 +1120,17 @@
             "description": "",
             "details": "",
             "status": "pending",
-            "dependencies": []
+            "dependencies": [],
+            "parentId": "undefined"
           }
         ],
-        "updatedAt": "2026-07-03T00:00:00.000Z"
+        "updatedAt": "2026-07-03T07:55:21.620Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-06-26T03:45:55.629Z",
-      "taskCount": 74,
+      "lastModified": "2026-07-03T07:55:21.623Z",
+      "taskCount": 75,
       "completedCount": 63,
       "tags": [
         "master"
