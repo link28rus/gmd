@@ -30,17 +30,17 @@ class ParentFcmRegistrar {
       // Permission request — на Android 13+ обязателен; на 12 и ниже granted by default.
       final status = await Permission.notification.request();
       if (status.isPermanentlyDenied) {
-        debugPrint('[GMD fcm] notification permission permanently denied — skip');
+        debugPrint('[Periscop fcm] notification permission permanently denied — skip');
         return;
       }
       if (status.isDenied) {
-        debugPrint('[GMD fcm] notification permission denied — skip (try later)');
+        debugPrint('[Periscop fcm] notification permission denied — skip (try later)');
         return;
       }
 
       final token = await FirebaseMessaging.instance.getToken();
       if (token == null || token.isEmpty) {
-        debugPrint('[GMD fcm] empty token — skip');
+        debugPrint('[Periscop fcm] empty token — skip');
         return;
       }
 
@@ -50,12 +50,12 @@ class ParentFcmRegistrar {
         _refreshSubscribed = true;
         FirebaseMessaging.instance.onTokenRefresh.listen((newToken) {
           _sendToBackend(newToken).catchError((e) {
-            debugPrint('[GMD fcm] onTokenRefresh send failed: $e');
+            debugPrint('[Periscop fcm] onTokenRefresh send failed: $e');
           });
         });
       }
     } catch (e) {
-      debugPrint('[GMD fcm] register failed: $e');
+      debugPrint('[Periscop fcm] register failed: $e');
     }
   }
 
@@ -70,6 +70,6 @@ class ParentFcmRegistrar {
         'appVersion': '${pkg.version}+${pkg.buildNumber}',
       },
     );
-    debugPrint('[GMD fcm] token registered (len=${token.length})');
+    debugPrint('[Periscop fcm] token registered (len=${token.length})');
   }
 }

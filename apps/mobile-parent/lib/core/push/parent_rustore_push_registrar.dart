@@ -29,20 +29,20 @@ class ParentRuStorePushRegistrar {
       // нет — getToken() кинет, FCM-канал продолжит работать.
       try {
         final available = await RustorePushClient.available();
-        debugPrint('[GMD rustore-push] available: $available');
+        debugPrint('[Periscop rustore-push] available: $available');
       } catch (e) {
-        debugPrint('[GMD rustore-push] available() failed: $e (likely no client)');
+        debugPrint('[Periscop rustore-push] available() failed: $e (likely no client)');
         return;
       }
 
       final token = await RustorePushClient.getToken();
       if (token.isEmpty) {
-        debugPrint('[GMD rustore-push] empty token — SDK not ready or project_id missing');
+        debugPrint('[Periscop rustore-push] empty token — SDK not ready or project_id missing');
         return;
       }
       await _sendToBackend(token);
     } catch (e) {
-      debugPrint('[GMD rustore-push] register failed: $e');
+      debugPrint('[Periscop rustore-push] register failed: $e');
     }
   }
 
@@ -51,22 +51,22 @@ class ParentRuStorePushRegistrar {
     _callbacksAttached = true;
     RustorePushClient.attachCallbacks(
       onNewToken: (token) {
-        debugPrint('[GMD rustore-push] onNewToken (len=${token.length})');
+        debugPrint('[Periscop rustore-push] onNewToken (len=${token.length})');
         _sendToBackend(token).catchError((e) {
-          debugPrint('[GMD rustore-push] onNewToken send failed: $e');
+          debugPrint('[Periscop rustore-push] onNewToken send failed: $e');
         });
       },
       onMessageReceived: (msg) {
-        debugPrint('[GMD rustore-push] onMessageReceived id=${msg.messageId} data=${msg.data}');
+        debugPrint('[Periscop rustore-push] onMessageReceived id=${msg.messageId} data=${msg.data}');
       },
       onMessageOpenedApp: (msg) {
-        debugPrint('[GMD rustore-push] onMessageOpenedApp id=${msg.messageId}');
+        debugPrint('[Periscop rustore-push] onMessageOpenedApp id=${msg.messageId}');
       },
       onDeletedMessages: () {
-        debugPrint('[GMD rustore-push] onDeletedMessages');
+        debugPrint('[Periscop rustore-push] onDeletedMessages');
       },
       onError: (err) {
-        debugPrint('[GMD rustore-push] onError: $err');
+        debugPrint('[Periscop rustore-push] onError: $err');
       },
     );
   }
@@ -81,6 +81,6 @@ class ParentRuStorePushRegistrar {
         'appVersion': '${pkg.version}+${pkg.buildNumber}',
       },
     );
-    debugPrint('[GMD rustore-push] token registered (len=${token.length})');
+    debugPrint('[Periscop rustore-push] token registered (len=${token.length})');
   }
 }

@@ -184,10 +184,10 @@ DateTime? _parseDate(Object? raw) {
 /// Ответ `POST /family/children/:childId/invites`.
 ///
 /// `qrUrl` — то, что кладётся в QR-код (формат `${landingBaseUrl}/claim/${code}`,
-/// например `https://gmd-online.ru/claim/AB12CD`). mobile-child сканирует
+/// например `https://periscop.pro/claim/AB12CD`). mobile-child сканирует
 /// QR, парсит URL → извлекает `code` → дёргает `/invites/claim` с device-info.
 ///
-/// `deepLink` — альтернатива QR (gmd://claim/AB12CD), для ручного ввода
+/// `deepLink` — альтернатива QR (periscop://claim/AB12CD), для ручного ввода
 /// или нативного intent-открытия. Не используется в mobile-parent UI.
 class InviteResponse {
   InviteResponse({
@@ -203,7 +203,7 @@ class InviteResponse {
   /// Полный URL для QR-кода.
   final String qrUrl;
 
-  /// Deep-link для нативного launch (`gmd://claim/<code>`).
+  /// Deep-link для нативного launch (`periscop://claim/<code>`).
   final String deepLink;
 
   /// Сколько секунд ещё действителен код (обычно 600 = 10 минут).

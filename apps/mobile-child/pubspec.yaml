@@ -1,4 +1,4 @@
-name: gmd_child
+name: periscop_child
 description: "Перископ — приложение ребёнка"
 publish_to: 'none'
 version: 0.52.0+6091

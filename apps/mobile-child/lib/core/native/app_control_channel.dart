@@ -9,7 +9,7 @@ import 'package:flutter/services.dart';
 /// (обычно — DiagLog + skip/retry).
 class AppControlChannel {
   static const MethodChannel _ch =
-      MethodChannel('ru.link28rus.gmd.child/app_control');
+      MethodChannel('pro.periscop.child/app_control');
 
   /// Granted ли PACKAGE_USAGE_STATS permission. На iOS / web — false.
   static Future<bool> hasUsageStatsPermission() async {
@@ -24,7 +24,7 @@ class AppControlChannel {
     await _ch.invokeMethod<void>('openUsageStatsSettings');
   }
 
-  /// v0.39 Phase 6.2: включён ли наш GmdAccessibilityService.
+  /// v0.39 Phase 6.2: включён ли наш PeriscopAccessibilityService.
   /// На iOS / web — false.
   static Future<bool> isAccessibilityServiceEnabled() async {
     final granted = await _ch.invokeMethod<bool>('isAccessibilityServiceEnabled');
@@ -32,7 +32,7 @@ class AppControlChannel {
   }
 
   /// v0.39 Phase 6.2: открыть Settings → Accessibility (общий список).
-  /// Пользователь сам находит «gmd_child» и включает.
+  /// Пользователь сам находит «Перископ Ребёнка» и включает.
   static Future<void> openAccessibilitySettings() async {
     await _ch.invokeMethod<void>('openAccessibilitySettings');
   }

@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gmd_child/core/api/child_api.dart';
-import 'package:gmd_child/core/native/sound_around_channel.dart';
-import 'package:gmd_child/features/sound_around/audio_command_handler.dart';
+import 'package:periscop_child/core/api/child_api.dart';
+import 'package:periscop_child/core/native/sound_around_channel.dart';
+import 'package:periscop_child/features/sound_around/audio_command_handler.dart';
 import 'package:mocktail/mocktail.dart';
 
 class _MockChannel extends Mock implements SoundAroundChannel {}
@@ -33,7 +33,7 @@ void main() {
         payload: {
           'sessionId': 's1',
           'ws': {
-            'url': 'wss://gmd.test/audio/ws?role=child&sessionId=s1&token=xxx',
+            'url': 'wss://periscop.test/audio/ws?role=child&sessionId=s1&token=xxx',
             'token': 'xxx',
             'ttlSec': 360,
           },
@@ -47,7 +47,7 @@ void main() {
       verify(
         () => channel.start(
           sessionId: 's1',
-          wsUrl: 'wss://gmd.test/audio/ws?role=child&sessionId=s1&token=xxx',
+          wsUrl: 'wss://periscop.test/audio/ws?role=child&sessionId=s1&token=xxx',
           durationSec: 60,
         ),
       ).called(1);

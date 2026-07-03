@@ -13,7 +13,7 @@ import 'package:flutter/services.dart';
 /// background isolate (poll-цикл) падает с MissingPluginException, см.
 /// commit 04cdaee / Plan E E2E v0.34.2.
 class SoundAroundChannel {
-  static const MethodChannel _channel = MethodChannel('gmd.child/sound_around');
+  static const MethodChannel _channel = MethodChannel('pro.periscop.child/sound_around');
 
   /// Запустить FGS с переданным контекстом сессии.
   /// Native: startForegroundService(SoundAroundService) + startForeground +

@@ -9,7 +9,7 @@ import 'package:flutter/services.dart';
 // изоляте, а не в UI-engine.
 class SignalChannel {
   static const MethodChannel _channel =
-      MethodChannel('ru.link28rus.gmd.child/signal');
+      MethodChannel('pro.periscop.child/signal');
 
   Future<void> play() async {
     await _channel.invokeMethod('play');

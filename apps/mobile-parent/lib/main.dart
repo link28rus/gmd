@@ -14,7 +14,7 @@ void main() async {
   try {
     await Firebase.initializeApp();
   } catch (e) {
-    debugPrint('[GMD] Firebase init failed (continuing without FCM): $e');
+    debugPrint('[Periscop] Firebase init failed (continuing without FCM): $e');
   }
-  runApp(const ProviderScope(child: GmdParentApp()));
+  runApp(const ProviderScope(child: PeriscopParentApp()));
 }

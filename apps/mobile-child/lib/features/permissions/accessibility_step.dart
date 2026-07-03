@@ -9,7 +9,7 @@ import 'permissions_wizard.dart';
 
 /// v0.39 Phase 6.2 — onboarding шаг для гранта Accessibility (блокировка приложений).
 ///
-/// Без AccessibilityService [GmdAccessibilityService] не может ловить
+/// Без AccessibilityService [PeriscopAccessibilityService] не может ловить
 /// `TYPE_WINDOW_STATE_CHANGED` → не может определить, какое приложение открыл
 /// ребёнок → не может показать [BlockOverlayActivity]. Блокировка просто не работает.
 ///
@@ -129,7 +129,7 @@ class _AccessibilityStepState extends State<AccessibilityStep>
           'дать доступ к спецвозможностям. Сервис только проверяет, какое '
           'приложение открыто, и не читает его содержимое.\n\n'
           'Откроется системный экран «Спецвозможности» (Accessibility). '
-          'Найди в списке «Скачанные службы» → «gmd_child» '
+          'Найди в списке «Скачанные службы» → «Перископ Ребёнка» '
           'и переключи тумблер.\n\n'
           'На Xiaomi / Redmi / POCO (HyperOS) сначала нажми кнопку '
           '«Разрешить ограниченные настройки» ниже — откроется карточка '

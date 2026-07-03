@@ -46,7 +46,7 @@
         <!-- Default notification icon и channel id для FCM (если payload не указывает иначе). -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="gmd_parent_events" />
+            android:value="periscop_parent_events" />
 
         <!-- Импеллер (Vulkan-рендер Flutter 3.24+) на Xiaomi/HyperOS вызывает
              AHardwareBuffer-ошибки и flutter_map TileLayer перестаёт запрашивать

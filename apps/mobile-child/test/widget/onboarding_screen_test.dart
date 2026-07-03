@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gmd_child/features/onboarding/onboarding_screen.dart';
+import 'package:periscop_child/features/onboarding/onboarding_screen.dart';
 
 void main() {
   testWidgets('OnboardingScreen shows welcome text + connect button', (tester) async {

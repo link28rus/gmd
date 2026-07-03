@@ -74,7 +74,7 @@ Future<void> _bootstrap() async {
     );
     diagLog('bg', 'bootstrap: ingestor ready');
 
-    const channel = MethodChannel('ru.link28rus.gmd.child/location');
+    const channel = MethodChannel('pro.periscop.child/location');
     channel.setMethodCallHandler((call) async {
       if (call.method == 'onLocation' && call.arguments is Map) {
         try {

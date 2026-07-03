@@ -38,7 +38,7 @@ import '../claim/claim_controller.dart';
 ///
 /// **v0.50.1 hotfix:** добавлен fallback path для случая uninstall+install
 /// (вместо in-place auto-update). При fresh install SharedPreferences
-/// `gmd_post_update` сбрасывается → native pending=null. Но `flutter_secure_storage`
+/// `periscop_post_update` сбрасывается → native pending=null. Но `flutter_secure_storage`
 /// через Android Keystore часто переживает reinstall (auto-backup + key restore),
 /// поэтому если `deviceToken` в secure storage есть И critical permissions
 /// слетели — показываем модал даже без post-update флага. Защита от спама

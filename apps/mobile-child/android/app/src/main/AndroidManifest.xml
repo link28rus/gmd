@@ -179,7 +179,7 @@
         </service>
         <!-- L1-защита от удаления приложения. Пока Device Admin активен,
              Android блокирует стандартный Uninstall из Settings → Apps →
-             gmd_child — вместо этого показывается «Deactivate device
+             «Перископ Ребёнка» — вместо этого показывается «Deactivate device
              administrator». Активация через ACTION_ADD_DEVICE_ADMIN
              (см. MainActivity.protection channel). -->
         <receiver
@@ -200,7 +200,7 @@
              и при попадании в blacklist запускает BlockOverlayActivity. Грантится
              вручную: Settings → Accessibility → "Перископ Ребёнка". -->
         <service
-            android:name=".GmdAccessibilityService"
+            android:name=".PeriscopAccessibilityService"
             android:label="@string/accessibility_service_description"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
             android:exported="false">

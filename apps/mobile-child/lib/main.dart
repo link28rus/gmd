@@ -45,7 +45,7 @@ void main() async {
   }
   if (escapeMode) {
     unawaited(diagLog('ui', 'app started in ESCAPE MODE — showing escape screen'));
-    runApp(ProviderScope(child: GmdChildApp(initialLocation: '/escape')));
+    runApp(ProviderScope(child: PeriscopChildApp(initialLocation: '/escape')));
     return;
   }
 
@@ -63,5 +63,5 @@ void main() async {
     unawaited(RuStorePushRegistrar.registerInBackground());
   }
   final initialLocation = hasToken ? '/home' : '/onboarding';
-  runApp(ProviderScope(child: GmdChildApp(initialLocation: initialLocation)));
+  runApp(ProviderScope(child: PeriscopChildApp(initialLocation: initialLocation)));
 }

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gmd_child/features/claim/claim_code.dart';
+import 'package:periscop_child/features/claim/claim_code.dart';
 
 void main() {
   group('normalizeInviteInput', () {
@@ -19,7 +19,7 @@ void main() {
 
     test('извлекает код из URL claim-страницы', () {
       expect(
-        extractInviteCode('https://gmd-online.ru/claim/6KDM3B1W'),
+        extractInviteCode('https://periscop.pro/claim/6KDM3B1W'),
         '6KDM3B1W',
       );
       expect(
@@ -32,8 +32,8 @@ void main() {
       );
     });
 
-    test('извлекает код из deep-link gmd://claim/', () {
-      expect(extractInviteCode('gmd://claim/6KDM3B1W'), '6KDM3B1W');
+    test('извлекает код из deep-link periscop://claim/', () {
+      expect(extractInviteCode('periscop://claim/6KDM3B1W'), '6KDM3B1W');
     });
 
     test('null для некорректных входов', () {

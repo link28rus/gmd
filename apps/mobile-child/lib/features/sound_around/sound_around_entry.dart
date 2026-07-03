@@ -14,7 +14,7 @@ import 'sound_around_controller.dart';
 /// Регистрируется в native через
 /// `DartExecutor.DartEntrypoint(
 ///    bundlePath,
-///    "package:gmd_child/features/sound_around/sound_around_entry.dart",
+///    "package:periscop_child/features/sound_around/sound_around_entry.dart",
 ///    "soundAroundEntryPoint"
 ///  )`.
 ///
@@ -44,7 +44,7 @@ void soundAroundEntryPoint() {
     }
   })();
 
-  const bgChannel = MethodChannel('gmd.child/sound_around_bg');
+  const bgChannel = MethodChannel('pro.periscop.child/sound_around_bg');
 
   late final SoundAroundController controller;
   controller = SoundAroundController(

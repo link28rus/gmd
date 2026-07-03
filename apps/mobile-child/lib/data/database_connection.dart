@@ -7,7 +7,7 @@ import 'package:path/path.dart' as p;
 LazyDatabase openConnection() {
   return LazyDatabase(() async {
     final dir = await getApplicationDocumentsDirectory();
-    final file = File(p.join(dir.path, 'gmd_child.sqlite'));
+    final file = File(p.join(dir.path, 'periscop_child.sqlite'));
     return NativeDatabase.createInBackground(file);
   });
 }

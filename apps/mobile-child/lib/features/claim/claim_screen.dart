@@ -48,7 +48,7 @@ class _ClaimScreenState extends ConsumerState<ClaimScreen> {
               if (_handled) return;
               for (final b in capture.barcodes) {
                 // QR может содержать URL (`https://…/claim/CODE`), deep-link
-                // (`gmd://claim/CODE`) или просто код — extractInviteCode
+                // (`periscop://claim/CODE`) или просто код — extractInviteCode
                 // покрывает все случаи и возвращает канонические 8 символов.
                 final code = extractInviteCode(b.rawValue);
                 if (code != null) {

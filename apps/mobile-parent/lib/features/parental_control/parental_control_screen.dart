@@ -17,7 +17,7 @@ import '../../core/providers.dart';
 /// чтобы он не уезжал в access-логи Caddy. embed-page сразу при mount
 /// очищает hash через `history.replaceState`.
 ///
-/// JS-bridge `GmdHost.postMessage('close')` закрывает экран при тапе кнопки
+/// JS-bridge `PeriscopHost.postMessage('close')` закрывает экран при тапе кнопки
 /// «Назад» в embed-странице.
 class ParentalControlScreen extends ConsumerStatefulWidget {
   const ParentalControlScreen({
@@ -61,12 +61,12 @@ class _ParentalControlScreenState extends ConsumerState<ParentalControlScreen> {
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(Theme.of(context).colorScheme.surface)
       ..setOnConsoleMessage((msg) {
-        debugPrint('GMD-WV [${msg.level.name}] ${msg.message}');
+        debugPrint('Periscop-WV [${msg.level.name}] ${msg.message}');
       })
       ..addJavaScriptChannel(
-        'GmdHost',
+        'PeriscopHost',
         onMessageReceived: (m) {
-          debugPrint('GMD-WV [bridge] ${m.message}');
+          debugPrint('Periscop-WV [bridge] ${m.message}');
           if (m.message == 'close' && mounted) {
             Navigator.of(context).maybePop();
           }
@@ -80,17 +80,17 @@ class _ParentalControlScreenState extends ConsumerState<ParentalControlScreen> {
             // в Flutter, чтобы видеть их в logcat вместе с обычными console.*.
             _controller.runJavaScript('''
               (function () {
-                if (window.__gmdErrHooked) return;
-                window.__gmdErrHooked = true;
+                if (window.__periscopErrHooked) return;
+                window.__periscopErrHooked = true;
                 window.addEventListener('error', function (e) {
                   try {
-                    GmdHost.postMessage('window.error: ' + (e.error ? (e.error.stack || e.error.message) : e.message));
+                    PeriscopHost.postMessage('window.error: ' + (e.error ? (e.error.stack || e.error.message) : e.message));
                   } catch (_) {}
                 });
                 window.addEventListener('unhandledrejection', function (e) {
                   try {
                     var r = e.reason;
-                    GmdHost.postMessage('unhandledrejection: ' + (r && (r.stack || r.message) ? (r.stack || r.message) : String(r)));
+                    PeriscopHost.postMessage('unhandledrejection: ' + (r && (r.stack || r.message) ? (r.stack || r.message) : String(r)));
                   } catch (_) {}
                 });
               })();
@@ -98,7 +98,7 @@ class _ParentalControlScreenState extends ConsumerState<ParentalControlScreen> {
           },
           onWebResourceError: (err) {
             debugPrint(
-              'GMD-WV resource error mainFrame=${err.isForMainFrame} '
+              'Periscop-WV resource error mainFrame=${err.isForMainFrame} '
               'code=${err.errorCode} type=${err.errorType} desc=${err.description}',
             );
             if (err.isForMainFrame ?? false) {

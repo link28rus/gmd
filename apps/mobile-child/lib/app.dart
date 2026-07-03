@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'router/app_router.dart';
 
-class GmdChildApp extends ConsumerWidget {
-  const GmdChildApp({super.key, this.initialLocation = '/onboarding'});
+class PeriscopChildApp extends ConsumerWidget {
+  const PeriscopChildApp({super.key, this.initialLocation = '/onboarding'});
 
   final String initialLocation;
 

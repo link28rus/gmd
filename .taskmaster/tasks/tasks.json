@@ -946,7 +946,7 @@
         "description": "Полный переход с бренда GMD на «Перископ». Новый домен periscop.pro уже работает и становится primary; старый gmd-online.ru остаётся ЖИВЫМ API-зеркалом (backend+Caddy отвечают на оба домена) для уже установленных у пользователей mobile-приложений, пока они не обновятся. Выбран максимально полный вариант (решения пользователя 2026-06-26): (1) сменить Android applicationId ru.link28rus.gmd.* → новый periscop-namespace = НОВЫЕ приложения в RuStore (потеря привязок/permissions у существующих пользователей принята); (2) gmd-online.ru как живое API-зеркало; (3) ребрендинг ВКЛЮЧАЯ прод-инфру (docker-контейнеры, /opt/gmd пути, SSH-алиас, имя БД, npm @gmd/* scope, dart-пакеты); (4) сначала отдельно закоммитить текущий WIP (28 файлов: RuStore v0.51.3, audio relay, легалка v1.4-1.6 + untracked-скриншоты), потом чистый ребрендинг (урок #24).",
         "details": "## Масштаб (audit 2026-06-26)\n- GMD как слово: 593 упоминания в 137 файлах\n- gmd-online.ru: 131 в 42 файлах (текущий primary)\n- gmd.link28rus.ru: 166 в 40 файлах (старый домен, уже 301)\n- Перископ: 75 в 24 файлах (частичный ребрендинг display names, v0.51.2 — уже сделан)\n- periscop.pro: 0 (новый домен нигде в репо)\n- applicationId: ru.link28rus.gmd.child / ru.link28rus.gmd.gmd_parent; Kotlin namespace + пути android/app/src/main/kotlin/ru/link28rus/gmd/...\n\n## Критичные уроки\n- #14/#16 релиз web + APK = два независимых шага; endpoint /api/public/updates/* зависит от deploy + APK имени\n- #23/#24 generic-промпт != план; WIP-ветка для незакоммиченной работы перед большой ортогональной задачей\n- #28/#29/#31 смена applicationId = НОВЫЕ apps в RuStore; один keystore/applicationId = навсегда\n- #15 finish_task перезаписывает tracking — не упоминать литералы IP/URL/версий в content\n- #41 трёхэтапный release: AVD → реальное устройство → RuStore (БЛОКИРУЮЩИЙ)\n- #43 при cross-stack фиче backend deploy ДО AVD-теста\n\n## Подзадачи (слои для распараллеливания агентами)\n74.1 prelim: закоммитить текущий WIP отдельной веткой, очистить рабочее дерево\n74.2 базовый слой: npm scope @gmd/* → @periscop/*, корневой package.json, turbo, tsconfig paths, версии\n74.3 backend: package name, env, URL → periscop.pro, user-facing тексты (mailer/auth/sos/audio), оба домена в CORS\n74.4 web: лендинг, кабинет, легалка, layout/metadata/SEO, footer, icon, домен, /api routes, /download\n74.5 mobile-parent: applicationId + namespace + Kotlin paths, env.dart → periscop.pro, label/иконки/тексты, pubspec, AndroidManifest, RuStore properties\n74.6 mobile-child: applicationId + namespace + Kotlin paths, env.dart, label/иконки/тексты, pubspec, AndroidManifest\n74.7 инфра/прод: Caddy оба домена (periscop.pro primary + gmd-online.ru API-зеркало), docker-compose контейнеры gmd-* → periscop-*, /opt/gmd → /opt/periscop, systemd-таймеры, deploy.sh, SSH-алиас, имя БД, env.prod\n74.8 docs: CLAUDE.md, CHANGELOG, README, docs/*, .claude/skills, .claude/agents, RuStore listing docs\n74.9 RuStore: новые application records (новый package), листинг, скриншоты, submit обоих apps\n74.10 верификация: build всех app, typecheck/lint/test, deploy на прод, проверка обоих доменов, AVD smoke",
         "testStrategy": "Поэтапно: (1) pnpm typecheck + lint + test зелёные после scope-rename; (2) flutter build apk обоих apps собирается с новым applicationId; (3) bash infra/deploy/deploy.sh успешен, curl https://periscop.pro/api/readyz И https://gmd-online.ru/api/readyz → оба {status:ok}; (4) старое mobile-приложение (gmd-online.ru baseUrl) продолжает работать против API-зеркала; (5) AVD smoke новых сборок (golden path); (6) реальное устройство; (7) RuStore submit. Grep после завершения: пользовательских упоминаний GMD/gmd-online.ru не осталось в user-facing слоях.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "high",
         "subtasks": [
@@ -1040,19 +1040,19 @@
             "id": 9,
             "title": "RuStore: новые application records + листинг + submit",
             "description": "Новые application records под новый package (parent + child), брендированный листинг «Перископ», скриншоты, обоснования permissions, multi-use invite модератору, submit. Этап после сборки AAB.",
-            "status": "blocked",
+            "status": "done",
             "dependencies": [
               5,
               6
             ],
             "parentId": "undefined",
-            "updatedAt": "2026-06-26T00:05:51.454Z"
+            "updatedAt": "2026-06-26T03:45:55.613Z"
           },
           {
             "id": 10,
             "title": "верификация: build, typecheck, deploy, оба домена, AVD",
             "description": "pnpm typecheck/lint/test, flutter build обоих apps, deploy на прод, curl обоих доменов /api/readyz, проверка legacy-app против API-зеркала, AVD smoke, реальное устройство.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               4,
               5,
@@ -1061,17 +1061,70 @@
               8
             ],
             "parentId": "undefined",
-            "updatedAt": "2026-06-25T23:44:26.743Z"
+            "updatedAt": "2026-06-26T03:45:55.628Z"
           }
         ],
-        "updatedAt": "2026-06-26T00:05:51.454Z"
+        "updatedAt": "2026-06-26T03:45:55.628Z"
+      },
+      {
+        "id": "75",
+        "title": "Проход B: package pro.periscop.*, вычистка GMD, новые иконки",
+        "description": "Полный перевод mobile-app на новый бренд: applicationId/namespace/dart-пакеты на pro.periscop.*, зачистка всех остаточных упоминаний GMD, новые иконки Перископа, публикация в новые записи RuStore «Перископ Ребёнка/Родителя».",
+        "details": "Пользователь: «переделываем всё сюда, никаких упоминаний GMD». Восстанавливаем откатанный Path B (commit c5b8984 через revert-of-revert d32bd08). google-services.json уже с pro.periscop.* (блокер снят). Иконки от пользователя обработаны в full-bleed + adaptive + monochrome + store-512. Firebase project id gmd-prod-7d1f8 оставляем (opaque). Первая версия новых записей — ручной upload AAB через Console.",
+        "testStrategy": "AVD smoke (lesson #41) golden path обоих apps; реальное устройство. flutter analyze чисто. aapt2 badging: applicationId=pro.periscop.*, label=Перископ.",
+        "status": "in-progress",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Восстановить Path B (revert-of-revert) + резолв pubspec child",
+            "description": "",
+            "details": "",
+            "status": "done",
+            "dependencies": []
+          },
+          {
+            "id": 2,
+            "title": "Новые иконки: full-bleed launcher + adaptive + monochrome + store-512",
+            "description": "",
+            "details": "",
+            "status": "done",
+            "dependencies": []
+          },
+          {
+            "id": 3,
+            "title": "Полная вычистка остаточных GMD-идентификаторов (класс, SharedPrefs, WorkManager, notif-каналы, теги, User-Agent, gmd_shared)",
+            "description": "",
+            "details": "",
+            "status": "pending",
+            "dependencies": []
+          },
+          {
+            "id": 4,
+            "title": "Сборка AAB (child+parent) + AVD smoke",
+            "description": "",
+            "details": "",
+            "status": "pending",
+            "dependencies": []
+          },
+          {
+            "id": 5,
+            "title": "Публикация в новые записи RuStore: ручной первый upload + скрипт APPS на pro.periscop.*",
+            "description": "",
+            "details": "",
+            "status": "pending",
+            "dependencies": []
+          }
+        ],
+        "updatedAt": "2026-07-03T00:00:00.000Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-06-26T00:05:51.454Z",
+      "lastModified": "2026-06-26T03:45:55.629Z",
       "taskCount": 74,
-      "completedCount": 62,
+      "completedCount": 63,
       "tags": [
         "master"
       ]

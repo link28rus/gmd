@@ -6,14 +6,14 @@ import 'core/api/connection_lifecycle_observer.dart';
 import 'core/providers.dart';
 import 'router/app_router.dart';
 
-class GmdParentApp extends ConsumerStatefulWidget {
-  const GmdParentApp({super.key});
+class PeriscopParentApp extends ConsumerStatefulWidget {
+  const PeriscopParentApp({super.key});
 
   @override
-  ConsumerState<GmdParentApp> createState() => _GmdParentAppState();
+  ConsumerState<PeriscopParentApp> createState() => _PeriscopParentAppState();
 }
 
-class _GmdParentAppState extends ConsumerState<GmdParentApp> {
+class _PeriscopParentAppState extends ConsumerState<PeriscopParentApp> {
   late final _router = AppRouter.build(ref);
   late final ConnectionLifecycleObserver _connectionObserver;
 

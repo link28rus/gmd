@@ -54,14 +54,14 @@ class _AudioListenScreenState extends ConsumerState<AudioListenScreen> {
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(Theme.of(context).colorScheme.surface)
       ..setOnConsoleMessage((msg) {
-        // Все JS console.* в logcat, виден через `adb logcat | grep "GMD-WV"`
+        // Все JS console.* в logcat, виден через `adb logcat | grep "Periscop-WV"`
         // (через flutter-print, чтобы работало и в release).
-        debugPrint('GMD-WV [${msg.level.name}] ${msg.message}');
+        debugPrint('Periscop-WV [${msg.level.name}] ${msg.message}');
       })
       ..addJavaScriptChannel(
-        'GmdHost',
+        'PeriscopHost',
         onMessageReceived: (m) {
-          debugPrint('GMD-WV [bridge] ${m.message}');
+          debugPrint('Periscop-WV [bridge] ${m.message}');
           // Команда close — embed-page просит закрыть экран после
           // тапа «Закрыть» / «Остановить» в audio-сессии.
           if (m.message == 'close' && mounted) {
@@ -76,17 +76,17 @@ class _AudioListenScreenState extends ConsumerState<AudioListenScreen> {
             // Перехватчик unhandled errors / promise-rejections — сразу шлём в Flutter.
             _controller.runJavaScript('''
               (function () {
-                if (window.__gmdErrHooked) return;
-                window.__gmdErrHooked = true;
+                if (window.__periscopErrHooked) return;
+                window.__periscopErrHooked = true;
                 window.addEventListener('error', function (e) {
                   try {
-                    GmdHost.postMessage('window.error: ' + (e.error ? (e.error.stack || e.error.message) : e.message));
+                    PeriscopHost.postMessage('window.error: ' + (e.error ? (e.error.stack || e.error.message) : e.message));
                   } catch (_) {}
                 });
                 window.addEventListener('unhandledrejection', function (e) {
                   try {
                     var r = e.reason;
-                    GmdHost.postMessage('unhandledrejection: ' + (r && (r.stack || r.message) ? (r.stack || r.message) : String(r)));
+                    PeriscopHost.postMessage('unhandledrejection: ' + (r && (r.stack || r.message) ? (r.stack || r.message) : String(r)));
                   } catch (_) {}
                 });
               })();
@@ -94,7 +94,7 @@ class _AudioListenScreenState extends ConsumerState<AudioListenScreen> {
           },
           onWebResourceError: (err) {
             debugPrint(
-              'GMD-WV resource error mainFrame=${err.isForMainFrame} '
+              'Periscop-WV resource error mainFrame=${err.isForMainFrame} '
               'code=${err.errorCode} type=${err.errorType} desc=${err.description}',
             );
             // Игнорируем мелкие ошибки subresources (favicon, метрики и т.п.) —
