@@ -4,6 +4,7 @@
 // Список прошлых версий здесь не нужен, они доступны в кабинете.
 'use client';
 
+import Image from 'next/image';
 import { useEffect, useState, type ReactElement } from 'react';
 
 interface DownloadFile {
@@ -32,6 +33,8 @@ interface AppSection {
   title: string;
   description: string;
   app: 'gmd-parent' | 'gmd-child';
+  icon: string;
+  rustoreUrl: string;
   instructions: string[];
 }
 
@@ -41,10 +44,11 @@ const SECTIONS: AppSection[] = [
     description:
       'Поставьте на свой телефон, чтобы видеть локацию ребёнка, отправлять сигнал, слушать звук вокруг и получать push-уведомления о геозонах.',
     app: 'gmd-parent',
+    icon: '/app-icon-parent.png',
+    rustoreUrl: 'https://www.rustore.ru/catalog/app/pro.periscop.parent',
     instructions: [
-      'Скачайте APK на свой телефон (или скиньте файл с ПК).',
-      'Откройте APK — Android предложит установить.',
-      'Если система блокирует установку, разрешите «Установка из неизвестных источников» для браузера или файлового менеджера.',
+      'Откройте страницу «Перископ Родителя» в RuStore и нажмите «Установить».',
+      'Дождитесь установки и запустите приложение.',
       'Войдите по email и паролю — список детей подтянется автоматически.',
     ],
   },
@@ -53,12 +57,12 @@ const SECTIONS: AppSection[] = [
     description:
       'Установите на телефон ребёнка и привяжите его QR-кодом из родительского кабинета.',
     app: 'gmd-child',
+    icon: '/app-icon-child.png',
+    rustoreUrl: 'https://www.rustore.ru/catalog/app/pro.periscop.child',
     instructions: [
-      'Скачайте APK на ПК или прямо в браузере телефона ребёнка.',
-      'Если скачивали на ПК — перенесите файл на телефон (кабель, Telegram, облако).',
-      'Откройте APK-файл на телефоне ребёнка — Android предложит установить.',
-      'Если система блокирует установку, включите «Установка из неизвестных источников».',
-      'После установки родитель в кабинете создаёт QR-код, ребёнок сканирует его в приложении.',
+      'На телефоне ребёнка откройте страницу «Перископ Ребёнка» в RuStore и нажмите «Установить».',
+      'Запустите приложение и выдайте запрошенные разрешения.',
+      'Родитель в кабинете создаёт QR-код, ребёнок сканирует его в приложении.',
     ],
   },
 ];
@@ -76,6 +80,42 @@ function pickLatest(
   return { version, abis };
 }
 
+function RuStoreButton({
+  href,
+  icon,
+  title,
+}: {
+  href: string;
+  icon: string;
+  title: string;
+}): ReactElement {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-center justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50/60 px-4 py-3 transition hover:border-blue-400 hover:bg-blue-100/60"
+    >
+      <div className="flex items-center gap-3">
+        <Image
+          src={icon}
+          alt={`Иконка «${title}»`}
+          width={48}
+          height={48}
+          className="h-12 w-12 shrink-0 rounded-xl shadow-sm"
+        />
+        <div>
+          <div className="font-semibold text-zinc-900">Установить из RuStore</div>
+          <div className="text-xs text-zinc-600">
+            Рекомендуем — автообновления и без «неизвестных источников»
+          </div>
+        </div>
+      </div>
+      <span className="shrink-0 text-sm font-medium text-blue-600">Открыть →</span>
+    </a>
+  );
+}
+
 function AppCard({
   section,
   latest,
@@ -88,13 +128,18 @@ function AppCard({
       <h2 className="text-xl font-semibold text-zinc-900">{section.title}</h2>
       <p className="mt-1 mb-5 text-sm text-zinc-600">{section.description}</p>
 
-      {latest.abis.length === 0 ? (
-        <div className="rounded-md border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600">
-          Релизов пока нет.
-        </div>
-      ) : (
-        <>
-          <div className="mb-3 flex items-baseline justify-between">
+      <RuStoreButton href={section.rustoreUrl} icon={section.icon} title={section.title} />
+
+      {latest.abis.length > 0 && (
+        <details className="mt-5 text-sm text-zinc-600">
+          <summary className="cursor-pointer font-medium text-zinc-800">
+            Или скачать APK напрямую
+          </summary>
+          <p className="mt-2 text-xs text-zinc-500">
+            Запасной вариант, если RuStore недоступен. Потребуется разрешить установку из
+            неизвестных источников; автообновление придёт только через RuStore.
+          </p>
+          <div className="mt-3 mb-2 flex items-baseline justify-between">
             <span className="text-sm font-medium text-zinc-900">
               Актуальная версия — v{latest.version}
             </span>
@@ -122,10 +167,10 @@ function AppCard({
               </a>
             ))}
           </div>
-        </>
+        </details>
       )}
 
-      <details className="mt-5 text-sm text-zinc-600">
+      <details className="mt-4 text-sm text-zinc-600">
         <summary className="cursor-pointer font-medium text-zinc-800">Как установить</summary>
         <ol className="mt-2 list-decimal space-y-1 pl-5">
           {section.instructions.map((step) => (
@@ -171,7 +216,8 @@ export default function DownloadPublicClient(): ReactElement {
     <div className="mx-auto max-w-3xl px-6 py-10">
       <h1 className="mb-2 text-3xl font-semibold text-zinc-900">Скачать Перископ</h1>
       <p className="mb-8 text-zinc-600">
-        Два приложения: одно для своего телефона (родителю), второе — на телефон ребёнка.
+        Два приложения: одно для своего телефона (родителю), второе — на телефон ребёнка. Оба
+        доступны в RuStore — так вы получите автоматические обновления.
       </p>
 
       {SECTIONS.map((section) => (

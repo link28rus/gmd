@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuthStore, type AuthUser, type AuthFamily } from '@/lib/auth-store';
 import { AuthMapBackground } from '@/components/auth/auth-map-background';
+import { FloatingAppIcons } from '@/components/brand/floating-app-icons';
 
 type Stage = 'email' | 'otp';
 type LoginMode = 'otp' | 'password';
@@ -187,6 +188,7 @@ export default function LoginClient(): ReactElement {
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#050a15] text-slate-100">
       <AuthMapBackground />
+      <FloatingAppIcons />
 
       <main className="relative z-10 flex min-h-screen items-center justify-center p-6">
         <div
