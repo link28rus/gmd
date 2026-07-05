@@ -10,7 +10,12 @@ export default async function AdminPage() {
   return (
     <AdminClient>
       <div className="mx-auto max-w-6xl px-6 py-8">
-        <h1 className="mb-6 text-2xl font-semibold text-slate-900">Обзор</h1>
+        <header className="mb-6">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Обзор</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Сводка по пользователям, семьям, детям и устройствам сервиса.
+          </p>
+        </header>
         <StatsDashboard />
       </div>
     </AdminClient>

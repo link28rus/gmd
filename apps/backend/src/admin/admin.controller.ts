@@ -21,8 +21,18 @@ import { AppSettingsService } from '../app-settings/app-settings.service';
 import { MailerService } from '../mailer/mailer.service';
 import { AdminGuard } from './guards/admin.guard';
 import { AdminService } from './admin.service';
-import { ChildrenQuerySchema, FamiliesQuerySchema, UsersQuerySchema } from './dto/pagination.dto';
-import type { ChildrenQueryDto, FamiliesQueryDto, UsersQueryDto } from './dto/pagination.dto';
+import {
+  ChildrenQuerySchema,
+  FamiliesQuerySchema,
+  InvitesQuerySchema,
+  UsersQuerySchema,
+} from './dto/pagination.dto';
+import type {
+  ChildrenQueryDto,
+  FamiliesQueryDto,
+  InvitesQueryDto,
+  UsersQueryDto,
+} from './dto/pagination.dto';
 import { z } from 'zod';
 
 const UpdateSettingSchema = z.object({ value: z.string().max(500) });
@@ -77,7 +87,14 @@ export class AdminController {
     @Query(new ZodValidationPipe(UsersQuerySchema)) query: UsersQueryDto,
   ): Promise<unknown> {
     this.audit(req, '/admin/users');
-    return this.admin.listUsers(query.page, query.limit, query.q);
+    return this.admin.listUsers(
+      query.page,
+      query.limit,
+      query.q,
+      query.showDeleted,
+      query.sortBy,
+      query.sortDir,
+    );
   }
 
   @Get('users/:id')
@@ -86,13 +103,28 @@ export class AdminController {
     return this.admin.getUserDetail(id);
   }
 
+  @Post('users/:id/restore')
+  @HttpCode(HttpStatus.OK)
+  async restoreUser(@Req() req: AdminRequest, @Param('id') id: string): Promise<{ ok: true }> {
+    this.audit(req, `POST /admin/users/${id}/restore`);
+    await this.admin.restoreUser(id);
+    return { ok: true };
+  }
+
   @Get('families')
   async families(
     @Req() req: AdminRequest,
     @Query(new ZodValidationPipe(FamiliesQuerySchema)) query: FamiliesQueryDto,
   ): Promise<unknown> {
     this.audit(req, '/admin/families');
-    return this.admin.listFamilies(query.page, query.limit, query.q, query.showDeleted);
+    return this.admin.listFamilies(
+      query.page,
+      query.limit,
+      query.q,
+      query.showDeleted,
+      query.sortBy,
+      query.sortDir,
+    );
   }
 
   @Delete('families/:id')
@@ -103,13 +135,28 @@ export class AdminController {
     return { ok: true };
   }
 
+  @Post('families/:id/restore')
+  @HttpCode(HttpStatus.OK)
+  async restoreFamily(@Req() req: AdminRequest, @Param('id') id: string): Promise<{ ok: true }> {
+    this.audit(req, `POST /admin/families/${id}/restore`);
+    await this.admin.restoreFamily(id);
+    return { ok: true };
+  }
+
   @Get('children')
   async children(
     @Req() req: AdminRequest,
     @Query(new ZodValidationPipe(ChildrenQuerySchema)) query: ChildrenQueryDto,
   ): Promise<unknown> {
     this.audit(req, '/admin/children');
-    return this.admin.listChildren(query.page, query.limit, query.q, query.showDeleted);
+    return this.admin.listChildren(
+      query.page,
+      query.limit,
+      query.q,
+      query.showDeleted,
+      query.sortBy,
+      query.sortDir,
+    );
   }
 
   @Delete('children/:id')
@@ -117,6 +164,14 @@ export class AdminController {
   async deleteChild(@Req() req: AdminRequest, @Param('id') id: string): Promise<{ ok: true }> {
     this.audit(req, `DELETE /admin/children/${id}`);
     await this.admin.softDeleteChild(id);
+    return { ok: true };
+  }
+
+  @Post('children/:id/restore')
+  @HttpCode(HttpStatus.OK)
+  async restoreChild(@Req() req: AdminRequest, @Param('id') id: string): Promise<{ ok: true }> {
+    this.audit(req, `POST /admin/children/${id}/restore`);
+    await this.admin.restoreChild(id);
     return { ok: true };
   }
 
@@ -129,9 +184,20 @@ export class AdminController {
   }
 
   @Get('invites')
-  async invites(@Req() req: AdminRequest): Promise<unknown> {
+  async invites(
+    @Req() req: AdminRequest,
+    @Query(new ZodValidationPipe(InvitesQuerySchema)) query: InvitesQueryDto,
+  ): Promise<unknown> {
     this.audit(req, '/admin/invites');
-    return this.admin.listActiveInvites();
+    return this.admin.listInvites(query.page, query.limit, query.q);
+  }
+
+  @Delete('invites/:id')
+  @HttpCode(HttpStatus.OK)
+  async revokeInvite(@Req() req: AdminRequest, @Param('id') id: string): Promise<{ ok: true }> {
+    this.audit(req, `DELETE /admin/invites/${id}`);
+    await this.admin.revokeInvite(id);
+    return { ok: true };
   }
 
   @Get('settings')

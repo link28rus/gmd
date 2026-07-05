@@ -33,14 +33,14 @@ function UserDetailInner({ id }: Props) {
 
   if (isLoading) return <p className="text-sm text-muted-foreground">Загружаем…</p>;
   if (error || !data)
-    return <p className="text-sm text-red-600">Пользователь не найден или ошибка сервера.</p>;
+    return <p className="text-sm text-destructive">Пользователь не найден или ошибка сервера.</p>;
 
   const { user, memberships, children, refreshTokensActive, otpCodesActiveLast24h } = data;
 
   return (
     <div>
       <div className="mb-4">
-        <Link href="/admin/users" className="text-sm text-blue-600 hover:underline">
+        <Link href="/admin/users" className="text-sm text-primary hover:underline">
           &larr; Назад к списку
         </Link>
       </div>
@@ -57,7 +57,9 @@ function UserDetailInner({ id }: Props) {
           label="Удалён"
           value={
             user.deletedAt ? (
-              <span className="text-red-600">{new Date(user.deletedAt).toLocaleString('ru')}</span>
+              <span className="text-destructive">
+                {new Date(user.deletedAt).toLocaleString('ru')}
+              </span>
             ) : (
               '—'
             )

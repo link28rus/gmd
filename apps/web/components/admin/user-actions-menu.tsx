@@ -3,7 +3,16 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { ReactElement } from 'react';
-import { MoreVertical, Shield, ShieldOff, Lock, Unlock, KeyRound, Trash2 } from 'lucide-react';
+import {
+  MoreVertical,
+  Shield,
+  ShieldOff,
+  Lock,
+  Unlock,
+  KeyRound,
+  Trash2,
+  RotateCcw,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminApi, type UserRow } from '@/lib/api/admin';
@@ -142,13 +151,20 @@ export function UserActionsMenu({ row, currentUserId }: Props): ReactElement | n
     onError: (e: Error) => toast.error(e.message || 'Не удалось удалить'),
   });
 
-  // Для уже удалённых юзеров меню не показываем — действия над удалённым
-  // аккаунтом не имеют смысла до того, как он вернётся из soft-delete.
-  if (isDeleted) return <span className="text-xs text-muted-foreground">—</span>;
+  const restoreMut = useMutation({
+    mutationFn: () => adminApi.restoreUser(row.id),
+    onSuccess: () => {
+      toast.success('Пользователь восстановлен');
+      invalidate();
+    },
+    onError: (e: Error) => toast.error(e.message || 'Не удалось восстановить'),
+  });
 
   const makeAdmin = row.role !== 'admin';
   const isBlocked = row.blockedAt !== null;
 
+  // Для удалённых юзеров меню содержит единственное действие — восстановить
+  // (до ночного hard-delete через 30 дней).
   const menu =
     open && menuPos && typeof document !== 'undefined'
       ? createPortal(
@@ -157,58 +173,72 @@ export function UserActionsMenu({ row, currentUserId }: Props): ReactElement | n
             style={{ position: 'fixed', top: menuPos.top, left: menuPos.left, width: MENU_WIDTH }}
             className="z-50 overflow-hidden rounded-md border border-border bg-card shadow-lg"
           >
-            <MenuItem
-              disabled={isSelf && !makeAdmin}
-              icon={makeAdmin ? Shield : ShieldOff}
-              onClick={() => {
-                setOpen(false);
-                roleMut.mutate(makeAdmin ? 'admin' : 'parent');
-              }}
-            >
-              {makeAdmin ? 'Сделать админом' : 'Забрать права админа'}
-            </MenuItem>
-            {isBlocked ? (
+            {isDeleted ? (
               <MenuItem
-                icon={Unlock}
+                icon={RotateCcw}
                 onClick={() => {
                   setOpen(false);
-                  unblockMut.mutate();
+                  restoreMut.mutate();
                 }}
               >
-                Разблокировать
+                Восстановить
               </MenuItem>
             ) : (
-              <MenuItem
-                disabled={isSelf}
-                icon={Lock}
-                onClick={() => {
-                  setOpen(false);
-                  setModal('block');
-                }}
-              >
-                Заблокировать
-              </MenuItem>
+              <>
+                <MenuItem
+                  disabled={isSelf && !makeAdmin}
+                  icon={makeAdmin ? Shield : ShieldOff}
+                  onClick={() => {
+                    setOpen(false);
+                    roleMut.mutate(makeAdmin ? 'admin' : 'parent');
+                  }}
+                >
+                  {makeAdmin ? 'Сделать админом' : 'Забрать права админа'}
+                </MenuItem>
+                {isBlocked ? (
+                  <MenuItem
+                    icon={Unlock}
+                    onClick={() => {
+                      setOpen(false);
+                      unblockMut.mutate();
+                    }}
+                  >
+                    Разблокировать
+                  </MenuItem>
+                ) : (
+                  <MenuItem
+                    disabled={isSelf}
+                    icon={Lock}
+                    onClick={() => {
+                      setOpen(false);
+                      setModal('block');
+                    }}
+                  >
+                    Заблокировать
+                  </MenuItem>
+                )}
+                <MenuItem
+                  icon={KeyRound}
+                  onClick={() => {
+                    setOpen(false);
+                    setModal('reset');
+                  }}
+                >
+                  Сбросить пароль
+                </MenuItem>
+                <MenuItem
+                  disabled={isSelf}
+                  danger
+                  icon={Trash2}
+                  onClick={() => {
+                    setOpen(false);
+                    setModal('delete');
+                  }}
+                >
+                  Удалить
+                </MenuItem>
+              </>
             )}
-            <MenuItem
-              icon={KeyRound}
-              onClick={() => {
-                setOpen(false);
-                setModal('reset');
-              }}
-            >
-              Сбросить пароль
-            </MenuItem>
-            <MenuItem
-              disabled={isSelf}
-              danger
-              icon={Trash2}
-              onClick={() => {
-                setOpen(false);
-                setModal('delete');
-              }}
-            >
-              Удалить
-            </MenuItem>
           </div>,
           document.body,
         )
@@ -291,9 +321,9 @@ export function UserActionsMenu({ row, currentUserId }: Props): ReactElement | n
                 (семья, дети, устройства, зоны — если он единственный родитель). Если в семье есть
                 другие родители — семья остаётся, один из них становится владельцем.
               </span>
-              <span className="block text-red-600">
-                Данные удаляются безвозвратно через 30 дней. До этого восстановление возможно через
-                БД.
+              <span className="block text-destructive">
+                Данные удаляются безвозвратно через 30 дней. До этого можно восстановить из меню
+                (при включённом фильтре «Показывать удалённых»).
               </span>
             </DialogDescription>
           </DialogHeader>
@@ -334,7 +364,7 @@ function MenuItem({
       disabled={disabled}
       onClick={onClick}
       className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-        danger ? 'text-red-600 hover:bg-red-50' : 'text-foreground hover:bg-muted'
+        danger ? 'text-destructive hover:bg-destructive/10' : 'text-foreground hover:bg-muted'
       }`}
     >
       <Icon className="h-4 w-4" />

@@ -2,74 +2,26 @@
 
 import { useEffect, useState } from 'react';
 import { useAdminFamilies } from '@/lib/hooks/use-admin';
-import { DataTable } from '@/components/admin/data-table';
+import { useTableSort } from '@/lib/hooks/use-table-sort';
+import { DataTable, type Column } from '@/components/admin/data-table';
 import { FamilyActionsMenu } from '@/components/admin/family-actions-menu';
-import type { FamilyRow } from '@/lib/api/admin';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-
-function StatusBadge({ row }: { row: FamilyRow }): React.ReactElement {
-  if (row.deletedAt) {
-    return (
-      <Badge className="border-transparent bg-red-100 text-red-700 hover:bg-red-100">Удалена</Badge>
-    );
-  }
-  return (
-    <Badge className="border-transparent bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
-      Активна
-    </Badge>
-  );
-}
-
-const columns = [
-  { key: 'name', header: 'Семья' },
-  { key: 'status', header: 'Статус', render: (row: FamilyRow) => <StatusBadge row={row} /> },
-  {
-    key: 'createdAt',
-    header: 'Создана',
-    render: (row: FamilyRow) => new Date(row.createdAt).toLocaleString('ru'),
-  },
-  {
-    key: 'deletedAt',
-    header: 'Удалена',
-    render: (row: FamilyRow) =>
-      row.deletedAt ? (
-        <span className="text-red-600">{new Date(row.deletedAt).toLocaleString('ru')}</span>
-      ) : (
-        '—'
-      ),
-  },
-  {
-    key: 'membersCount',
-    header: 'Участники',
-    render: (row: FamilyRow) => String(row.membersCount),
-  },
-  {
-    key: 'childrenCount',
-    header: 'Дети',
-    render: (row: FamilyRow) => String(row.childrenCount),
-  },
-  {
-    key: 'activeDevicesCount',
-    header: 'Активных устройств',
-    render: (row: FamilyRow) => String(row.activeDevicesCount),
-  },
-  {
-    key: 'actions',
-    header: '',
-    render: (row: FamilyRow) => (
-      <div className="text-right">
-        <FamilyActionsMenu row={row} />
-      </div>
-    ),
-  },
-] as const;
+import { FamilyStatusBadge } from '@/components/admin/badges';
+import {
+  ExportCsvButton,
+  ListToolbar,
+  Pagination,
+  SearchInput,
+  ToggleFilter,
+} from '@/components/admin/list-controls';
+import { exportRowsToCsv } from '@/lib/admin/csv';
+import type { FamilyRow, FamilySortField } from '@/lib/api/admin';
 
 export function FamiliesClient() {
   const [page, setPage] = useState(1);
   const [inputQ, setInputQ] = useState('');
   const [q, setQ] = useState('');
   const [showDeleted, setShowDeleted] = useState(false);
+  const { sort, toggle } = useTableSort<FamilySortField>({ by: 'createdAt', dir: 'desc' });
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -79,66 +31,119 @@ export function FamiliesClient() {
     return () => clearTimeout(t);
   }, [inputQ]);
 
-  const { data, isLoading, error } = useAdminFamilies({ page, q, showDeleted });
+  const { data, isLoading, error } = useAdminFamilies({
+    page,
+    q,
+    showDeleted,
+    sortBy: sort.by,
+    sortDir: sort.dir,
+  });
 
-  const totalPages = data ? Math.ceil(data.total / data.limit) : 1;
+  const columns: Column<FamilyRow>[] = [
+    { key: 'name', header: 'Семья', sortKey: 'name', cellClassName: 'font-medium' },
+    {
+      key: 'status',
+      header: 'Статус',
+      render: (row) => <FamilyStatusBadge deletedAt={row.deletedAt} />,
+    },
+    {
+      key: 'createdAt',
+      header: 'Создана',
+      sortKey: 'createdAt',
+      cellClassName: 'text-muted-foreground',
+      render: (row) => new Date(row.createdAt).toLocaleDateString('ru'),
+    },
+    {
+      key: 'deletedAt',
+      header: 'Удалена',
+      sortKey: 'deletedAt',
+      render: (row) =>
+        row.deletedAt ? (
+          <span className="text-destructive">
+            {new Date(row.deletedAt).toLocaleDateString('ru')}
+          </span>
+        ) : (
+          '—'
+        ),
+    },
+    {
+      key: 'membersCount',
+      header: 'Участники',
+      align: 'right',
+      cellClassName: 'tabular-nums',
+      render: (row) => String(row.membersCount),
+    },
+    {
+      key: 'childrenCount',
+      header: 'Дети',
+      align: 'right',
+      cellClassName: 'tabular-nums',
+      render: (row) => String(row.childrenCount),
+    },
+    {
+      key: 'activeDevicesCount',
+      header: 'Устройств',
+      align: 'right',
+      cellClassName: 'tabular-nums',
+      render: (row) => String(row.activeDevicesCount),
+    },
+    {
+      key: 'actions',
+      header: '',
+      align: 'right',
+      render: (row) => <FamilyActionsMenu row={row} />,
+    },
+  ];
+
+  function handleExport(): void {
+    if (!data) return;
+    exportRowsToCsv<FamilyRow>(
+      `families-${new Date().toISOString().slice(0, 10)}`,
+      [
+        { header: 'Семья', value: (r) => r.name },
+        { header: 'Статус', value: (r) => (r.deletedAt ? 'Удалена' : 'Активна') },
+        { header: 'Создана', value: (r) => r.createdAt },
+        { header: 'Удалена', value: (r) => r.deletedAt ?? '' },
+        { header: 'Участники', value: (r) => r.membersCount },
+        { header: 'Дети', value: (r) => r.childrenCount },
+        { header: 'Активных устройств', value: (r) => r.activeDevicesCount },
+      ],
+      data.items,
+    );
+  }
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <input
-          type="text"
-          placeholder="Поиск по названию…"
-          value={inputQ}
-          onChange={(e) => setInputQ(e.target.value)}
-          className="w-72 rounded-md border border-slate-300 px-3 py-1.5 text-sm outline-none focus:border-slate-500"
-        />
-        <label className="flex items-center gap-2 text-sm text-slate-700">
-          <input
-            type="checkbox"
-            checked={showDeleted}
-            onChange={(e) => {
-              setShowDeleted(e.target.checked);
-              setPage(1);
-            }}
-            className="h-4 w-4 rounded border-slate-300"
-          />
+      <ListToolbar>
+        <SearchInput value={inputQ} onChange={setInputQ} placeholder="Поиск по названию…" />
+        <ToggleFilter
+          checked={showDeleted}
+          onChange={(v) => {
+            setShowDeleted(v);
+            setPage(1);
+          }}
+        >
           Показывать удалённые
-        </label>
-        {data && <span className="text-sm text-slate-500">Всего: {data.total}</span>}
-      </div>
+        </ToggleFilter>
+        <div className="ml-auto">
+          <ExportCsvButton onClick={handleExport} disabled={!data || data.items.length === 0} />
+        </div>
+      </ListToolbar>
 
       {isLoading && <p className="text-sm text-muted-foreground">Загружаем…</p>}
-      {error && <p className="text-sm text-red-600">Ошибка загрузки семей.</p>}
+      {error && <p className="text-sm text-destructive">Ошибка загрузки семей.</p>}
 
       {data && (
         <>
           <DataTable
-            columns={columns as unknown as Parameters<typeof DataTable>[0]['columns']}
-            rows={data.items as unknown as Record<string, unknown>[]}
+            columns={columns}
+            rows={data.items}
             empty="Нет семей"
+            sort={sort}
+            onSort={toggle}
+            rowKey={(row) => (row as FamilyRow).id}
           />
-          <div className="mt-4 flex items-center gap-3">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page <= 1}
-              onClick={() => setPage((p) => p - 1)}
-            >
-              Назад
-            </Button>
-            <span className="text-sm text-muted-foreground">
-              Страница {page} из {totalPages}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              Вперёд
-            </Button>
-          </div>
+          <Pagination page={page} total={data.total} limit={data.limit} onPage={setPage} />
         </>
       )}
     </div>
