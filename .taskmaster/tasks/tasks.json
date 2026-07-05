@@ -1186,13 +1186,25 @@
         "priority": "medium",
         "subtasks": [],
         "updatedAt": "2026-07-05T14:30:51.056Z"
+      },
+      {
+        "id": "81",
+        "title": "Публикация mobile-parent 0.53.0+28 в RuStore через Public API",
+        "description": "Опубликовать новую версию parent (история передвижений + тёмная тема + splash + удаление/отвязка) в RuStore через tools/rustore/rustore-publish.mjs. Запись pro.periscop.parent, keyId 2351029746. Published была 0.52.0 versionCode 27 → bump pubspec до +28. Этап 2 (реальное устройство) пропущен по решению пользователя, этап 1 AVD пройден по всем задачам.",
+        "details": "Шаги: (1) bump pubspec parent 0.53.0+27→0.53.0+28 (versionCode 27 занят published); (2) flutter build appbundle --release; (3) jarsigner -verify подпись (тот же keystore CN=GMD Parent); (4) copy в releases/rustore/parent/gmd-parent-0.53.0+28.aab + sha256; (5) node rustore-publish.mjs publish --app parent --aab <path> --whatsnew \"...\" --appname \"Перископ Родителя\" (moderInfo из скрипта или --moderinfo с тест-кредами); (6) обновить реестр releases/rustore/README.md + PUBLISH_v0.53.0.md; (7) коммит (bump pubspec + README + CHANGELOG, точечно без web пользователя). Verify: status --app parent показывает новую версию на модерации. whatsNew из CHANGELOG 0.53.0 (история/тема/splash/удаление). DONE 2026-07-05: bump pubspec +28, собран AAB (не подошёл) → ГРАБЛЯ: AAB даёт 400 «Ключи и сертификаты еще не загружены» (запись pro.periscop.parent без RuStore App Signing, первая версия прохода B заливалась как APK). Пересобран universal release APK (66.2МБ, aapt2 badging: pro.periscop.parent versionCode 28 versionName 0.53.0 label «Перископ Родителя»), залит через --apk. Публикация OK: versionId 2064693129, status MODERATION (0.52.0/27 остаётся ACTIVE). Ключ keyId 2351029746 (Periscop-publish) из memory-compiler в ~/.rustore_publish.env. Реестр README + PUBLISH_v0.53.0.md обновлены. SHA-256 APK 8203ff97; AAB 3d37cf84. Коммит точечный без web-правок пользователя. Модерация 12-24ч.",
+        "testStrategy": "",
+        "status": "done",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": [],
+        "updatedAt": "2026-07-05T15:21:55.642Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-05T14:52:25.658Z",
-      "taskCount": 80,
-      "completedCount": 69,
+      "lastModified": "2026-07-05T15:21:55.642Z",
+      "taskCount": 81,
+      "completedCount": 70,
       "tags": [
         "master"
       ]
