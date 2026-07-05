@@ -94,7 +94,7 @@ function RuStoreButton({
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex items-center justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50/60 px-4 py-3 transition hover:border-blue-400 hover:bg-blue-100/60"
+      className="flex items-center justify-between gap-3 rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 transition hover:border-sky-400/50 hover:bg-sky-500/20"
     >
       <div className="flex items-center gap-3">
         <Image
@@ -105,13 +105,13 @@ function RuStoreButton({
           className="h-12 w-12 shrink-0 rounded-xl shadow-sm"
         />
         <div>
-          <div className="font-semibold text-zinc-900">Установить из RuStore</div>
-          <div className="text-xs text-zinc-600">
+          <div className="font-semibold text-white">Установить из RuStore</div>
+          <div className="text-xs text-slate-400">
             Рекомендуем — автообновления и без «неизвестных источников»
           </div>
         </div>
       </div>
-      <span className="shrink-0 text-sm font-medium text-blue-600">Открыть →</span>
+      <span className="shrink-0 text-sm font-medium text-sky-300">Открыть →</span>
     </a>
   );
 }
@@ -124,26 +124,26 @@ function AppCard({
   latest: ReturnType<typeof pickLatest>;
 }): ReactElement {
   return (
-    <section className="mb-8 rounded-lg border border-zinc-200 bg-white p-6 shadow-sm">
-      <h2 className="text-xl font-semibold text-zinc-900">{section.title}</h2>
-      <p className="mt-1 mb-5 text-sm text-zinc-600">{section.description}</p>
+    <section className="mb-8 rounded-lg border border-slate-700/60 bg-slate-900/70 p-6 shadow-sm">
+      <h2 className="text-xl font-semibold text-white">{section.title}</h2>
+      <p className="mt-1 mb-5 text-sm text-slate-300">{section.description}</p>
 
       <RuStoreButton href={section.rustoreUrl} icon={section.icon} title={section.title} />
 
       {latest.abis.length > 0 && (
-        <details className="mt-5 text-sm text-zinc-600">
-          <summary className="cursor-pointer font-medium text-zinc-800">
+        <details className="mt-5 text-sm text-slate-300">
+          <summary className="cursor-pointer font-medium text-slate-200">
             Или скачать APK напрямую
           </summary>
-          <p className="mt-2 text-xs text-zinc-500">
+          <p className="mt-2 text-xs text-slate-400">
             Запасной вариант, если RuStore недоступен. Потребуется разрешить установку из
             неизвестных источников; автообновление придёт только через RuStore.
           </p>
           <div className="mt-3 mb-2 flex items-baseline justify-between">
-            <span className="text-sm font-medium text-zinc-900">
+            <span className="text-sm font-medium text-white">
               Актуальная версия — v{latest.version}
             </span>
-            <span className="text-xs text-zinc-500">
+            <span className="text-xs text-slate-400">
               {new Date(latest.abis[0].uploadedAt).toLocaleString('ru')}
             </span>
           </div>
@@ -152,26 +152,26 @@ function AppCard({
               <a
                 key={f.filename}
                 href={`/api/public/download/${encodeURIComponent(f.filename)}`}
-                className="flex items-center justify-between rounded-md border border-zinc-200 bg-white px-4 py-3 hover:border-zinc-400 hover:bg-zinc-50"
+                className="flex items-center justify-between rounded-md border border-slate-700 bg-slate-950/40 px-4 py-3 transition hover:border-slate-500 hover:bg-slate-900"
               >
                 <div>
-                  <div className="font-medium text-zinc-900">
+                  <div className="font-medium text-slate-100">
                     {f.abi}
-                    <span className="ml-2 text-sm font-normal text-zinc-500">
+                    <span className="ml-2 text-sm font-normal text-slate-400">
                       {formatBytes(f.size)}
                     </span>
                   </div>
-                  <div className="text-xs text-zinc-500">{abiHint(f.abi)}</div>
+                  <div className="text-xs text-slate-400">{abiHint(f.abi)}</div>
                 </div>
-                <span className="text-sm font-medium text-blue-600">Скачать</span>
+                <span className="text-sm font-medium text-sky-300">Скачать</span>
               </a>
             ))}
           </div>
         </details>
       )}
 
-      <details className="mt-4 text-sm text-zinc-600">
-        <summary className="cursor-pointer font-medium text-zinc-800">Как установить</summary>
+      <details className="mt-4 text-sm text-slate-300">
+        <summary className="cursor-pointer font-medium text-slate-200">Как установить</summary>
         <ol className="mt-2 list-decimal space-y-1 pl-5">
           {section.instructions.map((step) => (
             <li key={step}>{step}</li>
@@ -199,13 +199,13 @@ export default function DownloadPublicClient(): ReactElement {
   }, []);
 
   if (loading) {
-    return <div className="mx-auto max-w-3xl px-6 py-8 text-sm text-zinc-500">Загрузка…</div>;
+    return <div className="mx-auto max-w-3xl px-6 py-8 text-sm text-slate-400">Загрузка…</div>;
   }
 
   if (error) {
     return (
       <div className="mx-auto max-w-3xl px-6 py-8">
-        <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        <div className="rounded-md border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">
           Не удалось загрузить список релизов: {error}
         </div>
       </div>
@@ -214,8 +214,8 @@ export default function DownloadPublicClient(): ReactElement {
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-10">
-      <h1 className="mb-2 text-3xl font-semibold text-zinc-900">Скачать Перископ</h1>
-      <p className="mb-8 text-zinc-600">
+      <h1 className="mb-2 text-3xl font-semibold text-white">Скачать Перископ</h1>
+      <p className="mb-8 text-slate-300">
         Два приложения: одно для своего телефона (родителю), второе — на телефон ребёнка. Оба
         доступны в RuStore — так вы получите автоматические обновления.
       </p>

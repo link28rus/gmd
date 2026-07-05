@@ -66,7 +66,7 @@ export function DeleteChildDialog({ child, open, onOpenChange }: Props) {
           />
         </div>
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={remove.isPending}>
             Отмена
           </Button>
           <Button variant="destructive" disabled={!matches || remove.isPending} onClick={onConfirm}>

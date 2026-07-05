@@ -223,7 +223,7 @@ function ZoneEditorForm({ kids, initial, initialCenter, onCancel, onSaved }: For
       </div>
 
       <DialogFooter>
-        <Button variant="ghost" onClick={onCancel} disabled={saving}>
+        <Button variant="outline" onClick={onCancel} disabled={saving}>
           Отмена
         </Button>
         <Button onClick={onSubmit} disabled={saving}>

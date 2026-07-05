@@ -9,7 +9,8 @@
 body {
   background: #0a0a0a;
   color: #ededed;
-  font-family: system-ui, -apple-system, sans-serif;
+  /* Шрифт наследуется от <html class="font-sans"> → Geist (var(--font-sans)).
+     Здесь font-family НЕ задаём — иначе перебивал бы Geist системным стеком. */
 }
 
 /* Появление контента hero-блока на landing — мягкий fade-up, используется

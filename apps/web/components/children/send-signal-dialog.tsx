@@ -50,7 +50,7 @@ export function SendSignalDialog({ child, open, onOpenChange }: Props): ReactEle
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={sending}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={sending}>
             Отмена
           </Button>
           <Button onClick={onConfirm} disabled={sending}>

@@ -71,7 +71,12 @@ export function CreateChildDialog({ trigger }: { trigger?: ReactNode } = {}) {
             <Input id="dob" type="date" {...register('dateOfBirth')} />
           </div>
           <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setOpen(false)}
+              disabled={create.isPending}
+            >
               Отмена
             </Button>
             <Button type="submit" disabled={create.isPending}>

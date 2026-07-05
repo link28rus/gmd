@@ -78,7 +78,12 @@ export function EditChildDialog({ child, open, onOpenChange }: Props) {
             <Input id="edit-dob" type="date" {...register('dateOfBirth')} />
           </div>
           <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={update.isPending}
+            >
               Отмена
             </Button>
             <Button type="submit" disabled={!isDirty || update.isPending}>
