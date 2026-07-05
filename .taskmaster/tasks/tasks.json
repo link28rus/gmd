@@ -1155,12 +1155,13 @@
         "id": "78",
         "title": "mobile-parent: брендовый splash (Flutter + native)",
         "description": "Заменить FlutterLogo-заглушку на splash с иконкой приложения + «Перископ». Гарантировать минимум ~1.8с показа. Плюс native splash (flutter_native_splash) чтобы убрать белый кадр на cold start. Логику _bootstrap не ломать.",
-        "details": "Развилка решена: Flutter-splash + native splash. Шаги: (1) splash_screen.dart — FlutterLogo→Image.asset('assets/icon/icon.png', 112, ClipRRect скругление) + «Перископ» (textTheme.titleLarge/headlineSmall w600) + «Родительский контроль» (bodyMedium onSurfaceVariant) + индикатор снизу; цвета через colorScheme (согласовать с задачей #77); (2) pubspec.yaml — добавить flutter: assets: секцию (сейчас её нет, Image.asset упадёт без неё) с assets/icon/; (3) минимальная длительность: await Future.wait([_bootstrapLogic(), Future.delayed(1800ms)]) — max не сумма, не блокировать если bootstrap дольше; вынести логику из _bootstrap в _bootstrapLogic возвращающую путь, навигацию сделать после Future.wait; (4) flutter_native_splash пакет в dev_deps + config (image=assets/icon/icon.png или foreground, color=0xFF2E7D32, android12 branding) + dart run flutter_native_splash:create. Verify: cold start (adb am force-stop + relaunch) видна иконка+«Перископ» ~2с → /home или /login; light+dark; скрин. CHANGELOG ### Улучшения. Отдельный коммит. mobile-child splash симметрию — опционально/отдельно.",
+        "details": "Развилка решена: Flutter-splash + native splash. Шаги: (1) splash_screen.dart — FlutterLogo→Image.asset('assets/icon/icon.png', 112, ClipRRect скругление) + «Перископ» (textTheme.titleLarge/headlineSmall w600) + «Родительский контроль» (bodyMedium onSurfaceVariant) + индикатор снизу; цвета через colorScheme (согласовать с задачей #77); (2) pubspec.yaml — добавить flutter: assets: секцию (сейчас её нет, Image.asset упадёт без неё) с assets/icon/; (3) минимальная длительность: await Future.wait([_bootstrapLogic(), Future.delayed(1800ms)]) — max не сумма, не блокировать если bootstrap дольше; вынести логику из _bootstrap в _bootstrapLogic возвращающую путь, навигацию сделать после Future.wait; (4) flutter_native_splash пакет в dev_deps + config (image=assets/icon/icon.png или foreground, color=0xFF2E7D32, android12 branding) + dart run flutter_native_splash:create. Verify: cold start (adb am force-stop + relaunch) видна иконка+«Перископ» ~2с → /home или /login; light+dark; скрин. CHANGELOG ### Улучшения. Отдельный коммит. mobile-child splash симметрию — опционально/отдельно. DONE 2026-07-06: splash_screen.dart — Image.asset icon.png (ClipRRect 24) + «Перископ» headlineSmall + «Родительский контроль» onSurfaceVariant + индикатор, фон scheme.surface; _bootstrap разделён на _resolveRoute() (возвращает путь) + Future.delayed(1800) паттерн max-не-сумма; pubspec assets: assets/icon/ + flutter_native_splash ^2.4.4 dev_dep + config (icon.png, color #2E7D32, android12); dart run flutter_native_splash:create сгенерил android-ресурсы. flutter analyze чист. AVD cold start verify: native splash = зелёный #2E7D32 фон + круглая иконка (Android12 mask); Flutter splash = иконка+«Перископ»+подзаголовок+индикатор; foreground сначала не отрисовался на native → заменил на icon.png. mobile-child splash симметрию не делал (опционально). Коммит #2 из трёх.",
         "testStrategy": "",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "medium",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-07-05T14:28:12.944Z"
       },
       {
         "id": "79",
@@ -1172,13 +1173,25 @@
         "dependencies": [],
         "priority": "medium",
         "subtasks": []
+      },
+      {
+        "id": "80",
+        "title": "web: дизайн-аудит — быстрые победы (Geist, футер, /download, диалоги)",
+        "description": "Устранить 4 самых заметных дефекта из дизайн-аудита веб-кабинета без риска для тем: (1) шрифт Geist грузится, но не применяется; (2) белый футер на тёмных публичных страницах; (3) страница /download в светлой теме на фоне тёмного бренда; (4) рассинхрон кнопки «Отмена» в диалогах (variant + disabled при pending).",
+        "details": "Аудит проведён 2026-07-06. Правки самодостаточные, без изменения SSR-темы (ThemeProvider на useEffect → глобальный dark на <html> дал бы flash в light-теме кабинета).\n\n1) Geist: tailwind.config.ts добавить fontFamily.sans=[var(--font-sans), ...defaultTheme]. globals.css убрать font-family из верхнего body{} (перебивал Geist через system-ui). Проверено: body computed = system-ui, html = дефолтный стек Tailwind, --font-sans определён но не подключён.\n2) Footer (components/layout/footer.tsx): bg-white/zinc → тёмный бренд (совпасть с landing #050a15/slate). Причина белой полосы: публичные страницы без data-admin-theme → :root=light токены, а body тёмный.\n3) /download (app/download/page.tsx + download-public-client.tsx): перевести на тёмную палитру бренда (был bg-zinc-50/white).\n4) Диалоги: унифицировать cancel на variant=outline (админка уже outline; кабинет был ghost) + добавить disabled при pending где нет: create-child (create.isPending), delete-child (remove.isPending), edit-child (update.isPending), reset-device (reset.isPending). Также ghost→outline: block-dialog, send-signal, zone-editor-dialog.\n\nВёрстка проверяется на dev :3003 через preview.",
+        "testStrategy": "preview :3003: скриншоты landing/login/download/privacy до и после; computed font-family body = Geist; футер bg тёмный на privacy; открыть диалоги — cancel=outline, disabled при отправке. pnpm --filter @periscop/web typecheck + lint.",
+        "status": "in-progress",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": [],
+        "updatedAt": "2026-07-05T14:24:54.450Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-05T14:18:40.715Z",
-      "taskCount": 79,
-      "completedCount": 66,
+      "lastModified": "2026-07-05T14:28:12.944Z",
+      "taskCount": 80,
+      "completedCount": 67,
       "tags": [
         "master"
       ]

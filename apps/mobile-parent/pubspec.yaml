@@ -76,6 +76,25 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   mocktail: ^1.0.4
   flutter_launcher_icons: ^0.14.4
+  # Нативный splash (до старта Flutter-движка) — убирает белый кадр на cold
+  # start. Генерирует Android-ресурсы: `dart run flutter_native_splash:create`.
+  flutter_native_splash: ^2.4.4
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/icon/
+
+# Нативная заставка — брендовый зелёный фон + логотип «Перископ» (foreground
+# адаптивной иконки). Показывается ОС до инициализации Flutter, затем виджет
+# SplashScreen продолжает брендовую заставку. Регенерация после правок:
+#   dart run flutter_native_splash:create
+flutter_native_splash:
+  color: "#2E7D32"
+  image: assets/icon/icon.png
+  android_12:
+    color: "#2E7D32"
+    image: assets/icon/icon.png
+  android: true
+  ios: false
+  web: false
