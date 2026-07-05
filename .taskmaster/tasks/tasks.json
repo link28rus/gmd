@@ -1072,7 +1072,7 @@
         "description": "Полный перевод mobile-app на новый бренд: applicationId/namespace/dart-пакеты на pro.periscop.*, зачистка всех остаточных упоминаний GMD, новые иконки Перископа, публикация в новые записи RuStore «Перископ Ребёнка/Родителя».",
         "details": "Пользователь: «переделываем всё сюда, никаких упоминаний GMD». Восстанавливаем откатанный Path B (commit c5b8984 через revert-of-revert d32bd08). google-services.json уже с pro.periscop.* (блокер снят). Иконки от пользователя обработаны в full-bleed + adaptive + monochrome + store-512. Firebase project id gmd-prod-7d1f8 оставляем (opaque). Первая версия новых записей — ручной upload AAB через Console.",
         "testStrategy": "AVD smoke (lesson #41) golden path обоих apps; реальное устройство. flutter analyze чисто. aapt2 badging: applicationId=pro.periscop.*, label=Перископ.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "high",
         "subtasks": [
@@ -1119,19 +1119,32 @@
             "title": "Публикация в новые записи RuStore: ручной первый upload + скрипт APPS на pro.periscop.*",
             "description": "",
             "details": "",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
-            "parentId": "undefined"
+            "parentId": "undefined",
+            "updatedAt": "2026-07-03T11:59:48.868Z"
           }
         ],
-        "updatedAt": "2026-07-03T07:55:21.620Z"
+        "updatedAt": "2026-07-03T11:59:48.868Z"
+      },
+      {
+        "id": "76",
+        "title": "mobile-parent: нативный экран «История передвижений»",
+        "description": "Заменить заглушку «История передвижений — скоро» в child_action_sheet на рабочий нативный экран. Функция уже есть в веб-кабинете (/cabinet/children/[id]/history): список поездок + карта маршрута. Backend готов (GET /children/:id/trips, /trips/:tripId/points).",
+        "details": "Нативная реализация (не embed), симметрия с child_detail_screen (flutter_map + PolylineLayer). Шаги: (1) модель Trip в Dart (child_models.dart) из TripDto; (2) методы ChildrenRepository.listTrips + tripPoints; (3) Riverpod providers childTripsProvider + tripPointsProvider (autoDispose.family); (4) TripHistoryScreen — список поездок карточками с датой/длительностью/дистанцией/точками, badge «Идёт» для active, пустое состояние; (5) TripRouteScreen — flutter_map с polyline маршрута + маркеры старт/финиш + fit bounds; (6) роуты /home/child/:id/history и history/:tripId в app_router.dart; (7) замена snackbar-заглушки на context.push; (8) CHANGELOG. Верификация: flutter analyze + AVD smoke (lesson #41 этап 1). Backend/web не трогаем. DONE 2026-07-05: реализовано нативно, flutter analyze чист (No issues found), debug-APK собран, AVD smoke на Medium_Phone_API_36.0 (x86_64, android-36) с реальными данными прода (ребёнок Артем): список поездок с badge «Идёт», форматирование дат/длительности/дистанции (13.9 км, 1 ч 32 мин), тап → маршрут на карте (polyline + маркеры старт/финиш + fit bounds) — всё работает. Версия bump 0.52.0→0.53.0 + CHANGELOG. Этап 2 (реальное устройство) и этап 3 (RuStore AAB submit) — отдельно по решению пользователя.",
+        "testStrategy": "",
+        "status": "done",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": [],
+        "updatedAt": "2026-07-05T13:10:32.685Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-03T07:55:21.623Z",
-      "taskCount": 75,
-      "completedCount": 63,
+      "lastModified": "2026-07-05T13:10:32.685Z",
+      "taskCount": 76,
+      "completedCount": 65,
       "tags": [
         "master"
       ]

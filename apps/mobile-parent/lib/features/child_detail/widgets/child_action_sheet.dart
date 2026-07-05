@@ -81,7 +81,7 @@ class _ChildActionSheetState extends ConsumerState<ChildActionSheet> {
           _ActionTile(
             icon: Icons.timeline_outlined,
             label: 'История передвижений',
-            onTap: () => _showSnack('История передвижений — скоро'),
+            onTap: _onHistory,
           ),
           _ActionTile(
             icon: Icons.shield_outlined,
@@ -200,6 +200,11 @@ class _ChildActionSheetState extends ConsumerState<ChildActionSheet> {
     context.push(
       '/home/child/${widget.child.id}/parental-control?name=$encoded',
     );
+  }
+
+  void _onHistory() {
+    final encoded = Uri.encodeQueryComponent(widget.child.name);
+    context.push('/home/child/${widget.child.id}/history?name=$encoded');
   }
 
   Future<void> _onSignalTap() async {

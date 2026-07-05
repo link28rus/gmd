@@ -27,3 +27,22 @@ final childActiveTrackProvider =
   final repo = ref.watch(childrenRepositoryProvider);
   return repo.activeTrack(childId);
 });
+
+/// Список поездок ребёнка (история передвижений). autoDispose — освобождается
+/// при выходе с экрана истории. Refresh: `ref.invalidate(childTripsProvider(id))`.
+final childTripsProvider =
+    FutureProvider.autoDispose.family<List<Trip>, String>((ref, childId) async {
+  final repo = ref.watch(childrenRepositoryProvider);
+  return repo.listTrips(childId);
+});
+
+/// Ключ для [tripPointsProvider] — пара (childId, tripId). Record-тип
+/// автоматически equatable по значению → корректная мемоизация family.
+typedef TripPointsKey = ({String childId, String tripId});
+
+/// Точки маршрута конкретной поездки (для polyline на карте).
+final tripPointsProvider =
+    FutureProvider.autoDispose.family<List<ChildLocation>, TripPointsKey>((ref, key) async {
+  final repo = ref.watch(childrenRepositoryProvider);
+  return repo.tripPoints(key.childId, key.tripId);
+});

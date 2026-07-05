@@ -114,6 +114,41 @@ class ChildrenRepository {
     );
   }
 
+  /// Список поездок ребёнка (история передвижений). Backend отдаёт до 100
+  /// поездок за 30 дней, отсортированных `startedAt desc`. Активная (незакрытая)
+  /// поездка, если есть, идёт первой с `isActive == true`.
+  ///
+  /// `GET /children/:id/trips` → `{ trips: TripDto[] }`.
+  Future<List<Trip>> listTrips(
+    String childId, {
+    DateTime? from,
+    DateTime? to,
+  }) async {
+    final res = await _dio.get<dynamic>(
+      '/children/$childId/trips',
+      queryParameters: <String, dynamic>{
+        // ignore: use_null_aware_elements
+        if (from != null) 'from': from.toUtc().toIso8601String(),
+        // ignore: use_null_aware_elements
+        if (to != null) 'to': to.toUtc().toIso8601String(),
+      },
+    );
+    final data = res.data as Map<String, dynamic>;
+    final list = (data['trips'] as List? ?? const []).cast<Map<String, dynamic>>();
+    return list.map(Trip.fromJson).toList();
+  }
+
+  /// Точки маршрута конкретной поездки — для отрисовки polyline на карте.
+  ///
+  /// `GET /children/:id/trips/:tripId/points` → `{ points: [{lat, lon, recordedAt}] }`.
+  /// В точках только координаты и время (без accuracy/battery — они будут null).
+  Future<List<ChildLocation>> tripPoints(String childId, String tripId) async {
+    final res = await _dio.get<dynamic>('/children/$childId/trips/$tripId/points');
+    final data = res.data as Map<String, dynamic>;
+    final points = (data['points'] as List? ?? const []).cast<Map<String, dynamic>>();
+    return points.map(ChildLocation.fromJson).toList();
+  }
+
   /// История точек за период. По умолчанию backend отдаёт ~24 часа.
   Future<List<ChildLocation>> locations(
     String childId, {
