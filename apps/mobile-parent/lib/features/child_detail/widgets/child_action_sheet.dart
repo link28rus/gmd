@@ -265,7 +265,7 @@ class _ChildActionSheetState extends ConsumerState<ChildActionSheet> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(text),
-        backgroundColor: error ? Colors.red.shade700 : null,
+        backgroundColor: error ? Theme.of(context).colorScheme.error : null,
       ),
     );
   }
@@ -295,7 +295,7 @@ class _ActionTile extends StatelessWidget {
     final theme = Theme.of(context);
     final disabled = onTap == null && trailing == null;
     final color = destructive
-        ? Colors.red.shade700
+        ? theme.colorScheme.error
         : disabled
             ? theme.disabledColor
             : theme.colorScheme.onSurface;

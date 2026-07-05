@@ -34,9 +34,9 @@ class _UpdateBannerState extends ConsumerState<UpdateBanner> {
       UpdateIdle() || UpdateChecking() || UpdateNotNeeded() =>
         const SizedBox.shrink(),
       UpdateFailed(:final message) => _Card(
-          color: Colors.red.shade50,
+          color: Theme.of(context).colorScheme.errorContainer,
           icon: Icons.error_outline,
-          iconColor: Colors.red.shade700,
+          iconColor: Theme.of(context).colorScheme.error,
           title: 'Не удалось проверить обновления',
           subtitle: message,
           actionLabel: 'Повторить',
@@ -94,7 +94,7 @@ class _Card extends StatelessWidget {
                     Text(
                       subtitle,
                       style: TextStyle(
-                        color: Colors.grey.shade800,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                         fontSize: 12,
                       ),
                     ),

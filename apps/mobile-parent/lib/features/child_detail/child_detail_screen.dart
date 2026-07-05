@@ -186,12 +186,15 @@ class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen> {
                           left: 12,
                           right: 12,
                           child: Card(
-                            color: Colors.red.shade50,
+                            color: Theme.of(context).colorScheme.errorContainer,
                             child: Padding(
                               padding: const EdgeInsets.all(12),
                               child: Text(
                                 'Не удалось загрузить локацию: ${latestAsync.error}',
-                                style: TextStyle(color: Colors.red.shade800),
+                                style: TextStyle(
+                                  color:
+                                      Theme.of(context).colorScheme.onErrorContainer,
+                                ),
                               ),
                             ),
                           ),

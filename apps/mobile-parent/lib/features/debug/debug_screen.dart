@@ -87,7 +87,9 @@ class _DebugScreenState extends State<DebugScreen> {
                     style: TextStyle(
                       fontFamily: 'monospace',
                       fontSize: 11,
-                      color: isErr ? Colors.red : Colors.black87,
+                      color: isErr
+                          ? Theme.of(context).colorScheme.error
+                          : Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
                 );

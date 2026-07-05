@@ -1138,13 +1138,47 @@
         "priority": "medium",
         "subtasks": [],
         "updatedAt": "2026-07-05T13:10:32.685Z"
+      },
+      {
+        "id": "77",
+        "title": "mobile-parent: тема Material 3 + dark-mode + переключатель",
+        "description": "Убрать 47 хардкодов Colors.* (в 13 файлах lib) → Theme.of(context).colorScheme.*. Добавить darkTheme + themeMode.system + ручной переключатель темы (Светлая/Тёмная/Системная) с сохранением в SharedPreferences. Presentation-слой, бизнес-логику/провайдеры не ломать.",
+        "details": "Развилка решена с пользователем: полный dark-mode + ручной переключатель. Шаги: (1) app.dart — darkTheme через ColorScheme.fromSeed(seedColor:0xFF2E7D32, brightness:dark), themeMode из нового провайдера; (2) Riverpod StateNotifierProvider themeModeProvider + persist в SharedPreferences (ключ theme_mode), инициализация при старте; (3) переключатель в PopupMenu home_screen (Светлая/Тёмная/Системная); (4) маппинг хардкодов: grey.shade200/300→surfaceContainerHighest, grey.shade400/500/600/700→onSurfaceVariant, grey.shade800/900/чёрный→onSurface, border/divider→outlineVariant, green.shade100→primaryContainer, green.shade800→onPrimaryContainer, инлайн TextStyle(fontSize)→textTheme.*; семантика НЕ на бренд-primary: online=Color(0xFF22C55E), ошибки→colorScheme.error; (5) home_screen прототип (протестирован ранее): _ChildCard online-точка Positioned поверх аватара 14px border surface, аватар online→primaryContainer/onPrimaryContainer offline→surfaceContainerHighest/onSurfaceVariant, Card elevation0+BorderSide(outlineVariant)+rounded16; _EmptyState иллюстрация в primaryContainer-кружке + CTA «Добавить ребёнка» (прокинуть onAddChild); _ErrorView серые→onSurfaceVariant. Файлы: audio_listen_screen, login_screen, register_screen, add_child_flow, child_detail_screen, child_action_sheet, child_status_card, debug_screen, home_screen, update_banner, parental_control_screen, trip_history_screen, trip_route_screen, splash_screen, app.dart. Verify: flutter analyze после каждого + AVD light И dark (adb shell cmd uimode night yes/no). CHANGELOG ### Улучшения. Отдельный коммит. DONE 2026-07-06: реализовано — app_theme.dart (light/dark builder + AppColors семантика online/warning), theme_mode_provider.dart (StateNotifier + SharedPreferences persist), app.dart (theme/darkTheme/themeMode), home_screen переписан (переключатель в меню, _ChildCard online-точка, _EmptyState CTA, _ErrorView), убраны все 47 палитровых хардкодов в 13 файлах (остались только Colors.white/black для маркеров/теней/QR). flutter analyze lib — No issues found. AVD verify: login light+dark корректны, home dark+light (прототип карточек: online primaryContainer+зелёная точка, offline surfaceContainerHighest без точки), диалог темы 3 опции, ручное переключение Тёмная→Светлая переопределяет системную тему, persist работает. Коммит #1 из трёх.",
+        "testStrategy": "",
+        "status": "done",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": [],
+        "updatedAt": "2026-07-05T14:18:40.714Z"
+      },
+      {
+        "id": "78",
+        "title": "mobile-parent: брендовый splash (Flutter + native)",
+        "description": "Заменить FlutterLogo-заглушку на splash с иконкой приложения + «Перископ». Гарантировать минимум ~1.8с показа. Плюс native splash (flutter_native_splash) чтобы убрать белый кадр на cold start. Логику _bootstrap не ломать.",
+        "details": "Развилка решена: Flutter-splash + native splash. Шаги: (1) splash_screen.dart — FlutterLogo→Image.asset('assets/icon/icon.png', 112, ClipRRect скругление) + «Перископ» (textTheme.titleLarge/headlineSmall w600) + «Родительский контроль» (bodyMedium onSurfaceVariant) + индикатор снизу; цвета через colorScheme (согласовать с задачей #77); (2) pubspec.yaml — добавить flutter: assets: секцию (сейчас её нет, Image.asset упадёт без неё) с assets/icon/; (3) минимальная длительность: await Future.wait([_bootstrapLogic(), Future.delayed(1800ms)]) — max не сумма, не блокировать если bootstrap дольше; вынести логику из _bootstrap в _bootstrapLogic возвращающую путь, навигацию сделать после Future.wait; (4) flutter_native_splash пакет в dev_deps + config (image=assets/icon/icon.png или foreground, color=0xFF2E7D32, android12 branding) + dart run flutter_native_splash:create. Verify: cold start (adb am force-stop + relaunch) видна иконка+«Перископ» ~2с → /home или /login; light+dark; скрин. CHANGELOG ### Улучшения. Отдельный коммит. mobile-child splash симметрию — опционально/отдельно.",
+        "testStrategy": "",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": []
+      },
+      {
+        "id": "79",
+        "title": "mobile-parent: «Удалить ребёнка» + «Отвязать устройство»",
+        "description": "Доделать две заглушки в child_action_sheet: «Удалить ребёнка» (:133) и «Отвязать устройство» (:127). Удаление — backend готов (DELETE /family/children/:childId, soft-delete). Отвязка — требует НОВОГО backend endpoint (revoke device без удаления ребёнка; сейчас revoke только внутри softDelete).",
+        "details": "Развилка решена: обе фичи, включая новый backend endpoint для отвязки. Шаги BACKEND: (1) children.controller.ts — новый endpoint для revoke активного устройства ребёнка без удаления (напр. DELETE /family/children/:childId/device или POST .../device/unbind), проверка FamilyAccessGuard; children.service — revoke device (revokedAt=now где childId и revokedAt=null, как внутри softDelete children.service:162) БЕЗ deletedAt; вернуть 200/204; тесты по образцу children.service.spec. Шаги MOBILE: (2) children_repository.dart — deleteChild(id)=>_dio.delete('/family/children/$id'); unbindDevice(id)=>_dio.delete(новый путь); (3) child_action_sheet.dart — заменить обе заглушки на flow с confirm (showDialog AlertDialog, деструктивная кнопка красным colorScheme.error), состояние загрузки (заблокировать на время запроса), обработка ApiException/Dio по образцу _onSignalTap/_onProtectionToggle; удаление после успеха: закрыть sheet → context.go('/home') → invalidate(childrenListProvider) → снек «Ребёнок удалён»; отвязка: invalidate(childrenListProvider) + снек «Устройство отвязано», остаться на экране. Тексты confirm: удаление «Удалить ребёнка? Данные о нём и история будут удалены», отвязка «Отвязать устройство? Ребёнок перестанет передавать геолокацию, приложение можно будет привязать заново». Verify (урок #17 реально): backend deploy → AVD залогиниться, тестовый ребёнок → Удалить/Отвязать → подтвердить → проверить что исчез/отвязался и не возвращается после refresh. НЕ удалять реальных детей пользователя — попросить создать тестового. CHANGELOG ### Улучшения. Отдельный коммит (может быть 2: backend+mobile вместе т.к. cross-stack, урок #43 deploy до AVD).",
+        "testStrategy": "",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": []
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-05T13:10:32.685Z",
-      "taskCount": 76,
-      "completedCount": 65,
+      "lastModified": "2026-07-05T14:18:40.715Z",
+      "taskCount": 79,
+      "completedCount": 66,
       "tags": [
         "master"
       ]
