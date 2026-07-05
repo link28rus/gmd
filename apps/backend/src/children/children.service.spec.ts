@@ -170,6 +170,33 @@ describe('ChildrenService', () => {
     expect(p._invites[0].consumedAt).not.toBeNull();
   });
 
+  it('unbindDevice revoke device + consume invites, но НЕ ставит deletedAt', async () => {
+    const p = makePrismaMock();
+    const svc = new ChildrenService(p as unknown as PrismaService);
+    p._children.push({ id: 'c1', familyId: 'f1', name: 'A', deletedAt: null });
+    p._devices.push({ id: 'd1', childId: 'c1', revokedAt: null });
+    p._invites.push({ id: 'i1', childId: 'c1', consumedAt: null });
+    const r = await svc.unbindDevice('f1', 'c1');
+    expect(r.unbound).toBe(true);
+    expect(p._children[0].deletedAt).toBeNull();
+    expect(p._devices[0].revokedAt).not.toBeNull();
+    expect(p._invites[0].consumedAt).not.toBeNull();
+  });
+
+  it('unbindDevice unbound=false если активного устройства нет', async () => {
+    const p = makePrismaMock();
+    const svc = new ChildrenService(p as unknown as PrismaService);
+    p._children.push({ id: 'c1', familyId: 'f1', name: 'A', deletedAt: null });
+    const r = await svc.unbindDevice('f1', 'c1');
+    expect(r.unbound).toBe(false);
+  });
+
+  it('unbindDevice 404 если child не в семье', async () => {
+    const p = makePrismaMock();
+    const svc = new ChildrenService(p as unknown as PrismaService);
+    await expect(svc.unbindDevice('f1', 'missing')).rejects.toThrow(NotFoundException);
+  });
+
   describe('protection', () => {
     it('getProtection возвращает дефолтное false для нового child', async () => {
       const p = makePrismaMock();

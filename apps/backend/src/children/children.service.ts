@@ -168,4 +168,28 @@ export class ChildrenService {
       }),
     ]);
   }
+
+  /// Отвязать устройство ребёнка, НЕ удаляя самого ребёнка: отзываем активный
+  /// device-token и гасим неиспользованные invites. Ребёнок остаётся в списке
+  /// (без устройства), позже его можно привязать заново по новому QR-коду.
+  /// Тот же revoke-механизм, что и в [softDelete], но без `deletedAt`.
+  /// Возвращает `true`, если было что отвязывать (активное устройство).
+  async unbindDevice(familyId: string, childId: string): Promise<{ unbound: boolean }> {
+    const existing = await this.getChildInFamily(familyId, childId);
+    if (!existing) {
+      throw new NotFoundException({ code: 'child_not_found', message: 'Child not found' });
+    }
+    const now = new Date();
+    const [devices] = await this.prisma.$transaction([
+      this.prisma.childDevice.updateMany({
+        where: { childId, revokedAt: null },
+        data: { revokedAt: now },
+      }),
+      this.prisma.invite.updateMany({
+        where: { childId, consumedAt: null },
+        data: { consumedAt: now },
+      }),
+    ]);
+    return { unbound: devices.count > 0 };
+  }
 }

@@ -59,6 +59,24 @@ class ChildrenRepository {
     );
   }
 
+  /// Удалить (soft-delete) ребёнка. Backend помечает `deletedAt`, отзывает
+  /// устройство и гасит неиспользованные invites. `DELETE /family/children/:id`
+  /// → 204. Возможные [ApiException]: `child_not_found`, `consent_required`.
+  Future<void> deleteChild(String childId) async {
+    await _dio.delete<dynamic>('/family/children/$childId');
+  }
+
+  /// Отвязать устройство ребёнка, НЕ удаляя его: backend отзывает активный
+  /// device-token и гасит invites, ребёнок остаётся в списке без устройства.
+  /// `DELETE /family/children/:id/device` → 200 `{unbound}`. `unbound=false`,
+  /// если активного устройства не было. Возможные [ApiException]:
+  /// `child_not_found`.
+  Future<bool> unbindDevice(String childId) async {
+    final res = await _dio.delete<dynamic>('/family/children/$childId/device');
+    final data = res.data as Map<String, dynamic>?;
+    return (data?['unbound'] as bool?) ?? true;
+  }
+
   /// Создать нового ребёнка. Backend проверяет лимит (макс 10 на семью)
   /// и возвращает `{child: {id, name, dateOfBirth, createdAt}}`.
   ///
