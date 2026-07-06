@@ -48,6 +48,20 @@ function stateLabel(s: AudioUiState): string {
   }
 }
 
+/**
+ * Пока ждём подключения телефона ребёнка (`waiting`/`negotiating`), делаем
+ * подпись честной. START_AUDIO будит устройство через push; на холодную (когда
+ * OEM усыпил приложение в энергосбережении) пробуждение занимает до минуты. Без
+ * этого родитель видит статичное «Устанавливаем соединение», думает что зависло,
+ * и жмёт «Остановить» за секунды до того, как ребёнок подключился бы.
+ */
+function connectingLabel(s: AudioUiState, waitSec: number): string {
+  if (s === 'waiting' || s === 'negotiating') {
+    return waitSec >= 5 ? 'Будим телефон ребёнка…' : 'Устанавливаем соединение…';
+  }
+  return stateLabel(s);
+}
+
 function failReasonLabel(reason: string | null): string {
   switch (reason) {
     case 'PERMISSION_DENIED':
@@ -98,6 +112,7 @@ export function AudioSessionPane({
   const { state: sessionState, start: sessionStart } = session;
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [level, setLevel] = useState(0);
+  const [waitSec, setWaitSec] = useState(0);
 
   // Привязываем MediaStream к <audio>
   useEffect(() => {
@@ -129,6 +144,19 @@ export function AudioSessionPane({
       void sessionStart();
     }
   }, [sessionState, sessionStart]);
+
+  // Счётчик ожидания пробуждения устройства ребёнка. Пока идёт waiting/negotiating
+  // и звук ещё не пошёл — тикаем, чтобы показать честный прогресс вместо статичной
+  // надписи. Сбрасываем при любом другом состоянии.
+  useEffect(() => {
+    if (sessionState === 'waiting' || sessionState === 'negotiating') {
+      setWaitSec(0);
+      const t = setInterval(() => setWaitSec((x) => x + 1), 1000);
+      return () => clearInterval(t);
+    }
+    setWaitSec(0);
+    return undefined;
+  }, [sessionState]);
 
   // Toast на FAILED/EXPIRED
   useEffect(() => {
@@ -181,7 +209,7 @@ export function AudioSessionPane({
             ) : (
               <MicOff className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
             )}
-            <span aria-live="polite">{stateLabel(session.state)}</span>
+            <span aria-live="polite">{connectingLabel(session.state, waitSec)}</span>
           </div>
           <span className="font-mono text-sm tabular-nums">
             {elapsed} / {total}
@@ -203,6 +231,13 @@ export function AudioSessionPane({
         </div>
 
         <audio ref={audioRef} autoPlay playsInline className="sr-only" />
+
+        {(session.state === 'waiting' || session.state === 'negotiating') && waitSec >= 5 && (
+          <p className="text-sm text-muted-foreground">
+            Телефон ребёнка выходит из энергосбережения — это может занять до минуты. Не закрывайте
+            окно, звук начнётся автоматически. Ждём {waitSec}&nbsp;с…
+          </p>
+        )}
 
         {(session.state === 'failed' || session.state === 'expired') && (
           <p className="text-sm text-red-600">
