@@ -20,13 +20,6 @@
          иначе Android Doze усыпляет процесс между обновлениями локации и
          мы теряем точки при заблокированном экране. -->
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
-    <!-- Wi-Fi SSID для карточки ребёнка: на Android 10+ требует FINE_LOCATION
-         (уже есть выше), на Android 12+ — NEARBY_WIFI_DEVICES. -->
-    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
-    <uses-permission
-        android:name="android.permission.NEARBY_WIFI_DEVICES"
-        android:usesPermissionFlags="neverForLocation"
-        tools:targetApi="s"/>
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
     <!-- «Звук вокруг ребёнка» (Phase 5.3) — захват микрофона по запросу родителя.
          FOREGROUND_SERVICE_MICROPHONE обязателен с Android 14 (API 34). -->

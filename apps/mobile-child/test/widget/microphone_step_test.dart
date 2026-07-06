@@ -15,8 +15,8 @@ void main() {
     expect(find.textContaining('Звук вокруг ребёнка'), findsOneWidget);
     expect(find.text('Разрешить'), findsOneWidget);
     expect(find.text('Пропустить'), findsOneWidget);
-    // Шаг 5 из 6 (stepIndex=4, totalSteps=6)
-    expect(find.text('Шаг 5 из 6'), findsOneWidget);
+    // Микрофон — recommended-шаг, позиция вычисляется из kWizardSteps.
+    expect(find.text('Шаг 8 из 9'), findsOneWidget);
   });
 
   testWidgets('Skip calls onSkip (onNext equivalent)', (tester) async {
@@ -36,15 +36,15 @@ void main() {
     expect(find.text('Разрешить'), findsOneWidget);
   });
 
-  testWidgets('MicrophoneStep shows progress step 5 of 6', (tester) async {
+  testWidgets('MicrophoneStep shows progress step 8 of 9', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
         home: MicrophoneStep(),
       ),
     );
 
-    // stepIndex=4, totalSteps=6 → «Шаг 5 из 6»
-    expect(find.text('Шаг 5 из 6'), findsOneWidget);
+    // Позиция микрофона в kWizardSteps (индекс 7) → «Шаг 8 из 9».
+    expect(find.text('Шаг 8 из 9'), findsOneWidget);
   });
 
   testWidgets('MicrophoneStep description contains privacy notice',

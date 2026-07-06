@@ -34,7 +34,7 @@ class _ClaimManualScreenState extends ConsumerState<ClaimManualScreen> {
   Widget build(BuildContext context) {
     ref.listen<ClaimState>(claimControllerProvider, (prev, next) {
       if (next.status == ClaimStatus.success) {
-        context.go('/permissions/notifications');
+        context.go('/permissions/intro');
       }
     });
     final state = ref.watch(claimControllerProvider);

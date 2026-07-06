@@ -52,7 +52,6 @@ class LocationPoint {
     this.isCharging,
     this.provider,
     this.networkType,
-    this.wifiSsid,
     this.mobileOperator,
   });
   final double lat;
@@ -65,7 +64,6 @@ class LocationPoint {
   final bool? isCharging;
   final String? provider;
   final String? networkType;
-  final String? wifiSsid;
   final String? mobileOperator;
   final DateTime recordedAt;
 
@@ -80,7 +78,6 @@ class LocationPoint {
         if (isCharging != null) 'isCharging': isCharging,
         if (provider != null) 'provider': provider,
         if (networkType != null) 'networkType': networkType,
-        if (wifiSsid != null) 'wifiSsid': wifiSsid,
         if (mobileOperator != null) 'mobileOperator': mobileOperator,
         'recordedAt': recordedAt.toUtc().toIso8601String(),
       };

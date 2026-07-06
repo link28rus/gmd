@@ -1222,13 +1222,25 @@
         "priority": "medium",
         "subtasks": [],
         "updatedAt": "2026-07-06T00:40:49.516Z"
+      },
+      {
+        "id": "84",
+        "title": "Редизайн онбординга и аудит разрешений mobile-child",
+        "description": "Полный редизайн процесса установки и выдачи разрешений в детском приложении: убрать неиспользуемые/избыточные разрешения (Wi-Fi SSID) и сделать понятный, простой мастер, где родитель не теряется.",
+        "details": "Аудитория: родитель настраивает телефон ребёнка, потом отдаёт (тексты разрешений — для взрослого, пошагово; главный SOS-экран остаётся детским).\n\nЧасть A — разрешения:\n- Мёртвых разрешений в коде нет (все 23 используются).\n- Убрать ACCESS_WIFI_STATE + NEARBY_WIFI_DEVICES из манифеста + сбор поля wifiSsid из payload локаций (native LocationForegroundService.currentWifiSsid + Dart child_api/database/location_queue_repository/location_ingestor + Drift migration). Причина: косвенные геоданные (152-ФЗ минимизация), NEARBY_WIFI_DEVICES на Android 13+ не запрашивается runtime → не работает. networkType (mobile/wifi/offline из connectivity_plus) ОСТАВИТЬ — не требует Wi-Fi permissions.\n\nЧасть B — редизайн мастера (полный):\n- Убрать _DeviceAdminPlaceholder («Продолжить (devadmin placeholder)») из app_router — вернуть Device Admin настоящим шагом (переиспользовать _AdminWizard из protection_banner, с Xiaomi restricted-settings flow).\n- Починить нумерацию шагов (сейчас totalSteps:9 но реальные 0..4,6..8 — «шаг 6» пропадает). Сделать динамической через централизованный список шагов.\n- Ввести иерархию обязательности: Обязательно / Для функции / Можно позже — визуальные бейджи, для обязательных убрать лёгкий «Пропустить».\n- Исправить locationAlways: на Android 11+ система не даёт «Всегда» из диалога — вести в настройки + resume-recheck (как в mic/overlay шагах).\n- Интро-экран мастера («настроим за ~2 минуты, N шагов, часть откроет системные настройки») + итоговый экран-чеклист («всё готово» / «не хватает X»).\n- Переписать тексты для родителя: понятно, пошагово, без смешения детского и взрослого тона.\n\nВерификация: flutter analyze + сборка + AVD smoke (lesson #41 этап 1). CHANGELOG + bump версии.",
+        "testStrategy": "",
+        "status": "done",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": [],
+        "updatedAt": "2026-07-06T04:11:25.555Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-06T00:40:49.516Z",
-      "taskCount": 83,
-      "completedCount": 72,
+      "lastModified": "2026-07-06T04:11:25.555Z",
+      "taskCount": 84,
+      "completedCount": 73,
       "tags": [
         "master"
       ]

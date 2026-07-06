@@ -3,6 +3,9 @@ import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import 'permissions_wizard.dart';
+import 'wizard_steps.dart';
+
+const _route = '/permissions/microphone';
 
 /// v0.41.0 — шаг запроса RECORD_AUDIO в permissions-wizard.
 ///
@@ -137,14 +140,13 @@ class _MicrophoneStepState extends State<MicrophoneStep>
   }
 
   void _goNext() {
-    if (mounted) GoRouter.of(context).go('/permissions/devadmin');
+    if (mounted) GoRouter.of(context).go(wizardNextRoute(_route));
   }
 
   @override
   Widget build(BuildContext context) {
     return PermissionsWizardScaffold(
-      stepIndex: 4,
-      totalSteps: 9,
+      route: _route,
       title: 'Доступ к микрофону',
       description:
           'Нужен для функции «Звук вокруг ребёнка» — родитель сможет в кризисной '

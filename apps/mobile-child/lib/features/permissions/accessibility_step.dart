@@ -6,6 +6,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/native/app_control_channel.dart';
 import 'permissions_wizard.dart';
+import 'wizard_steps.dart';
+
+const _route = '/permissions/accessibility';
 
 /// v0.39 Phase 6.2 — onboarding шаг для гранта Accessibility (блокировка приложений).
 ///
@@ -114,15 +117,13 @@ class _AccessibilityStepState extends State<AccessibilityStep>
   }
 
   void _goNext() {
-    // v0.39.5: после Accessibility — шаг SAW (для visual blocking overlay).
-    if (mounted) GoRouter.of(context).go('/permissions/overlay');
+    if (mounted) GoRouter.of(context).go(wizardNextRoute(_route));
   }
 
   @override
   Widget build(BuildContext context) {
     return PermissionsWizardScaffold(
-      stepIndex: 7,
-      totalSteps: 9,
+      route: _route,
       title: 'Блокировка приложений',
       description:
           'Чтобы родитель мог временно заблокировать игры и соцсети — нужно '

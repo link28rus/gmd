@@ -15,7 +15,6 @@ class PendingLocations extends Table {
   BoolColumn get isCharging => boolean().nullable()();
   TextColumn get provider => text().nullable()();
   TextColumn get networkType => text().nullable()();
-  TextColumn get wifiSsid => text().nullable()();
   TextColumn get mobileOperator => text().nullable()();
   DateTimeColumn get recordedAt => dateTime()();
   IntColumn get uploadAttempts => integer().withDefault(const Constant(0))();
@@ -42,7 +41,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -51,8 +50,20 @@ class AppDatabase extends _$AppDatabase {
             await m.addColumn(pendingLocations, pendingLocations.networkType);
           }
           if (from < 3) {
-            await m.addColumn(pendingLocations, pendingLocations.wifiSsid);
+            // Историческая миграция: раньше здесь добавлялись wifiSsid +
+            // mobileOperator. wifiSsid удалён в v0.53 (152-ФЗ минимизация,
+            // косвенные геоданные), поэтому здесь добавляем только
+            // mobileOperator. Пересоздание таблицы без wifiSsid делает шаг 3→4.
             await m.addColumn(pendingLocations, pendingLocations.mobileOperator);
+          }
+          if (from < 4) {
+            // v0.53: убираем колонку wifiSsid из pendingLocations. SQLite до
+            // 3.35 не умеет DROP COLUMN, поэтому пересоздаём таблицу через
+            // TableMigration — Drift копирует все существующие pending-точки
+            // (совпадающие по имени колонки переносятся автоматически),
+            // orphaned wifiSsid отбрасывается. Очередь эфемерная, но точки
+            // сохраняются.
+            await m.alterTable(TableMigration(pendingLocations));
           }
         },
       );

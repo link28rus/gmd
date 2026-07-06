@@ -6,6 +6,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/native/app_control_channel.dart';
 import 'permissions_wizard.dart';
+import 'wizard_steps.dart';
+
+const _route = '/permissions/usage-stats';
 
 /// v0.38 Phase 6.1 — onboarding шаг для grant'а PACKAGE_USAGE_STATS.
 ///
@@ -116,14 +119,13 @@ class _UsageStatsStepState extends State<UsageStatsStep>
   }
 
   void _goNext() {
-    if (mounted) GoRouter.of(context).go('/permissions/accessibility');
+    if (mounted) GoRouter.of(context).go(wizardNextRoute(_route));
   }
 
   @override
   Widget build(BuildContext context) {
     return PermissionsWizardScaffold(
-      stepIndex: 6,
-      totalSteps: 9,
+      route: _route,
       title: 'Статистика приложений',
       description:
           'Чтобы родитель видел в кабинете, сколько ты сегодня провёл в '
