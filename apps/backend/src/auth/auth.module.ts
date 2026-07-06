@@ -39,8 +39,12 @@ function asNum(v: string | undefined, def: number): number {
     },
     {
       provide: REFRESH_TOKEN_CONFIG,
+      // 60 дней (sliding): rotate() перевыпускает токен с expiresAt=now+ttl на
+      // каждом /auth/refresh без абсолютного потолка, поэтому активный
+      // пользователь остаётся залогинен без повторного ввода пароля. Если с
+      // устройства не заходили дольше ttl — токен истекает → требуется вход.
       useFactory: () => ({
-        ttlSec: asNum(process.env.REFRESH_TOKEN_TTL_SECONDS, 2592000),
+        ttlSec: asNum(process.env.REFRESH_TOKEN_TTL_SECONDS, 5184000),
       }),
     },
     {

@@ -1200,7 +1200,7 @@
         "updatedAt": "2026-07-05T15:21:55.642Z"
       },
       {
-        "id": 82,
+        "id": "82",
         "title": "Доводка админки: дизайн (темы) + функциональность",
         "description": "Полировка UI админ-панели с переводом на theme-токены (чтобы dim/dark не ломались) + функциональные доделки: childrenCount, сортировка таблиц, invites пагинация/поиск/отзыв, CSV-экспорт, восстановление удалённых.",
         "details": "Дизайн: заменить хардкод slate/sky/цветных badge на семантические токены (foreground, muted-foreground, border, card, primary), единый page-shell, shadcn Input для поиска, улучшенная DataTable (sticky/zebra/sort), badge-хелперы. Backend: fix childrenCount (реальный подсчёт), sortBy/sortDir в listUsers/Families/Children, listActiveInvites пагинация+q, DELETE /admin/invites/:id (revoke), restore-endpoints для users/families/children, showDeleted для users. Web: api/hooks/routes для новых endpoint, CSV-экспорт на фронте. | ВЫПОЛНЕНО: Backend — childrenCount реальный groupBy-подсчёт, sortBy/sortDir whitelist (users/families/children) с защитой от инъекции колонки, showDeleted для users, listInvites пагинация+OR-поиск(code/child/family)+maxUses/usesCount, revokeInvite (expiresAt=now, повторный→400), restore для users/families(каскад детей по timestamp-match)/children. Controller: +restore x3, +DELETE invites/:id. Web: api-клиент+хуки+4 новых proxy-route, dark-safe badges.tsx (Pill tinted bg-*/15+dark:text-*), DataTable с сортируемыми заголовками/zebra/sticky-стилем на токенах, list-controls (SearchInput shadcn/ToggleFilter/ExportCsvButton/Pagination), csv.ts экспорт, use-table-sort. Переведены на theme-токены: stats-dashboard, page.tsx обзора, settings-client (баг bg-foreground text-white в dark), user-detail, invites-client, все actions-menu (+restore). ВЕРИФИКАЦИЯ: 23 unit-теста backend зелёные; typecheck backend+web чистые; lint чистый; web prod-build ок; РЕАЛЬНЫЙ прогон на локальном стеке (docker+backend+web, admin-логин) — все endpoints (stats/users-sort/showDeleted/childrenCount/families-sort/invites-пагинация-поиск-revoke/restore-child-family-каскад-user/sort-инъекция→fallback) OK; визуально проверены light+dark темы на обзоре и таблицах (Пользователи/Семьи), интерактивная сортировка, бейджи читаемы в dark. Найдено при live-проверке: локальная dev-БД была не мигрирована (add_multi_use_invites) — применил migrate deploy; web .env.local целится в прод-backend (вернул после теста). Версию НЕ бампал (внутренний инструмент, не user-facing релиз). Коммит НЕ делал (пользователь не просил).",
@@ -1210,13 +1210,25 @@
         "priority": "high",
         "subtasks": [],
         "updatedAt": "2026-07-06"
+      },
+      {
+        "id": "83",
+        "title": "Долгоживущая сессия 60 дней (sliding) для web + mobile-parent",
+        "description": "Расширить окно активной сессии родителя с 30 до 60 дней с sliding-продлением: пока пользователь заходит с устройства чаще раза в 60 дней — не просить пароль; при неактивности >60 дней — разлогинивать.",
+        "details": "Архитектура уже реализует sliding-сессию: RefreshTokenService.rotate() выдаёт новый токен с expiresAt=now+TTL без абсолютного потолка; web-cookie gmd_refresh переставляется (rolling) на каждом /auth/refresh. Требуется только согласованно поднять TTL 30д(2592000с)→60д(5184000с) и cookie maxAge 30д→60д.\n\nТочки правок:\n- backend: apps/backend/src/auth/auth.module.ts (default REFRESH_TOKEN_CONFIG), apps/backend/.env, apps/backend/.env.example, infra/docker/docker-compose.prod.yml (REFRESH_TOKEN_TTL_SECONDS default).\n- web: централизовать REFRESH_COOKIE + REFRESH_MAX_AGE в apps/web/lib/auth и поднять до 60д; обновить 4 setter-route (verify-otp, login-password, confirm-email, refresh) + logout.\n- mobile-parent: изменений НЕ требуется (истечение на backend, secure storage персистит, splash+interceptor рефрешат).\n- docs: CLAUDE.md стек «refresh 30d»→«refresh 60d sliding», CHANGELOG, auth-spec.\n\nVerify: unit auth backend, web typecheck+lint, prod-integration (refresh продлевает expiresAt на +60д).",
+        "testStrategy": "",
+        "status": "done",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": [],
+        "updatedAt": "2026-07-06T00:40:49.516Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-05T15:21:55.642Z",
-      "taskCount": 81,
-      "completedCount": 70,
+      "lastModified": "2026-07-06T00:40:49.516Z",
+      "taskCount": 83,
+      "completedCount": 72,
       "tags": [
         "master"
       ]

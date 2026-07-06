@@ -25,7 +25,7 @@ Self-hosted сервис для РФ-рынка. Бренд — «Периско
 | Web      | Next.js 15 (App Router), TypeScript, Tailwind, shadcn/ui, Zod                           |
 | Backend  | NestJS, PostgreSQL 16 + PostGIS + pg_cron, Redis, MinIO                                 |
 | API      | REST + OpenAPI 3.1, codegen TS + Dart                                                   |
-| Auth     | JWT (access 15m + refresh 30d) + long-lived device-token для детей                      |
+| Auth     | JWT (access 15m + refresh 60d, sliding) + long-lived device-token для детей             |
 | Realtime | Short-polling + FCM/RuStore push (без WebSocket на MVP)                                 |
 | Infra    | Docker Compose, Caddy, GlitchTip, Uptime Kuma, Grafana+Loki+Prometheus                  |
 | Карты    | OpenStreetMap (mobile: `flutter_map`, web: `react-leaflet`)                             |

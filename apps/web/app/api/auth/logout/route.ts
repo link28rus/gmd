@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { backend } from '@/lib/backend';
-
-const REFRESH_COOKIE = 'gmd_refresh';
+import { REFRESH_COOKIE } from '@/lib/auth/session-cookie';
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const isMobile = req.headers.get('x-client')?.startsWith('mobile') ?? false;
