@@ -10,18 +10,20 @@ import androidx.work.WorkManager
 import java.util.concurrent.TimeUnit
 
 /**
- * v0.38 Phase 6.1: scheduling helper для periodic worker'ов.
+ * Scheduling helper для periodic worker'ов.
  *
  * Идемпотентен — при повторном вызове KEEP-policy не перезаписывает уже
  * запланированный job. Можно дёргать на каждом MainActivity.onCreate
  * и BootReceiver — это не штрафует battery.
  *
  * Дизайн:
- *  - UsageStatsReportWorker: 15 мин (минимум WorkManager periodic).
- *    Constraint: NETWORK CONNECTED (без сети нет смысла, retry помогает мало).
- *  - InstalledAppsReportWorker: 24ч.
- *    Constraint: NETWORK CONNECTED + BATTERY_NOT_LOW (тяжёлая операция,
- *    PNG-кодирование 100-300 иконок не должно убивать батарею ребёнка).
+ *  - EscapeProbeWorker: 1 ч — снять защиту, если ребёнка удалили из кабинета.
+ *  - FcmTokenRefreshWorker: 6 ч — держать FCM-токен на backend'е актуальным.
+ *
+ * v0.58.0: блокировка приложений и экранное время временно отключены —
+ * BlockPollWorker, UsageStatsReportWorker и InstalledAppsReportWorker удалены.
+ * [scheduleAll] снимает их периодические задачи, оставшиеся в WorkManager
+ * на устройствах после обновления со старой версии.
  *
  * Backoff: exponential, default min 30 сек.
  */
@@ -29,33 +31,22 @@ object AppControlScheduler {
 
   private const val TAG = "app_control_scheduler"
 
+  /**
+   * Unique-имена periodic-задач удалённых worker'ов. Классов больше нет —
+   * без отмены WorkManager каждый период пытался бы их создать и падал.
+   */
+  private val LEGACY_UNIQUE_NAMES = listOf(
+    "periscop_block_poll_periodic",
+    "periscop_usage_stats_periodic",
+    "periscop_installed_apps_daily",
+  )
+
   fun scheduleAll(ctx: Context) {
     val wm = WorkManager.getInstance(ctx)
 
-    val usageReq = PeriodicWorkRequestBuilder<UsageStatsReportWorker>(
-      15, TimeUnit.MINUTES,
-    )
-      .setConstraints(
-        Constraints.Builder()
-          .setRequiredNetworkType(NetworkType.CONNECTED)
-          .build(),
-      )
-      .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
-      .addTag(UsageStatsReportWorker.TAG)
-      .build()
-
-    val appsReq = PeriodicWorkRequestBuilder<InstalledAppsReportWorker>(
-      24, TimeUnit.HOURS,
-    )
-      .setConstraints(
-        Constraints.Builder()
-          .setRequiredNetworkType(NetworkType.CONNECTED)
-          .setRequiresBatteryNotLow(true)
-          .build(),
-      )
-      .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 5, TimeUnit.MINUTES)
-      .addTag(InstalledAppsReportWorker.TAG)
-      .build()
+    for (name in LEGACY_UNIQUE_NAMES) {
+      wm.cancelUniqueWork(name)
+    }
 
     // v0.38 escape hatch: probe раз в час. Лёгкая операция, низкие constraints
     // (только NETWORK), чтобы максимально быстро задетектить child_deleted /
@@ -70,21 +61,6 @@ object AppControlScheduler {
       )
       .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 1, TimeUnit.MINUTES)
       .addTag(EscapeProbeWorker.TAG)
-      .build()
-
-    // v0.39 Phase 6.2: fallback poll active-block + app-rules. FCM = main канал
-    // (мгновенно), poll = страховка от Doze / отсутствия Google Play Services /
-    // потерянного TTL=60с push'а.
-    val blockPollReq = PeriodicWorkRequestBuilder<BlockPollWorker>(
-      15, TimeUnit.MINUTES,
-    )
-      .setConstraints(
-        Constraints.Builder()
-          .setRequiredNetworkType(NetworkType.CONNECTED)
-          .build(),
-      )
-      .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
-      .addTag(BlockPollWorker.TAG)
       .build()
 
     // v0.51.1 fix регрессии latency (task #68 root cause): periodic refresh FCM
@@ -104,24 +80,9 @@ object AppControlScheduler {
       .build()
 
     wm.enqueueUniquePeriodicWork(
-      UsageStatsReportWorker.UNIQUE_NAME,
-      ExistingPeriodicWorkPolicy.KEEP,
-      usageReq,
-    )
-    wm.enqueueUniquePeriodicWork(
-      InstalledAppsReportWorker.UNIQUE_NAME,
-      ExistingPeriodicWorkPolicy.KEEP,
-      appsReq,
-    )
-    wm.enqueueUniquePeriodicWork(
       EscapeProbeWorker.UNIQUE_NAME,
       ExistingPeriodicWorkPolicy.KEEP,
       escapeReq,
-    )
-    wm.enqueueUniquePeriodicWork(
-      BlockPollWorker.UNIQUE_NAME,
-      ExistingPeriodicWorkPolicy.KEEP,
-      blockPollReq,
     )
     wm.enqueueUniquePeriodicWork(
       FcmTokenRefreshWorker.UNIQUE_NAME,
@@ -131,7 +92,7 @@ object AppControlScheduler {
     DiagLog.write(
       ctx,
       TAG,
-      "scheduled UsageStats(15min) + InstalledApps(24h) + EscapeProbe(1h) + BlockPoll(15min) + FcmRefresh(6h) periodic (KEEP)",
+      "scheduled EscapeProbe(1h) + FcmRefresh(6h) periodic (KEEP)",
     )
   }
 
@@ -142,10 +103,7 @@ object AppControlScheduler {
    */
   fun rescheduleAll(ctx: Context) {
     val wm = WorkManager.getInstance(ctx)
-    wm.cancelUniqueWork(UsageStatsReportWorker.UNIQUE_NAME)
-    wm.cancelUniqueWork(InstalledAppsReportWorker.UNIQUE_NAME)
     wm.cancelUniqueWork(EscapeProbeWorker.UNIQUE_NAME)
-    wm.cancelUniqueWork(BlockPollWorker.UNIQUE_NAME)
     wm.cancelUniqueWork(FcmTokenRefreshWorker.UNIQUE_NAME)
     DiagLog.write(ctx, TAG, "cancelled existing workers, re-enqueueing")
     scheduleAll(ctx)
@@ -168,49 +126,5 @@ object AppControlScheduler {
       .build()
     WorkManager.getInstance(ctx).enqueue(req)
     DiagLog.write(ctx, TAG, "enqueued one-time FcmTokenRefresh run (manual trigger)")
-  }
-
-  /**
-   * Триггерит немедленный poll active-block + app-rules. Используется на старте
-   * MainActivity чтобы сразу подтянуть актуальное состояние (не ждать 15 мин
-   * до первого periodic'а), а также после grant'а Accessibility — чтобы тут же
-   * получить правила и активную сессию из backend'а.
-   */
-  fun runBlockPollNow(ctx: Context) {
-    val req = androidx.work.OneTimeWorkRequestBuilder<BlockPollWorker>()
-      .setConstraints(
-        Constraints.Builder()
-          .setRequiredNetworkType(NetworkType.CONNECTED)
-          .build(),
-      )
-      .build()
-    WorkManager.getInstance(ctx).enqueue(req)
-    DiagLog.write(ctx, TAG, "enqueued one-time BlockPoll run (manual trigger)")
-  }
-
-  /** Триггерит немедленный запуск usage-worker (для wizard'а после grant'а). */
-  fun runUsageNow(ctx: Context) {
-    val req = androidx.work.OneTimeWorkRequestBuilder<UsageStatsReportWorker>()
-      .setConstraints(
-        Constraints.Builder()
-          .setRequiredNetworkType(NetworkType.CONNECTED)
-          .build(),
-      )
-      .build()
-    WorkManager.getInstance(ctx).enqueue(req)
-    DiagLog.write(ctx, TAG, "enqueued one-time UsageStats run (manual trigger)")
-  }
-
-  /** Триггерит немедленный запуск installed-apps worker'а. */
-  fun runInstalledAppsNow(ctx: Context) {
-    val req = androidx.work.OneTimeWorkRequestBuilder<InstalledAppsReportWorker>()
-      .setConstraints(
-        Constraints.Builder()
-          .setRequiredNetworkType(NetworkType.CONNECTED)
-          .build(),
-      )
-      .build()
-    WorkManager.getInstance(ctx).enqueue(req)
-    DiagLog.write(ctx, TAG, "enqueued one-time InstalledApps run (manual trigger)")
   }
 }

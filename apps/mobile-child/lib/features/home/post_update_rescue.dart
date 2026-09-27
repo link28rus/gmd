@@ -14,7 +14,7 @@ import '../claim/claim_controller.dart';
 /// На HyperOS / MIUI 14+ / некоторых других OEM при обновлении из
 /// sideload-источника (`/api/public/updates/...` → PackageInstaller через
 /// ACTION_VIEW) система деактивирует:
-///   - AccessibilityService (для блокировки приложений)
+///   - AccessibilityService (была нужна блокировке приложений — отключена в v0.58.0)
 ///   - Device Admin (для защиты от удаления)
 /// Это **известное поведение OS**, технически предотвратить нельзя.
 ///
@@ -25,11 +25,11 @@ import '../claim/claim_controller.dart';
 ///   1. При init слушает `AppControlChannel.consumePostUpdateFlag()` —
 ///      one-shot native flag «первый запуск после смены versionCode».
 ///   2. Если флаг pending → проверяем критические permissions
-///      (a11y + Device Admin). Если хотя бы одно слетело → показываем
+///      (Device Admin, уведомления). Если хотя бы одно слетело → показываем
 ///      `AlertDialog` с заголовком «После обновления слетели разрешения»
 ///      и списком конкретных проблем + кнопками-shortcut'ами.
 ///   3. Кнопки ведут в существующие onboarding-step'ы / wizard
-///      (`accessibility_step.dart`, `_AdminWizard` через `ProtectionBanner`).
+///      (`_AdminWizard` через `ProtectionBanner`, шаг уведомлений).
 ///   4. После закрытия модала пассивные баннеры подхватывают остальное.
 ///
 /// Идемпотентен: native flag clear'ится при первом consume (даже если в
@@ -107,17 +107,6 @@ class _PostUpdateRescueGateState extends ConsumerState<PostUpdateRescueGate> {
     // Проверяем те permissions которые ИЗВЕСТНО слетают на HyperOS/MIUI.
     final missing = <_RescueItem>[];
 
-    final a11y = await AppControlChannel.isAccessibilityServiceEnabled();
-    if (!a11y) {
-      missing.add(_RescueItem(
-        title: 'Блокировка приложений',
-        description:
-            'Спецвозможности (Accessibility) — без неё родитель не сможет '
-            'блокировать игры и соцсети.',
-        action: _RescueAction.openAccessibilitySettings,
-      ));
-    }
-
     final adminActive = await DeviceAdminChannel().isActive();
     if (!adminActive) {
       missing.add(_RescueItem(
@@ -126,18 +115,6 @@ class _PostUpdateRescueGateState extends ConsumerState<PostUpdateRescueGate> {
             'Device Admin — без него приложение можно удалить через launcher, '
             'и родительский контроль перестанет работать.',
         action: _RescueAction.requestDeviceAdmin,
-      ));
-    }
-
-    // SAW (overlay) — на HyperOS обычно сохраняется (привязан к UID), но
-    // проверяем для надёжности; это критично для visual blocking overlay.
-    final canOverlay = await AppControlChannel.canDrawOverlays();
-    if (!canOverlay) {
-      missing.add(_RescueItem(
-        title: 'Поверх других приложений',
-        description:
-            'Без этого блокировка работает, но без визуального экрана-заглушки.',
-        action: _RescueAction.openOverlaySettings,
       ));
     }
 
@@ -180,9 +157,7 @@ class _PostUpdateRescueGateState extends ConsumerState<PostUpdateRescueGate> {
 }
 
 enum _RescueAction {
-  openAccessibilitySettings,
   requestDeviceAdmin,
-  openOverlaySettings,
   openNotificationsStep,
 }
 
@@ -210,22 +185,12 @@ class _RescueDialog extends ConsumerWidget {
     // баннеры — `PermissionHealthBanner` + `ProtectionBanner`).
     Navigator.of(ctx).pop();
     switch (a) {
-      case _RescueAction.openAccessibilitySettings:
-        if (ctx.mounted) {
-          ctx.go('/permissions/accessibility');
-        }
-        break;
       case _RescueAction.requestDeviceAdmin:
         // ProtectionBanner на home сам авто-покажет _AdminWizard через
         // _autoShownOnce когда определит needAdmin=true. Просто открываем
         // home и доверяем существующему flow.
         if (ctx.mounted) {
           ctx.go('/home');
-        }
-        break;
-      case _RescueAction.openOverlaySettings:
-        if (ctx.mounted) {
-          ctx.go('/permissions/overlay');
         }
         break;
       case _RescueAction.openNotificationsStep:

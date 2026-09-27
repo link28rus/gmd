@@ -10,6 +10,7 @@ import { DeleteChildDialog } from '@/components/children/delete-child-dialog';
 import { SendSignalDialog } from '@/components/children/send-signal-dialog';
 import { AudioListenDialog } from '@/components/children/audio-listen-dialog';
 import { useToggleProtection } from '@/lib/hooks/use-children';
+import { APP_CONTROL_ENABLED } from '@/lib/features';
 
 interface Props {
   child: Child;
@@ -57,7 +58,7 @@ export function ChildActions({ child, showReset }: Props): ReactElement {
           <Clock className="h-4 w-4 text-muted-foreground" />
           История передвижений
         </Link>
-        {showReset && (
+        {APP_CONTROL_ENABLED && showReset && (
           <Link
             href={`/cabinet/children/${child.id}/parental-control`}
             className="flex w-full items-center gap-2 border-t border-border px-3 py-2 text-left text-sm text-foreground hover:bg-muted"

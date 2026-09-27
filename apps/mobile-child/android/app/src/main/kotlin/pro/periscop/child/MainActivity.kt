@@ -16,7 +16,8 @@ import io.flutter.plugin.common.MethodChannel
 private const val UI_METHOD_CHANNEL = "pro.periscop.child/location"
 private const val DIAG_METHOD_CHANNEL = "pro.periscop.child/diag"
 private const val PROTECTION_METHOD_CHANNEL = "pro.periscop.child/protection"
-// v0.38: Phase 6.1 screen-time. Native helpers для UsageStatsManager + installed apps.
+// Задача #61: флаг «первый запуск после обновления APK». Имя канала историческое
+// (v0.38 screen-time) — блокировка и экранное время временно отключены в v0.58.0.
 private const val APP_CONTROL_METHOD_CHANNEL = "pro.periscop.child/app_control"
 // v0.38 escape hatch: probe + status check + open uninstall.
 private const val ESCAPE_METHOD_CHANNEL = "pro.periscop.child/escape"
@@ -36,9 +37,8 @@ class MainActivity : FlutterActivity() {
         } catch (e: Throwable) {
             DiagLog.write(this, "ui", "PostUpdateGuard.recordCurrentVersion failed: ${e.message}")
         }
-        // v0.38 Phase 6.1: при наличии device-token поднимаем periodic workers
-        // (UsageStatsReportWorker 15-min + InstalledAppsReportWorker 24h +
-        //  EscapeProbeWorker 1h).
+        // При наличии device-token поднимаем periodic workers
+        // (EscapeProbeWorker 1h + FcmTokenRefreshWorker 6h).
         // Идемпотентно (KEEP-policy) — повторные вызовы безопасны. Если token
         // ещё не сохранён (первый запуск до claim'а) — workers запустятся
         // после saveNativeCreds через protection channel (см. ниже).
@@ -48,18 +48,6 @@ class MainActivity : FlutterActivity() {
         try {
             if (!NativeCreds.getToken(this).isNullOrEmpty()) {
                 AppControlScheduler.scheduleAll(this)
-                // v0.38.0-rc.7: на каждом старте app триггерим one-time
-                // installed-apps + usage runs. Это решает проблему когда
-                // periodic worker'ы ушли в exponential backoff после серии 5xx —
-                // periodic не сработает быстро, но ручной open-app сделает
-                // мгновенный sync. UX: «открой app → через 30 сек данные в кабинете».
-                AppControlScheduler.runInstalledAppsNow(this)
-                AppControlScheduler.runUsageNow(this)
-                // v0.39 Phase 6.2: на старте сразу подтянуть active-block + app-rules.
-                // Без этого после рестарта app локальный BlockManager может
-                // содержать устаревший state (например, родитель остановил блок
-                // пока app был закрыт).
-                AppControlScheduler.runBlockPollNow(this)
                 // v0.51.1 fix регрессии latency push (task #68): на каждом
                 // open app триггерим immediate FCM token refresh. Это
                 // покрывает кейс «ребёнок только что обновил app через RuStore,
@@ -288,130 +276,17 @@ class MainActivity : FlutterActivity() {
         // иначе POLL-команда START_AUDIO в фоне падает с MissingPluginException.
         SoundAroundChannel.register(this, flutterEngine.dartExecutor.binaryMessenger)
 
-        // v0.38: Phase 6.1 screen-time channel. Только UI-isolate (worker'ы используют
-        // AppControlNative напрямую через WorkManager — не через channel).
+        // Канал app_control: после отключения блокировки и экранного времени
+        // (v0.58.0) в нём остался только флаг «первый запуск после обновления».
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, APP_CONTROL_METHOD_CHANNEL)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
-                    "hasUsageStatsPermission" ->
-                        result.success(AppControlNative.hasUsageStatsPermission(this))
-                    "openUsageStatsSettings" -> {
-                        try {
-                            AppControlNative.openUsageStatsSettings(this)
-                            result.success(null)
-                        } catch (e: Throwable) {
-                            result.error("open_settings_failed", e.message, null)
-                        }
-                    }
-                    // v0.39 Phase 6.2: Accessibility helpers
-                    "isAccessibilityServiceEnabled" ->
-                        result.success(AppControlNative.isAccessibilityServiceEnabled(this))
-                    "openAccessibilitySettings" -> {
-                        try {
-                            AppControlNative.openAccessibilitySettings(this)
-                            result.success(null)
-                        } catch (e: Throwable) {
-                            result.error("open_settings_failed", e.message, null)
-                        }
-                    }
-                    "openAppDetailsSettings" -> {
-                        try {
-                            AppControlNative.openAppDetailsSettings(this)
-                            result.success(null)
-                        } catch (e: Throwable) {
-                            result.error("open_settings_failed", e.message, null)
-                        }
-                    }
                     // Задача #61: one-shot consume флага «первый запуск после
                     // обновления APK». Возвращает map {fromVersionName, toVersionName}
                     // если флаг был выставлен (PostUpdateGuard детектит смену
                     // versionCode в onCreate), иначе null. Сразу очищает state.
                     "consumePostUpdateFlag" ->
                         result.success(PostUpdateGuard.consumePending(this))
-                    // v0.39.5 Phase 6.2 fix: SAW для visual blocking overlay
-                    "canDrawOverlays" ->
-                        result.success(AppControlNative.canDrawOverlays(this))
-                    "openOverlaySettings" -> {
-                        try {
-                            AppControlNative.openOverlaySettings(this)
-                            result.success(null)
-                        } catch (e: Throwable) {
-                            result.error("open_settings_failed", e.message, null)
-                        }
-                    }
-                    "deviceTimezone" ->
-                        result.success(AppControlNative.deviceTimezone())
-                    "collectInstalledApps" -> {
-                        // Тяжёлая операция (~100-500ms на типичном устройстве из-за
-                        // PNG-кодирования иконок). Запускаем на background-thread,
-                        // result уходит в Flutter после завершения.
-                        Thread {
-                            try {
-                                val apps = AppControlNative.collectInstalledApps(this)
-                                val payload = apps.map {
-                                    mapOf(
-                                        "packageName" to it.packageName,
-                                        "appLabel" to it.appLabel,
-                                        "isSystem" to it.isSystem,
-                                        "iconSha256" to it.iconSha256,
-                                        // ВНИМАНИЕ: pngBytes передаются как ByteArray, Flutter
-                                        // получает Uint8List. Не base64 — экономим memcpy.
-                                        "iconPngBytes" to it.iconPngBytes,
-                                    )
-                                }
-                                runOnUiThread { result.success(payload) }
-                            } catch (e: Throwable) {
-                                runOnUiThread {
-                                    result.error("collect_failed", e.message, null)
-                                }
-                            }
-                        }.start()
-                    }
-                    "collectUsageBuckets" -> {
-                        val daysBack = (call.argument<Int>("daysBack") ?: 1).coerceIn(1, 30)
-                        Thread {
-                            try {
-                                val buckets = AppControlNative.collectUsageBuckets(this, daysBack)
-                                val payload = buckets.map {
-                                    mapOf(
-                                        "date" to it.date,
-                                        "hour" to it.hour,
-                                        "packageName" to it.packageName,
-                                        "seconds" to it.seconds,
-                                    )
-                                }
-                                runOnUiThread { result.success(payload) }
-                            } catch (e: Throwable) {
-                                runOnUiThread {
-                                    result.error("collect_failed", e.message, null)
-                                }
-                            }
-                        }.start()
-                    }
-                    "scheduleAll" -> {
-                        try {
-                            AppControlScheduler.scheduleAll(this)
-                            result.success(null)
-                        } catch (e: Throwable) {
-                            result.error("schedule_failed", e.message, null)
-                        }
-                    }
-                    "runUsageNow" -> {
-                        try {
-                            AppControlScheduler.runUsageNow(this)
-                            result.success(null)
-                        } catch (e: Throwable) {
-                            result.error("run_failed", e.message, null)
-                        }
-                    }
-                    "runInstalledAppsNow" -> {
-                        try {
-                            AppControlScheduler.runInstalledAppsNow(this)
-                            result.success(null)
-                        } catch (e: Throwable) {
-                            result.error("run_failed", e.message, null)
-                        }
-                    }
                     else -> result.notImplemented()
                 }
             }

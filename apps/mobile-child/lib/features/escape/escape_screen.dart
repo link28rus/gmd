@@ -60,7 +60,7 @@ class _EscapeScreenState extends State<EscapeScreen> {
     switch (_reason) {
       case 'child_deleted':
         return 'Профиль ребёнка был удалён в кабинете родителя. '
-            'Все ограничения (защита от удаления, блокировки) сняты — '
+            'Защита от удаления снята — '
             'ты можешь удалить приложение, нажав кнопку ниже.';
       case 'device_revoked':
         return 'Родитель отвязал это устройство в кабинете. '

@@ -86,7 +86,7 @@ class HomeScreen extends ConsumerWidget {
           // Задача #61 — активный rescue после автообновления APK. Невидимый
           // виджет: при init дёргает one-shot native-flag «первый запуск
           // после смены versionCode», и если хоть одно critical permission
-          // (a11y/Device Admin/overlay/notif) слетело — показывает модал
+          // (Device Admin/notif) слетело — показывает модал
           // «Восстанови разрешения» с shortcut'ами в нужные настройки. На
           // HyperOS/MIUI это известный bug OS, технически не предотвращается.
           const PostUpdateRescueGate(),

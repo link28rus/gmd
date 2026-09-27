@@ -15,7 +15,7 @@ import java.util.concurrent.TimeUnit
  * новый токен записывался на backend ТОЛЬКО когда ребёнок открывал app в
  * foreground (FcmRegistrar в main.dart). Если ребёнок не открывал app сутками
  * — backend держал старый невалидный токен, push'и от parent не доставлялись,
- * срабатывал только polling fallback (BlockPollWorker раз в 15 мин).
+ * срабатывал только polling fallback.
  *
  * Решение: native CoroutineWorker, не зависящий от Dart isolate. Периодически
  * (6 ч) тянет текущий FCM-токен через `FirebaseMessaging.getInstance().getToken()`
@@ -25,8 +25,8 @@ import java.util.concurrent.TimeUnit
  * Запускается из foreground-services (LocationForegroundService) которые всегда
  * живы — не зависит от того открывает ли ребёнок app.
  *
- * Симметрия с [BlockPollWorker] (lesson #20): тот же pattern CoroutineWorker +
- * AppControlHttp + NativeCreds.getToken() pre-check + DiagLog для observability.
+ * Pattern (lesson #20): CoroutineWorker + AppControlHttp +
+ * NativeCreds.getToken() pre-check + DiagLog для observability.
  */
 class FcmTokenRefreshWorker(
     appContext: Context,

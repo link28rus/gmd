@@ -1,8 +1,10 @@
 'use client';
 
 import { use, useEffect, useState, type ReactElement } from 'react';
+import AppControlDisabled from '@/app/cabinet/children/[id]/parental-control/app-control-disabled';
 import ParentalControlClient from '@/app/cabinet/children/[id]/parental-control/parental-control-client';
 import { useAuthStore } from '@/lib/auth-store';
+import { APP_CONTROL_ENABLED } from '@/lib/features';
 
 /**
  * Embed-страница «Родительский контроль», предназначенная для открытия
@@ -76,6 +78,9 @@ export default function ParentalControlEmbedPage({
     );
   }
 
+  // v0.58.0: функция временно отключена — старые версии mobile-parent
+  // всё ещё открывают этот экран из меню ребёнка, показываем заглушку.
+  if (!APP_CONTROL_ENABLED) return <AppControlDisabled onBack={handleClose} />;
   return <ParentalControlClient childId={childId} onBack={handleClose} />;
 }
 

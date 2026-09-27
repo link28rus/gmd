@@ -11,6 +11,7 @@ import { DeleteChildDialog } from './delete-child-dialog';
 import { InviteQrDialog } from './invite-qr-dialog';
 import { ResetDeviceDialog } from './reset-device-dialog';
 import type { Child } from '@/lib/api/children';
+import { APP_CONTROL_ENABLED } from '@/lib/features';
 
 interface Props {
   child: Child;
@@ -97,7 +98,7 @@ export function ChildCard({ child }: Props) {
             На карту
           </Link>
         )}
-        {hasActiveDevice && (
+        {APP_CONTROL_ENABLED && hasActiveDevice && (
           <Link
             href={`/cabinet/children/${child.id}/parental-control`}
             className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-3 py-1.5 text-sm text-foreground hover:bg-muted"

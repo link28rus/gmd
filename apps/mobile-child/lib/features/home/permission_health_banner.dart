@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-import '../../core/native/app_control_channel.dart';
-
 /// Красный баннер сверху на home, если критические permissions для фонового
 /// трекинга не даны. Показывается и при первом запуске, и после обновлений
 /// приложения (когда онбординг уже пройден, но требования могли поменяться —
@@ -55,22 +53,6 @@ class _PermissionHealthBannerState extends State<PermissionHealthBanner>
     // Уведомления — Android 13+ требует runtime.
     final notif = await Permission.notification.status;
     if (!notif.isGranted) missing.add('Уведомления');
-    // v0.39 Phase 6.2: блокировка приложений требует AccessibilityService.
-    // Если выключен — родитель не сможет блокировать apps. Critical для фичи,
-    // но не для остального tracking — ставим в banner отдельным пунктом.
-    final a11y = await AppControlChannel.isAccessibilityServiceEnabled();
-    if (!a11y) {
-      missing.add('Блокировка приложений');
-      if (missing.length == 1) route = '/permissions/accessibility';
-    }
-    // v0.39.5 Phase 6.2 fix: SYSTEM_ALERT_WINDOW для visual blocking overlay.
-    // Без него блокировка работает (выкидывает на home), но без красивого
-    // экрана «🔒 Телефон заблокирован». Не блокер, но UX-критично.
-    final overlay = await AppControlChannel.canDrawOverlays();
-    if (!overlay) {
-      missing.add('Поверх других приложений');
-      if (missing.length == 1) route = '/permissions/overlay';
-    }
     // v0.41.0: микрофон для «Звук вокруг ребёнка». Без RECORD_AUDIO
     // FGS-microphone падает с SecurityException, кнопка в кабинете родителя
     // вечно висит на «Устанавливаем соединение». Раньше об этом нельзя было

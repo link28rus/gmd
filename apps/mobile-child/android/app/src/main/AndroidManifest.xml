@@ -1,5 +1,4 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
     <uses-permission android:name="android.permission.INTERNET"/>
@@ -20,7 +19,6 @@
          иначе Android Doze усыпляет процесс между обновлениями локации и
          мы теряем точки при заблокированном экране. -->
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
-    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
     <!-- «Звук вокруг ребёнка» (Phase 5.3) — захват микрофона по запросу родителя.
          FOREGROUND_SERVICE_MICROPHONE обязателен с Android 14 (API 34). -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
@@ -36,27 +34,9 @@
          переключать FLP в режим 5-мин интервала и экономить батарею ребёнка.
          Permission optional: при отказе сервис работает в active-only режиме. -->
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION"/>
-    <!-- v0.38 Phase 6.1 / v0.50.6: screen-time reporting.
-         PACKAGE_USAGE_STATS — special access (Settings → Special access → Usage data),
-         используется UsageStatsManager.queryEvents для часовых bucket'ов.
-
-         QUERY_ALL_PACKAGES (Android 11+) — УДАЛЁН в v0.50.6 после отказа RuStore-
-         модерации (lesson 2026-05-14). Вместо broad permission используем `<queries>`
-         с intent-filter MAIN/LAUNCHER (см. ниже) — это RuStore-friendly способ
-         enumerate launchable apps через PackageManager.queryIntentActivities, без
-         выдачи доступа ко ВСЕМ установленным пакетам. Покрывает 99% use-case
-         (системные служебные apps без launcher activity и так не блокируются
-         ребёнком). -->
-    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
-        tools:ignore="ProtectedPermissions"/>
-    <!-- v0.39.4 Phase 6.2 fix: Android 12+ HyperOS блокирует startActivity()
-         из background даже из AccessibilityService (Abort background activity
-         starts). SYSTEM_ALERT_WINDOW даёт нашему процессу exemption на BAL +
-         позволяет показывать TYPE_APPLICATION_OVERLAY поверх любого app.
-         Special access — грантится через ACTION_MANAGE_OVERLAY_PERMISSION,
-         не runtime. Без него блокировка деградирует до GLOBAL_ACTION_HOME
-         (выкидывает на launcher без визуального overlay'а). -->
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
+    <!-- v0.58.0: блокировка приложений и экранное время временно отключены —
+         убраны PACKAGE_USAGE_STATS, SYSTEM_ALERT_WINDOW, служба спецвозможностей
+         и <queries> для списка приложений. При возврате — восстановить из git. -->
     <!-- v0.56.0 самообновление с собственного сервера (AppUpdater.kt).
          REQUEST_INSTALL_PACKAGES — установка скачанного APK через PackageInstaller
          (пользователь один раз разрешает «Установку неизвестных приложений»).
@@ -117,9 +97,9 @@
             android:exported="false"
             android:foregroundServiceType="mediaPlayback"/>
         <!-- SoundAroundService — FGS для аудиомониторинга «Звук вокруг ребёнка».
-             Стартует по START_AUDIO команде из poll'а /child/commands/pending.
-             Держит headless FlutterEngine, который через flutter_webrtc создаёт
-             RTCPeerConnection и шлёт mic-stream на parent через TURN-сервер.
+             Стартует по START_AUDIO (realtime-канал, FCM или poll команд).
+             Держит headless FlutterEngine, который пишет микрофон (record) и шлёт
+             Opus-кадры на backend-relay по WebSocket.
              Останавливается по STOP_AUDIO команде или durationSec timeout. -->
         <service
             android:name=".SoundAroundService"
@@ -133,7 +113,6 @@
             android:directBootAware="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED"/>
-                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED"/>
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
                 <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
                 <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
@@ -201,37 +180,6 @@
             </intent-filter>
         </receiver>
 
-        <!-- v0.39 Phase 6.2: AccessibilityService реактивирован для блокировки
-             приложений (PIN-lock остался удалён, защита от удаления — Device Admin L1).
-             Ловит TYPE_WINDOW_STATE_CHANGED, проверяет packageName через BlockManager
-             и при попадании в blacklist запускает BlockOverlayActivity. Грантится
-             вручную: Settings → Accessibility → "Перископ Ребёнка". -->
-        <service
-            android:name=".PeriscopAccessibilityService"
-            android:label="@string/accessibility_service_description"
-            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="android.accessibilityservice.AccessibilityService" />
-            </intent-filter>
-            <meta-data
-                android:name="android.accessibilityservice"
-                android:resource="@xml/accessibility_service_config" />
-        </service>
-
-        <!-- v0.39 Phase 6.2: full-screen overlay при попытке открыть заблокированное app.
-             excludeFromRecents=true — оверлей не висит в недавних задачах.
-             showWhenLocked=true (manifest + setShowWhenLocked в Activity) — overlay
-             перекрывает lockscreen. launchMode=singleTop — повторный startActivity
-             не плодит дубли. theme — без ActionBar, NoActionBar.Fullscreen аналог. -->
-        <activity
-            android:name=".BlockOverlayActivity"
-            android:exported="false"
-            android:launchMode="singleTop"
-            android:excludeFromRecents="true"
-            android:showOnLockScreen="true"
-            android:taskAffinity=""
-            android:theme="@android:style/Theme.NoTitleBar.Fullscreen" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
@@ -242,17 +190,6 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
-        </intent>
-        <!-- v0.50.6: enumerate launchable apps без QUERY_ALL_PACKAGES.
-             pm.queryIntentActivities(Intent(ACTION_MAIN).addCategory(CATEGORY_LAUNCHER))
-             вернёт все apps с launcher activity — практически все user-facing apps
-             которые ребёнок может запустить (то что показывается в drawer'е).
-             Используется в AppControlNative.collectInstalledApps для screen-time
-             reporting и app-blocking allowlist. RuStore-friendly: narrow visibility
-             без broad QUERY_ALL_PACKAGES permission. -->
-        <intent>
-            <action android:name="android.intent.action.MAIN"/>
-            <category android:name="android.intent.category.LAUNCHER"/>
         </intent>
     </queries>
 </manifest>

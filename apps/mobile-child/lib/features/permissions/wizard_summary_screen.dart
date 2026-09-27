@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-import '../../core/native/app_control_channel.dart';
 import '../../core/native/device_admin_channel.dart';
 import '../../core/updates/app_update_channel.dart';
 import '../../core/version/app_version.dart';
@@ -12,7 +11,7 @@ import 'wizard_steps.dart';
 
 /// Итоговый экран мастера: чек-лист выданных и невыданных разрешений.
 ///
-/// Заменяет ситуацию «9 шагов кончились — ты сразу на home, и не понятно, что
+/// Заменяет ситуацию «шаги кончились — ты сразу на home, и не понятно, что
 /// включилось, а что нет». Показывает состояние каждого разрешения; по тапу на
 /// невыданный пункт можно вернуться к нужному шагу и до-настроить.
 class WizardSummaryScreen extends StatefulWidget {
@@ -66,9 +65,6 @@ class _WizardSummaryScreenState extends State<WizardSummaryScreen>
     final mic = await Permission.microphone.status;
     final activity = await Permission.activityRecognition.status;
     final admin = await _admin.isActive();
-    final a11y = await AppControlChannel.isAccessibilityServiceEnabled();
-    final overlay = await AppControlChannel.canDrawOverlays();
-    final usage = await AppControlChannel.hasUsageStatsPermission();
     final updates = await AppUpdateChannel.canRequestInstall();
 
     final items = <_SummaryItem>[
@@ -95,24 +91,6 @@ class _WizardSummaryScreenState extends State<WizardSummaryScreen>
         importance: StepImportance.recommended,
         route: '/permissions/devadmin',
         granted: admin,
-      ),
-      _SummaryItem(
-        title: 'Блокировка приложений',
-        importance: StepImportance.recommended,
-        route: '/permissions/accessibility',
-        granted: a11y,
-      ),
-      _SummaryItem(
-        title: 'Экран блокировки',
-        importance: StepImportance.recommended,
-        route: '/permissions/overlay',
-        granted: overlay,
-      ),
-      _SummaryItem(
-        title: 'Статистика приложений',
-        importance: StepImportance.recommended,
-        route: '/permissions/usage-stats',
-        granted: usage,
       ),
       _SummaryItem(
         title: 'Звук вокруг ребёнка',

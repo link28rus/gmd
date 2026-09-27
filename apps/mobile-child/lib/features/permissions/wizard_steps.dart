@@ -8,7 +8,7 @@ enum StepImportance {
   mandatory,
 
   /// Нужно для конкретной функции родительского контроля (защита от удаления,
-  /// блокировка приложений, статистика, звук вокруг). Можно пропустить.
+  /// звук вокруг, обновления). Можно пропустить.
   recommended,
 
   /// Приятное дополнение (экономия батареи). Спокойно пропускается.
@@ -67,21 +67,6 @@ const List<WizardStep> kWizardSteps = [
   WizardStep(
     route: '/permissions/devadmin',
     title: 'Защита от удаления',
-    importance: StepImportance.recommended,
-  ),
-  WizardStep(
-    route: '/permissions/accessibility',
-    title: 'Блокировка приложений',
-    importance: StepImportance.recommended,
-  ),
-  WizardStep(
-    route: '/permissions/overlay',
-    title: 'Экран блокировки',
-    importance: StepImportance.recommended,
-  ),
-  WizardStep(
-    route: '/permissions/usage-stats',
-    title: 'Статистика приложений',
     importance: StepImportance.recommended,
   ),
   WizardStep(

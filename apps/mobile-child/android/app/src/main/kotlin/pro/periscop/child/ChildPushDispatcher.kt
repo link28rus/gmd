@@ -9,8 +9,7 @@ import android.os.Build
  * она приехала: FCM ([MyFirebaseMessagingService]) или собственный realtime-канал
  * ([ChildRealtimeClient], WebSocket `/api/child/ws`). Формат data-map одинаковый
  * (его собирает backend в `sendHybridDataMessage`):
- *   - type: START_AUDIO | STOP_AUDIO | BLOCK_APPS | UNBLOCK_APPS | SYNC_RULES |
- *           SYNC_SCHEDULES | PLAY_SIGNAL
+ *   - type: START_AUDIO | STOP_AUDIO | PLAY_SIGNAL
  *   - sessionId, wsUrl, durationSec (START_AUDIO); commandId (если есть очередь)
  *
  * `source` — тег для DiagLog ("fcm" / "realtime"), чтобы в логе было видно канал.
@@ -26,14 +25,10 @@ object ChildPushDispatcher {
         when (type) {
             "START_AUDIO" -> handleStartAudio(ctx, data, source)
             "STOP_AUDIO" -> handleStopAudio(ctx, data, source)
-            // v0.39 Phase 6.2 — App Blocking
-            "BLOCK_APPS" -> handleBlockApps(ctx, data, source)
-            "UNBLOCK_APPS" -> handleUnblockApps(ctx, data, source)
-            "SYNC_RULES" -> handleSyncRules(ctx, source)
-            // v0.49 Phase 6.x — расписание автоблокировки
-            "SYNC_SCHEDULES" -> handleSyncSchedules(ctx, source)
             // v0.43 — мгновенный сигнал «найди телефон» от родителя.
             "PLAY_SIGNAL" -> handlePlaySignal(ctx, data, source)
+            // BLOCK_APPS / UNBLOCK_APPS / SYNC_RULES / SYNC_SCHEDULES — блокировка
+            // приложений временно отключена (v0.58.0), падают сюда и игнорируются.
             else -> DiagLog.write(ctx, source, "unknown type=$type — ignored")
         }
     }
@@ -74,83 +69,6 @@ object ChildPushDispatcher {
                 }
             }.start()
         }
-    }
-
-    /**
-     * Backend отправил {sessionId, endsAt} — сохраняем активную блок-сессию
-     * в [BlockManager]. AccessibilityService уже подключен (если ребёнок дал
-     * permission) и сразу начнёт ловить попытки открыть blocked app.
-     */
-    private fun handleBlockApps(ctx: Context, data: Map<String, String>, source: String) {
-        val sessionId = data["sessionId"] ?: return logErr(ctx, source, "BLOCK_APPS without sessionId")
-        val endsAtIso = data["endsAt"] ?: return logErr(ctx, source, "BLOCK_APPS without endsAt")
-        val endsAtMs = parseIsoToMs(endsAtIso) ?: run {
-            logErr(ctx, source, "BLOCK_APPS unparseable endsAt=$endsAtIso")
-            return
-        }
-        DiagLog.write(ctx, source, "BLOCK_APPS via $source: id=${sessionId.take(8)}… endsAt=$endsAtIso")
-        BlockManager.setActiveBlock(ctx.applicationContext, sessionId, endsAtMs)
-    }
-
-    /** Backend сообщил что сессия закрыта. Чистим локально. */
-    private fun handleUnblockApps(ctx: Context, data: Map<String, String>, source: String) {
-        val sessionId = data["sessionId"]
-        DiagLog.write(ctx, source, "UNBLOCK_APPS via $source: id=${sessionId?.take(8) ?: "?"}…")
-        BlockManager.clearActiveBlock(ctx.applicationContext, "$source-unblock")
-    }
-
-    /**
-     * Backend сообщил что AppRule изменилось. Делаем GET /child/app-rules
-     * на background-thread.
-     */
-    private fun handleSyncRules(ctx: Context, source: String) {
-        DiagLog.write(ctx, source, "SYNC_RULES via $source — pulling /child/app-rules")
-        val app = ctx.applicationContext
-        Thread {
-            try {
-                val res = AppControlHttp.getAppRules(app)
-                if (res.ok && res.bodyJson != null) {
-                    BlockManager.applyRulesFromJsonObject(app, res.bodyJson)
-                } else {
-                    DiagLog.write(app, source, "SYNC_RULES pull failed: status=${res.statusCode}")
-                }
-            } catch (e: Throwable) {
-                DiagLog.write(app, source, "SYNC_RULES exception: ${e.javaClass.simpleName}: ${e.message}")
-            }
-        }.start()
-    }
-
-    /**
-     * v0.49 Phase 6.x: backend сообщил что список расписаний изменился (CRUD
-     * на /family/children/:id/app-control/schedules). Тянем GET /child/schedules
-     * и переписываем локальную копию в SharedPreferences. AccessibilityService
-     * сразу подхватит новые расписания через [BlockManager.isBlocked].
-     */
-    private fun handleSyncSchedules(ctx: Context, source: String) {
-        DiagLog.write(ctx, source, "SYNC_SCHEDULES via $source — pulling /child/schedules")
-        val app = ctx.applicationContext
-        Thread {
-            try {
-                val res = AppControlHttp.getSchedules(app)
-                if (res.ok && res.bodyJson != null) {
-                    BlockManager.applySchedulesFromJsonObject(app, res.bodyJson)
-                } else {
-                    DiagLog.write(app, source, "SYNC_SCHEDULES pull failed: status=${res.statusCode}")
-                }
-            } catch (e: Throwable) {
-                DiagLog.write(app, source, "SYNC_SCHEDULES exception: ${e.javaClass.simpleName}: ${e.message}")
-            }
-        }.start()
-    }
-
-    /** ISO-8601 (`2026-04-26T10:43:24.000Z`) → epoch millis. */
-    private fun parseIsoToMs(iso: String): Long? = try {
-        // Простой парсер без java.time зависимостей: формат фиксирован backend'ом.
-        java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).apply {
-            timeZone = java.util.TimeZone.getTimeZone("UTC")
-        }.parse(iso)?.time
-    } catch (_: Throwable) {
-        null
     }
 
     private fun handleStartAudio(ctx: Context, data: Map<String, String>, source: String) {

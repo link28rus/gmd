@@ -11,7 +11,7 @@ import android.os.Build
  * Проблема: на HyperOS / MIUI / некоторых других OEM при обновлении из
  * sideload-источника (наш `/api/public/updates/mobile-child/latest` →
  * PackageInstaller через ACTION_VIEW) система деактивирует:
- *   - AccessibilityService (PeriscopAccessibilityService) — нужен для блокировки apps
+ *   - AccessibilityService — был нужен для блокировки apps (отключена в v0.58.0)
  *   - Device Admin (ChildDeviceAdminReceiver) — нужен для защиты от удаления
  *
  * Это **известное поведение OS** (особенно MIUI 14+ с Restricted Settings),

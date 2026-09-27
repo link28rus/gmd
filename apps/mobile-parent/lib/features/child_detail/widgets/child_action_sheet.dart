@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/api/api_exception.dart';
+import '../../../core/features.dart';
 import '../../children/child_models.dart';
 import '../../children/children_providers.dart';
 import 'child_status_card.dart';
@@ -91,11 +92,12 @@ class _ChildActionSheetState extends ConsumerState<ChildActionSheet> {
             label: 'История передвижений',
             onTap: _onHistory,
           ),
-          _ActionTile(
-            icon: Icons.shield_outlined,
-            label: 'Родительский контроль',
-            onTap: _onParentalControl,
-          ),
+          if (kAppControlEnabled)
+            _ActionTile(
+              icon: Icons.shield_outlined,
+              label: 'Родительский контроль',
+              onTap: _onParentalControl,
+            ),
           _ActionTile(
             icon: Icons.lock_outline,
             label: 'Защита от удаления',

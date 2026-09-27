@@ -1,12 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Минимальный набор policies для L1-защиты: достаточно объявить ресивер
-     как Device Admin, чтобы Android заменил «Удалить» на «Deactivate» в
-     Settings → Apps для этого приложения. Конкретные разрешения из списка
-     ниже не используются в логике — они нужны чтобы Android принял ресивер
-     как валидный DeviceAdminReceiver. FORCE_LOCK оставлен на будущее (может
-     пригодиться для Lock-экрана при SOS). -->
+<!-- L1-защита от удаления: достаточно объявить ресивер как Device Admin,
+     чтобы Android заменил «Удалить» на «Deactivate» в Settings → Apps для
+     этого приложения. Сами policies для этого не нужны.
+
+     v0.58.0: убрана неиспользуемая force-lock (lockNow нигде не вызывался) —
+     из диалога активации пропал пункт «Блокировка экрана». Пустой
+     uses-policies — валидный Device Admin. -->
 <device-admin xmlns:android="http://schemas.android.com/apk/res/android">
-    <uses-policies>
-        <force-lock />
-    </uses-policies>
+    <uses-policies />
 </device-admin>

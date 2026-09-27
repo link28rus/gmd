@@ -37,10 +37,10 @@
 1. **GPS-геолокация ребёнка** (Android) + история 30 дней (retention через `pg_cron`)
 2. **Геозоны** с push-уведомлениями при входе/выходе (PostGIS фильтрация, FCM high-priority)
 3. **SOS-кнопка** от ребёнка — родитель получает сирену (sweep 600↔1300 Hz, 12 сек, в DND-режиме)
-4. **Читаемая статистика экранного времени** Android (Usage Stats API, block sessions)
+4. **Читаемая статистика экранного времени** Android (Usage Stats API, block sessions) — _временно отключена с v0.58.0 вместе с блокировкой приложений_
 5. **«Звук вокруг ребёнка»** (Перископа) — аудиомониторинг с микрофона по запросу (Android only), WebSocket relay 5-минутные сессии
 6. **Сигнал («Найди телефон»)** — FCM high-priority с fallback на poll-очередь (1–3 сек delivery, 2500/3500 Hz квадратные волны)
-7. **Защита от удаления** (Device Admin + AccessibilityService на mobile-child)
+7. **Защита от удаления** (Device Admin на mobile-child; AccessibilityService убран в v0.58.0 вместе с блокировкой приложений)
 8. **Web-кабинет** (Next.js 15, TypeScript, responsive, dark theme, Zustand auth)
 9. **Mobile-parent** (Flutter 3.24+, Android + iOS в плане) и **mobile-child** (Flutter, Android-only)
 10. **Persistent login** на mobile-parent (refresh-token 30d в `shared_preferences`, resilient к kill app — см. [ADR-secure-storage](#5-shared_preferences-вместо-flutter_secure_storage-mobile-parent))
