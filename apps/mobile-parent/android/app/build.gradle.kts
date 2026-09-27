@@ -94,4 +94,6 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:34.12.0"))
     implementation("com.google.firebase:firebase-messaging")
     implementation("androidx.core:core-ktx:1.13.1")
+    // v0.56.0: AppUpdateWorker — фоновая проверка обновлений (как у mobile-child).
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
 }

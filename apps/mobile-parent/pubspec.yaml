@@ -1,7 +1,7 @@
 name: periscop_parent
 description: "Перископ Родителя — родительский контроль и геолокация ребёнка"
 publish_to: 'none'
-version: 0.55.0+29
+version: 0.56.0+30
 
 environment:
   sdk: ^3.11.5
@@ -58,15 +58,12 @@ dependencies:
   # сканирует в mobile-child).
   qr_flutter: ^4.1.0
 
-  # v0.51: RuStore SDKs — единственный канал distribution для РФ-рынка
-  # (lessons #24 + #26). `flutter_rustore_push` — параллельный FCM транспорт
-  # push'ей; нужен для устройств без Google Play Services (HMS Huawei, чистые
-  # AOSP). Backend выбирает канал по deviceCapabilities, см. push.service.ts.
-  # `flutter_rustore_update` — In-App Update SDK. С v0.50.4 — без fallback'а
-  # на ACTION_VIEW: RuStore модерация требует, чтобы все обновления шли
-  # централизованно через store.
+  # v0.51: `flutter_rustore_push` — параллельный FCM транспорт push'ей; нужен
+  # для устройств без Google Play Services (HMS Huawei, чистые AOSP). Backend
+  # выбирает канал по deviceCapabilities, см. push.service.ts.
+  # `flutter_rustore_update` (In-App Update SDK) удалён в v0.56.0: RuStore на
+  # паузе, обновления — самообновлением с нашего сервера (AppUpdater.kt).
   flutter_rustore_push: ^7.2.0
-  flutter_rustore_update: ^10.3.0
 
 dev_dependencies:
   flutter_test:

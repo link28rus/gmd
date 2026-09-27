@@ -1,15 +1,18 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app.dart';
 import 'background/location_entry.dart' as bg;
+import 'core/config/env.dart';
 import 'core/diag/diag_channel.dart';
 import 'core/fcm/fcm_registrar.dart';
 import 'core/native/escape_channel.dart';
 import 'core/push/rustore_push_registrar.dart';
 import 'core/storage/secure_storage_service.dart';
+import 'core/updates/app_update_channel.dart';
 import 'features/sound_around/sound_around_entry.dart' as sa;
 
 // Держим ссылки на entrypoints чтобы AOT tree-shaker не выкинул их из
@@ -47,6 +50,15 @@ void main() async {
     unawaited(diagLog('ui', 'app started in ESCAPE MODE — showing escape screen'));
     runApp(ProviderScope(child: PeriscopChildApp(initialLocation: '/escape')));
     return;
+  }
+
+  // v0.56.0 самообновление: адрес API для фонового AppUpdateWorker'а и сама
+  // периодическая проверка — на любом запуске, ещё до claim, чтобы новая
+  // версия доходила и до устройства, застрявшего на онбординге.
+  if (Platform.isAndroid) {
+    unawaited(AppUpdateChannel.configure(apiBaseUrl).catchError(
+      (Object e) => diagLog('updates', 'configure failed: $e'),
+    ));
   }
 
   // Если device уже приклеймлен — при повторном запуске сразу

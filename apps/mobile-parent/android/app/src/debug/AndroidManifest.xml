@@ -4,4 +4,8 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Только debug: нативный HttpURLConnection (AppUpdater.kt) подчиняется
+         запрету cleartext, в отличие от Dart-клиента. Без этого эмулятор не
+         достучится до локального web по http://10.0.2.2. -->
+    <application android:usesCleartextTraffic="true"/>
 </manifest>

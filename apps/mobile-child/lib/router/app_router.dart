@@ -13,6 +13,7 @@ import '../features/permissions/notifications_step.dart';
 import '../features/permissions/usage_stats_step.dart';
 import '../features/permissions/accessibility_step.dart';
 import '../features/permissions/overlay_step.dart';
+import '../features/permissions/updates_step.dart';
 import '../features/permissions/wizard_intro_screen.dart';
 import '../features/permissions/wizard_summary_screen.dart';
 import '../features/escape/escape_screen.dart';
@@ -88,6 +89,11 @@ class AppRouter {
     GoRoute(
       path: '/permissions/microphone',
       builder: (_, _) => const MicrophoneStep(),
+    ),
+    // v0.56.0: «Установка неизвестных приложений» для тихого самообновления.
+    GoRoute(
+      path: '/permissions/updates',
+      builder: (_, _) => const UpdatesStep(),
     ),
     GoRoute(
       path: '/permissions/activity',

@@ -14,14 +14,27 @@ import androidx.core.content.ContextCompat
 // Direct Boot); обычный BOOT_COMPLETED — после разблокировки. Ловим оба, но
 // запускаем сервис только один раз — дубль stopForeground/startForeground
 // безопасен (Android сам склеит).
+//
+// v0.56.0: MY_PACKAGE_REPLACED — установка обновления убивает процесс вместе
+// с foreground-сервисом. После тихого самообновления (AppUpdater) никто не
+// открывает UI, поэтому сервис поднимаем здесь, как после ребута.
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         val action = intent?.action ?: return
         if (action != Intent.ACTION_BOOT_COMPLETED &&
             action != Intent.ACTION_LOCKED_BOOT_COMPLETED &&
+            action != Intent.ACTION_MY_PACKAGE_REPLACED &&
             action != "android.intent.action.QUICKBOOT_POWERON" &&
             action != "com.htc.intent.action.QUICKBOOT_POWERON"
         ) return
+
+        if (action == Intent.ACTION_MY_PACKAGE_REPLACED) {
+            try {
+                AppUpdater.onPackageReplaced(context)
+            } catch (e: Throwable) {
+                DiagLog.write(context, "updates", "onPackageReplaced failed: ${e.message}")
+            }
+        }
 
         // v0.50.2 — permission gate. На Android 14+ (targetSdk=34) запуск
         // foregroundServiceType=location ТРЕБУЕТ granted ACCESS_*_LOCATION,
@@ -59,9 +72,6 @@ class BootReceiver : BroadcastReceiver() {
         } else {
             context.startService(svc)
         }
-
-        // v0.50.4 (lesson #24): UpdateCheckScheduler удалён — auto-update
-        // полностью через `flutter_rustore_update` SDK на Dart-слое.
 
         // v0.36.0 D-lite: best-effort pre-warm SoundAroundService после ребута.
         // BootReceiver получает короткий FGS-start exemption от system, поэтому

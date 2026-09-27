@@ -175,8 +175,6 @@ class LocationForegroundService : Service() {
         fused = LocationServices.getFusedLocationProviderClient(this)
         createChannel()
         ensureBackgroundEngine()
-        // v0.50.4 (lesson #24): UpdateCheckScheduler удалён — auto-update
-        // полностью через `flutter_rustore_update` SDK на Dart-слое.
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {

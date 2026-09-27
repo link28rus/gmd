@@ -6,6 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../../core/native/app_control_channel.dart';
 import '../../core/native/device_admin_channel.dart';
+import '../../core/updates/app_update_channel.dart';
 import '../../core/version/app_version.dart';
 import 'wizard_steps.dart';
 
@@ -68,6 +69,7 @@ class _WizardSummaryScreenState extends State<WizardSummaryScreen>
     final a11y = await AppControlChannel.isAccessibilityServiceEnabled();
     final overlay = await AppControlChannel.canDrawOverlays();
     final usage = await AppControlChannel.hasUsageStatsPermission();
+    final updates = await AppUpdateChannel.canRequestInstall();
 
     final items = <_SummaryItem>[
       _SummaryItem(
@@ -117,6 +119,12 @@ class _WizardSummaryScreenState extends State<WizardSummaryScreen>
         importance: StepImportance.recommended,
         route: '/permissions/microphone',
         granted: mic.isGranted,
+      ),
+      _SummaryItem(
+        title: 'Обновления приложения',
+        importance: StepImportance.recommended,
+        route: '/permissions/updates',
+        granted: updates,
       ),
       _SummaryItem(
         title: 'Экономия батареи',

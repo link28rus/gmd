@@ -90,6 +90,11 @@ const List<WizardStep> kWizardSteps = [
     importance: StepImportance.recommended,
   ),
   WizardStep(
+    route: '/permissions/updates',
+    title: 'Обновления приложения',
+    importance: StepImportance.recommended,
+  ),
+  WizardStep(
     route: '/permissions/activity',
     title: 'Экономия батареи',
     importance: StepImportance.optional,

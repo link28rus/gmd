@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -25,14 +27,15 @@ class HomeScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Мои дети'),
         actions: [
-          // Версия + long-press → /debug. Аналог mobile-child header'а.
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Center(
-              child: GestureDetector(
-                onLongPress: () => context.push('/debug'),
-                child: const AppVersionLabel(),
-              ),
+          // Версия: нажатие — проверить обновления, long-press — /debug.
+          // Аналог mobile-child header'а.
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => checkForUpdates(context, ref),
+            onLongPress: () => context.push('/debug'),
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8),
+              child: Center(child: AppVersionLabel()),
             ),
           ),
           PopupMenuButton<String>(
@@ -41,6 +44,9 @@ class HomeScreen extends ConsumerWidget {
               switch (value) {
                 case 'theme':
                   await _showThemeDialog(context, ref);
+                  break;
+                case 'updates':
+                  await checkForUpdates(context, ref);
                   break;
                 case 'logout':
                   await ref.read(authRepositoryProvider).logout();
@@ -69,6 +75,18 @@ class HomeScreen extends ConsumerWidget {
                   ],
                 ),
               ),
+              // Самообновление есть только на Android (iOS — через App Store).
+              if (Platform.isAndroid)
+                const PopupMenuItem<String>(
+                  value: 'updates',
+                  child: Row(
+                    children: [
+                      Icon(Icons.system_update_outlined, size: 20),
+                      SizedBox(width: 12),
+                      Text('Проверить обновления'),
+                    ],
+                  ),
+                ),
               const PopupMenuItem<String>(value: 'logout', child: Text('Выйти')),
             ],
           ),
@@ -76,8 +94,8 @@ class HomeScreen extends ConsumerWidget {
       ),
       body: Column(
         children: [
-          // Auto-update: показывается ТОЛЬКО когда есть обновление
-          // (Downloading / Downloaded / NeedsPermission / Failed).
+          // v0.56.0 самообновление: виден только при загрузке, готовом
+          // обновлении, ожидании подтверждения или сбое загрузки/установки.
           const UpdateBanner(),
           Expanded(
             child: RefreshIndicator(
