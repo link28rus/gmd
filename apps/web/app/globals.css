@@ -218,11 +218,16 @@ body {
     color-scheme: dark;
   }
 
-  /* Тёмная подложка CartoDB Dark Matter сама по себе очень чёрная — чуть
-     осветляем чтобы дороги и названия читались. dim использует Voyager
-     (нейтральный бежевый), фильтр там не нужен. */
+  /* Подложка во всех темах — стандартный OSM (см. lib/maps/tile-config.ts),
+     тёмный вид делаем фильтром только на слое тайлов: маркеры, треки и круги
+     геозон живут в других pane'ах и сохраняют свои цвета.
+     dim — приглушённый бежево-серый; dark — инверсия с возвратом оттенков
+     (hue-rotate 180°), чтобы вода осталась синей, а парки — зелёными. */
+  html[data-admin-theme='dim'] .leaflet-tile-pane {
+    filter: saturate(0.55) brightness(0.92) contrast(0.95) sepia(0.12);
+  }
   html[data-admin-theme='dark'] .leaflet-tile-pane {
-    filter: brightness(1.4) saturate(0.95);
+    filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9) saturate(0.6);
   }
 
   /* Leaflet по умолчанию даёт panes z-index 200–800 и control'ам 800 — это

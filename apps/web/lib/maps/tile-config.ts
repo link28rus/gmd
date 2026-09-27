@@ -7,40 +7,24 @@ export interface TileConfig {
 }
 
 /**
- * Конфиг tile-сервера в зависимости от темы интерфейса.
+ * Конфиг tile-сервера для карт кабинета.
  *
- * - `light` → стандартный OSM (tile.openstreetmap.org).
- * - `dim`   → CartoDB Voyager — нейтральный бежево-серый стиль.
- *             Заметно мягче стандартного OSM, но не чёрный.
- * - `dark`  → CartoDB Dark Matter — настоящая тёмная подложка.
+ * Во всех темах — стандартный OSM (tile.openstreetmap.org), ключ не нужен.
+ * Тёмный вид для `dim` / `dark` делается CSS-фильтром на `.leaflet-tile-pane`
+ * в `app/globals.css` — фильтр не задевает маркеры, треки и круги геозон
+ * (они в других pane'ах).
  *
- * Все три варианта бесплатны, без API-ключа. Атрибуция CARTO/OSM обязательна.
+ * CartoDB (Voyager / Dark Matter) больше не используем: с 2026-09 CARTO
+ * требует API-ключ и без него отдаёт тайл-заглушку «API KEY REQUIRED».
  *
- * При смене темы leaflet TileLayer должен пере-маунтиться (через `key` prop) —
- * иначе он продолжит тянуть тайлы со старого URL.
+ * `theme` оставлен в сигнатуре, чтобы подложку можно было снова развести
+ * по темам без правки трёх компонентов карты. Если URL начнёт зависеть от
+ * темы — TileLayer пере-маунтится сам через `key={tile.url}`.
  */
-export function tileConfigFor(theme: GmdTheme): TileConfig {
-  if (theme === 'light') {
-    return {
-      url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-      maxZoom: 19,
-    };
-  }
-  if (theme === 'dim') {
-    return {
-      url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-      attribution:
-        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> ' +
-        '&copy; <a href="https://carto.com/attributions">CARTO</a>',
-      maxZoom: 19,
-    };
-  }
+export function tileConfigFor(_theme: GmdTheme): TileConfig {
   return {
-    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-    attribution:
-      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> ' +
-      '&copy; <a href="https://carto.com/attributions">CARTO</a>',
+    url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     maxZoom: 19,
   };
 }

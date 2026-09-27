@@ -53,30 +53,30 @@ GPS-часы, чат, iOS mobile-child, мониторинг соцсетей, �
 
 ## Технологический стек
 
-| Слой                        | Технология                                                                      | Примечание                                                             |
-| --------------------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| **Mobile parent**           | Flutter 3.24, Dart 3.11.5, Riverpod, GoRouter 14.6                              | Android + iOS (iOS after MVP)                                          |
-| **Mobile child**            | Flutter 3.24, Dart 3.11.5, Drift SQLite, WorkManager                            | Android-only; Device Admin, AccessibilityService                       |
-| **Web**                     | Next.js 15 (App Router), TypeScript 5.6, Tailwind, shadcn/ui, Zustand           | Лендинг + кабинет + embed-pages                                        |
-| **API**                     | REST (no OpenAPI codegen yet; types manual TS/Dart)                             | `/api` Caddy-проксирует на backend:3001                                |
-| **Backend**                 | NestJS, TypeScript, Prisma ORM                                                  | Модульная архитектура, guards, pipes, interceptors                     |
-| **Database**                | PostgreSQL 16 + PostGIS + pg_cron                                               | Мигрируется Prisma, schema.prisma = source of truth                    |
-| **Realtime**                | FCM data-message high-priority; short-polling child→backend                     | Без WebSocket на MVP (кроме audio relay)                               |
-| **Audio relay**             | WebSocket (Opus 20ms@16kHz mono → AudioWorklet)                                 | Embedded в `/embed/audio/[childId]` (web)                              |
-| **Maps**                    | OpenStreetMap (flutter_map 7.0.2, react-leaflet 5)                              | Без ключей, без санкционных рисков; CartoDB Dark Matter для dark-theme |
-| **Geocoding**               | Yandex Geocoder (backend proxy)                                                 | Переезд на другой геокодер в плане                                     |
-| **Caching**                 | Redis (sessions, OTP)                                                           | Управляется через docker-compose                                       |
-| **Storage**                 | MinIO (S3-compatible)                                                           | Для аудиосессий (не на MVP, но infra готова)                           |
-| **Auth tokens**             | JWT: access 15m + refresh 30d                                                   | Mobile → refresh из body; web → HttpOnly cookie + body для mobile      |
-| **Auth method**             | Email + OTP (SMS когда будет Twilio или RuSMS)                                  | Версионированное согласие на регистрацию (152-ФЗ)                      |
-| **Passwords**               | Argon2id (backend hashing)                                                      | ParentPin тоже на User-уровне, Argon2                                  |
-| **Logging**                 | GlitchTip (Sentry-compatible)                                                   | В production; dev → console                                            |
-| **Monitoring**              | Grafana + Loki + Prometheus                                                     | Доступ через SSH-tunnel: `ssh -N gmd-online-tunnels`                   |
-| **Uptime**                  | Uptime Kuma                                                                     | Health endpoints: `/healthz` (liveness), `/readyz` (readiness)         |
-| **Container orchestration** | Docker Compose (production и development)                                       | Нет K8s; Caddy как reverse-proxy + auto-TLS                            |
-| **CI/CD**                   | Husky + lint-staged (pre-commit)                                                | GitHub Actions когда будет выбран git-хостинг                          |
-| **Package managers**        | pnpm 9.15.0 (JS/TS), Melos (Flutter)                                            | Monorepo с Turborepo                                                   |
-| **Build tools**             | Gradle (mobile-child native), Next.js build (web), NestJS compilation (backend) | Версия Node 22+, Dart 3.11.5+, Flutter 3.24+                           |
+| Слой                        | Технология                                                                      | Примечание                                                                                             |
+| --------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| **Mobile parent**           | Flutter 3.24, Dart 3.11.5, Riverpod, GoRouter 14.6                              | Android + iOS (iOS after MVP)                                                                          |
+| **Mobile child**            | Flutter 3.24, Dart 3.11.5, Drift SQLite, WorkManager                            | Android-only; Device Admin, AccessibilityService                                                       |
+| **Web**                     | Next.js 15 (App Router), TypeScript 5.6, Tailwind, shadcn/ui, Zustand           | Лендинг + кабинет + embed-pages                                                                        |
+| **API**                     | REST (no OpenAPI codegen yet; types manual TS/Dart)                             | `/api` Caddy-проксирует на backend:3001                                                                |
+| **Backend**                 | NestJS, TypeScript, Prisma ORM                                                  | Модульная архитектура, guards, pipes, interceptors                                                     |
+| **Database**                | PostgreSQL 16 + PostGIS + pg_cron                                               | Мигрируется Prisma, schema.prisma = source of truth                                                    |
+| **Realtime**                | FCM data-message high-priority; short-polling child→backend                     | Без WebSocket на MVP (кроме audio relay)                                                               |
+| **Audio relay**             | WebSocket (Opus 20ms@16kHz mono → AudioWorklet)                                 | Embedded в `/embed/audio/[childId]` (web)                                                              |
+| **Maps**                    | OpenStreetMap (flutter_map 7.0.2, react-leaflet 5)                              | Без ключей, без санкционных рисков; тёмные темы — CSS-фильтр поверх OSM (CARTO с 2026-09 требует ключ) |
+| **Geocoding**               | Yandex Geocoder (backend proxy)                                                 | Переезд на другой геокодер в плане                                                                     |
+| **Caching**                 | Redis (sessions, OTP)                                                           | Управляется через docker-compose                                                                       |
+| **Storage**                 | MinIO (S3-compatible)                                                           | Для аудиосессий (не на MVP, но infra готова)                                                           |
+| **Auth tokens**             | JWT: access 15m + refresh 30d                                                   | Mobile → refresh из body; web → HttpOnly cookie + body для mobile                                      |
+| **Auth method**             | Email + OTP (SMS когда будет Twilio или RuSMS)                                  | Версионированное согласие на регистрацию (152-ФЗ)                                                      |
+| **Passwords**               | Argon2id (backend hashing)                                                      | ParentPin тоже на User-уровне, Argon2                                                                  |
+| **Logging**                 | GlitchTip (Sentry-compatible)                                                   | В production; dev → console                                                                            |
+| **Monitoring**              | Grafana + Loki + Prometheus                                                     | Доступ через SSH-tunnel: `ssh -N gmd-online-tunnels`                                                   |
+| **Uptime**                  | Uptime Kuma                                                                     | Health endpoints: `/healthz` (liveness), `/readyz` (readiness)                                         |
+| **Container orchestration** | Docker Compose (production и development)                                       | Нет K8s; Caddy как reverse-proxy + auto-TLS                                                            |
+| **CI/CD**                   | Husky + lint-staged (pre-commit)                                                | GitHub Actions когда будет выбран git-хостинг                                                          |
+| **Package managers**        | pnpm 9.15.0 (JS/TS), Melos (Flutter)                                            | Monorepo с Turborepo                                                                                   |
+| **Build tools**             | Gradle (mobile-child native), Next.js build (web), NestJS compilation (backend) | Версия Node 22+, Dart 3.11.5+, Flutter 3.24+                                                           |
 
 ---
 
@@ -236,7 +236,7 @@ D:/Project/GMD/
 │   │   │   ├── api/client.ts         # apiFetch() with auto-refresh on 401
 │   │   │   ├── auth-store.ts         # Zustand + persist (user, family, tokens)
 │   │   │   ├── backend.ts            # Direct backend call from BFF routes
-│   │   │   ├── maps/                 # TileConfig (light/dim/dark OSM/CartoDB)
+│   │   │   ├── maps/                 # TileConfig (OSM во всех темах, тёмные — CSS-фильтр)
 │   │   │   └── api/                  # Type definitions (manual, no OpenAPI codegen)
 │   │   ├── components/               # shadcn/ui + custom
 │   │   ├── .env.example
@@ -1153,7 +1153,7 @@ const users = await prisma.user.findMany({
 
 - No API key required (no quota exhaustion risk)
 - No sanctioning/licensing concerns
-- Free tiles from OSM community + CartoDB for dark theme
+- Free tiles from OSM community; dim/dark themes via CSS filter on the tile pane (CARTO basemaps require an API key since 2026-09)
 - Geocoding via backend proxy (separate Yandex account, rate-limited)
 
 **Implementation:**
