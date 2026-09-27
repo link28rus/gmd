@@ -97,6 +97,9 @@ phase1.1-web-*.png
 tmp-*/
 tmp-*.png
 tmp/
+.tmp_*
+*.bak
+*.bak.*
 
 # Debug-скриншоты сессий (AVD smoke, RuStore Console, device state) — мусор, не в git
 /avd_*.png
