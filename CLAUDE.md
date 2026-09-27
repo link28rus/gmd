@@ -1,7 +1,8 @@
 # Перископ — сервис родительского контроля и геолокации детей
 
-Self-hosted сервис для РФ-рынка. Бренд — «Перископ», основной домен periscop.pro
-(прежний gmd-online.ru остаётся legacy-зеркалом для уже установленных приложений).
+Self-hosted сервис. Бренд — «Перископ». **С 2026-09-27 (задача #85) прод — для своей семьи:**
+домен `gmd.link28rus.ru`, приложения ставятся на устройства вручную, RuStore на паузе.
+periscop.pro / gmd-online.ru указывают на потерянный VPS — не используются.
 Дизайн MVP: [docs/superpowers/specs/2026-04-18-gmd-mvp-design.md](docs/superpowers/specs/2026-04-18-gmd-mvp-design.md).
 
 ## Кратко
@@ -51,22 +52,24 @@ releases/rustore/       AAB-артефакты для RuStore (см. ниже)
 
 ## Инфраструктура
 
-- **Сервер (с 2026-05-15, task #67):** VPS 45.67.230.87, Ubuntu 24.04 LTS,
-  4 vCPU / 8 GB RAM / 89 GB disk, единственный публичный интерфейс `ens3`
-  (45.67.230.87/24, прямой IP без NAT). Loopback (127.0.0.1) и docker
-  bridges (172.x) — служебное, не трогать. UFW: только 22/80/443.
-- **Прежний сервер (до 2026-05-15):** dual-WAN 192.168.1.23 (ens160 LAN) +
-  95.104.240.111 (ens192 WAN), потребовал asymmetric-routing fix через
-  CONNMARK fwmark 0x2. Теперь работает только как 301-редирект на
-  gmd-online.ru (см. memory-compiler runbook). После 90 дней — выключение.
-- **Домен:** periscop.pro — основной (DNS A → 45.67.230.87, TLS Caddy + Let's
-  Encrypt автоматически через ACME http-01 на :80). gmd-online.ru обслуживается
-  тем же Caddy как legacy-зеркало (адреса сайтов: `periscop.pro, gmd-online.ru`)
-  для старых установленных mobile-приложений, ходящих на него за API.
+- **Сервер (с 2026-09-27, задача #85):** VM 109 `gmd-prod` на Proxmox pve121
+  (192.168.1.121), Ubuntu 24.04 LTS, 4 vCPU (Xeon X7542, без AVX) / 8 GB / 60 GB.
+  Сеть через cloud-init сниппет `hdd:snippets/gmd-prod-network.yaml`:
+  `eth0` LAN 192.168.1.111/24 (управление; 192.168.0.0/16 и 10.0.0.0/8 через .1),
+  `eth1` МТС 95.104.240.111/27 — **маршрут по умолчанию через МТС** (шлюз .97).
+  CONNMARK-костыль старого dual-WAN сервера не нужен. Docker bridges (172.x) — не трогать.
+- **UFW:** eth0 открыт целиком, снаружи только 80/443. SSH снаружи закрыт.
+  `infra/server-setup/10-harden-ssh.sh` и `20-firewall.sh` НЕ запускать — первый
+  выключит вход root по паролю (оставлен по просьбе пользователя), второй откроет 22 наружу.
+- **Потерянный VPS 45.67.230.87 (прод 2026-05-15 … 2026-09):** недоступен, секреты
+  прежнего `.env.prod` и `FIREBASE_SA_KEY` утеряны; стек поднят с чистой БД.
+- **Домен:** `gmd.link28rus.ru` (reg.ru, A → 95.104.240.111), TLS — Caddy + Let's
+  Encrypt (ACME http-01). Адреса сайтов — env `SITE_ADDRESSES` в `/opt/gmd/.env.prod`.
 - **Регион данных:** РФ (152-ФЗ)
-- **SSH (key-only):** алиас `gmd-online` (root + non-root sudo-user `gmd`,
-  оба с ключом `id_ed25519_servers`). Password-auth отключён.
-  fail2ban + UFW активны.
+- **SSH:** алиасы `gmd-prod` = `gmd-online` (оставлен для `deploy.sh` и runbook'ов) →
+  root@192.168.1.111, ключ `id_ed25519_servers`; пароль root — memory-compiler (infra).
+- **Бэкапы:** VM целиком — ночной vzdump pve121 (21:00, HDD, keep-last=3);
+  pg-дампы внутри VM — `40-backups-install.sh`.
 - **Мониторинг:** GlitchTip + Uptime Kuma (docs/monitoring.md). Доступ через
   SSH-tunnel `ssh -N gmd-online-tunnels`.
 
@@ -424,11 +427,11 @@ melos run analyze
 Подробности: [docs/deploy.md](docs/deploy.md), [docs/backup-restore.md](docs/backup-restore.md), [docs/server-hardening.md](docs/server-hardening.md).
 
 ```bash
-# Деплой актуального кода на gmd-online (45.67.230.87)
+# Деплой актуального кода на gmd-prod (VM 109, алиас gmd-online)
 bash infra/deploy/deploy.sh
 
 # Проверки
-curl https://gmd-online.ru/api/readyz               # {status:ok,db:up,redis:up}
+curl https://gmd.link28rus.ru/api/readyz            # {status:ok,db:up,redis:up}
 ssh gmd-online 'docker ps --format "{{.Names}} {{.Status}}"'
 
 # Бэкапы PG (systemd timers)
@@ -436,7 +439,7 @@ ssh gmd-online 'systemctl list-timers | grep pg-'
 ssh gmd-online 'ls /opt/gmd/backups/postgres/'
 ```
 
-Сервер доступен по `https://periscop.pro/` — основной домен (DNS A → 45.67.230.87, прямой публичный IP на интерфейсе `ens3`, без NAT). `gmd-online.ru` обслуживается тем же Caddy как legacy-зеркало (идентичный роутинг, отдельный TLS-cert) для уже установленных mobile-приложений. Прежний домен `gmd.link28rus.ru` отвечает 301 редиректом до плановой остановки (90 дней с 2026-05-15).
+Сервер доступен по `https://gmd.link28rus.ru/` (A → 95.104.240.111, МТС-интерфейс VM 109 `gmd-prod`). Сборка образов идёт на самом сервере — после деплоев чистить build cache (`docker builder prune --keep-storage 5g -f`).
 
 ## RuStore-релизы (`releases/rustore/`)
 

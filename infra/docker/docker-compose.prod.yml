@@ -87,24 +87,9 @@ services:
       timeout: 3s
       retries: 5
 
-  minio:
-    <<: [*restart, *logging]
-    image: minio/minio:RELEASE.2024-12-18T13-15-44Z
-    container_name: gmd-minio
-    command: ['server', '/data', '--console-address', ':9001']
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-    volumes:
-      - /opt/gmd/data/minio:/data
-    networks: [gmd_net]
-    # MinIO console при необходимости — через SSH-tunnel (ssh -L 9001:minio:9001 gmd-prod)
-    healthcheck:
-      test: ['CMD', 'mc', 'ready', 'local']
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
+  # minio удалён 2026-09-27 (задача #85): ни backend, ни web к нему не обращаются,
+  # а образы minio/minio с Docker Hub и quay.io больше не выдаются (pull access denied).
+  # Понадобится S3 — выбирать заново (Garage / SeaweedFS / RustFS).
 
   glitchtip-postgres:
     <<: [*restart, *logging]
@@ -270,6 +255,8 @@ services:
       OTP_FIXED_DEV: ${OTP_FIXED_DEV:-}
       INVITE_TTL_SECONDS: ${INVITE_TTL_SECONDS:-600}
       CLAIM_LANDING_BASE_URL: ${CLAIM_LANDING_BASE_URL:-https://periscop.pro}
+      # База ссылок в письмах (сброс пароля, SOS). Тот же адрес, что PUBLIC_SITE_URL у web.
+      WEB_BASE_URL: ${PUBLIC_SITE_URL:-https://periscop.pro}
       ADMIN_EMAILS: ${ADMIN_EMAILS:-}
       AUTH_DEV_MODE: ${AUTH_DEV_MODE:-false}
       AUTH_DEV_SECRET: ${AUTH_DEV_SECRET:-}
@@ -333,10 +320,12 @@ services:
     container_name: gmd-caddy
     ports:
       - '80:80'
-      # Caddy сам терминирует TLS на 45.67.230.87:443 через ACME (http-01 на :80).
-      # Прямой публичный IP без NAT, UFW: только 22/80/443.
+      # Caddy сам терминирует TLS на :443 через ACME (http-01 на :80).
+      # Прямой публичный IP без NAT; снаружи UFW пускает только 80/443.
       - '443:443'
     environment:
+      # Адреса сайтов Caddyfile (через запятую). Прод с 2026-09-27 — gmd.link28rus.ru.
+      SITE_ADDRESSES: ${SITE_ADDRESSES:-gmd.link28rus.ru}
       CADDY_ACME_EMAIL: ${CADDY_ACME_EMAIL}
       CADDY_BASIC_AUTH_HASH: ${CADDY_BASIC_AUTH_HASH}
       DOWNLOAD_PASSWORD_HASH: ${DOWNLOAD_PASSWORD_HASH}
