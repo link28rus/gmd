@@ -175,6 +175,8 @@ class LocationForegroundService : Service() {
         fused = LocationServices.getFusedLocationProviderClient(this)
         createChannel()
         ensureBackgroundEngine()
+        // v0.57: realtime-канал команд живёт вместе с FGS геолокации.
+        ChildRealtimeClient.start(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -196,6 +198,8 @@ class LocationForegroundService : Service() {
                 // безопасен.
                 startForeground(NOTIF_ID, buildNotification())
                 handleHeartbeat()
+                // v0.57: страховка realtime-канала — поднять упавший / порвать «тихий».
+                ChildRealtimeClient.ensureConnected(this)
                 // Перепланируем следующий alarm — делаем это всегда, в т.ч.
                 // после ошибок lastLocation, иначе цепочка оборвётся.
                 scheduleHeartbeatAlarm()

@@ -105,6 +105,8 @@ dependencies {
     // installer'у. Тянется транзитивно через workmanager, но явно фиксируем —
     // имя класса androidx.core.content.FileProvider используется в манифесте.
     implementation("androidx.core:core-ktx:1.13.1")
+    // v0.57: WebSocket-клиент realtime-канала команд (ChildRealtimeClient).
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
     // v0.49 Phase 6.x: unit-тесты для ScheduleEvaluator (parity с backend
     // ScheduleService.isActiveAt). org.json уже доступен в android.jar для
     // unit-тестов через robolectric/inline jar. На JUnit 4 хватает —

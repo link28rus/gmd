@@ -10,7 +10,7 @@ import { FcmService } from '../fcm/fcm.service';
 
 interface PrismaMock {
   child: { findFirst: jest.Mock };
-  childDevice: { findFirst: jest.Mock };
+  childDevice: { findFirst: jest.Mock; findUnique: jest.Mock };
   audioSession: {
     findFirst: jest.Mock;
     findUnique: jest.Mock;
@@ -42,7 +42,10 @@ interface SettingsMock {
 function makePrisma(): PrismaMock {
   return {
     child: { findFirst: jest.fn() },
-    childDevice: { findFirst: jest.fn() },
+    childDevice: {
+      findFirst: jest.fn(),
+      findUnique: jest.fn().mockResolvedValue({ fcmToken: null, rustorePushToken: null }),
+    },
     audioSession: {
       findFirst: jest.fn().mockResolvedValue(null),
       findUnique: jest.fn().mockResolvedValue(null),
@@ -501,7 +504,7 @@ describe('AudioService.markChildError', () => {
         }),
       }),
     );
-    expect(relay.terminate).toHaveBeenCalledWith('s1', 4008, 'session_failed');
+    expect(relay.terminate).toHaveBeenCalledWith('s1', 4008, 'child_error:PERMISSION_DENIED');
   });
 
   it('idempotent on terminal state', async () => {

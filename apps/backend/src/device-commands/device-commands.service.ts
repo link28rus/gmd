@@ -1,8 +1,10 @@
 import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import type { OnModuleInit } from '@nestjs/common';
 import type { DeviceCommand } from '@prisma/client';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { FcmService } from '../fcm/fcm.service';
+import { ChildRealtimeService } from '../child-realtime/child-realtime.service';
 import type { AudioWsConnInfo } from '../audio/dto/audio.dto';
 
 // TTL на команду: если child не забрал её за это время, помечаем как
@@ -12,13 +14,39 @@ import type { AudioWsConnInfo } from '../audio/dto/audio.dto';
 const COMMAND_TTL_MS = 5 * 60 * 1000;
 
 @Injectable()
-export class DeviceCommandsService {
+export class DeviceCommandsService implements OnModuleInit {
   private readonly logger = new Logger(DeviceCommandsService.name);
 
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(FcmService) private readonly fcm: FcmService,
+    @Inject(ChildRealtimeService) private readonly realtime: ChildRealtimeService,
   ) {}
+
+  onModuleInit(): void {
+    this.realtime.onDeviceConnected((deviceId) => {
+      void this.replayPendingOverRealtime(deviceId).catch((err) =>
+        this.logger.warn(`replay pending for ${deviceId} failed: ${String(err)}`),
+      );
+    });
+  }
+
+  /**
+   * v0.57: телефон (пере)подключился к realtime-каналу — досылаем команды,
+   * которые он ещё не забрал. Типичный случай: родитель нажал «Звук вокруг»,
+   * пока телефон переключался между Wi-Fi и мобильной сетью. Без этого команда
+   * ждала бы poll'а (до ~90с) и истекала раньше. Дедупликация START+STOP —
+   * в listPending.
+   */
+  async replayPendingOverRealtime(deviceId: string): Promise<void> {
+    const pending = await this.listPending(deviceId);
+    for (const cmd of pending) {
+      const data = toPushData(cmd.id, cmd.type, cmd.payload);
+      if (!data) continue;
+      this.logger.log(`replay ${cmd.type} ${cmd.id} → device=${deviceId}`);
+      await this.realtime.sendWithAck(deviceId, data);
+    }
+  }
 
   // Родитель: отправить сигнал конкретному ребёнку. Возвращает command.id —
   // пригодится для последующего отслеживания статуса, если понадобится.
@@ -209,9 +237,9 @@ export class DeviceCommandsService {
     durationSec: number,
     createdByUserId: string,
     ttlMs = 60_000,
-  ): Promise<void> {
+  ): Promise<string> {
     const expiresAt = new Date(Date.now() + ttlMs);
-    await this.prisma.deviceCommand.create({
+    const cmd = await this.prisma.deviceCommand.create({
       data: {
         childDeviceId,
         type: 'START_AUDIO',
@@ -221,18 +249,19 @@ export class DeviceCommandsService {
         payload: { sessionId, ws, durationSec } as unknown as Prisma.InputJsonValue,
       },
     });
+    return cmd.id;
   }
 
   async enqueueAudioStop(
     childDeviceId: string,
     sessionId: string,
     createdByUserId: string,
-  ): Promise<void> {
+  ): Promise<string> {
     // TTL 180s (v0.34.4): poll в mobile-child привязан к location-heartbeat
     // (каждые 120с), 60с не перекрывало один цикл → команда expire'илась до доставки.
     // 180s даёт запас на 1-2 poll-цикла.
     const expiresAt = new Date(Date.now() + 180_000);
-    await this.prisma.deviceCommand.create({
+    const cmd = await this.prisma.deviceCommand.create({
       data: {
         childDeviceId,
         type: 'STOP_AUDIO',
@@ -242,5 +271,42 @@ export class DeviceCommandsService {
         payload: { sessionId } as Prisma.InputJsonValue,
       },
     });
+    return cmd.id;
+  }
+}
+
+/**
+ * DeviceCommand → data-map в формате FCM-push (его же понимает нативный
+ * ChildPushDispatcher на телефоне). null — тип не доставляется push'ем.
+ */
+export function toPushData(
+  commandId: string,
+  type: string,
+  payload: unknown,
+): Record<string, string> | null {
+  const p = (payload ?? {}) as {
+    sessionId?: unknown;
+    durationSec?: unknown;
+    ws?: { url?: unknown; token?: unknown; ttlSec?: unknown };
+  };
+  switch (type) {
+    case 'PLAY_SIGNAL':
+      return { type, commandId };
+    case 'STOP_AUDIO':
+      if (typeof p.sessionId !== 'string') return null;
+      return { type, commandId, sessionId: p.sessionId };
+    case 'START_AUDIO':
+      if (typeof p.sessionId !== 'string' || typeof p.ws?.url !== 'string') return null;
+      return {
+        type,
+        commandId,
+        sessionId: p.sessionId,
+        wsUrl: p.ws.url,
+        wsToken: typeof p.ws.token === 'string' ? p.ws.token : '',
+        ttlSec: String(p.ws.ttlSec ?? ''),
+        durationSec: String(p.durationSec ?? 300),
+      };
+    default:
+      return null;
   }
 }

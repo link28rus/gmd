@@ -4,12 +4,20 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { ChildDeviceModule } from '../child-device/child-device.module';
 import { ConsentModule } from '../consent/consent.module';
 import { FcmModule } from '../fcm/fcm.module';
+import { ChildRealtimeModule } from '../child-realtime/child-realtime.module';
 import { DeviceCommandsService } from './device-commands.service';
 import { ParentCommandsController } from './parent-commands.controller';
 import { ChildCommandsController } from './child-commands.controller';
 
 @Module({
-  imports: [AuthModule, PrismaModule, ChildDeviceModule, ConsentModule, FcmModule],
+  imports: [
+    AuthModule,
+    PrismaModule,
+    ChildDeviceModule,
+    ConsentModule,
+    FcmModule,
+    ChildRealtimeModule,
+  ],
   controllers: [ParentCommandsController, ChildCommandsController],
   providers: [DeviceCommandsService],
   exports: [DeviceCommandsService],

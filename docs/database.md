@@ -122,8 +122,10 @@
 - `id` (uuid) — первичный ключ
 - `childId` (uuid) — foreign key → children (UNIQUE, один device на ребёнка)
 - `tokenHash` (varchar) — SHA256-хэш long-lived device-token (32 байта)
-- `deviceName`, `osVersion`, `appVersion` (varchar) — метаданные устройства
-- `lastSeenAt` (timestamptz) — время последнего контакта
+- `deviceName`, `osVersion`, `appVersion` (varchar) — метаданные устройства; с v0.57.0
+  `appVersion` обновляется при каждом подключении к realtime-каналу (`hello`), а не только при claim
+- `lastSeenAt` (timestamptz) — время последнего контакта (REST-запросы ребёнка + `pong`
+  realtime-канала раз в 45 с)
 - `revokedAt` (timestamptz) — время отзыва токена родителем
 - `createdAt` (timestamptz)
 
