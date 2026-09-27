@@ -218,13 +218,6 @@ body {
     color-scheme: dark;
   }
 
-  /* Тёмная подложка CartoDB Dark Matter сама по себе очень чёрная — чуть
-     осветляем чтобы дороги и названия читались. dim использует Voyager
-     (нейтральный бежевый), фильтр там не нужен. */
-  html[data-admin-theme='dark'] .leaflet-tile-pane {
-    filter: brightness(1.4) saturate(0.95);
-  }
-
   /* Leaflet по умолчанию даёт panes z-index 200–800 и control'ам 800 — это
      перекрывает sticky-карточки и popover'ы кабинета (z-50 и ниже из shadcn).
      Опускаем всё ниже — карта остаётся внутри своего контейнера, controls
@@ -237,4 +230,18 @@ body {
   .leaflet-control {
     z-index: 1 !important;
   }
+}
+
+/* Подложка карты во всех темах — стандартный OSM (см. lib/maps/tile-config.ts),
+   тёмный вид делаем фильтром только на слое тайлов: маркеры, треки и круги
+   геозон живут в других pane'ах и сохраняют свои цвета.
+   dim — приглушённый бежево-серый; dark — инверсия с возвратом оттенков
+   (hue-rotate 180°), чтобы вода осталась синей, а парки — зелёными.
+   ВНЕ @layer намеренно: класс .leaflet-tile-pane ставит Leaflet в рантайме,
+   в app/ и components/ его нет — Tailwind вырезал бы правило из @layer base. */
+html[data-admin-theme='dim'] .leaflet-tile-pane {
+  filter: saturate(0.55) brightness(0.92) contrast(0.95) sepia(0.12);
+}
+html[data-admin-theme='dark'] .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9) saturate(0.6);
 }

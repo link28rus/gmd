@@ -27,7 +27,7 @@ periscop.pro / gmd-online.ru указывают на потерянный VPS �
 | Backend  | NestJS, PostgreSQL 16 + PostGIS + pg_cron, Redis, MinIO                                 |
 | API      | REST + OpenAPI 3.1, codegen TS + Dart                                                   |
 | Auth     | JWT (access 15m + refresh 60d, sliding) + long-lived device-token для детей             |
-| Realtime | Short-polling + FCM/RuStore push (без WebSocket на MVP)                                 |
+| Realtime | WebSocket ребёнка `/api/child/ws` (v0.57) + FCM/RuStore push (запасные) + short-polling |
 | Infra    | Docker Compose, Caddy, GlitchTip, Uptime Kuma, Grafana+Loki+Prometheus                  |
 | Карты    | OpenStreetMap (mobile: `flutter_map`, web: `react-leaflet`)                             |
 | Оплаты   | ❌ на MVP (монетизация после сбора аудитории)                                           |

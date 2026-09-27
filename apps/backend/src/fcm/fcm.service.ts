@@ -2,6 +2,7 @@ import type { OnModuleInit } from '@nestjs/common';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import * as admin from 'firebase-admin';
 import { PrismaService } from '../prisma/prisma.service';
+import { ChildRealtimeService } from '../child-realtime/child-realtime.service';
 
 /**
  * v0.37 / v0.51: hybrid push-доставка через Firebase Cloud Messaging (V1 API
@@ -20,6 +21,9 @@ import { PrismaService } from '../prisma/prisma.service';
  *                  обновлениях через RuStore.
  *
  * Стратегия выбора канала per-device:
+ *   0. v0.57: если телефон ребёнка держит realtime-канал (WebSocket
+ *      `/child/ws`, ChildRealtimeService) и подтвердил получение — готово,
+ *      FCM/RuStore не трогаем.
  *   1. Если у устройства есть rustorePushToken — предпочитаем RuStore (он
  *      переживает MIUI). Если ошибка/невалидный — fallback на FCM.
  *   2. Иначе FCM.
@@ -48,7 +52,10 @@ export class FcmService implements OnModuleInit {
   private rustoreParentProjectId: string | null = null;
   private rustoreParentServiceToken: string | null = null;
 
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(ChildRealtimeService) private readonly realtime: ChildRealtimeService,
+  ) {}
 
   onModuleInit(): void {
     const b64 = process.env.FIREBASE_SA_KEY;
@@ -278,6 +285,8 @@ export class FcmService implements OnModuleInit {
     tokens: { fcmToken: string | null; rustorePushToken: string | null },
     data: Record<string, string>,
   ): Promise<boolean> {
+    // 0. Свой realtime-канал — мгновенно и без внешних ключей.
+    if (await this.realtime.sendWithAck(deviceId, data)) return true;
     // 1. Если есть RuStore-токен — пробуем его первым (не сбрасывается MIUI).
     if (tokens.rustorePushToken && this.isRustoreEnabled('child')) {
       const ok = await this._sendRustoreMessage({

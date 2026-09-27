@@ -269,6 +269,8 @@ class MainActivity : FlutterActivity() {
                         // v0.38 Phase 6.1: после claim'а запускаем periodic workers.
                         // Идемпотентно (KEEP) — если уже стояли, ничего не меняется.
                         if (!token.isNullOrEmpty()) {
+                            // v0.57: переподключить realtime-канал со свежим токеном.
+                            ChildRealtimeClient.restart(this)
                             try {
                                 AppControlScheduler.scheduleAll(this)
                             } catch (e: Throwable) {

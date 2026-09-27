@@ -229,6 +229,15 @@ export class ChildDeviceService {
       });
   }
 
+  // v0.57: версия приложения приходит в hello realtime-канала при каждом
+  // подключении. Раньше appVersion писалась только при claim и после
+  // самообновления оставалась старой.
+  async setAppVersion(deviceId: string, appVersion: string): Promise<void> {
+    await this.prisma.childDevice
+      .update({ where: { id: deviceId }, data: { appVersion } })
+      .catch(() => undefined);
+  }
+
   // v0.37: child регистрирует свой FCM token (или null если получил
   // INSTANCE_ID_RESET / устройство сменило). Backend хранит его в child_devices
   // и использует для high-priority push при createAudioSession (мгновенный

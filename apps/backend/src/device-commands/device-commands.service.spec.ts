@@ -1,6 +1,7 @@
-import { DeviceCommandsService } from './device-commands.service';
+import { DeviceCommandsService, toPushData } from './device-commands.service';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { FcmService } from '../fcm/fcm.service';
+import type { ChildRealtimeService } from '../child-realtime/child-realtime.service';
 
 // Тесты trogают только listPending, FCM ему не нужен — пустая заглушка.
 const fcmStub = {
@@ -9,6 +10,11 @@ const fcmStub = {
   sendDataMessage: jest.fn().mockResolvedValue(false),
   sendHybridDataMessage: jest.fn().mockResolvedValue(false),
 } as unknown as FcmService;
+
+const realtimeStub = {
+  onDeviceConnected: jest.fn(),
+  sendWithAck: jest.fn().mockResolvedValue(false),
+} as unknown as ChildRealtimeService;
 
 interface MockCmd {
   id: string;
@@ -101,7 +107,7 @@ describe('DeviceCommandsService.listPending', () => {
         expiresAt: future,
       },
     ]);
-    const svc = new DeviceCommandsService(prisma, fcmStub);
+    const svc = new DeviceCommandsService(prisma, fcmStub, realtimeStub);
     const out = await svc.listPending(deviceId);
     expect(out.map((c) => c.id).sort()).toEqual(['c1', 'c2']);
   });
@@ -127,7 +133,7 @@ describe('DeviceCommandsService.listPending', () => {
         expiresAt: future,
       },
     ]);
-    const svc = new DeviceCommandsService(prisma, fcmStub);
+    const svc = new DeviceCommandsService(prisma, fcmStub, realtimeStub);
     const out = await svc.listPending(deviceId);
     expect(out).toEqual([]);
     // обе помечены expired в DB
@@ -167,7 +173,7 @@ describe('DeviceCommandsService.listPending', () => {
         expiresAt: future,
       },
     ]);
-    const svc = new DeviceCommandsService(prisma, fcmStub);
+    const svc = new DeviceCommandsService(prisma, fcmStub, realtimeStub);
     const out = await svc.listPending(deviceId);
     expect(out.map((c) => c.id)).toEqual(['start-B']);
   });
@@ -184,8 +190,46 @@ describe('DeviceCommandsService.listPending', () => {
         expiresAt: future,
       },
     ]);
-    const svc = new DeviceCommandsService(prisma, fcmStub);
+    const svc = new DeviceCommandsService(prisma, fcmStub, realtimeStub);
     const out = await svc.listPending(deviceId);
     expect(out.map((c) => c.id)).toEqual(['lone-stop']);
+  });
+});
+
+describe('toPushData (v0.57 realtime replay)', () => {
+  it('START_AUDIO → тот же data-map, что уходит в FCM', () => {
+    expect(
+      toPushData('c1', 'START_AUDIO', {
+        sessionId: 's1',
+        ws: { url: 'wss://h/audio/ws?x', token: 't', ttlSec: 360 },
+        durationSec: 300,
+      }),
+    ).toEqual({
+      type: 'START_AUDIO',
+      commandId: 'c1',
+      sessionId: 's1',
+      wsUrl: 'wss://h/audio/ws?x',
+      wsToken: 't',
+      ttlSec: '360',
+      durationSec: '300',
+    });
+  });
+
+  it('STOP_AUDIO и PLAY_SIGNAL', () => {
+    expect(toPushData('c2', 'STOP_AUDIO', { sessionId: 's1' })).toEqual({
+      type: 'STOP_AUDIO',
+      commandId: 'c2',
+      sessionId: 's1',
+    });
+    expect(toPushData('c3', 'PLAY_SIGNAL', null)).toEqual({
+      type: 'PLAY_SIGNAL',
+      commandId: 'c3',
+    });
+  });
+
+  it('битый payload и неизвестный тип → null', () => {
+    expect(toPushData('c4', 'START_AUDIO', { sessionId: 's1' })).toBeNull();
+    expect(toPushData('c5', 'STOP_AUDIO', {})).toBeNull();
+    expect(toPushData('c6', 'AUDIO_ANSWER', {})).toBeNull();
   });
 });

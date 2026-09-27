@@ -8,6 +8,11 @@
 - Plan-A infra+backend: `docs/superpowers/plans/2026-04-23-gmd-sound-around-plan-A-infra-backend.md`
 - DTO: `apps/backend/src/audio/dto/audio.dto.ts`
 
+> **Актуальность (2026-09-27, v0.57.0).** Разделы про WebRTC/SSE/TURN устарели: с v0.35
+> аудио идёт по WebSocket-relay внутри backend (`/audio/ws`, Opus), а с v0.57.0 команда
+> `START_AUDIO`/`STOP_AUDIO` доставляется телефону по постоянному realtime-каналу
+> `/api/child/ws` — см. `docs/superpowers/specs/2026-09-27-child-realtime-channel.md`.
+
 ---
 
 ## 1. Обзор фичи

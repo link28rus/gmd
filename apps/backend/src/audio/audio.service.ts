@@ -201,7 +201,7 @@ export class AudioService implements OnModuleInit {
       baseUrl: wsBaseUrl,
     });
 
-    await this.commands.enqueueAudioStart(
+    const startCommandId = await this.commands.enqueueAudioStart(
       device.id,
       session.id,
       childWs,
@@ -220,6 +220,7 @@ export class AudioService implements OnModuleInit {
         { fcmToken: device.fcmToken, rustorePushToken: device.rustorePushToken },
         {
           type: 'START_AUDIO',
+          commandId: startCommandId,
           sessionId: session.id,
           wsUrl: childWs.url,
           wsToken: childWs.token,
@@ -387,7 +388,11 @@ export class AudioService implements OnModuleInit {
       },
     });
     if (session.childDeviceId) {
-      await this.commands.enqueueAudioStop(session.childDeviceId, sessionId, session.requestedById);
+      const stopCommandId = await this.commands.enqueueAudioStop(
+        session.childDeviceId,
+        sessionId,
+        session.requestedById,
+      );
       // v0.37: FCM push STOP — мгновенно прервать stream на child'е.
       const device = await this.prisma.childDevice.findUnique({
         where: { id: session.childDeviceId },
@@ -402,6 +407,7 @@ export class AudioService implements OnModuleInit {
           },
           {
             type: 'STOP_AUDIO',
+            commandId: stopCommandId,
             sessionId,
           },
         )
@@ -499,7 +505,11 @@ export class AudioService implements OnModuleInit {
       },
     });
     if (session.childDeviceId) {
-      await this.commands.enqueueAudioStop(session.childDeviceId, sessionId, actorUserId);
+      const stopCommandId = await this.commands.enqueueAudioStop(
+        session.childDeviceId,
+        sessionId,
+        actorUserId,
+      );
       // v0.37: FCM push STOP — мгновенно прервать stream на child'е (parent stop / auto-end).
       const device = await this.prisma.childDevice.findUnique({
         where: { id: session.childDeviceId },
@@ -514,6 +524,7 @@ export class AudioService implements OnModuleInit {
           },
           {
             type: 'STOP_AUDIO',
+            commandId: stopCommandId,
             sessionId,
           },
         )

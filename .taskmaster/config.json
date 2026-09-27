@@ -34,7 +34,9 @@
     "anonymousTelemetry": true,
     "userId": "1234567890"
   },
-  "claudeCode": {},
+  "claudeCode": {
+    "pathToClaudeCodeExecutable": "C:/Users/link2/.local/bin/claude.exe"
+  },
   "codexCli": {},
   "grokCli": {
     "timeout": 120000,

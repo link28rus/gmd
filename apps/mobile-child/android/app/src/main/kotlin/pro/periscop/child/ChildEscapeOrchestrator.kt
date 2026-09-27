@@ -176,6 +176,7 @@ object ChildEscapeOrchestrator {
     try {
       NativeCreds.save(ctx, null, null)
       DiagLog.write(ctx, TAG, "NativeCreds cleared")
+      ChildRealtimeClient.stop(ctx)
     } catch (e: Throwable) {
       DiagLog.write(ctx, TAG, "NativeCreds.save(null) FAILED: ${e.message}")
     }
