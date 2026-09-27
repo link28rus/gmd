@@ -29,12 +29,13 @@ function abiHint(abi: string): string {
   return '';
 }
 
+// С 2026-09-27 приложения ставятся из APK с этого сервера: версии в RuStore
+// собраны под прежний домен и с текущим сервером не работают.
 interface AppSection {
   title: string;
   description: string;
   app: 'gmd-parent' | 'gmd-child';
   icon: string;
-  rustoreUrl: string;
   instructions: string[];
 }
 
@@ -42,27 +43,25 @@ const SECTIONS: AppSection[] = [
   {
     title: 'Приложение родителя',
     description:
-      'Поставьте на свой телефон, чтобы видеть локацию ребёнка, отправлять сигнал, слушать звук вокруг и получать push-уведомления о геозонах.',
+      'Поставьте на свой телефон, чтобы видеть локацию ребёнка, отправлять сигнал, слушать звук вокруг и получать уведомления о геозонах.',
     app: 'gmd-parent',
     icon: '/app-icon-parent.png',
-    rustoreUrl: 'https://www.rustore.ru/catalog/app/pro.periscop.parent',
     instructions: [
-      'Откройте страницу «Перископ Родителя» в RuStore и нажмите «Установить».',
-      'Дождитесь установки и запустите приложение.',
-      'Войдите по email и паролю — список детей подтянется автоматически.',
+      'Скачайте файл arm64-v8a — он подходит почти всем телефонам.',
+      'Откройте скачанный файл. Если телефон спросит — разрешите браузеру устанавливать приложения.',
+      'Запустите приложение и войдите по email и паролю — список детей подтянется автоматически.',
     ],
   },
   {
     title: 'Приложение для телефона ребёнка',
     description:
-      'Установите на телефон ребёнка и привяжите его QR-кодом из родительского кабинета.',
+      'Установите на телефон ребёнка и привяжите его кодом или QR-кодом из кабинета родителя.',
     app: 'gmd-child',
     icon: '/app-icon-child.png',
-    rustoreUrl: 'https://www.rustore.ru/catalog/app/pro.periscop.child',
     instructions: [
-      'На телефоне ребёнка откройте страницу «Перископ Ребёнка» в RuStore и нажмите «Установить».',
-      'Запустите приложение и выдайте запрошенные разрешения.',
-      'Родитель в кабинете создаёт QR-код, ребёнок сканирует его в приложении.',
+      'Откройте эту страницу на телефоне ребёнка и скачайте файл arm64-v8a.',
+      'Откройте скачанный файл и разрешите установку из этого источника.',
+      'Запустите приложение, выдайте запрошенные разрешения и введите код из кабинета родителя.',
     ],
   },
 ];
@@ -80,42 +79,6 @@ function pickLatest(
   return { version, abis };
 }
 
-function RuStoreButton({
-  href,
-  icon,
-  title,
-}: {
-  href: string;
-  icon: string;
-  title: string;
-}): ReactElement {
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="flex items-center justify-between gap-3 rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 transition hover:border-sky-400/50 hover:bg-sky-500/20"
-    >
-      <div className="flex items-center gap-3">
-        <Image
-          src={icon}
-          alt={`Иконка «${title}»`}
-          width={48}
-          height={48}
-          className="h-12 w-12 shrink-0 rounded-xl shadow-sm"
-        />
-        <div>
-          <div className="font-semibold text-white">Установить из RuStore</div>
-          <div className="text-xs text-slate-400">
-            Рекомендуем — автообновления и без «неизвестных источников»
-          </div>
-        </div>
-      </div>
-      <span className="shrink-0 text-sm font-medium text-sky-300">Открыть →</span>
-    </a>
-  );
-}
-
 function AppCard({
   section,
   latest,
@@ -123,51 +86,66 @@ function AppCard({
   section: AppSection;
   latest: ReturnType<typeof pickLatest>;
 }): ReactElement {
+  // arm64-v8a — первым: он нужен почти всем.
+  const abis = [...latest.abis].sort(
+    (a, b) => Number(b.abi === 'arm64-v8a') - Number(a.abi === 'arm64-v8a'),
+  );
   return (
     <section className="mb-8 rounded-lg border border-slate-700/60 bg-slate-900/70 p-6 shadow-sm">
-      <h2 className="text-xl font-semibold text-white">{section.title}</h2>
-      <p className="mt-1 mb-5 text-sm text-slate-300">{section.description}</p>
+      <div className="flex items-center gap-3">
+        <Image
+          src={section.icon}
+          alt={`Иконка «${section.title}»`}
+          width={48}
+          height={48}
+          className="h-12 w-12 shrink-0 rounded-xl shadow-sm"
+        />
+        <h2 className="text-xl font-semibold text-white">{section.title}</h2>
+      </div>
+      <p className="mt-2 mb-5 text-sm text-slate-300">{section.description}</p>
 
-      <RuStoreButton href={section.rustoreUrl} icon={section.icon} title={section.title} />
-
-      {latest.abis.length > 0 && (
-        <details className="mt-5 text-sm text-slate-300">
-          <summary className="cursor-pointer font-medium text-slate-200">
-            Или скачать APK напрямую
-          </summary>
-          <p className="mt-2 text-xs text-slate-400">
-            Запасной вариант, если RuStore недоступен. Потребуется разрешить установку из
-            неизвестных источников; автообновление придёт только через RuStore.
-          </p>
-          <div className="mt-3 mb-2 flex items-baseline justify-between">
+      {abis.length === 0 ? (
+        <div className="rounded-md border border-slate-700 bg-slate-950/40 p-4 text-sm text-slate-400">
+          Файл приложения пока не выложен.
+        </div>
+      ) : (
+        <>
+          <div className="mb-2 flex items-baseline justify-between">
             <span className="text-sm font-medium text-white">
-              Актуальная версия — v{latest.version}
+              Актуальная версия — v{latest.version?.split('+')[0]}
             </span>
             <span className="text-xs text-slate-400">
-              {new Date(latest.abis[0].uploadedAt).toLocaleString('ru')}
+              {new Date(abis[0].uploadedAt).toLocaleString('ru')}
             </span>
           </div>
           <div className="space-y-2">
-            {latest.abis.map((f) => (
-              <a
-                key={f.filename}
-                href={`/api/public/download/${encodeURIComponent(f.filename)}`}
-                className="flex items-center justify-between rounded-md border border-slate-700 bg-slate-950/40 px-4 py-3 transition hover:border-slate-500 hover:bg-slate-900"
-              >
-                <div>
-                  <div className="font-medium text-slate-100">
-                    {f.abi}
-                    <span className="ml-2 text-sm font-normal text-slate-400">
-                      {formatBytes(f.size)}
-                    </span>
+            {abis.map((f) => {
+              const primary = f.abi === 'arm64-v8a';
+              return (
+                <a
+                  key={f.filename}
+                  href={`/api/public/download/${encodeURIComponent(f.filename)}`}
+                  className={
+                    primary
+                      ? 'flex items-center justify-between rounded-md border border-sky-500/40 bg-sky-500/10 px-4 py-3 transition hover:border-sky-400/60 hover:bg-sky-500/20'
+                      : 'flex items-center justify-between rounded-md border border-slate-700 bg-slate-950/40 px-4 py-3 transition hover:border-slate-500 hover:bg-slate-900'
+                  }
+                >
+                  <div>
+                    <div className="font-medium text-slate-100">
+                      {f.abi}
+                      <span className="ml-2 text-sm font-normal text-slate-400">
+                        {formatBytes(f.size)}
+                      </span>
+                    </div>
+                    <div className="text-xs text-slate-400">{abiHint(f.abi)}</div>
                   </div>
-                  <div className="text-xs text-slate-400">{abiHint(f.abi)}</div>
-                </div>
-                <span className="text-sm font-medium text-sky-300">Скачать</span>
-              </a>
-            ))}
+                  <span className="text-sm font-medium text-sky-300">Скачать</span>
+                </a>
+              );
+            })}
           </div>
-        </details>
+        </>
       )}
 
       <details className="mt-4 text-sm text-slate-300">
@@ -215,9 +193,13 @@ export default function DownloadPublicClient(): ReactElement {
   return (
     <div className="mx-auto max-w-3xl px-6 py-10">
       <h1 className="mb-2 text-3xl font-semibold text-white">Скачать Перископ</h1>
-      <p className="mb-8 text-slate-300">
-        Два приложения: одно для своего телефона (родителю), второе — на телефон ребёнка. Оба
-        доступны в RuStore — так вы получите автоматические обновления.
+      <p className="mb-3 text-slate-300">
+        Два приложения для Android: одно для своего телефона (родителю), второе — на телефон
+        ребёнка. Новая версия ставится так же, поверх старой — данные сохраняются.
+      </p>
+      <p className="mb-8 text-sm text-slate-400">
+        Если телефон предупредит, что приложение неизвестное или небезопасное, нажмите «Подробнее» и
+        «Всё равно установить».
       </p>
 
       {SECTIONS.map((section) => (

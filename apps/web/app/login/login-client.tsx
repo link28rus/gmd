@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { FormEvent, ReactElement } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuthStore, type AuthUser, type AuthFamily } from '@/lib/auth-store';
@@ -21,7 +22,61 @@ interface ErrorResponse {
   error?: { code?: string; message?: string; retryAfterSec?: number };
 }
 
-export default function LoginClient(): ReactElement {
+// Последний APK приложения — страница входа даёт скачать его без авторизации.
+export interface LoginApk {
+  filename: string;
+  version: string;
+  size: number;
+}
+
+interface LoginApps {
+  parent: LoginApk | null;
+  child: LoginApk | null;
+}
+
+function ApkLink({
+  apk,
+  title,
+  icon,
+}: {
+  apk: LoginApk | null;
+  title: string;
+  icon: string;
+}): ReactElement {
+  const className =
+    'flex items-center gap-2 rounded-md border border-slate-700 bg-slate-950/40 px-3 py-2 transition hover:border-sky-400/50 hover:bg-slate-900';
+  const content = (
+    <>
+      <Image src={icon} alt="" width={32} height={32} className="h-8 w-8 shrink-0 rounded-lg" />
+      <span className="min-w-0">
+        <span className="block text-sm font-medium text-slate-100">{title}</span>
+        <span className="block text-[11px] leading-tight text-slate-400">
+          {apk ? `v${apk.version.split('+')[0]}` : 'Скачать'}
+        </span>
+        {apk && (
+          <span className="block text-[11px] leading-tight text-slate-500">
+            {`${(apk.size / 1024 / 1024).toFixed(0)} МБ`}
+          </span>
+        )}
+      </span>
+    </>
+  );
+  // Если APK на сервере нет — ведём на /download, там понятное сообщение.
+  if (!apk) {
+    return (
+      <Link href="/download" className={className}>
+        {content}
+      </Link>
+    );
+  }
+  return (
+    <a href={`/api/public/download/${encodeURIComponent(apk.filename)}`} className={className}>
+      {content}
+    </a>
+  );
+}
+
+export default function LoginClient({ apps }: { apps: LoginApps }): ReactElement {
   const router = useRouter();
   const setAll = useAuthStore((s) => s.setAll);
 
@@ -361,6 +416,22 @@ export default function LoginClient(): ReactElement {
               )}
             </div>
           )}
+
+          <div className="mt-6 border-t border-slate-700/60 pt-5">
+            <p className="mb-3 text-center text-xs font-medium text-slate-300">
+              Приложения для Android
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <ApkLink apk={apps.parent} title="Родителю" icon="/app-icon-parent.png" />
+              <ApkLink apk={apps.child} title="Ребёнку" icon="/app-icon-child.png" />
+            </div>
+            <Link
+              href="/download"
+              className="mt-3 block text-center text-xs text-slate-400 hover:text-slate-200"
+            >
+              Как установить и другие версии →
+            </Link>
+          </div>
         </div>
       </main>
     </div>
