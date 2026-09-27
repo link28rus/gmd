@@ -2,20 +2,18 @@
   "mcpServers": {
     "gmd-taskmaster": {
       "type": "stdio",
-      "command": "node",
-      "args": ["C:/Users/link2/AppData/Roaming/npm/node_modules/task-master-ai/dist/mcp-server.js"],
+      "command": "npx",
+      "args": ["-y", "task-master-ai"],
       "env": {
         "TASK_MASTER_TOOLS": "all"
       }
     },
     "gmd-postgres": {
       "type": "stdio",
-      "command": "uvx",
+      "command": "npx",
       "args": [
-        "--with",
-        "mcp[cli]<2",
-        "postgres-mcp",
-        "--access-mode=restricted",
+        "-y",
+        "@modelcontextprotocol/server-postgres",
         "postgresql://gmd:gmd_dev_password@localhost:54320/gmd_dev"
       ]
     }
