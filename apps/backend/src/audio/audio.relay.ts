@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import type { OnModuleDestroy } from '@nestjs/common';
 import type { WebSocket } from 'ws';
 
 // Backpressure пороги (на каждого consumer'а):
@@ -9,6 +10,13 @@ import type { WebSocket } from 'ws';
 // здоровый канал держит < 32 KB. 512 KB = тревожный порог, 2 MB = аварийный.
 const BACKPRESSURE_DROP_BYTES = 512 * 1024;
 const BACKPRESSURE_FAIL_BYTES = 2 * 1024 * 1024;
+
+// Сколько producer может слать аудио без единого слушателя, прежде чем сессию
+// закроем. Родитель закрыл окно / вкладку, у приложения убили WebView — без
+// этого микрофон ребёнка писал бы в пустоту до конца durationSec (5 мин).
+// Запас на переподключение родителя и на то, что WS родителя открывается
+// чуть позже, чем ребёнок начинает слать.
+export const NO_LISTENER_GRACE_MS = 20_000;
 
 // ws.readyState значения (без хардкода '1' magic-number).
 const WS_OPEN = 1;
@@ -24,6 +32,8 @@ export interface RelaySession {
   activatedAt: number | null;
   totalFrames: number;
   dropCount: number;
+  // Таймер «producer есть, слушателей нет» (см. NO_LISTENER_GRACE_MS).
+  noListenerTimer: NodeJS.Timeout | null;
 }
 
 export interface RelayCallbacks {
@@ -31,16 +41,22 @@ export interface RelayCallbacks {
   onActivate: (sessionId: string) => Promise<void> | void;
   /** Вызывается из watchdog'а когда сессия idle > threshold. */
   onIdleExpire: (sessionId: string) => Promise<void> | void;
+  /** Producer шлёт аудио, а слушателей нет дольше NO_LISTENER_GRACE_MS. */
+  onNoListener: (sessionId: string) => Promise<void> | void;
 }
 
 @Injectable()
-export class AudioRelay {
+export class AudioRelay implements OnModuleDestroy {
   private readonly logger = new Logger(AudioRelay.name);
   private readonly sessions = new Map<string, RelaySession>();
   private callbacks: RelayCallbacks | null = null;
 
   setCallbacks(cb: RelayCallbacks): void {
     this.callbacks = cb;
+  }
+
+  onModuleDestroy(): void {
+    for (const s of this.sessions.values()) this.disarmNoListener(s);
   }
 
   /** Сколько сессий в памяти прямо сейчас (для метрик/тестов). */
@@ -103,11 +119,13 @@ export class AudioRelay {
     s.producer = ws;
     s.lastFrameTs = Date.now();
     this.maybeActivate(s);
+    this.armNoListener(s);
   }
 
   attachConsumer(sessionId: string, ws: WebSocket): void {
     const s = this.getOrCreate(sessionId);
     s.consumers.add(ws);
+    this.disarmNoListener(s);
     this.maybeActivate(s);
   }
 
@@ -115,7 +133,8 @@ export class AudioRelay {
    * Снять клиента из сессии. Вызывается из gateway на ws.close.
    * Если ушёл producer — рвём всех consumer'ов (поток оборван, держать смысла нет).
    * Если ушёл последний consumer и producer ещё есть — оставляем сессию (consumer может
-   * переподключиться). Если ушли все — удаляем из памяти.
+   * переподключиться) и заводим таймер NO_LISTENER_GRACE_MS. Если ушли все —
+   * удаляем из памяти.
    */
   detach(sessionId: string, ws: WebSocket): void {
     const s = this.sessions.get(sessionId);
@@ -145,8 +164,11 @@ export class AudioRelay {
       s.consumers.delete(ws);
     }
     if (!s.producer && s.consumers.size === 0) {
+      this.disarmNoListener(s);
       this.sessions.delete(sessionId);
+      return;
     }
+    this.armNoListener(s);
   }
 
   /**
@@ -201,8 +223,9 @@ export class AudioRelay {
       }
     }
     for (const c of dead) s.consumers.delete(c);
-    // Если все consumer'ы умерли — оставляем producer (вдруг parent переподключится).
-    // Watchdog убьёт сессию по idle если никто не вернётся за 90с.
+    // Все consumer'ы умерли — producer оставляем (вдруг parent переподключится),
+    // но если никто не вернётся за NO_LISTENER_GRACE_MS, сессия закроется.
+    if (dead.length > 0) this.armNoListener(s);
   }
 
   /**
@@ -248,11 +271,14 @@ export class AudioRelay {
         }
       }
     }
+    this.disarmNoListener(s);
     this.sessions.delete(sessionId);
   }
 
   /** Удалить только запись из карты, без закрытия сокетов. Для тестов. */
   forget(sessionId: string): void {
+    const s = this.sessions.get(sessionId);
+    if (s) this.disarmNoListener(s);
     this.sessions.delete(sessionId);
   }
 
@@ -267,6 +293,7 @@ export class AudioRelay {
         activatedAt: null,
         totalFrames: 0,
         dropCount: 0,
+        noListenerTimer: null,
       };
       this.sessions.set(sessionId, s);
     }
@@ -282,5 +309,30 @@ export class AudioRelay {
         this.logger.error(`onActivate failed for ${s.sessionId}: ${String(err)}`);
       });
     }
+  }
+
+  /** Producer есть, слушателей нет — через NO_LISTENER_GRACE_MS сообщаем gateway. */
+  private armNoListener(s: RelaySession): void {
+    if (s.noListenerTimer || !s.producer || s.consumers.size > 0) return;
+    s.noListenerTimer = setTimeout(() => {
+      s.noListenerTimer = null;
+      if (this.sessions.get(s.sessionId) !== s || !s.producer || s.consumers.size > 0) return;
+      this.logger.warn(
+        `session ${s.sessionId}: no listener for ${NO_LISTENER_GRACE_MS}ms ` +
+          `(totalFrames=${s.totalFrames}) — ending`,
+      );
+      if (this.callbacks) {
+        Promise.resolve(this.callbacks.onNoListener(s.sessionId)).catch((err) => {
+          this.logger.error(`onNoListener failed for ${s.sessionId}: ${String(err)}`);
+        });
+      }
+    }, NO_LISTENER_GRACE_MS);
+    s.noListenerTimer.unref?.();
+  }
+
+  private disarmNoListener(s: RelaySession): void {
+    if (!s.noListenerTimer) return;
+    clearTimeout(s.noListenerTimer);
+    s.noListenerTimer = null;
   }
 }

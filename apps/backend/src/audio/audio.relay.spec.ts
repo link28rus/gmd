@@ -1,5 +1,5 @@
 import type { WebSocket as WsSocket } from 'ws';
-import { AudioRelay } from './audio.relay';
+import { AudioRelay, NO_LISTENER_GRACE_MS } from './audio.relay';
 
 // Минимальный mock WebSocket — только те поля, что использует relay.
 interface MockWs {
@@ -36,10 +36,14 @@ describe('AudioRelay', () => {
     relay = new AudioRelay();
   });
 
+  afterEach(() => {
+    relay.onModuleDestroy();
+  });
+
   describe('attach + activation', () => {
     it('emits onActivate when both producer and consumer присоединились', async () => {
       const onActivate = jest.fn();
-      relay.setCallbacks({ onActivate, onIdleExpire: jest.fn() });
+      relay.setCallbacks({ onActivate, onIdleExpire: jest.fn(), onNoListener: jest.fn() });
 
       const child = makeWs();
       const parent = makeWs();
@@ -54,7 +58,7 @@ describe('AudioRelay', () => {
 
     it('onActivate срабатывает только один раз даже при reconnects', async () => {
       const onActivate = jest.fn();
-      relay.setCallbacks({ onActivate, onIdleExpire: jest.fn() });
+      relay.setCallbacks({ onActivate, onIdleExpire: jest.fn(), onNoListener: jest.fn() });
 
       relay.attachProducer('s1', makeWs() as unknown as WsSocket);
       relay.attachConsumer('s1', makeWs() as unknown as WsSocket);
@@ -148,6 +152,92 @@ describe('AudioRelay', () => {
       relay.detach('s1', parent as unknown as WsSocket);
       expect(relay.snapshot('s1')?.producer).toBe(child);
       expect(relay.snapshot('s1')?.consumers.size).toBe(0);
+    });
+  });
+
+  describe('нет слушателя', () => {
+    let onNoListener: jest.Mock;
+
+    beforeEach(() => {
+      jest.useFakeTimers();
+      onNoListener = jest.fn();
+      relay.setCallbacks({ onActivate: jest.fn(), onIdleExpire: jest.fn(), onNoListener });
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('родитель ушёл и не вернулся — onNoListener через grace', () => {
+      const child = makeWs();
+      const parent = makeWs();
+      relay.attachProducer('s1', child as unknown as WsSocket);
+      relay.attachConsumer('s1', parent as unknown as WsSocket);
+      relay.detach('s1', parent as unknown as WsSocket);
+
+      jest.advanceTimersByTime(NO_LISTENER_GRACE_MS - 1);
+      expect(onNoListener).not.toHaveBeenCalled();
+      jest.advanceTimersByTime(1);
+      expect(onNoListener).toHaveBeenCalledWith('s1');
+    });
+
+    it('родитель переподключился в пределах grace — сессия живёт', () => {
+      const child = makeWs();
+      relay.attachProducer('s1', child as unknown as WsSocket);
+      const parent = makeWs();
+      relay.attachConsumer('s1', parent as unknown as WsSocket);
+      relay.detach('s1', parent as unknown as WsSocket);
+
+      jest.advanceTimersByTime(NO_LISTENER_GRACE_MS / 2);
+      relay.attachConsumer('s1', makeWs() as unknown as WsSocket);
+      jest.advanceTimersByTime(NO_LISTENER_GRACE_MS * 2);
+      expect(onNoListener).not.toHaveBeenCalled();
+    });
+
+    it('ребёнок подключился, а родитель так и не пришёл — onNoListener', () => {
+      relay.attachProducer('s1', makeWs() as unknown as WsSocket);
+      jest.advanceTimersByTime(NO_LISTENER_GRACE_MS);
+      expect(onNoListener).toHaveBeenCalledWith('s1');
+    });
+
+    it('родитель подключился чуть позже ребёнка — не срабатывает', () => {
+      relay.attachProducer('s1', makeWs() as unknown as WsSocket);
+      jest.advanceTimersByTime(2_000);
+      relay.attachConsumer('s1', makeWs() as unknown as WsSocket);
+      jest.advanceTimersByTime(NO_LISTENER_GRACE_MS * 2);
+      expect(onNoListener).not.toHaveBeenCalled();
+    });
+
+    it('consumer умер при отправке кадра — таймер тоже заводится', () => {
+      const parent = makeWs();
+      relay.attachProducer('s1', makeWs() as unknown as WsSocket);
+      relay.attachConsumer('s1', parent as unknown as WsSocket);
+      parent.readyState = 3; // CLOSED, detach ещё не пришёл
+      relay.publishFrame('s1', Buffer.from([1]));
+
+      jest.advanceTimersByTime(NO_LISTENER_GRACE_MS);
+      expect(onNoListener).toHaveBeenCalledWith('s1');
+    });
+
+    it('terminate до истечения grace — не срабатывает', () => {
+      const parent = makeWs();
+      relay.attachProducer('s1', makeWs() as unknown as WsSocket);
+      relay.attachConsumer('s1', parent as unknown as WsSocket);
+      relay.detach('s1', parent as unknown as WsSocket);
+      relay.terminate('s1', 4008, 'session_ended');
+
+      jest.advanceTimersByTime(NO_LISTENER_GRACE_MS * 2);
+      expect(onNoListener).not.toHaveBeenCalled();
+    });
+
+    it('ушёл ребёнок — сессия удалена, onNoListener не зовём', () => {
+      const child = makeWs();
+      relay.attachProducer('s1', child as unknown as WsSocket);
+      relay.detach('s1', child as unknown as WsSocket);
+
+      jest.advanceTimersByTime(NO_LISTENER_GRACE_MS * 2);
+      expect(onNoListener).not.toHaveBeenCalled();
+      expect(relay.size()).toBe(0);
     });
   });
 

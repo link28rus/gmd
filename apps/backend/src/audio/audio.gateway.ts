@@ -54,6 +54,14 @@ export class AudioGateway
         this.audio.expireOrFail(sid, 'EXPIRED', 'NETWORK_ERROR').catch((err) => {
           this.logger.warn(`expireOrFail(${sid}) failed: ${String(err)}`);
         }),
+      // Родитель ушёл, не нажав «Остановить» (закрыл окно, вкладку, WebView):
+      // гасим микрофон ребёнка — закрываем его WS и шлём STOP_AUDIO.
+      onNoListener: (sid) => {
+        this.relay.terminate(sid, 4008, 'no_listener');
+        return this.audio.expireOrFail(sid, 'EXPIRED', 'PARENT_TIMEOUT').catch((err) => {
+          this.logger.warn(`expireOrFail(${sid}) failed: ${String(err)}`);
+        });
+      },
     });
 
     // Watchdog: раз в 30с делает два шага.

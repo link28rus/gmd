@@ -59,6 +59,14 @@ export function useAudioSession({ childId, durationSec }: Params): UseAudioSessi
   const activeStartRef = useRef<number | null>(null);
   // stop через ref, чтобы коллбеки player'а не пересоздавали player при каждом перерендере.
   const stopRef = useRef<() => Promise<void>>(async () => {});
+  const mountedRef = useRef(true);
+  // Живая сессия на backend — её надо остановить при размонтировании: закрытие
+  // диалога крестиком / Esc / кликом мимо и уход со страницы идут мимо stop().
+  const liveSessionIdRef = useRef<string | null>(null);
+  liveSessionIdRef.current =
+    sessionId && (state === 'waiting' || state === 'negotiating' || state === 'active')
+      ? sessionId
+      : null;
 
   const cleanup = useCallback(() => {
     playerRef.current?.stop();
@@ -162,6 +170,13 @@ export function useAudioSession({ childId, durationSec }: Params): UseAudioSessi
     let wsUrl: string | null = null;
     try {
       const res = await audioApi.createSession({ childId, durationSec, hiddenMode: true });
+      if (!mountedRef.current) {
+        // Диалог закрыли, пока создавалась сессия, — сразу гасим её.
+        audioApi.stopSession(res.id).catch(() => {
+          /* ignore */
+        });
+        return;
+      }
       createdSessionId = res.id;
       wsUrl = res.ws.url;
       setSessionId(res.id);
@@ -233,8 +248,17 @@ export function useAudioSession({ childId, durationSec }: Params): UseAudioSessi
   }, [childId, durationSec, cleanup, startElapsedTimer, handleCloseCode]);
 
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
+      mountedRef.current = false;
       cleanup();
+      const id = liveSessionIdRef.current;
+      if (id) {
+        console.log('[audio-session] unmount — stopping live session', id);
+        audioApi.stopSession(id).catch(() => {
+          /* backend сам закроет сессию без слушателя */
+        });
+      }
     };
   }, [cleanup]);
 

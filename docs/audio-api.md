@@ -12,6 +12,12 @@
 > аудио идёт по WebSocket-relay внутри backend (`/audio/ws`, Opus), а с v0.57.0 команда
 > `START_AUDIO`/`STOP_AUDIO` доставляется телефону по постоянному realtime-каналу
 > `/api/child/ws` — см. `docs/superpowers/specs/2026-09-27-child-realtime-channel.md`.
+>
+> **v0.57.1:** если телефон ребёнка шлёт аудио, а в relay нет ни одного слушателя-родителя
+> дольше 20 с (`NO_LISTENER_GRACE_MS` в `audio.relay.ts`), сессия закрывается как
+> `EXPIRED/PARENT_TIMEOUT`: WS ребёнка закрывается с `4008 no_listener`, уходит
+> `STOP_AUDIO`. Web-кабинет дополнительно шлёт `POST /audio/sessions/:id/stop` при
+> любом закрытии окна (не только по кнопке «Остановить»).
 
 ---
 
