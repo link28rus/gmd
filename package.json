@@ -1,6 +1,6 @@
 {
   "name": "periscop",
-  "version": "0.58.0",
+  "version": "0.58.1",
   "private": true,
   "description": "Перископ — сервис родительского контроля и геолокации детей",
   "packageManager": "pnpm@9.15.0",

@@ -76,7 +76,10 @@ function toDto(row: {
   };
 }
 
-const OUT_OF_WINDOW_PAST_MS = 24 * 60 * 60 * 1000; // 24h
+// v0.58.1: 7 суток вместо 24 ч. Телефон ребёнка копит точки без интернета
+// и отдаёт их пачкой, когда сеть появится; поход или лагерь без связи
+// не должен оставлять дыру в треке.
+const OUT_OF_WINDOW_PAST_MS = 7 * 24 * 60 * 60 * 1000; // 7 суток
 const OUT_OF_WINDOW_FUTURE_MS = 2 * 60 * 1000; // 2min
 const CONSENT_CACHE_TTL_MS = 60 * 1000;
 
