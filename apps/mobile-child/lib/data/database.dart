@@ -63,6 +63,10 @@ class AppDatabase extends _$AppDatabase {
             // (совпадающие по имени колонки переносятся автоматически),
             // orphaned wifiSsid отбрасывается. Очередь эфемерная, но точки
             // сохраняются.
+            // TableMigration помечен в drift как @experimental, но это штатный
+            // способ пересоздать таблицу через alterTable; новые версии
+            // анализатора (Flutter 3.47+) предупреждают об этом.
+            // ignore: experimental_member_use
             await m.alterTable(TableMigration(pendingLocations));
           }
         },
