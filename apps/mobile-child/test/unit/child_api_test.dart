@@ -72,6 +72,59 @@ void main() {
     );
   });
 
+  void stubClaimError(int status, Object? data) {
+    when(() => dio.post('/child/claim', data: any(named: 'data'))).thenThrow(
+      DioException(
+        requestOptions: RequestOptions(path: '/child/claim'),
+        response: Response(
+          requestOptions: RequestOptions(path: '/child/claim'),
+          statusCode: status,
+          data: data,
+        ),
+      ),
+    );
+  }
+
+  Future<ClaimResponse> claimAny() =>
+      api.claim(code: 'ZZZZ2222', deviceName: 'x', osVersion: 'y', appVersion: 'z');
+
+  test('claim throws InvalidCodeException on 400 invite_invalid (реальный ответ бэкенда)',
+      () async {
+    stubClaimError(400, {
+      'error': {'code': 'invite_invalid', 'message': 'Invite invalid'},
+    });
+    expect(claimAny, throwsA(isA<InvalidCodeException>()));
+  });
+
+  test('claim throws ChildHasDeviceException on 409 child_has_device', () async {
+    stubClaimError(409, {
+      'error': {'code': 'child_has_device', 'message': 'Child already has active device'},
+    });
+    expect(claimAny, throwsA(isA<ChildHasDeviceException>()));
+  });
+
+  test('claim throws Consent14PlusRequiredException on 400 consent14plus_required',
+      () async {
+    stubClaimError(400, {
+      'error': {'code': 'consent14plus_required', 'message': 'consent'},
+    });
+    expect(claimAny, throwsA(isA<Consent14PlusRequiredException>()));
+  });
+
+  test('claim throws TooManyRequestsException on 429', () async {
+    stubClaimError(429, {
+      'error': {'code': 'too_many_requests', 'message': 'ThrottlerException'},
+    });
+    expect(claimAny, throwsA(isA<TooManyRequestsException>()));
+  });
+
+  test('claim throws ServerException on другой 400 (validation_error)', () async {
+    stubClaimError(400, {
+      'error': {'code': 'validation_error', 'message': 'bad'},
+    });
+    expect(claimAny, throwsA(isA<ServerException>()));
+  });
+
   test('claim throws NetworkException when no response', () async {
     when(() => dio.post('/child/claim', data: any(named: 'data'))).thenThrow(
       DioException(
