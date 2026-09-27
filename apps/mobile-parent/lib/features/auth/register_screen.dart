@@ -100,7 +100,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         child: Column(
           children: [
             Icon(Icons.mark_email_read_outlined,
-                size: 64, color: Colors.green.shade600),
+                size: 64, color: Theme.of(context).colorScheme.primary),
             const SizedBox(height: 16),
             const Text(
               'Письмо отправлено',
@@ -111,7 +111,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               'Мы отправили ссылку для подтверждения на ${_email.text.trim()}. '
               'Откройте письмо и перейдите по ссылке, после этого вернитесь и войдите.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey.shade700),
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),
             const SizedBox(height: 24),
             FilledButton(
@@ -153,7 +153,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               ),
               if (_error != null) ...[
                 const SizedBox(height: 12),
-                Text(_error!, style: TextStyle(color: Colors.red.shade700)),
+                Text(_error!,
+                    style: TextStyle(color: Theme.of(context).colorScheme.error)),
               ],
               const SizedBox(height: 8),
               TextButton(

@@ -11,6 +11,9 @@ import '../features/debug/debug_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/parental_control/parental_control_screen.dart';
 import '../features/splash/splash_screen.dart';
+import '../features/trip_history/trip_history_screen.dart';
+import '../features/trip_history/trip_route_screen.dart';
+import '../features/children/child_models.dart';
 
 class AppRouter {
   static GoRouter build(WidgetRef ref) {
@@ -59,6 +62,27 @@ class AppRouter {
                     childId: state.pathParameters['id']!,
                     childName: state.uri.queryParameters['name'] ?? 'Ребёнок',
                   ),
+                ),
+                GoRoute(
+                  // /home/child/:id/history?name=<urlencoded child name>
+                  path: 'history',
+                  builder: (_, state) => TripHistoryScreen(
+                    childId: state.pathParameters['id']!,
+                    childName: state.uri.queryParameters['name'] ?? 'Ребёнок',
+                  ),
+                  routes: [
+                    GoRoute(
+                      // /home/child/:id/history/:tripId — маршрут поездки.
+                      // Trip передаётся через state.extra (для заголовка).
+                      path: ':tripId',
+                      builder: (_, state) => TripRouteScreen(
+                        childId: state.pathParameters['id']!,
+                        tripId: state.pathParameters['tripId']!,
+                        childName: state.uri.queryParameters['name'] ?? 'Ребёнок',
+                        trip: state.extra is Trip ? state.extra as Trip : null,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

@@ -45,7 +45,7 @@ void main() {
     await tester.pumpWidget(_wrap(api: api, storage: storage));
     expect(find.text('Введите код'), findsOneWidget);
     expect(find.text('Код покажет мама или папа'), findsOneWidget);
-    expect(find.text('6KDM3B1W'), findsOneWidget);
+    expect(find.text('Из цифр и букв, например: 6K DM 3B 1W'), findsOneWidget);
   });
 
   testWidgets('entering 8-char alnum code triggers submitCode', (tester) async {

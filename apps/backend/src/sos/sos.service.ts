@@ -46,7 +46,7 @@ export class SosService {
             await this.mailer.send({
               to,
               subject: 'SOS от ребёнка',
-              text: `Ребёнок ${ctx.childName} отправил SOS.\nКоординаты: ${dto.lat}, ${dto.lon}\nОткрыть: https://periscop.pro/cabinet`,
+              text: `Ребёнок ${ctx.childName} отправил SOS.\nКоординаты: ${dto.lat}, ${dto.lon}\nОткрыть: ${(process.env.WEB_BASE_URL || 'https://periscop.pro').replace(/\/+$/, '')}/cabinet`,
             });
           } catch (err) {
             this.logger.error(`Failed to email SOS to ${to.slice(0, 3)}***: ${String(err)}`);

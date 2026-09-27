@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import type { ReactElement } from 'react';
+import { FloatingAppIcons } from '@/components/brand/floating-app-icons';
 
 const APP_VERSION = process.env.APP_VERSION ?? '';
 
@@ -134,6 +135,40 @@ export default async function HomePage(): Promise<ReactElement> {
           </path>
         </g>
 
+        {/* Световые импульсы, бегущие по маршруту (два, со сдвигом на пол-круга). */}
+        <g filter="url(#pinGlow)">
+          <circle r="3.4" fill="#e0f2fe">
+            <animate
+              attributeName="opacity"
+              values="0.15;1;0.15"
+              dur="2.4s"
+              repeatCount="indefinite"
+            />
+            <animateMotion
+              dur="16s"
+              repeatCount="indefinite"
+              rotate="auto"
+              path="M 190 205 Q 720 90 1255 175 Q 1390 440 1265 705 Q 760 870 245 735 Q 60 460 190 205"
+            />
+          </circle>
+          <circle r="3.4" fill="#e0f2fe">
+            <animate
+              attributeName="opacity"
+              values="0.15;1;0.15"
+              dur="2.4s"
+              begin="-8s"
+              repeatCount="indefinite"
+            />
+            <animateMotion
+              dur="16s"
+              begin="-8s"
+              repeatCount="indefinite"
+              rotate="auto"
+              path="M 190 205 Q 720 90 1255 175 Q 1390 440 1265 705 Q 760 870 245 735 Q 60 460 190 205"
+            />
+          </circle>
+        </g>
+
         {/* GPS-маркеры: два расширяющихся кольца (в противофазе) + teardrop-пин. */}
         {MARKERS.map((m, i) => (
           <g key={i} transform={`translate(${m.x} ${m.y})`}>
@@ -182,6 +217,9 @@ export default async function HomePage(): Promise<ReactElement> {
           </g>
         ))}
       </svg>
+
+      {/* Фирменные иконки приложений, вписанные в фон-карту */}
+      <FloatingAppIcons />
 
       {/* Верхний правый угол — только «Скачать приложение». Лого кабинета
           на landing не нужен — его место в центре композиции. */}

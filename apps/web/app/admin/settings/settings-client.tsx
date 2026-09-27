@@ -112,7 +112,7 @@ export function SettingsClient(): ReactElement {
   }
   if (q.error || !q.data) {
     return (
-      <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+      <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
         Не удалось загрузить настройки. Попробуйте обновить страницу.
       </div>
     );
@@ -200,7 +200,7 @@ function SectionBlock({
 
 function ListCard({ children }: { children: ReactNode }): ReactElement {
   return (
-    <div className="overflow-hidden rounded-lg border border-border bg-card divide-y divide-zinc-100">
+    <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
       {children}
     </div>
   );
@@ -264,7 +264,7 @@ function SettingRow({ row, onSaved }: { row: AppSettingRow; onSaved: () => void 
                 onClick={() => setDescOpen((v) => !v)}
                 className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full transition-colors ${
                   descOpen
-                    ? 'bg-sky-100 text-sky-700'
+                    ? 'bg-primary/15 text-primary'
                     : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                 }`}
                 aria-label={descOpen ? 'Скрыть описание' : 'Показать описание'}
@@ -287,7 +287,7 @@ function SettingRow({ row, onSaved }: { row: AppSettingRow; onSaved: () => void 
             inputMode={meta?.inputMode as React.InputHTMLAttributes<HTMLInputElement>['inputMode']}
             autoComplete={isSecret ? 'new-password' : undefined}
             onChange={(e) => setValue(e.target.value)}
-            className="w-full rounded-md border border-border bg-card px-2.5 py-1 pr-7 font-mono text-[13px] text-foreground transition-colors placeholder:font-sans placeholder:text-muted-foreground focus:border-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-200"
+            className="w-full rounded-md border border-input bg-background px-2.5 py-1 pr-7 font-mono text-[13px] text-foreground transition-colors placeholder:font-sans placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
           />
           {meta?.unit && !isSecret && (
             <span
@@ -309,15 +309,15 @@ function SettingRow({ row, onSaved }: { row: AppSettingRow; onSaved: () => void 
           aria-label="Сохранить"
           className={`shrink-0 rounded-md px-2.5 py-1 text-[11px] font-medium transition-all ${
             dirty
-              ? 'bg-foreground text-white hover:bg-zinc-800'
+              ? 'bg-primary text-primary-foreground hover:bg-primary/90'
               : justSaved
-                ? 'bg-emerald-50 text-emerald-600'
+                ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
                 : 'bg-transparent text-transparent'
           } disabled:cursor-not-allowed`}
         >
           <span className="inline-flex items-center gap-1">
             {m.isPending ? (
-              <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/50 border-t-white" />
+              <span className="h-3 w-3 animate-spin rounded-full border-2 border-current/40 border-t-current" />
             ) : justSaved ? (
               <Check className="h-3 w-3" strokeWidth={3} />
             ) : null}
@@ -393,13 +393,13 @@ function SmtpTestRow(): ReactElement {
         value={to}
         onChange={(e) => setTo(e.target.value)}
         placeholder="recipient@example.com"
-        className="w-56 shrink-0 rounded-md border border-border bg-card px-2.5 py-1 font-mono text-[13px] text-foreground focus:border-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-200"
+        className="w-56 shrink-0 rounded-md border border-input bg-background px-2.5 py-1 font-mono text-[13px] text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
       />
       <button
         type="button"
         disabled={!emailValid || m.isPending}
         onClick={() => m.mutate(to.trim())}
-        className="shrink-0 rounded-md bg-foreground px-3 py-1 text-[11px] font-medium text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-300"
+        className="shrink-0 rounded-md bg-primary px-3 py-1 text-[11px] font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
       >
         {m.isPending ? 'Шлём…' : 'Отправить'}
       </button>

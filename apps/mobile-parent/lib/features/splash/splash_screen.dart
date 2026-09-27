@@ -24,6 +24,12 @@ class SplashScreen extends ConsumerStatefulWidget {
 }
 
 class _SplashScreenState extends ConsumerState<SplashScreen> {
+  // Минимальная длительность показа брендовой заставки. Берём максимум из
+  // (время bootstrap'а, эта задержка) — не сумму: если восстановление сессии
+  // дольше, splash не удлиняется искусственно; если быстрее — держим заставку
+  // ~1.8с, чтобы она не «мелькнула».
+  static const _minSplash = Duration(milliseconds: 1800);
+
   @override
   void initState() {
     super.initState();
@@ -31,18 +37,22 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   }
 
   Future<void> _bootstrap() async {
+    // Стартуем восстановление сессии и таймер одновременно, ждём оба (max).
+    final routeFuture = _resolveRoute();
+    await Future<void>.delayed(_minSplash);
+    final route = await routeFuture;
+    _go(route);
+  }
+
+  /// Решает, куда идти после старта: `/home` (сессия восстановлена) или
+  /// `/login`. Никакой навигации внутри — только возврат маршрута.
+  Future<String> _resolveRoute() async {
     final storage = ref.read(secureStorageProvider);
     final refresh = await storage.readRefreshToken();
-    if (refresh == null || refresh.isEmpty) {
-      _go('/login');
-      return;
-    }
+    if (refresh == null || refresh.isEmpty) return '/login';
 
     final result = await ref.read(authRepositoryProvider).refreshSession();
-    if (result == RefreshResult.rejected) {
-      _go('/login');
-      return;
-    }
+    if (result == RefreshResult.rejected) return '/login';
 
     final accessToken = await storage.readAccessToken();
     final userMap = await storage.readUser();
@@ -54,8 +64,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
         userMap == null ||
         familyMap == null ||
         refreshNow == null) {
-      _go('/login');
-      return;
+      return '/login';
     }
 
     ref.read(authSessionProvider.notifier).state = AuthSession(
@@ -69,7 +78,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     unawaited(ref.read(parentFcmRegistrarProvider).register());
     // v0.51 (lesson #24): параллельно RuStore Push token.
     unawaited(ref.read(parentRuStorePushRegistrarProvider).register());
-    _go('/home');
+    return '/home';
   }
 
   void _go(String path) {
@@ -78,14 +87,38 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Scaffold(
+      backgroundColor: scheme.surface,
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            FlutterLogo(size: 96),
-            SizedBox(height: 24),
-            CircularProgressIndicator(strokeWidth: 2),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: Image.asset(
+                'assets/icon/icon.png',
+                width: 112,
+                height: 112,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Перископ',
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Родительский контроль',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 32),
+            const CircularProgressIndicator(strokeWidth: 2),
           ],
         ),
       ),

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { backend } from '@/lib/backend';
+import { REFRESH_COOKIE, REFRESH_MAX_AGE } from '@/lib/auth/session-cookie';
 
 interface BackendRefreshResponse {
   accessToken: string;
@@ -16,9 +17,6 @@ interface BackendMeResponse {
   requiresConsent: boolean;
   currentPolicyVersion: string;
 }
-
-const REFRESH_COOKIE = 'gmd_refresh';
-const REFRESH_MAX_AGE = 60 * 60 * 24 * 30;
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   // Web берёт refresh из HttpOnly cookie, mobile — из body (нет cookie-jar).

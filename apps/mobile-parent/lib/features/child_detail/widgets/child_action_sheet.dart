@@ -33,6 +33,14 @@ class ChildActionSheet extends ConsumerStatefulWidget {
 class _ChildActionSheetState extends ConsumerState<ChildActionSheet> {
   bool _signalSending = false;
   bool _protectionToggling = false;
+  bool _deleting = false;
+  bool _unbinding = false;
+
+  /// Есть ли что отвязывать — привязанное и не отозванное устройство.
+  bool get _hasActiveDevice {
+    final d = widget.child.device;
+    return d != null && d.revokedAt == null;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -81,7 +89,7 @@ class _ChildActionSheetState extends ConsumerState<ChildActionSheet> {
           _ActionTile(
             icon: Icons.timeline_outlined,
             label: 'История передвижений',
-            onTap: () => _showSnack('История передвижений — скоро'),
+            onTap: _onHistory,
           ),
           _ActionTile(
             icon: Icons.shield_outlined,
@@ -124,13 +132,16 @@ class _ChildActionSheetState extends ConsumerState<ChildActionSheet> {
           _ActionTile(
             icon: Icons.link_off_outlined,
             label: 'Отвязать устройство',
-            onTap: () => _showSnack('Отвязать устройство — скоро'),
+            busy: _unbinding,
+            // disabled когда нет активного устройства — отвязывать нечего.
+            onTap: (_unbinding || !_hasActiveDevice) ? null : _onUnbindDevice,
           ),
           _ActionTile(
             icon: Icons.delete_outline,
             label: 'Удалить ребёнка',
             destructive: true,
-            onTap: () => _showSnack('Удалить ребёнка — скоро'),
+            busy: _deleting,
+            onTap: _deleting ? null : _onDeleteChild,
           ),
           // Безопасный padding снизу под жестовый/3-кнопочный системный bar
           SizedBox(height: MediaQuery.of(context).padding.bottom + 12),
@@ -202,6 +213,102 @@ class _ChildActionSheetState extends ConsumerState<ChildActionSheet> {
     );
   }
 
+  void _onHistory() {
+    final encoded = Uri.encodeQueryComponent(widget.child.name);
+    context.push('/home/child/${widget.child.id}/history?name=$encoded');
+  }
+
+  Future<void> _onUnbindDevice() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Отвязать устройство?'),
+        content: Text(
+          '${widget.child.name} перестанет передавать геолокацию. Приложение '
+          '«Перископ Ребёнка» можно будет привязать заново по новому QR-коду.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Отвязать'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _unbinding = true);
+    try {
+      await ref.read(childrenRepositoryProvider).unbindDevice(widget.child.id);
+      // childrenListProvider — источник истины для child.device.
+      ref.invalidate(childrenListProvider);
+      if (!mounted) return;
+      _showSnack('Устройство отвязано');
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      _showSnack(e.message ?? 'Не удалось отвязать (код ${e.status})', error: true);
+    } catch (e) {
+      if (!mounted) return;
+      _showSnack('Не удалось отвязать: $e', error: true);
+    } finally {
+      if (mounted) setState(() => _unbinding = false);
+    }
+  }
+
+  Future<void> _onDeleteChild() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Удалить ребёнка?'),
+        content: Text(
+          'Профиль «${widget.child.name}», история передвижений и привязанное '
+          'устройство будут удалены. Это действие нельзя отменить.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Удалить'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    // Захватываем messenger и router ДО await — после успешного удаления
+    // экран ребёнка размонтируется (context.go на /home), и обращаться к
+    // context уже нельзя. Root ScaffoldMessenger переживёт навигацию.
+    final messenger = ScaffoldMessenger.of(context);
+    final router = GoRouter.of(context);
+    setState(() => _deleting = true);
+    try {
+      await ref.read(childrenRepositoryProvider).deleteChild(widget.child.id);
+      ref.invalidate(childrenListProvider);
+      router.go('/home');
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Ребёнок удалён')),
+      );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      _showSnack(e.message ?? 'Не удалось удалить (код ${e.status})', error: true);
+      setState(() => _deleting = false);
+    } catch (e) {
+      if (!mounted) return;
+      _showSnack('Не удалось удалить: $e', error: true);
+      setState(() => _deleting = false);
+    }
+  }
+
   Future<void> _onSignalTap() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -260,7 +367,7 @@ class _ChildActionSheetState extends ConsumerState<ChildActionSheet> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(text),
-        backgroundColor: error ? Colors.red.shade700 : null,
+        backgroundColor: error ? Theme.of(context).colorScheme.error : null,
       ),
     );
   }
@@ -290,7 +397,7 @@ class _ActionTile extends StatelessWidget {
     final theme = Theme.of(context);
     final disabled = onTap == null && trailing == null;
     final color = destructive
-        ? Colors.red.shade700
+        ? theme.colorScheme.error
         : disabled
             ? theme.disabledColor
             : theme.colorScheme.onSurface;

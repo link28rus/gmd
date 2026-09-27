@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../../core/api/api_exception.dart';
+import '../../../core/theme/app_theme.dart';
 import '../child_models.dart';
 import '../children_providers.dart';
 
@@ -215,7 +216,7 @@ class _CreateChildSheetState extends ConsumerState<_CreateChildSheet> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          backgroundColor: Colors.red.shade700,
+          backgroundColor: Theme.of(context).colorScheme.error,
           content: Text(_createErrorText(e)),
         ),
       );
@@ -224,7 +225,7 @@ class _CreateChildSheetState extends ConsumerState<_CreateChildSheet> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          backgroundColor: Colors.red.shade700,
+          backgroundColor: Theme.of(context).colorScheme.error,
           content: Text('Не удалось создать: $e'),
         ),
       );
@@ -429,7 +430,7 @@ class _InviteQrSheetState extends ConsumerState<_InviteQrSheet> {
         child: Text(
           _error!,
           textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.red.shade700),
+          style: TextStyle(color: theme.colorScheme.error),
         ),
       );
     }
@@ -504,7 +505,7 @@ class _InviteQrSheetState extends ConsumerState<_InviteQrSheet> {
               : 'Действителен ещё ${_formatDuration(_remaining)}',
           style: theme.textTheme.bodySmall?.copyWith(
             color: expired
-                ? Colors.red.shade700
+                ? theme.colorScheme.error
                 : theme.colorScheme.onSurfaceVariant,
           ),
         ),
@@ -526,11 +527,12 @@ class _Consent14PlusBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
     return Container(
       decoration: BoxDecoration(
-        color: Colors.amber.shade50,
+        color: AppColors.warningContainer(brightness),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.amber.shade300),
+        border: Border.all(color: AppColors.warningBorder(brightness)),
       ),
       padding: const EdgeInsets.all(12),
       child: Column(
@@ -540,14 +542,17 @@ class _Consent14PlusBlock extends StatelessWidget {
             'Ребёнку $age лет.',
             style: TextStyle(
               fontWeight: FontWeight.w600,
-              color: Colors.amber.shade900,
+              color: AppColors.onWarningContainer(brightness),
             ),
           ),
           const SizedBox(height: 4),
           Text(
             'По 152-ФЗ для обработки геолокации ребёнка от 14 лет требуется '
             'его согласие.',
-            style: TextStyle(color: Colors.amber.shade900, fontSize: 13),
+            style: TextStyle(
+              color: AppColors.onWarningContainer(brightness),
+              fontSize: 13,
+            ),
           ),
           const SizedBox(height: 8),
           InkWell(

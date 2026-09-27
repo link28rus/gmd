@@ -42,9 +42,8 @@ class MainActivity : FlutterActivity() {
         // Идемпотентно (KEEP-policy) — повторные вызовы безопасны. Если token
         // ещё не сохранён (первый запуск до claim'а) — workers запустятся
         // после saveNativeCreds через protection channel (см. ниже).
-        // Самопальный self-hosted UpdateCheckWorker удалён в v0.50.4 (lesson #24:
-        // RuStore модерация запретила REQUEST_INSTALL_PACKAGES). Auto-update идёт
-        // через `flutter_rustore_update` SDK на Dart-слое (см. core/updates/).
+        // Самообновление (AppUpdateWorker) планирует Dart через канал updates →
+        // AppUpdater.configure: worker'у нужен apiBaseUrl из Dart-конфига.
 
         try {
             if (!NativeCreds.getToken(this).isNullOrEmpty()) {
@@ -105,6 +104,18 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    // v0.56.0: AppUpdater не ставит обновление в фоне, пока UI на экране, —
+    // установка закрыла бы приложение под пальцем.
+    override fun onResume() {
+        super.onResume()
+        AppUpdater.uiVisible = true
+    }
+
+    override fun onPause() {
+        AppUpdater.uiVisible = false
+        super.onPause()
+    }
+
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == REQUEST_CODE_ADD_ADMIN) {
@@ -114,6 +125,8 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+
+        AppUpdater.registerChannel(this, flutterEngine.dartExecutor.binaryMessenger)
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, UI_METHOD_CHANNEL)
             .setMethodCallHandler { call, result ->

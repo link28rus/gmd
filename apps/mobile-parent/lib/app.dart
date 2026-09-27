@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/api/connection_lifecycle_observer.dart';
 import 'core/providers.dart';
+import 'core/theme/app_theme.dart';
+import 'core/theme/theme_mode_provider.dart';
 import 'router/app_router.dart';
 
 class PeriscopParentApp extends ConsumerStatefulWidget {
@@ -38,13 +40,13 @@ class _PeriscopParentAppState extends ConsumerState<PeriscopParentApp> {
 
   @override
   Widget build(BuildContext context) {
+    final themeMode = ref.watch(themeModeProvider);
     return MaterialApp.router(
       title: 'Перископ',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorSchemeSeed: const Color(0xFF2E7D32),
-      ),
+      theme: buildLightTheme(),
+      darkTheme: buildDarkTheme(),
+      themeMode: themeMode,
       // Русская локализация для DatePicker и других встроенных виджетов.
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,

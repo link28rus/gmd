@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { ReactElement } from 'react';
-import { MoreVertical, Trash2 } from 'lucide-react';
+import { MoreVertical, RotateCcw, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminApi, type FamilyRow } from '@/lib/api/admin';
@@ -71,19 +71,30 @@ export function FamilyActionsMenu({ row }: Props): ReactElement | null {
 
   const isDeleted = row.deletedAt !== null;
 
+  function invalidate(): void {
+    void qc.invalidateQueries({ queryKey: ['admin', 'families'] });
+    void qc.invalidateQueries({ queryKey: ['admin', 'children'] });
+    void qc.invalidateQueries({ queryKey: ['admin', 'stats'] });
+  }
+
   const deleteMut = useMutation({
     mutationFn: () => adminApi.deleteFamily(row.id),
     onSuccess: () => {
       toast.success('Семья удалена');
       setModal(null);
-      void qc.invalidateQueries({ queryKey: ['admin', 'families'] });
-      void qc.invalidateQueries({ queryKey: ['admin', 'children'] });
-      void qc.invalidateQueries({ queryKey: ['admin', 'stats'] });
+      invalidate();
     },
     onError: (e: Error) => toast.error(e.message || 'Не удалось удалить'),
   });
 
-  if (isDeleted) return <span className="text-xs text-muted-foreground">—</span>;
+  const restoreMut = useMutation({
+    mutationFn: () => adminApi.restoreFamily(row.id),
+    onSuccess: () => {
+      toast.success('Семья восстановлена');
+      invalidate();
+    },
+    onError: (e: Error) => toast.error(e.message || 'Не удалось восстановить'),
+  });
 
   const menu =
     open && menuPos && typeof document !== 'undefined'
@@ -93,17 +104,31 @@ export function FamilyActionsMenu({ row }: Props): ReactElement | null {
             style={{ position: 'fixed', top: menuPos.top, left: menuPos.left, width: MENU_WIDTH }}
             className="z-50 overflow-hidden rounded-md border border-border bg-card shadow-lg"
           >
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                setModal('delete');
-              }}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 transition-colors hover:bg-red-50"
-            >
-              <Trash2 className="h-4 w-4" />
-              <span>Удалить семью</span>
-            </button>
+            {isDeleted ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  restoreMut.mutate();
+                }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-muted"
+              >
+                <RotateCcw className="h-4 w-4" />
+                <span>Восстановить</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  setModal('delete');
+                }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-destructive transition-colors hover:bg-destructive/10"
+              >
+                <Trash2 className="h-4 w-4" />
+                <span>Удалить семью</span>
+              </button>
+            )}
           </div>,
           document.body,
         )
@@ -131,8 +156,8 @@ export function FamilyActionsMenu({ row }: Props): ReactElement | null {
                 Семья <b>{row.name}</b> и все её дети будут помечены удалёнными. Устройства детей
                 отзовутся, активные QR-коды станут недействительны. Сам аккаунт-owner остаётся.
               </span>
-              <span className="block text-red-600">
-                Данные удаляются безвозвратно через 30 дней.
+              <span className="block text-destructive">
+                Данные удаляются безвозвратно через 30 дней. До этого можно восстановить.
               </span>
             </DialogDescription>
           </DialogHeader>

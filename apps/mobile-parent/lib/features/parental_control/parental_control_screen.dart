@@ -159,7 +159,7 @@ class _ParentalControlScreenState extends ConsumerState<ParentalControlScreen> {
                 child: Center(
                   child: Text(
                     _loadError!,
-                    style: TextStyle(color: Colors.red.shade800),
+                    style: TextStyle(color: Theme.of(context).colorScheme.error),
                     textAlign: TextAlign.center,
                   ),
                 ),

@@ -1072,7 +1072,7 @@
         "description": "Полный перевод mobile-app на новый бренд: applicationId/namespace/dart-пакеты на pro.periscop.*, зачистка всех остаточных упоминаний GMD, новые иконки Перископа, публикация в новые записи RuStore «Перископ Ребёнка/Родителя».",
         "details": "Пользователь: «переделываем всё сюда, никаких упоминаний GMD». Восстанавливаем откатанный Path B (commit c5b8984 через revert-of-revert d32bd08). google-services.json уже с pro.periscop.* (блокер снят). Иконки от пользователя обработаны в full-bleed + adaptive + monochrome + store-512. Firebase project id gmd-prod-7d1f8 оставляем (opaque). Первая версия новых записей — ручной upload AAB через Console.",
         "testStrategy": "AVD smoke (lesson #41) golden path обоих apps; реальное устройство. flutter analyze чисто. aapt2 badging: applicationId=pro.periscop.*, label=Перископ.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "high",
         "subtasks": [
@@ -1119,19 +1119,140 @@
             "title": "Публикация в новые записи RuStore: ручной первый upload + скрипт APPS на pro.periscop.*",
             "description": "",
             "details": "",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
-            "parentId": "undefined"
+            "parentId": "undefined",
+            "updatedAt": "2026-07-03T11:59:48.868Z"
           }
         ],
-        "updatedAt": "2026-07-03T07:55:21.620Z"
+        "updatedAt": "2026-07-03T11:59:48.868Z"
+      },
+      {
+        "id": "76",
+        "title": "mobile-parent: нативный экран «История передвижений»",
+        "description": "Заменить заглушку «История передвижений — скоро» в child_action_sheet на рабочий нативный экран. Функция уже есть в веб-кабинете (/cabinet/children/[id]/history): список поездок + карта маршрута. Backend готов (GET /children/:id/trips, /trips/:tripId/points).",
+        "details": "Нативная реализация (не embed), симметрия с child_detail_screen (flutter_map + PolylineLayer). Шаги: (1) модель Trip в Dart (child_models.dart) из TripDto; (2) методы ChildrenRepository.listTrips + tripPoints; (3) Riverpod providers childTripsProvider + tripPointsProvider (autoDispose.family); (4) TripHistoryScreen — список поездок карточками с датой/длительностью/дистанцией/точками, badge «Идёт» для active, пустое состояние; (5) TripRouteScreen — flutter_map с polyline маршрута + маркеры старт/финиш + fit bounds; (6) роуты /home/child/:id/history и history/:tripId в app_router.dart; (7) замена snackbar-заглушки на context.push; (8) CHANGELOG. Верификация: flutter analyze + AVD smoke (lesson #41 этап 1). Backend/web не трогаем. DONE 2026-07-05: реализовано нативно, flutter analyze чист (No issues found), debug-APK собран, AVD smoke на Medium_Phone_API_36.0 (x86_64, android-36) с реальными данными прода (ребёнок Артем): список поездок с badge «Идёт», форматирование дат/длительности/дистанции (13.9 км, 1 ч 32 мин), тап → маршрут на карте (polyline + маркеры старт/финиш + fit bounds) — всё работает. Версия bump 0.52.0→0.53.0 + CHANGELOG. Этап 2 (реальное устройство) и этап 3 (RuStore AAB submit) — отдельно по решению пользователя.",
+        "testStrategy": "",
+        "status": "done",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": [],
+        "updatedAt": "2026-07-05T13:10:32.685Z"
+      },
+      {
+        "id": "77",
+        "title": "mobile-parent: тема Material 3 + dark-mode + переключатель",
+        "description": "Убрать 47 хардкодов Colors.* (в 13 файлах lib) → Theme.of(context).colorScheme.*. Добавить darkTheme + themeMode.system + ручной переключатель темы (Светлая/Тёмная/Системная) с сохранением в SharedPreferences. Presentation-слой, бизнес-логику/провайдеры не ломать.",
+        "details": "Развилка решена с пользователем: полный dark-mode + ручной переключатель. Шаги: (1) app.dart — darkTheme через ColorScheme.fromSeed(seedColor:0xFF2E7D32, brightness:dark), themeMode из нового провайдера; (2) Riverpod StateNotifierProvider themeModeProvider + persist в SharedPreferences (ключ theme_mode), инициализация при старте; (3) переключатель в PopupMenu home_screen (Светлая/Тёмная/Системная); (4) маппинг хардкодов: grey.shade200/300→surfaceContainerHighest, grey.shade400/500/600/700→onSurfaceVariant, grey.shade800/900/чёрный→onSurface, border/divider→outlineVariant, green.shade100→primaryContainer, green.shade800→onPrimaryContainer, инлайн TextStyle(fontSize)→textTheme.*; семантика НЕ на бренд-primary: online=Color(0xFF22C55E), ошибки→colorScheme.error; (5) home_screen прототип (протестирован ранее): _ChildCard online-точка Positioned поверх аватара 14px border surface, аватар online→primaryContainer/onPrimaryContainer offline→surfaceContainerHighest/onSurfaceVariant, Card elevation0+BorderSide(outlineVariant)+rounded16; _EmptyState иллюстрация в primaryContainer-кружке + CTA «Добавить ребёнка» (прокинуть onAddChild); _ErrorView серые→onSurfaceVariant. Файлы: audio_listen_screen, login_screen, register_screen, add_child_flow, child_detail_screen, child_action_sheet, child_status_card, debug_screen, home_screen, update_banner, parental_control_screen, trip_history_screen, trip_route_screen, splash_screen, app.dart. Verify: flutter analyze после каждого + AVD light И dark (adb shell cmd uimode night yes/no). CHANGELOG ### Улучшения. Отдельный коммит. DONE 2026-07-06: реализовано — app_theme.dart (light/dark builder + AppColors семантика online/warning), theme_mode_provider.dart (StateNotifier + SharedPreferences persist), app.dart (theme/darkTheme/themeMode), home_screen переписан (переключатель в меню, _ChildCard online-точка, _EmptyState CTA, _ErrorView), убраны все 47 палитровых хардкодов в 13 файлах (остались только Colors.white/black для маркеров/теней/QR). flutter analyze lib — No issues found. AVD verify: login light+dark корректны, home dark+light (прототип карточек: online primaryContainer+зелёная точка, offline surfaceContainerHighest без точки), диалог темы 3 опции, ручное переключение Тёмная→Светлая переопределяет системную тему, persist работает. Коммит #1 из трёх.",
+        "testStrategy": "",
+        "status": "done",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": [],
+        "updatedAt": "2026-07-05T14:18:40.714Z"
+      },
+      {
+        "id": "78",
+        "title": "mobile-parent: брендовый splash (Flutter + native)",
+        "description": "Заменить FlutterLogo-заглушку на splash с иконкой приложения + «Перископ». Гарантировать минимум ~1.8с показа. Плюс native splash (flutter_native_splash) чтобы убрать белый кадр на cold start. Логику _bootstrap не ломать.",
+        "details": "Развилка решена: Flutter-splash + native splash. Шаги: (1) splash_screen.dart — FlutterLogo→Image.asset('assets/icon/icon.png', 112, ClipRRect скругление) + «Перископ» (textTheme.titleLarge/headlineSmall w600) + «Родительский контроль» (bodyMedium onSurfaceVariant) + индикатор снизу; цвета через colorScheme (согласовать с задачей #77); (2) pubspec.yaml — добавить flutter: assets: секцию (сейчас её нет, Image.asset упадёт без неё) с assets/icon/; (3) минимальная длительность: await Future.wait([_bootstrapLogic(), Future.delayed(1800ms)]) — max не сумма, не блокировать если bootstrap дольше; вынести логику из _bootstrap в _bootstrapLogic возвращающую путь, навигацию сделать после Future.wait; (4) flutter_native_splash пакет в dev_deps + config (image=assets/icon/icon.png или foreground, color=0xFF2E7D32, android12 branding) + dart run flutter_native_splash:create. Verify: cold start (adb am force-stop + relaunch) видна иконка+«Перископ» ~2с → /home или /login; light+dark; скрин. CHANGELOG ### Улучшения. Отдельный коммит. mobile-child splash симметрию — опционально/отдельно. DONE 2026-07-06: splash_screen.dart — Image.asset icon.png (ClipRRect 24) + «Перископ» headlineSmall + «Родительский контроль» onSurfaceVariant + индикатор, фон scheme.surface; _bootstrap разделён на _resolveRoute() (возвращает путь) + Future.delayed(1800) паттерн max-не-сумма; pubspec assets: assets/icon/ + flutter_native_splash ^2.4.4 dev_dep + config (icon.png, color #2E7D32, android12); dart run flutter_native_splash:create сгенерил android-ресурсы. flutter analyze чист. AVD cold start verify: native splash = зелёный #2E7D32 фон + круглая иконка (Android12 mask); Flutter splash = иконка+«Перископ»+подзаголовок+индикатор; foreground сначала не отрисовался на native → заменил на icon.png. mobile-child splash симметрию не делал (опционально). Коммит #2 из трёх.",
+        "testStrategy": "",
+        "status": "done",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": [],
+        "updatedAt": "2026-07-05T14:28:12.944Z"
+      },
+      {
+        "id": "79",
+        "title": "mobile-parent: «Удалить ребёнка» + «Отвязать устройство»",
+        "description": "Доделать две заглушки в child_action_sheet: «Удалить ребёнка» (:133) и «Отвязать устройство» (:127). Удаление — backend готов (DELETE /family/children/:childId, soft-delete). Отвязка — требует НОВОГО backend endpoint (revoke device без удаления ребёнка; сейчас revoke только внутри softDelete).",
+        "details": "Развилка решена: обе фичи, включая новый backend endpoint для отвязки. Шаги BACKEND: (1) children.controller.ts — новый endpoint для revoke активного устройства ребёнка без удаления (напр. DELETE /family/children/:childId/device или POST .../device/unbind), проверка FamilyAccessGuard; children.service — revoke device (revokedAt=now где childId и revokedAt=null, как внутри softDelete children.service:162) БЕЗ deletedAt; вернуть 200/204; тесты по образцу children.service.spec. Шаги MOBILE: (2) children_repository.dart — deleteChild(id)=>_dio.delete('/family/children/$id'); unbindDevice(id)=>_dio.delete(новый путь); (3) child_action_sheet.dart — заменить обе заглушки на flow с confirm (showDialog AlertDialog, деструктивная кнопка красным colorScheme.error), состояние загрузки (заблокировать на время запроса), обработка ApiException/Dio по образцу _onSignalTap/_onProtectionToggle; удаление после успеха: закрыть sheet → context.go('/home') → invalidate(childrenListProvider) → снек «Ребёнок удалён»; отвязка: invalidate(childrenListProvider) + снек «Устройство отвязано», остаться на экране. Тексты confirm: удаление «Удалить ребёнка? Данные о нём и история будут удалены», отвязка «Отвязать устройство? Ребёнок перестанет передавать геолокацию, приложение можно будет привязать заново». Verify (урок #17 реально): backend deploy → AVD залогиниться, тестовый ребёнок → Удалить/Отвязать → подтвердить → проверить что исчез/отвязался и не возвращается после refresh. НЕ удалять реальных детей пользователя — попросить создать тестового. CHANGELOG ### Улучшения. Отдельный коммит (может быть 2: backend+mobile вместе т.к. cross-stack, урок #43 deploy до AVD). РЕАЛИЗОВАНО 2026-07-06: BACKEND — children.service.unbindDevice(familyId,childId) revoke device + consume invites БЕЗ deletedAt, возвращает {unbound}; children.controller DELETE /family/children/:childId/device (200, без ConsentGuard — уменьшение обработки данных); 3 unit-теста (13/13 passed), tsc чист. MOBILE — children_repository.deleteChild + unbindDevice(bool); child_action_sheet заглушки заменены на _onDeleteChild (confirm красная кнопка error, messenger+router захвачены до await, go /home + снек «Ребёнок удалён») и _onUnbindDevice (confirm, invalidate childrenList, снек «Устройство отвязано», остаётся на экране); busy-state _deleting/_unbinding, «Отвязать» disabled когда нет активного device (_hasActiveDevice). flutter analyze чист. Развилка: пользователь выбрал деплой через stash (изолировать его незакоммиченные web-правки) + тест на link28rus. VERIFY DONE 2026-07-06: deploy backend на прод через split-stash (изолированы незакоммиченные web-правки пользователя, pop после), контейнеры пересозданы healthy, endpoint DELETE /family/children/:id/device отвечает 401 без auth (не 404 — задеплоен). AVD E2E на link28rus: «Отвязать устройство» disabled (серый) т.к. device revoked (_hasActiveDevice=false); «Удалить ребёнка» красная → confirm dialog «Удалить ребёнка? Профиль…» → удаление → /home + снек «Ребёнок удалён» → link28rus исчез из списка и НЕ вернулся после pull-to-refresh (реальный prod soft-delete). «Отвязать» E2E на активном device не гонял (нельзя трогать реальных детей) — покрыто unit-тестами + endpoint live + UI disabled. Коммит #3 из трёх.",
+        "testStrategy": "",
+        "status": "done",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": [],
+        "updatedAt": "2026-07-05T14:52:25.658Z"
+      },
+      {
+        "id": "80",
+        "title": "web: дизайн-аудит — быстрые победы (Geist, футер, /download, диалоги)",
+        "description": "Устранить 4 самых заметных дефекта из дизайн-аудита веб-кабинета без риска для тем: (1) шрифт Geist грузится, но не применяется; (2) белый футер на тёмных публичных страницах; (3) страница /download в светлой теме на фоне тёмного бренда; (4) рассинхрон кнопки «Отмена» в диалогах (variant + disabled при pending).",
+        "details": "Аудит проведён 2026-07-06. Правки самодостаточные, без изменения SSR-темы (ThemeProvider на useEffect → глобальный dark на <html> дал бы flash в light-теме кабинета).\n\n1) Geist: tailwind.config.ts добавить fontFamily.sans=[var(--font-sans), ...defaultTheme]. globals.css убрать font-family из верхнего body{} (перебивал Geist через system-ui). Проверено: body computed = system-ui, html = дефолтный стек Tailwind, --font-sans определён но не подключён.\n2) Footer (components/layout/footer.tsx): bg-white/zinc → тёмный бренд (совпасть с landing #050a15/slate). Причина белой полосы: публичные страницы без data-admin-theme → :root=light токены, а body тёмный.\n3) /download (app/download/page.tsx + download-public-client.tsx): перевести на тёмную палитру бренда (был bg-zinc-50/white).\n4) Диалоги: унифицировать cancel на variant=outline (админка уже outline; кабинет был ghost) + добавить disabled при pending где нет: create-child (create.isPending), delete-child (remove.isPending), edit-child (update.isPending), reset-device (reset.isPending). Также ghost→outline: block-dialog, send-signal, zone-editor-dialog.\n\nВёрстка проверяется на dev :3003 через preview.\n\n--- Выполнено 2026-07-06 ---\nВсе 4 правки внесены и проверены на preview :3003 (computed styles):\n1) Geist: body/html computed font-family = Geist,Geist Fallback,... (был system-ui). tailwind.config fontFamily.sans + убран font-family из body globals.css.\n2) Footer: bg computed rgb(5,10,21)=#050a15, text slate-500 — белая полоса на тёмных страницах устранена.\n3) /download: main bg #050a15, карточки slate-900/70, RuStore-кнопка sky-500/10, h1 белый. Остаточных zinc/white/blue классов нет (grep чист).\n4) Диалоги: cancel унифицирован на variant=outline (7 файлов), добавлен disabled при pending в create/delete/edit/reset-child.\nProof: typecheck чистый, lint (0 warnings/errors), консоль без ошибок. Скриншот-захват preview нестабилен в сессии — верификация через computed styles.\nОсталось (при желании выкатывать): bump 0.53.1 + CHANGELOG-блок + version:sync + deploy.sh (web-контейнер).",
+        "testStrategy": "preview :3003: скриншоты landing/login/download/privacy до и после; computed font-family body = Geist; футер bg тёмный на privacy; открыть диалоги — cancel=outline, disabled при отправке. pnpm --filter @periscop/web typecheck + lint.",
+        "status": "done",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": [],
+        "updatedAt": "2026-07-05T14:30:51.056Z"
+      },
+      {
+        "id": "81",
+        "title": "Публикация mobile-parent 0.53.0+28 в RuStore через Public API",
+        "description": "Опубликовать новую версию parent (история передвижений + тёмная тема + splash + удаление/отвязка) в RuStore через tools/rustore/rustore-publish.mjs. Запись pro.periscop.parent, keyId 2351029746. Published была 0.52.0 versionCode 27 → bump pubspec до +28. Этап 2 (реальное устройство) пропущен по решению пользователя, этап 1 AVD пройден по всем задачам.",
+        "details": "Шаги: (1) bump pubspec parent 0.53.0+27→0.53.0+28 (versionCode 27 занят published); (2) flutter build appbundle --release; (3) jarsigner -verify подпись (тот же keystore CN=GMD Parent); (4) copy в releases/rustore/parent/gmd-parent-0.53.0+28.aab + sha256; (5) node rustore-publish.mjs publish --app parent --aab <path> --whatsnew \"...\" --appname \"Перископ Родителя\" (moderInfo из скрипта или --moderinfo с тест-кредами); (6) обновить реестр releases/rustore/README.md + PUBLISH_v0.53.0.md; (7) коммит (bump pubspec + README + CHANGELOG, точечно без web пользователя). Verify: status --app parent показывает новую версию на модерации. whatsNew из CHANGELOG 0.53.0 (история/тема/splash/удаление). DONE 2026-07-05: bump pubspec +28, собран AAB (не подошёл) → ГРАБЛЯ: AAB даёт 400 «Ключи и сертификаты еще не загружены» (запись pro.periscop.parent без RuStore App Signing, первая версия прохода B заливалась как APK). Пересобран universal release APK (66.2МБ, aapt2 badging: pro.periscop.parent versionCode 28 versionName 0.53.0 label «Перископ Родителя»), залит через --apk. Публикация OK: versionId 2064693129, status MODERATION (0.52.0/27 остаётся ACTIVE). Ключ keyId 2351029746 (Periscop-publish) из memory-compiler в ~/.rustore_publish.env. Реестр README + PUBLISH_v0.53.0.md обновлены. SHA-256 APK 8203ff97; AAB 3d37cf84. Коммит точечный без web-правок пользователя. Модерация 12-24ч.",
+        "testStrategy": "",
+        "status": "done",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": [],
+        "updatedAt": "2026-07-05T15:21:55.642Z"
+      },
+      {
+        "id": "82",
+        "title": "Доводка админки: дизайн (темы) + функциональность",
+        "description": "Полировка UI админ-панели с переводом на theme-токены (чтобы dim/dark не ломались) + функциональные доделки: childrenCount, сортировка таблиц, invites пагинация/поиск/отзыв, CSV-экспорт, восстановление удалённых.",
+        "details": "Дизайн: заменить хардкод slate/sky/цветных badge на семантические токены (foreground, muted-foreground, border, card, primary), единый page-shell, shadcn Input для поиска, улучшенная DataTable (sticky/zebra/sort), badge-хелперы. Backend: fix childrenCount (реальный подсчёт), sortBy/sortDir в listUsers/Families/Children, listActiveInvites пагинация+q, DELETE /admin/invites/:id (revoke), restore-endpoints для users/families/children, showDeleted для users. Web: api/hooks/routes для новых endpoint, CSV-экспорт на фронте. | ВЫПОЛНЕНО: Backend — childrenCount реальный groupBy-подсчёт, sortBy/sortDir whitelist (users/families/children) с защитой от инъекции колонки, showDeleted для users, listInvites пагинация+OR-поиск(code/child/family)+maxUses/usesCount, revokeInvite (expiresAt=now, повторный→400), restore для users/families(каскад детей по timestamp-match)/children. Controller: +restore x3, +DELETE invites/:id. Web: api-клиент+хуки+4 новых proxy-route, dark-safe badges.tsx (Pill tinted bg-*/15+dark:text-*), DataTable с сортируемыми заголовками/zebra/sticky-стилем на токенах, list-controls (SearchInput shadcn/ToggleFilter/ExportCsvButton/Pagination), csv.ts экспорт, use-table-sort. Переведены на theme-токены: stats-dashboard, page.tsx обзора, settings-client (баг bg-foreground text-white в dark), user-detail, invites-client, все actions-menu (+restore). ВЕРИФИКАЦИЯ: 23 unit-теста backend зелёные; typecheck backend+web чистые; lint чистый; web prod-build ок; РЕАЛЬНЫЙ прогон на локальном стеке (docker+backend+web, admin-логин) — все endpoints (stats/users-sort/showDeleted/childrenCount/families-sort/invites-пагинация-поиск-revoke/restore-child-family-каскад-user/sort-инъекция→fallback) OK; визуально проверены light+dark темы на обзоре и таблицах (Пользователи/Семьи), интерактивная сортировка, бейджи читаемы в dark. Найдено при live-проверке: локальная dev-БД была не мигрирована (add_multi_use_invites) — применил migrate deploy; web .env.local целится в прод-backend (вернул после теста). Версию НЕ бампал (внутренний инструмент, не user-facing релиз). Коммит НЕ делал (пользователь не просил).",
+        "testStrategy": "pnpm --filter @periscop/backend test (admin.service.spec), pnpm typecheck, pnpm lint, dev-preview визуальная проверка light/dim/dark тем всех страниц админки.",
+        "status": "done",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": [],
+        "updatedAt": "2026-07-06"
+      },
+      {
+        "id": "83",
+        "title": "Долгоживущая сессия 60 дней (sliding) для web + mobile-parent",
+        "description": "Расширить окно активной сессии родителя с 30 до 60 дней с sliding-продлением: пока пользователь заходит с устройства чаще раза в 60 дней — не просить пароль; при неактивности >60 дней — разлогинивать.",
+        "details": "Архитектура уже реализует sliding-сессию: RefreshTokenService.rotate() выдаёт новый токен с expiresAt=now+TTL без абсолютного потолка; web-cookie gmd_refresh переставляется (rolling) на каждом /auth/refresh. Требуется только согласованно поднять TTL 30д(2592000с)→60д(5184000с) и cookie maxAge 30д→60д.\n\nТочки правок:\n- backend: apps/backend/src/auth/auth.module.ts (default REFRESH_TOKEN_CONFIG), apps/backend/.env, apps/backend/.env.example, infra/docker/docker-compose.prod.yml (REFRESH_TOKEN_TTL_SECONDS default).\n- web: централизовать REFRESH_COOKIE + REFRESH_MAX_AGE в apps/web/lib/auth и поднять до 60д; обновить 4 setter-route (verify-otp, login-password, confirm-email, refresh) + logout.\n- mobile-parent: изменений НЕ требуется (истечение на backend, secure storage персистит, splash+interceptor рефрешат).\n- docs: CLAUDE.md стек «refresh 30d»→«refresh 60d sliding», CHANGELOG, auth-spec.\n\nVerify: unit auth backend, web typecheck+lint, prod-integration (refresh продлевает expiresAt на +60д).",
+        "testStrategy": "",
+        "status": "done",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": [],
+        "updatedAt": "2026-07-06T00:40:49.516Z"
+      },
+      {
+        "id": "84",
+        "title": "Редизайн онбординга и аудит разрешений mobile-child",
+        "description": "Полный редизайн процесса установки и выдачи разрешений в детском приложении: убрать неиспользуемые/избыточные разрешения (Wi-Fi SSID) и сделать понятный, простой мастер, где родитель не теряется.",
+        "details": "Аудитория: родитель настраивает телефон ребёнка, потом отдаёт (тексты разрешений — для взрослого, пошагово; главный SOS-экран остаётся детским).\n\nЧасть A — разрешения:\n- Мёртвых разрешений в коде нет (все 23 используются).\n- Убрать ACCESS_WIFI_STATE + NEARBY_WIFI_DEVICES из манифеста + сбор поля wifiSsid из payload локаций (native LocationForegroundService.currentWifiSsid + Dart child_api/database/location_queue_repository/location_ingestor + Drift migration). Причина: косвенные геоданные (152-ФЗ минимизация), NEARBY_WIFI_DEVICES на Android 13+ не запрашивается runtime → не работает. networkType (mobile/wifi/offline из connectivity_plus) ОСТАВИТЬ — не требует Wi-Fi permissions.\n\nЧасть B — редизайн мастера (полный):\n- Убрать _DeviceAdminPlaceholder («Продолжить (devadmin placeholder)») из app_router — вернуть Device Admin настоящим шагом (переиспользовать _AdminWizard из protection_banner, с Xiaomi restricted-settings flow).\n- Починить нумерацию шагов (сейчас totalSteps:9 но реальные 0..4,6..8 — «шаг 6» пропадает). Сделать динамической через централизованный список шагов.\n- Ввести иерархию обязательности: Обязательно / Для функции / Можно позже — визуальные бейджи, для обязательных убрать лёгкий «Пропустить».\n- Исправить locationAlways: на Android 11+ система не даёт «Всегда» из диалога — вести в настройки + resume-recheck (как в mic/overlay шагах).\n- Интро-экран мастера («настроим за ~2 минуты, N шагов, часть откроет системные настройки») + итоговый экран-чеклист («всё готово» / «не хватает X»).\n- Переписать тексты для родителя: понятно, пошагово, без смешения детского и взрослого тона.\n\nВерификация: flutter analyze + сборка + AVD smoke (lesson #41 этап 1). CHANGELOG + bump версии.",
+        "testStrategy": "",
+        "status": "done",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": [],
+        "updatedAt": "2026-07-06T04:11:25.555Z"
+      },
+      {
+        "id": "85",
+        "title": "Восстановление прода Перископ на локальной VM gmd-prod (pve121)",
+        "description": "Прод на VPS потерян. Поднимаем прод заново на VM 109 gmd-prod (192.168.1.111) на Proxmox pve121: ОС → Docker → стек GMD → DNS/проброс портов → бэкапы вне сервера.",
+        "details": "2026-09-27 шаг 1 — VM создана и проверена:\n- VMID 109 gmd-prod, Ubuntu 24.04.5 LTS из cloud-образа, 4 vCPU (cpu host, Xeon X7542 без AVX) / 8 ГБ (balloon 0) / 60 ГБ storage ssd, onboot=1.\n- 192.168.1.111/24, gw 192.168.1.1, DNS 192.168.1.213 192.168.1.1. Адрес был свободен (ARP INCOMPLETE).\n- user-data hdd:snippets/gmd-prod-user.yaml (root-пароль только SHA-512 хешем, chmod 600, ssh_deletekeys: false).\n- root: PermitRootLogin yes + PasswordAuthentication yes по просьбе пользователя; ключи id_ed25519_servers + root@pve121. Креды — memory-compiler infra (secret VM 109 gmd-prod).\n- Проверено: вход root по паролю и по ключу, cloud-init done, интернет и DNS работают.\n\n2026-09-27 шаг 2 — подключён МТС:\n- net1 на бридж MTS pve121 → eth1 95.104.240.111/27, gw 95.104.240.97, default route через МТС. eth0 LAN без default; 192.168.0.0/16 и 10.0.0.0/8 via 192.168.1.1. Адрес был свободен (шлюз МТС сам ARP-ит .111 — без ответа).\n- Сеть через cicustom network=hdd:snippets/gmd-prod-network.yaml (ipconfig0 удалён).\n- Решение: default через МТС вместо схемы старого сервера (default LAN + CONNMARK fwmark 0x2) — с Docker DNAT ответы идут по default сами, костыль не нужен.\n- UFW: eth0 открыт целиком, снаружи только 80/443. Проверено снаружи: 22 filtered, 80/443 доходят (refused — сервиса ещё нет).\n- ВНИМАНИЕ для стека: Docker-published порты обходят UFW → в compose наружу публиковать только caddy 80/443, остальное на 127.0.0.1.\n\n2026-09-27 DNS: пользователь направил A gmd.link28rus.ru → 95.104.240.111 (reg.ru, TTL 86400) — подтверждено у ns1.reg.ru, 8.8.8.8, 1.1.1.1, 77.88.8.8, офисного 192.168.1.213. periscop.pro и gmd-online.ru (тоже NS reg.ru) всё ещё на мёртвом VPS 45.67.230.87 — а приложения из RuStore ходят именно на periscop.pro/api (старые сборки — gmd-online.ru). Caddyfile сейчас: `periscop.pro, gmd-online.ru` — нужно добавить gmd.link28rus.ru.\n\n2026-09-27 решение пользователя: прод только под gmd.link28rus.ru, RuStore пока не нужен, приложения ставит семье сам.\nСделано (не закоммичено): Caddyfile — адреса из env {$SITE_ADDRESSES} (compose default gmd.link28rus.ru); compose — SITE_ADDRESSES для caddy, WEB_BASE_URL=${PUBLIC_SITE_URL} для backend; sos.service — ссылка в SOS-письме из WEB_BASE_URL вместо хардкода periscop.pro; .env.prod.example и deploy.sh — новый домен. ~/.ssh/config: gmd-online*, gmd-prod → VM 109 root (бэкап config.bak.before-gmd-prod-vm109.2026-09-27). Docker 29 + Compose v5 установлены (30-install-docker.sh).\nНЕ сделано: /opt/gmd/.env.prod + JWT-ключи + каталоги — генерация заблокирована классификатором auto mode (запись SMTP-пароля и прочих секретов в файл на сервере), решение за пользователем. FIREBASE_SA_KEY потерян с VPS — push выключен до нового ключа.\n\n2026-09-27 стек поднят (пользователь разрешил генерацию .env.prod):\n- /opt/gmd/.env.prod + JWT RS256 сгенерированы на сервере; пароль /download — memory-compiler (infra, секрет VM 109).\n- deploy.sh: шаг 4 ждёт pg_isready по TCP (на чистой БД initdb → P1001 без ожидания).\n- minio удалён из prod-compose: не используется кодом, образ minio/minio недоступен (pull access denied на Docker Hub и quay.io).\n- 10 сервисов healthy; Let's Encrypt выпущен; снаружи /api/readyz → ok db up redis up; /api/me → 401; login-password неверный → 401 invalid_credentials; /download/ → 401.\n- SMTP Yandex verify OK из контейнера backend.\n- Бэкапы: 40-backups-install.sh (pg-backup 03:16, restore-verify 04:0x, первый дамп снят) + gmd-cleanup.timer (docker prune, вс 04:30) + vzdump pve121 21:00.\n- CLAUDE.md (инфраструктура/деплой) обновлён. Всё НЕ закоммичено.\n\n2026-09-27 приложения собраны и опубликованы (v0.54.1: parent +29, child +6093):\n- env.dart обоих приложений: дефолт API https://gmd.link28rus.ru/api (parent ещё WEB_ORIGIN). Пакеты прежние pro.periscop.parent / pro.periscop.child, подпись совпадает с прошлыми релизами (parent SHA-1 41f11c56…, child c0e8428b…).\n- split-per-ABI APK (6 шт.) в /opt/gmd/download/; endpoint /api/public/updates/<app>/latest отдаёт корректный JSON для всех 6 (parent 2029/1029/4029, child 8093/7093/10093). /download без пароля 401, с паролем 200.\n- Админ создан: link28rus@gmail.com (ADMIN_EMAILS), вход работает, /api/admin/users и /api/admin/stats отдают данные. Креды — memory-compiler gmd (секрет «админская учётка»).\n- AVD smoke: parent — вход админом → «Мои дети», версия 0.54.1 (4029); child — запрос claim доходит до нового бэкенда.\n- Найдено: child на неверный код показывает «Ошибка сервера» — бэкенд отдаёт 400 invite_invalid, child_api.dart мапит в InvalidCodeException только 404/410. Не исправлено.\n- Этап 2 (реальное устройство) НЕ пройден: телефон был unauthorized и пропал из adb.\n- CHANGELOG v0.54.1 + CLAUDE.md обновлены. Всё НЕ закоммичено.\n\nОсталось: коммит; реальное устройство; новый FIREBASE_SA_KEY (push выключен); алерты Uptime Kuma; фикс маппинга 400 invite_invalid в child_api.dart.\n\nДальше (старый план): infra/server-setup/30-install-docker.sh (10-harden-ssh.sh НЕ запускать как есть — выключит root/пароль), стек + восстановление БД (если найдётся дамп), DNS periscop.pro/gmd-online.ru → публичный IP + проброс 80/443 на MikroTik, бэкапы вне сервера.",
+        "testStrategy": "ssh root@192.168.1.111 по паролю и ключу; после стека — /api/readyz на обоих доменах.",
+        "status": "in-progress",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": [],
+        "updatedAt": "2026-09-27T00:00:00.000Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-07-03T07:55:21.623Z",
-      "taskCount": 75,
-      "completedCount": 63,
+      "lastModified": "2026-09-27T00:00:00.000Z",
+      "taskCount": 85,
+      "completedCount": 73,
       "tags": [
         "master"
       ]

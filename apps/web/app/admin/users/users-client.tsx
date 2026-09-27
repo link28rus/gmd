@@ -4,11 +4,19 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAdminUsers } from '@/lib/hooks/use-admin';
 import { useAuthStore } from '@/lib/auth-store';
-import { DataTable } from '@/components/admin/data-table';
+import { useTableSort } from '@/lib/hooks/use-table-sort';
+import { DataTable, type Column } from '@/components/admin/data-table';
 import { UserActionsMenu } from '@/components/admin/user-actions-menu';
-import { Badge } from '@/components/ui/badge';
-import type { UserRow } from '@/lib/api/admin';
-import { Button } from '@/components/ui/button';
+import { RoleBadge, UserStatusBadge } from '@/components/admin/badges';
+import {
+  ExportCsvButton,
+  ListToolbar,
+  Pagination,
+  SearchInput,
+  ToggleFilter,
+} from '@/components/admin/list-controls';
+import { exportRowsToCsv } from '@/lib/admin/csv';
+import type { UserRow, UserSortField } from '@/lib/api/admin';
 
 function fmtLastSeen(iso: string | null): string {
   if (!iso) return 'ни разу';
@@ -25,46 +33,12 @@ function fmtLastSeen(iso: string | null): string {
   return new Date(iso).toLocaleDateString('ru');
 }
 
-function RoleBadge({ role }: { role: UserRow['role'] }): React.ReactElement {
-  if (role === 'admin') {
-    return (
-      <Badge className="border-transparent bg-sky-100 text-sky-700 hover:bg-sky-100">Админ</Badge>
-    );
-  }
-  return (
-    <Badge className="border-transparent bg-slate-100 text-slate-700 hover:bg-slate-100">
-      Родитель
-    </Badge>
-  );
-}
-
-function StatusBadge({ row }: { row: UserRow }): React.ReactElement {
-  if (row.deletedAt) {
-    return (
-      <Badge className="border-transparent bg-red-100 text-red-700 hover:bg-red-100">Удалён</Badge>
-    );
-  }
-  if (row.blockedAt) {
-    return (
-      <Badge
-        className="border-transparent bg-amber-100 text-amber-700 hover:bg-amber-100"
-        title={row.blockedReason ?? undefined}
-      >
-        Заблокирован
-      </Badge>
-    );
-  }
-  return (
-    <Badge className="border-transparent bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
-      Активен
-    </Badge>
-  );
-}
-
 export function UsersClient() {
   const [page, setPage] = useState(1);
   const [inputQ, setInputQ] = useState('');
   const [q, setQ] = useState('');
+  const [showDeleted, setShowDeleted] = useState(false);
+  const { sort, toggle } = useTableSort<UserSortField>({ by: 'createdAt', dir: 'desc' });
   const currentUserId = useAuthStore((s) => s.user?.id ?? null);
 
   useEffect(() => {
@@ -75,97 +49,128 @@ export function UsersClient() {
     return () => clearTimeout(t);
   }, [inputQ]);
 
-  const { data, isLoading, error } = useAdminUsers({ page, q });
+  const { data, isLoading, error } = useAdminUsers({
+    page,
+    q,
+    showDeleted,
+    sortBy: sort.by,
+    sortDir: sort.dir,
+  });
 
-  const totalPages = data ? Math.ceil(data.total / data.limit) : 1;
-
-  const columns = [
+  const columns: Column<UserRow>[] = [
     {
       key: 'email',
       header: 'Email',
-      render: (row: UserRow) => (
-        <Link href={`/admin/users/${row.id}`} className="text-sky-600 hover:underline">
+      sortKey: 'email',
+      render: (row) => (
+        <Link href={`/admin/users/${row.id}`} className="font-medium text-primary hover:underline">
           {row.email}
         </Link>
       ),
     },
-    { key: 'name', header: 'ФИО', render: (row: UserRow) => row.name ?? '—' },
-    { key: 'role', header: 'Роль', render: (row: UserRow) => <RoleBadge role={row.role} /> },
-    { key: 'status', header: 'Статус', render: (row: UserRow) => <StatusBadge row={row} /> },
+    { key: 'name', header: 'ФИО', sortKey: 'name', render: (row) => row.name ?? '—' },
     {
-      key: 'familyName',
-      header: 'Семья',
-      render: (row: UserRow) => row.familyName ?? '—',
+      key: 'role',
+      header: 'Роль',
+      sortKey: 'role',
+      render: (row) => <RoleBadge role={row.role} />,
+    },
+    {
+      key: 'status',
+      header: 'Статус',
+      render: (row) => (
+        <UserStatusBadge
+          deletedAt={row.deletedAt}
+          blockedAt={row.blockedAt}
+          blockedReason={row.blockedReason}
+        />
+      ),
+    },
+    { key: 'familyName', header: 'Семья', render: (row) => row.familyName ?? '—' },
+    {
+      key: 'childrenCount',
+      header: 'Дети',
+      align: 'right',
+      cellClassName: 'tabular-nums text-muted-foreground',
+      render: (row) => (row.childrenCount > 0 ? String(row.childrenCount) : '—'),
     },
     {
       key: 'lastSeenAt',
-      header: 'Последний заход',
-      render: (row: UserRow) => (
-        <span className="text-slate-600" title={row.lastSeenAt ?? undefined}>
-          {fmtLastSeen(row.lastSeenAt)}
-        </span>
+      header: 'Заход',
+      sortKey: 'lastSeenAt',
+      cellClassName: 'text-muted-foreground',
+      render: (row) => (
+        <span title={row.lastSeenAt ?? undefined}>{fmtLastSeen(row.lastSeenAt)}</span>
       ),
     },
     {
       key: 'createdAt',
       header: 'Создан',
-      render: (row: UserRow) => new Date(row.createdAt).toLocaleDateString('ru'),
+      sortKey: 'createdAt',
+      cellClassName: 'text-muted-foreground',
+      render: (row) => new Date(row.createdAt).toLocaleDateString('ru'),
     },
     {
       key: 'actions',
       header: '',
-      render: (row: UserRow) => (
-        <div className="text-right">
-          <UserActionsMenu row={row} currentUserId={currentUserId} />
-        </div>
-      ),
+      align: 'right',
+      render: (row) => <UserActionsMenu row={row} currentUserId={currentUserId} />,
     },
-  ] as const;
+  ];
+
+  function handleExport(): void {
+    if (!data) return;
+    exportRowsToCsv<UserRow>(
+      `users-${new Date().toISOString().slice(0, 10)}`,
+      [
+        { header: 'Email', value: (r) => r.email },
+        { header: 'ФИО', value: (r) => r.name ?? '' },
+        { header: 'Роль', value: (r) => (r.role === 'admin' ? 'Админ' : 'Родитель') },
+        {
+          header: 'Статус',
+          value: (r) => (r.deletedAt ? 'Удалён' : r.blockedAt ? 'Заблокирован' : 'Активен'),
+        },
+        { header: 'Семья', value: (r) => r.familyName ?? '' },
+        { header: 'Дети', value: (r) => r.childrenCount },
+        { header: 'Последний заход', value: (r) => r.lastSeenAt ?? '' },
+        { header: 'Создан', value: (r) => r.createdAt },
+      ],
+      data.items,
+    );
+  }
 
   return (
     <div>
-      <div className="mb-4 flex items-center gap-3">
-        <input
-          type="text"
-          placeholder="Поиск по email…"
-          value={inputQ}
-          onChange={(e) => setInputQ(e.target.value)}
-          className="w-72 rounded-md border border-slate-300 px-3 py-1.5 text-sm outline-none focus:border-slate-500"
-        />
-        {data && <span className="text-sm text-slate-500">Всего: {data.total}</span>}
-      </div>
+      <ListToolbar>
+        <SearchInput value={inputQ} onChange={setInputQ} placeholder="Поиск по email…" />
+        <ToggleFilter
+          checked={showDeleted}
+          onChange={(v) => {
+            setShowDeleted(v);
+            setPage(1);
+          }}
+        >
+          Показывать удалённых
+        </ToggleFilter>
+        <div className="ml-auto">
+          <ExportCsvButton onClick={handleExport} disabled={!data || data.items.length === 0} />
+        </div>
+      </ListToolbar>
 
-      {isLoading && <p className="text-sm text-slate-400">Загружаем…</p>}
-      {error && <p className="text-sm text-red-600">Ошибка загрузки пользователей.</p>}
+      {isLoading && <p className="text-sm text-muted-foreground">Загружаем…</p>}
+      {error && <p className="text-sm text-destructive">Ошибка загрузки пользователей.</p>}
 
       {data && (
         <>
           <DataTable
-            columns={columns as unknown as Parameters<typeof DataTable>[0]['columns']}
-            rows={data.items as unknown as Record<string, unknown>[]}
+            columns={columns}
+            rows={data.items}
             empty="Нет пользователей"
+            sort={sort}
+            onSort={toggle}
+            rowKey={(row) => (row as UserRow).id}
           />
-          <div className="mt-4 flex items-center gap-3">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page <= 1}
-              onClick={() => setPage((p) => p - 1)}
-            >
-              Назад
-            </Button>
-            <span className="text-sm text-slate-600">
-              Страница {page} из {totalPages}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              Вперёд
-            </Button>
-          </div>
+          <Pagination page={page} total={data.total} limit={data.limit} onPage={setPage} />
         </>
       )}
     </div>

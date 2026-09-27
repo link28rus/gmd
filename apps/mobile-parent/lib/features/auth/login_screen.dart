@@ -185,7 +185,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       Text(
                         'Родительский контроль и геолокация',
                         textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                       ),
                       const SizedBox(height: 24),
                       SegmentedButton<_Mode>(
@@ -324,19 +327,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Widget _buildError() {
+    final scheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.only(top: 16),
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.red.shade50,
-          border: Border.all(color: Colors.red.shade200),
+          color: scheme.errorContainer,
+          border: Border.all(color: scheme.error.withValues(alpha: 0.4)),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(_error!, style: TextStyle(color: Colors.red.shade800)),
+            Text(_error!, style: TextStyle(color: scheme.onErrorContainer)),
             if (_showRegisterCta) ...[
               const SizedBox(height: 8),
               GestureDetector(
@@ -344,7 +348,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 child: Text(
                   '→ Зарегистрироваться',
                   style: TextStyle(
-                    color: Colors.blue.shade700,
+                    color: scheme.primary,
                     fontWeight: FontWeight.w600,
                   ),
                 ),

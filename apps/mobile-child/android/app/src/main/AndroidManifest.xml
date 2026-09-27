@@ -20,13 +20,6 @@
          иначе Android Doze усыпляет процесс между обновлениями локации и
          мы теряем точки при заблокированном экране. -->
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
-    <!-- Wi-Fi SSID для карточки ребёнка: на Android 10+ требует FINE_LOCATION
-         (уже есть выше), на Android 12+ — NEARBY_WIFI_DEVICES. -->
-    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
-    <uses-permission
-        android:name="android.permission.NEARBY_WIFI_DEVICES"
-        android:usesPermissionFlags="neverForLocation"
-        tools:targetApi="s"/>
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
     <!-- «Звук вокруг ребёнка» (Phase 5.3) — захват микрофона по запросу родителя.
          FOREGROUND_SERVICE_MICROPHONE обязателен с Android 14 (API 34). -->
@@ -64,6 +57,15 @@
          не runtime. Без него блокировка деградирует до GLOBAL_ACTION_HOME
          (выкидывает на launcher без визуального overlay'а). -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
+    <!-- v0.56.0 самообновление с собственного сервера (AppUpdater.kt).
+         REQUEST_INSTALL_PACKAGES — установка скачанного APK через PackageInstaller
+         (пользователь один раз разрешает «Установку неизвестных приложений»).
+         UPDATE_PACKAGES_WITHOUT_USER_ACTION (Android 12+) — обновление самого
+         себя без диалога подтверждения.
+         ВНИМАНИЕ: RuStore-модерация отклоняет сборки с REQUEST_INSTALL_PACKAGES
+         (lesson #36) — перед возвратом в RuStore убрать или вынести во flavor. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION"/>
     <application
         android:label="Перископ Ребёнка"
         android:name="${applicationName}"
@@ -132,6 +134,7 @@
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED"/>
                 <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
                 <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
                 <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
             </intent-filter>
@@ -139,6 +142,10 @@
         <!-- Получает AlarmManager-alarm, запланированный в onTaskRemoved
              (после свайпа приложения из recents), и перезапускает сервис.
              exported=false — alarm приходит только от своего же процесса. -->
+        <!-- v0.56.0: результат PackageInstaller-сессии самообновления. -->
+        <receiver
+            android:name=".AppUpdateStatusReceiver"
+            android:exported="false"/>
         <receiver
             android:name=".RestartReceiver"
             android:enabled="true"

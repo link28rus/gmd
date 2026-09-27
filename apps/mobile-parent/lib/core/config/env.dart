@@ -3,18 +3,17 @@
 // `--dart-define=API_BASE_URL=http://10.0.2.2:3001` (Android emulator) либо
 // `http://localhost:3001` (Genymotion/iOS sim).
 //
-// Caddy на periscop.pro (основной домен): `handle_path /api/* → backend:3001`
-// стрипает префикс — поэтому baseUrl с `/api`. Legacy-домен gmd-online.ru
-// остаётся живым зеркалом для уже установленных сборок, новые ходят на
-// periscop.pro по умолчанию.
+// Прод с 2026-09-27 — gmd.link28rus.ru (VM gmd-prod). periscop.pro и gmd-online.ru
+// смотрят на потерянный VPS и не отвечают. Caddy: `handle_path /api/* → backend:3001`
+// стрипает префикс — поэтому baseUrl с `/api`.
 const apiBaseUrl = String.fromEnvironment(
   'API_BASE_URL',
-  defaultValue: 'https://periscop.pro/api',
+  defaultValue: 'https://gmd.link28rus.ru/api',
 );
 
 /// Web origin (без `/api`) — нужен для embed-страниц, открываемых в WebView
 /// (например, «Звук вокруг» использует `/embed/audio/<childId>` веб-плеер).
 const webOrigin = String.fromEnvironment(
   'WEB_ORIGIN',
-  defaultValue: 'https://periscop.pro',
+  defaultValue: 'https://gmd.link28rus.ru',
 );

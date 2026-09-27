@@ -6,6 +6,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/native/app_control_channel.dart';
 import 'permissions_wizard.dart';
+import 'wizard_steps.dart';
+
+const _route = '/permissions/overlay';
 
 /// v0.39.5 Phase 6.2 — onboarding шаг для гранта SYSTEM_ALERT_WINDOW.
 ///
@@ -97,14 +100,13 @@ class _OverlayStepState extends State<OverlayStep>
   }
 
   void _goNext() {
-    if (mounted) GoRouter.of(context).go('/home');
+    if (mounted) GoRouter.of(context).go(wizardNextRoute(_route));
   }
 
   @override
   Widget build(BuildContext context) {
     return PermissionsWizardScaffold(
-      stepIndex: 8,
-      totalSteps: 9,
+      route: _route,
       title: 'Экран блокировки',
       description:
           'Когда родитель включит блокировку и ты попробуешь открыть запрещённое '

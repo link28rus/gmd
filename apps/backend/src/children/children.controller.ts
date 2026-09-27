@@ -88,6 +88,19 @@ export class ChildrenController {
     await this.children.softDelete(req.user.familyId, childId);
   }
 
+  // Отвязать устройство ребёнка, не удаляя самого ребёнка. Отзывает активный
+  // device-token и гасит неиспользованные invites; ребёнок остаётся в списке
+  // и может быть привязан заново по новому QR. Consent не требуется — это
+  // уменьшение объёма обрабатываемых данных, а не новая обработка.
+  @Delete(':childId/device')
+  @HttpCode(HttpStatus.OK)
+  async unbindDevice(
+    @Req() req: AuthedRequest,
+    @Param('childId') childId: string,
+  ): Promise<{ unbound: boolean }> {
+    return this.children.unbindDevice(req.user.familyId, childId);
+  }
+
   @Get(':childId/protection')
   async getProtection(
     @Req() req: AuthedRequest,

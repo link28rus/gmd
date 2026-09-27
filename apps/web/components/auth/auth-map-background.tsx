@@ -126,6 +126,40 @@ export function AuthMapBackground(): ReactElement {
         </path>
       </g>
 
+      {/* Световые импульсы, бегущие по маршруту (два, со сдвигом на пол-круга). */}
+      <g filter="url(#authPinGlow)">
+        <circle r="3.4" fill="#e0f2fe">
+          <animate
+            attributeName="opacity"
+            values="0.15;1;0.15"
+            dur="2.4s"
+            repeatCount="indefinite"
+          />
+          <animateMotion
+            dur="17s"
+            repeatCount="indefinite"
+            rotate="auto"
+            path="M 220 185 C 480 40, 820 360, 1245 225 C 1440 380, 1100 540, 1260 695 C 900 880, 540 540, 195 720 C 30 520, 380 380, 220 185"
+          />
+        </circle>
+        <circle r="3.4" fill="#e0f2fe">
+          <animate
+            attributeName="opacity"
+            values="0.15;1;0.15"
+            dur="2.4s"
+            begin="-8.5s"
+            repeatCount="indefinite"
+          />
+          <animateMotion
+            dur="17s"
+            begin="-8.5s"
+            repeatCount="indefinite"
+            rotate="auto"
+            path="M 220 185 C 480 40, 820 360, 1245 225 C 1440 380, 1100 540, 1260 695 C 900 880, 540 540, 195 720 C 30 520, 380 380, 220 185"
+          />
+        </circle>
+      </g>
+
       {MARKERS.map((m) => (
         <g key={m.label} transform={`translate(${m.x} ${m.y})`}>
           <circle r="4" fill="none" stroke="rgba(56,189,248,0.55)" strokeWidth="1.5">

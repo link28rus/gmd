@@ -109,7 +109,7 @@ export function BlockDialog({ childId, childName, open, onOpenChange }: Props): 
 
         <DialogFooter>
           <Button
-            variant="ghost"
+            variant="outline"
             onClick={() => handleClose(false)}
             disabled={createBlock.isPending}
           >

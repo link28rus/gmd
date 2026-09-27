@@ -6,7 +6,6 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
-import android.net.wifi.WifiManager
 import android.os.BatteryManager
 import android.os.Build
 import android.os.IBinder
@@ -176,8 +175,6 @@ class LocationForegroundService : Service() {
         fused = LocationServices.getFusedLocationProviderClient(this)
         createChannel()
         ensureBackgroundEngine()
-        // v0.50.4 (lesson #24): UpdateCheckScheduler удалён — auto-update
-        // полностью через `flutter_rustore_update` SDK на Dart-слое.
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -775,7 +772,6 @@ class LocationForegroundService : Service() {
             "isCharging" to isCharging,
             "provider" to (loc.provider ?: "fused"),
             "networkType" to currentNetworkType(),
-            "wifiSsid" to currentWifiSsid(),
             "mobileOperator" to currentMobileOperator(),
             "recordedAt" to loc.time,
         )
@@ -803,26 +799,6 @@ class LocationForegroundService : Service() {
             Pair(pct, isCharging)
         } catch (_: Throwable) {
             Pair(null, null)
-        }
-    }
-
-    // Имя текущей Wi-Fi сети. Android возвращает SSID в кавычках ("MyWifi")
-    // — убираем. На Android <28 без FINE_LOCATION возвращается
-    // "<unknown ssid>" — отфильтровываем. На Android 12+ требуется
-    // NEARBY_WIFI_DEVICES (уже в манифесте).
-    private fun currentWifiSsid(): String? {
-        return try {
-            val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
-                ?: return null
-            @Suppress("DEPRECATION")
-            val info = wm.connectionInfo ?: return null
-            @Suppress("DEPRECATION")
-            val raw = info.ssid ?: return null
-            val unquoted = raw.removePrefix("\"").removeSuffix("\"")
-            if (unquoted.isEmpty() || unquoted == "<unknown ssid>" || unquoted == "0x") null
-            else unquoted.take(64)
-        } catch (_: Throwable) {
-            null
         }
     }
 

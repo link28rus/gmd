@@ -20,19 +20,37 @@ const BoolFlag = z
   .optional()
   .transform((v) => v === true || v === 'true' || v === '1');
 
+/** Направление сортировки. Валидные поля (sortBy) проверяет сервис по whitelist'у. */
+const SortDir = z
+  .enum(['asc', 'desc'])
+  .optional()
+  .transform((v) => v ?? 'desc');
+
 export const UsersQuerySchema = PaginationSchema.extend({
   q: z.string().optional(),
+  showDeleted: BoolFlag,
+  sortBy: z.string().optional(),
+  sortDir: SortDir,
 });
 export type UsersQueryDto = z.infer<typeof UsersQuerySchema>;
 
 export const FamiliesQuerySchema = PaginationSchema.extend({
   q: z.string().optional(),
   showDeleted: BoolFlag,
+  sortBy: z.string().optional(),
+  sortDir: SortDir,
 });
 export type FamiliesQueryDto = z.infer<typeof FamiliesQuerySchema>;
 
 export const ChildrenQuerySchema = PaginationSchema.extend({
   q: z.string().optional(),
   showDeleted: BoolFlag,
+  sortBy: z.string().optional(),
+  sortDir: SortDir,
 });
 export type ChildrenQueryDto = z.infer<typeof ChildrenQuerySchema>;
+
+export const InvitesQuerySchema = PaginationSchema.extend({
+  q: z.string().optional(),
+});
+export type InvitesQueryDto = z.infer<typeof InvitesQuerySchema>;

@@ -13,11 +13,11 @@
 }
 
 # --- Основной кабинет + API ---
-# periscop.pro — основной домен (бренд «Перископ»); gmd-online.ru — legacy-зеркало
-# с идентичным роутингом для уже установленных приложений. Оба получают TLS-cert
-# через ACME http-01. НЕ редиректим gmd-online.ru на periscop.pro — иначе сломается
-# API старых mobile-клиентов (редирект ломает POST/PUT и Authorization-заголовки).
-periscop.pro, gmd-online.ru {
+# Адреса сайтов — из env SITE_ADDRESSES (compose, по умолчанию gmd.link28rus.ru;
+# несколько доменов — через запятую, например `periscop.pro, gmd-online.ru`).
+# Каждый получает TLS-cert через ACME http-01. Зеркала НЕ редиректим на основной
+# домен — редирект ломает POST/PUT и Authorization-заголовки mobile-клиентов.
+{$SITE_ADDRESSES} {
 	encode zstd gzip
 
 	# /healthz — edge liveness (должен идти до всех handle-матчеров)

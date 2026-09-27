@@ -7,6 +7,18 @@ import io.flutter.plugin.common.MethodChannel
 private const val DIAG_METHOD_CHANNEL = "pro.periscop.parent/diag"
 
 class MainActivity : FlutterActivity() {
+    // v0.56.0: AppUpdater не ставит обновление в фоне, пока UI на экране, —
+    // установка закрыла бы приложение под пальцем.
+    override fun onResume() {
+        super.onResume()
+        AppUpdater.uiVisible = true
+    }
+
+    override fun onPause() {
+        AppUpdater.uiVisible = false
+        super.onPause()
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
@@ -27,8 +39,7 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
-        // Самопальный installer-channel удалён в v0.50.4 (lesson #24:
-        // RuStore модерация запретила REQUEST_INSTALL_PACKAGES). Auto-update
-        // через `flutter_rustore_update` SDK — см. lib/core/updates/.
+        // v0.56.0: самообновление с собственного сервера (AppUpdater.kt).
+        AppUpdater.registerChannel(this, flutterEngine.dartExecutor.binaryMessenger)
     }
 }

@@ -68,7 +68,10 @@ class HomeScreen extends ConsumerWidget {
           const LocationProfileIndicator(),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
+            // Нажатие — проверить обновления, long-press — /debug.
             child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => checkForUpdates(context, ref),
               onLongPress: () => context.push('/debug'),
               child: const AppVersionLabel(),
             ),
@@ -90,8 +93,8 @@ class HomeScreen extends ConsumerWidget {
           const ProtectionBanner(),
           const PermissionHealthBanner(),
           const ActivityRecognitionBanner(),
-          // v0.40 auto-update: показывается ТОЛЬКО когда есть обновление
-          // (Downloading / Downloaded / NeedsPermission / Failed). Idle/None — пустой.
+          // v0.56.0 самообновление: виден только при загрузке, готовом
+          // обновлении, ожидании подтверждения или сбое загрузки/установки.
           const UpdateBanner(),
           Expanded(
             child: Padding(

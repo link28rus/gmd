@@ -1,4 +1,5 @@
 import type { Config } from 'tailwindcss';
+import defaultTheme from 'tailwindcss/defaultTheme';
 import tailwindcssAnimate from 'tailwindcss-animate';
 
 const config: Config = {
@@ -13,6 +14,12 @@ const config: Config = {
       },
     },
     extend: {
+      // Шрифт Geist подключается через next/font (переменная --font-sans на
+      // <html>). Без этой строки Tailwind `font-sans` = дефолтный системный
+      // стек, а Geist грузился, но не применялся.
+      fontFamily: {
+        sans: ['var(--font-sans)', ...defaultTheme.fontFamily.sans],
+      },
       colors: {
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',

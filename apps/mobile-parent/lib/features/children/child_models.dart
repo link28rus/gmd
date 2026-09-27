@@ -181,6 +181,55 @@ DateTime? _parseDate(Object? raw) {
   return null;
 }
 
+/// Поездка ребёнка из `GET /children/:id/trips`.
+///
+/// Backend (`apps/backend/src/locations/trips.service.ts` `TripDto`) собирает
+/// поездки из точек: новая поездка стартует при движении и закрывается, когда
+/// ребёнок стоит на месте дольше `TRIP_IDLE_MINUTES` (по умолчанию 30 мин).
+/// `isActive == true` — поездка ещё идёт (`endedAt == null`).
+///
+/// Порт из `apps/web/lib/api/locations.ts` `TripDto`.
+class Trip {
+  Trip({
+    required this.id,
+    required this.startedAt,
+    required this.endedAt,
+    required this.isActive,
+    required this.pointsCount,
+    required this.distanceM,
+    required this.startLat,
+    required this.startLon,
+    required this.endLat,
+    required this.endLon,
+  });
+
+  final String id;
+  final DateTime startedAt;
+  final DateTime? endedAt;
+  final bool isActive;
+  final int pointsCount;
+
+  /// Пройденное расстояние, метры.
+  final int distanceM;
+  final double startLat;
+  final double startLon;
+  final double endLat;
+  final double endLon;
+
+  factory Trip.fromJson(Map<String, dynamic> json) => Trip(
+        id: json['id'] as String,
+        startedAt: DateTime.parse(json['startedAt'] as String).toLocal(),
+        endedAt: _parseDate(json['endedAt']),
+        isActive: (json['isActive'] as bool?) ?? false,
+        pointsCount: (json['pointsCount'] as num?)?.toInt() ?? 0,
+        distanceM: (json['distanceM'] as num?)?.toInt() ?? 0,
+        startLat: (json['startLat'] as num).toDouble(),
+        startLon: (json['startLon'] as num).toDouble(),
+        endLat: (json['endLat'] as num).toDouble(),
+        endLon: (json['endLon'] as num).toDouble(),
+      );
+}
+
 /// Ответ `POST /family/children/:childId/invites`.
 ///
 /// `qrUrl` — то, что кладётся в QR-код (формат `${landingBaseUrl}/claim/${code}`,

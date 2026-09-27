@@ -3,6 +3,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { adminApi } from '@/lib/api/admin';
+import type { ChildSortField, FamilySortField, SortDir, UserSortField } from '@/lib/api/admin';
 
 export function useAdminStats() {
   return useQuery({
@@ -15,14 +16,20 @@ export function useAdminUsers({
   page = 1,
   limit = 50,
   q = '',
+  showDeleted = false,
+  sortBy,
+  sortDir,
 }: {
   page?: number;
   limit?: number;
   q?: string;
+  showDeleted?: boolean;
+  sortBy?: UserSortField;
+  sortDir?: SortDir;
 } = {}) {
   return useQuery({
-    queryKey: ['admin', 'users', page, q],
-    queryFn: () => adminApi.listUsers({ page, limit, q }),
+    queryKey: ['admin', 'users', page, q, showDeleted, sortBy, sortDir],
+    queryFn: () => adminApi.listUsers({ page, limit, q, showDeleted, sortBy, sortDir }),
   });
 }
 
@@ -39,15 +46,19 @@ export function useAdminFamilies({
   limit = 50,
   q = '',
   showDeleted = false,
+  sortBy,
+  sortDir,
 }: {
   page?: number;
   limit?: number;
   q?: string;
   showDeleted?: boolean;
+  sortBy?: FamilySortField;
+  sortDir?: SortDir;
 } = {}) {
   return useQuery({
-    queryKey: ['admin', 'families', page, q, showDeleted],
-    queryFn: () => adminApi.listFamilies({ page, limit, q, showDeleted }),
+    queryKey: ['admin', 'families', page, q, showDeleted, sortBy, sortDir],
+    queryFn: () => adminApi.listFamilies({ page, limit, q, showDeleted, sortBy, sortDir }),
   });
 }
 
@@ -56,21 +67,29 @@ export function useAdminChildren({
   limit = 50,
   q = '',
   showDeleted = false,
+  sortBy,
+  sortDir,
 }: {
   page?: number;
   limit?: number;
   q?: string;
   showDeleted?: boolean;
+  sortBy?: ChildSortField;
+  sortDir?: SortDir;
 } = {}) {
   return useQuery({
-    queryKey: ['admin', 'children', page, q, showDeleted],
-    queryFn: () => adminApi.listChildren({ page, limit, q, showDeleted }),
+    queryKey: ['admin', 'children', page, q, showDeleted, sortBy, sortDir],
+    queryFn: () => adminApi.listChildren({ page, limit, q, showDeleted, sortBy, sortDir }),
   });
 }
 
-export function useAdminInvites() {
+export function useAdminInvites({
+  page = 1,
+  limit = 50,
+  q = '',
+}: { page?: number; limit?: number; q?: string } = {}) {
   return useQuery({
-    queryKey: ['admin', 'invites'],
-    queryFn: adminApi.listActiveInvites,
+    queryKey: ['admin', 'invites', page, q],
+    queryFn: () => adminApi.listInvites({ page, limit, q }),
   });
 }

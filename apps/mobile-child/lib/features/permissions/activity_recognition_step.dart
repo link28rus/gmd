@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'permissions_wizard.dart';
+import 'wizard_steps.dart';
+
+const _route = '/permissions/activity';
 
 // v0.31.0 — опциональное разрешение Activity Recognition (Android 10+).
 // Используется LocationForegroundService: когда Google Play Services
@@ -15,22 +18,22 @@ class ActivityRecognitionStep extends StatelessWidget {
 
   Future<void> _request(BuildContext context) async {
     await Permission.activityRecognition.request();
-    if (context.mounted) context.go('/permissions/microphone');
+    if (context.mounted) context.go(wizardNextRoute(_route));
   }
 
   @override
   Widget build(BuildContext context) {
     return PermissionsWizardScaffold(
-      stepIndex: 3,
-      totalSteps: 9,
+      route: _route,
       title: 'Экономия батареи',
       description:
-          'Разреши распознавание физической активности (сидишь / идёшь / едешь), '
-          'чтобы приложение реже включало GPS, когда ты не двигаешься. '
-          'Телефон будет дольше держать заряд.\n\n'
-          'Можно пропустить — всё будет работать, но чуть быстрее сядет батарея.',
+          'Разрешите распознавание физической активности (идёт / едет / стоит) — '
+          'тогда приложение реже включает GPS, когда ребёнок не двигается, и '
+          'телефон дольше держит заряд.\n\n'
+          'Это последний шаг и его можно пропустить: всё будет работать, просто '
+          'батарея сядет чуть быстрее.',
       onRequest: () => _request(context),
-      onSkip: () => context.go('/permissions/microphone'),
+      onSkip: () => context.go(wizardNextRoute(_route)),
     );
   }
 }

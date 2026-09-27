@@ -52,7 +52,6 @@ class LocationPoint {
     this.isCharging,
     this.provider,
     this.networkType,
-    this.wifiSsid,
     this.mobileOperator,
   });
   final double lat;
@@ -65,7 +64,6 @@ class LocationPoint {
   final bool? isCharging;
   final String? provider;
   final String? networkType;
-  final String? wifiSsid;
   final String? mobileOperator;
   final DateTime recordedAt;
 
@@ -80,7 +78,6 @@ class LocationPoint {
         if (isCharging != null) 'isCharging': isCharging,
         if (provider != null) 'provider': provider,
         if (networkType != null) 'networkType': networkType,
-        if (wifiSsid != null) 'wifiSsid': wifiSsid,
         if (mobileOperator != null) 'mobileOperator': mobileOperator,
         'recordedAt': recordedAt.toUtc().toIso8601String(),
       };
@@ -144,10 +141,27 @@ class ChildApi {
       return ClaimResponse.fromJson(resp.data as Map<String, dynamic>);
     } on DioException catch (e) {
       final status = e.response?.statusCode;
-      if (status == 404 || status == 410) throw const InvalidCodeException();
       if (status == null) throw NetworkException(e.message ?? 'Сеть недоступна');
+      // Бэкенд отвечает `{error: {code, message}}`: неверный, истёкший и уже
+      // использованный код — 400 invite_invalid. 404/410 — прежний контракт.
+      final code = _errorCode(e.response?.data);
+      if (code == 'invite_invalid' || status == 404 || status == 410) {
+        throw const InvalidCodeException();
+      }
+      if (code == 'child_has_device') throw const ChildHasDeviceException();
+      if (code == 'consent14plus_required') {
+        throw const Consent14PlusRequiredException();
+      }
+      if (status == 429) throw const TooManyRequestsException();
       throw ServerException('Ошибка сервера', status);
     }
+  }
+
+  static String? _errorCode(Object? data) {
+    if (data is! Map) return null;
+    final error = data['error'];
+    final code = error is Map ? error['code'] : data['code'];
+    return code is String ? code : null;
   }
 
   Future<IngestResponse> ingestLocations(

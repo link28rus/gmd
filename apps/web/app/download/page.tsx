@@ -8,13 +8,13 @@ import DownloadPublicClient from './download-public-client';
 
 export default function PublicDownloadPage(): ReactElement {
   return (
-    <main className="min-h-screen bg-zinc-50">
-      <header className="border-b border-zinc-200 bg-white">
+    <main className="min-h-screen bg-[#050a15] text-slate-100">
+      <header className="border-b border-slate-800 bg-[#050a15]">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-6 py-4">
-          <Link href="/" className="text-lg font-semibold text-zinc-900">
+          <Link href="/" className="text-lg font-semibold text-slate-100">
             Перископ
           </Link>
-          <Link href="/login" className="text-sm font-medium text-zinc-700 hover:text-zinc-900">
+          <Link href="/login" className="text-sm font-medium text-slate-300 hover:text-white">
             Войти
           </Link>
         </div>

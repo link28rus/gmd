@@ -1,6 +1,12 @@
 // apps/web/lib/api/admin.ts
 import { apiFetch } from './client';
 
+// ─── Sorting ────────────────────────────────────────────────────────────────
+export type SortDir = 'asc' | 'desc';
+export type UserSortField = 'createdAt' | 'email' | 'name' | 'lastSeenAt' | 'role';
+export type FamilySortField = 'createdAt' | 'name' | 'deletedAt';
+export type ChildSortField = 'createdAt' | 'name' | 'dateOfBirth' | 'deletedAt';
+
 // ─── Stats ────────────────────────────────────────────────────────────────────
 
 export interface AdminStats {
@@ -114,12 +120,17 @@ export interface InviteRow {
   familyName: string;
   expiresAt: string;
   consumedAt: string | null;
+  maxUses: number;
+  usesCount: number;
   createdAt: string;
-  createdByEmail: string;
+  createdByEmail: string | null;
 }
 
-export interface InviteList {
+export interface PaginatedInvites {
   items: InviteRow[];
+  page: number;
+  limit: number;
+  total: number;
 }
 
 // ─── API methods ──────────────────────────────────────────────────────────────
@@ -127,51 +138,107 @@ export interface InviteList {
 export const adminApi = {
   stats: () => apiFetch<AdminStats>('/api/admin/stats'),
 
-  listUsers: ({ page = 1, limit = 50, q = '' }: { page?: number; limit?: number; q?: string }) => {
-    const params = new URLSearchParams({
-      page: String(page),
-      limit: String(limit),
-      ...(q ? { q } : {}),
-    });
+  listUsers: ({
+    page = 1,
+    limit = 50,
+    q = '',
+    showDeleted = false,
+    sortBy,
+    sortDir,
+  }: {
+    page?: number;
+    limit?: number;
+    q?: string;
+    showDeleted?: boolean;
+    sortBy?: UserSortField;
+    sortDir?: SortDir;
+  }) => {
+    const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+    if (q) params.set('q', q);
+    if (showDeleted) params.set('showDeleted', 'true');
+    if (sortBy) params.set('sortBy', sortBy);
+    if (sortDir) params.set('sortDir', sortDir);
     return apiFetch<PaginatedUsers>(`/api/admin/users?${params.toString()}`);
   },
 
   getUserDetail: (id: string) => apiFetch<UserDetail>(`/api/admin/users/${id}`),
+
+  restoreUser: (id: string) =>
+    apiFetch<{ ok: true }>(`/api/admin/users/${id}/restore`, { method: 'POST' }),
 
   listFamilies: ({
     page = 1,
     limit = 50,
     q = '',
     showDeleted = false,
-  }: { page?: number; limit?: number; q?: string; showDeleted?: boolean } = {}) => {
+    sortBy,
+    sortDir,
+  }: {
+    page?: number;
+    limit?: number;
+    q?: string;
+    showDeleted?: boolean;
+    sortBy?: FamilySortField;
+    sortDir?: SortDir;
+  } = {}) => {
     const params = new URLSearchParams({ page: String(page), limit: String(limit) });
     if (q) params.set('q', q);
     if (showDeleted) params.set('showDeleted', 'true');
+    if (sortBy) params.set('sortBy', sortBy);
+    if (sortDir) params.set('sortDir', sortDir);
     return apiFetch<PaginatedFamilies>(`/api/admin/families?${params.toString()}`);
   },
 
   deleteFamily: (id: string) =>
     apiFetch<{ ok: true }>(`/api/admin/families/${id}`, { method: 'DELETE' }),
 
+  restoreFamily: (id: string) =>
+    apiFetch<{ ok: true }>(`/api/admin/families/${id}/restore`, { method: 'POST' }),
+
   listChildren: ({
     page = 1,
     limit = 50,
     q = '',
     showDeleted = false,
-  }: { page?: number; limit?: number; q?: string; showDeleted?: boolean } = {}) => {
+    sortBy,
+    sortDir,
+  }: {
+    page?: number;
+    limit?: number;
+    q?: string;
+    showDeleted?: boolean;
+    sortBy?: ChildSortField;
+    sortDir?: SortDir;
+  } = {}) => {
     const params = new URLSearchParams({ page: String(page), limit: String(limit) });
     if (q) params.set('q', q);
     if (showDeleted) params.set('showDeleted', 'true');
+    if (sortBy) params.set('sortBy', sortBy);
+    if (sortDir) params.set('sortDir', sortDir);
     return apiFetch<PaginatedChildren>(`/api/admin/children?${params.toString()}`);
   },
 
   deleteChild: (id: string) =>
     apiFetch<{ ok: true }>(`/api/admin/children/${id}`, { method: 'DELETE' }),
 
+  restoreChild: (id: string) =>
+    apiFetch<{ ok: true }>(`/api/admin/children/${id}/restore`, { method: 'POST' }),
+
   resetChildDevice: (id: string) =>
     apiFetch<{ ok: true }>(`/api/admin/children/${id}/reset-device`, { method: 'POST' }),
 
-  listActiveInvites: () => apiFetch<InviteList>('/api/admin/invites?active=true'),
+  listInvites: ({
+    page = 1,
+    limit = 50,
+    q = '',
+  }: { page?: number; limit?: number; q?: string } = {}) => {
+    const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+    if (q) params.set('q', q);
+    return apiFetch<PaginatedInvites>(`/api/admin/invites?${params.toString()}`);
+  },
+
+  revokeInvite: (id: string) =>
+    apiFetch<{ ok: true }>(`/api/admin/invites/${id}`, { method: 'DELETE' }),
 
   listSettings: () => apiFetch<{ settings: AppSettingRow[] }>('/api/admin/settings'),
 

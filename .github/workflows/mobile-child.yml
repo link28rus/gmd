@@ -27,6 +27,10 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
+          # Та же версия, что локально собирает релизные APK. Без пина CI брал
+          # свежий stable, и новый анализатор падал на том, чего нет локально.
+          # Обновлять вместе с локальным Flutter.
+          flutter-version: '3.41.7'
           cache: true
 
       - name: flutter pub get (mobile-child)
@@ -40,6 +44,34 @@ jobs:
       - name: flutter test
         working-directory: apps/mobile-child
         run: flutter test
+
+      # google-services.json в .gitignore (с v0.37, FCM), без него плагин
+      # google-services роняет сборку. Для debug-сборки в CI хватает заглушки
+      # с тем же package — FCM в CI не нужен, настоящие ключи не требуются.
+      - name: google-services.json (заглушка для CI)
+        working-directory: apps/mobile-child/android/app
+        run: |
+          [ -f google-services.json ] || cat > google-services.json <<'JSON'
+          {
+            "project_info": {
+              "project_number": "000000000000",
+              "project_id": "periscop-ci-stub",
+              "storage_bucket": "periscop-ci-stub.appspot.com"
+            },
+            "client": [
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:000000000000:android:0000000000000000",
+                  "android_client_info": { "package_name": "pro.periscop.child" }
+                },
+                "oauth_client": [],
+                "api_key": [{ "current_key": "ci-stub" }],
+                "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
+              }
+            ],
+            "configuration_version": "1"
+          }
+          JSON
 
       - name: flutter build apk --debug
         working-directory: apps/mobile-child

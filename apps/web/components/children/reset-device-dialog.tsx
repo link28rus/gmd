@@ -44,7 +44,7 @@ export function ResetDeviceDialog({ child, open, onOpenChange }: Props) {
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={reset.isPending}>
             Отмена
           </Button>
           <Button variant="destructive" onClick={onConfirm} disabled={reset.isPending}>

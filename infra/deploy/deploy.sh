@@ -49,8 +49,11 @@ say "4) Prisma migrate deploy — через одноразовый контей
 # health-check падает и блокирует depends_on для web/caddy.
 # --no-deps + --rm: не трогаем другие сервисы, контейнер удаляется после
 # завершения миграции. Postgres уже должен быть healthy на этот момент.
+# На чистой БД первый старт postgres = initdb + PostGIS (временный сервер только на
+# unix-сокете, потом рестарт) — ждём, пока примет соединения по TCP, иначе P1001.
 ssh "${SERVER}" "cd ${REMOTE_DOCKER} && \
   docker compose --env-file ${REMOTE_DIR}/.env.prod -f docker-compose.prod.yml up -d postgres redis && \
+  for i in \$(seq 1 60); do docker exec gmd-postgres pg_isready -h 127.0.0.1 -q && break; sleep 2; done && \
   docker compose --env-file ${REMOTE_DIR}/.env.prod -f docker-compose.prod.yml run --rm --no-deps \
     --entrypoint sh backend -c \
     'node apps/backend/node_modules/prisma/build/index.js migrate deploy --schema apps/backend/prisma/schema.prisma'"
@@ -72,6 +75,5 @@ ssh "${SERVER}" "cd ${REMOTE_DOCKER} && for i in \$(seq 1 60); do
 done
 docker compose --env-file ${REMOTE_DIR}/.env.prod -f docker-compose.prod.yml ps"
 
-say "Done. Проверь оба домена:"
-say "  curl https://periscop.pro/api/readyz   (основной)"
-say "  curl https://gmd-online.ru/api/readyz  (legacy-зеркало)"
+say "Done. Проверь каждый домен из SITE_ADDRESSES (/opt/gmd/.env.prod):"
+say "  curl https://gmd.link28rus.ru/api/readyz"

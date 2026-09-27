@@ -12,24 +12,26 @@ interface StatCardProps {
 
 function StatCard({ title, icon: Icon, primary, secondary = [] }: StatCardProps) {
   return (
-    <div className="group relative overflow-hidden rounded-xl border border-slate-200 bg-card p-5 shadow-sm transition hover:border-sky-200 hover:shadow-md">
+    <div className="group relative overflow-hidden rounded-xl border border-border bg-card p-5 shadow-sm transition hover:border-primary/40 hover:shadow-md">
       <div className="mb-4 flex items-center gap-2.5">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-50 text-sky-600 ring-1 ring-inset ring-sky-100">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-inset ring-primary/20">
           <Icon className="h-[18px] w-[18px]" strokeWidth={2} />
         </div>
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">{title}</h3>
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          {title}
+        </h3>
       </div>
 
       <div className="flex items-baseline gap-2">
-        <span className="text-3xl font-semibold tabular-nums text-slate-900">{primary.value}</span>
-        <span className="text-xs text-slate-500">{primary.label}</span>
+        <span className="text-3xl font-semibold tabular-nums text-foreground">{primary.value}</span>
+        <span className="text-xs text-muted-foreground">{primary.label}</span>
       </div>
 
       {secondary.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t border-slate-100 pt-3">
+        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t border-border pt-3">
           {secondary.map(({ label, value }) => (
-            <div key={label} className="text-xs text-slate-500">
-              <span className="font-semibold tabular-nums text-slate-700">{value}</span> {label}
+            <div key={label} className="text-xs text-muted-foreground">
+              <span className="font-semibold tabular-nums text-foreground">{value}</span> {label}
             </div>
           ))}
         </div>
@@ -42,12 +44,21 @@ export function StatsDashboard() {
   const { data, isLoading, error } = useAdminStats();
 
   if (isLoading) {
-    return <p className="text-sm text-slate-400">Загружаем статистику…</p>;
+    return (
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div
+            key={i}
+            className="h-[112px] animate-pulse rounded-xl border border-border bg-muted/40"
+          />
+        ))}
+      </div>
+    );
   }
 
   if (error || !data) {
     return (
-      <p className="text-sm text-red-600">
+      <p className="text-sm text-destructive">
         Ошибка загрузки статистики. Проверьте что вы администратор и backend запущен.
       </p>
     );

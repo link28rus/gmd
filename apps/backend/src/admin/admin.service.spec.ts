@@ -32,6 +32,7 @@ function makePrisma() {
       findUnique: jest.fn(),
       update: jest.fn(),
       updateMany: jest.fn(),
+      groupBy: jest.fn().mockResolvedValue([]),
     },
     childDevice: {
       count: jest.fn(),
@@ -41,6 +42,8 @@ function makePrisma() {
     invite: {
       count: jest.fn(),
       findMany: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
       updateMany: jest.fn(),
     },
     refreshToken: {
@@ -352,10 +355,11 @@ describe('AdminService', () => {
     });
   });
 
-  it('listActiveInvites возвращает только активные', async () => {
+  it('listInvites возвращает активные с пагинацией', async () => {
     const p = makePrisma();
     const now = new Date();
     const future = new Date(now.getTime() + 60_000);
+    (p.invite.count as jest.Mock).mockResolvedValue(1);
     (p.invite.findMany as jest.Mock).mockResolvedValue([
       {
         id: 'i1',
@@ -366,15 +370,95 @@ describe('AdminService', () => {
         family: { name: 'Семья' },
         expiresAt: future,
         consumedAt: null,
+        maxUses: 1,
+        usesCount: 0,
         createdAt: now,
         createdBy: 'u1',
       },
     ]);
     (p.user.findMany as jest.Mock).mockResolvedValue([{ id: 'u1', email: 'parent@example.com' }]);
     const svc = new AdminService(p, makePasswordReset());
-    const r = await svc.listActiveInvites();
+    const r = await svc.listInvites(1, 50);
+    expect(r.total).toBe(1);
     expect(r.items).toHaveLength(1);
     expect(r.items[0].code).toBe('ABC123');
     expect(r.items[0].createdByEmail).toBe('parent@example.com');
+  });
+
+  it('listInvites фильтрует по q через OR (code/child/family)', async () => {
+    const p = makePrisma();
+    (p.invite.count as jest.Mock).mockResolvedValue(0);
+    (p.invite.findMany as jest.Mock).mockResolvedValue([]);
+    const svc = new AdminService(p, makePasswordReset());
+    await svc.listInvites(1, 50, 'ваня');
+    const call = (p.invite.findMany as jest.Mock).mock.calls[0][0];
+    expect(Array.isArray(call.where.OR)).toBe(true);
+    expect(call.where.OR).toHaveLength(3);
+  });
+
+  it('revokeInvite гасит активный инвайт через expiresAt=now', async () => {
+    const p = makePrisma();
+    const future = new Date(Date.now() + 60_000);
+    (p.invite.findUnique as jest.Mock).mockResolvedValue({
+      id: 'i1',
+      consumedAt: null,
+      expiresAt: future,
+    });
+    const svc = new AdminService(p, makePasswordReset());
+    await svc.revokeInvite('i1');
+    expect(p.invite.update as jest.Mock).toHaveBeenCalledWith({
+      where: { id: 'i1' },
+      data: { expiresAt: expect.any(Date) },
+    });
+  });
+
+  it('revokeInvite бросает already_inactive для истёкшего', async () => {
+    const p = makePrisma();
+    const past = new Date(Date.now() - 60_000);
+    (p.invite.findUnique as jest.Mock).mockResolvedValue({
+      id: 'i1',
+      consumedAt: null,
+      expiresAt: past,
+    });
+    const svc = new AdminService(p, makePasswordReset());
+    await expect(svc.revokeInvite('i1')).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('listUsers считает childrenCount по семьям пользователя', async () => {
+    const p = makePrisma();
+    (p.user.count as jest.Mock).mockResolvedValue(1);
+    (p.user.findMany as jest.Mock).mockResolvedValue([
+      {
+        id: 'u1',
+        email: 'a@b.com',
+        name: 'A',
+        locale: 'ru',
+        acceptedPrivacyPolicyVersion: null,
+        createdAt: new Date(),
+        deletedAt: null,
+        memberships: [
+          { familyId: 'f1', family: { name: 'Семья А' } },
+          { familyId: 'f2', family: { name: 'Семья Б' } },
+        ],
+      },
+    ]);
+    (p.child.groupBy as jest.Mock).mockResolvedValue([
+      { familyId: 'f1', _count: { _all: 2 } },
+      { familyId: 'f2', _count: { _all: 3 } },
+    ]);
+    const svc = new AdminService(p, makePasswordReset());
+    const r = await svc.listUsers(1, 50);
+    expect(r.items[0].childrenCount).toBe(5);
+  });
+
+  it('restoreChild бросает family_deleted если семья удалена', async () => {
+    const p = makePrisma();
+    (p.child.findUnique as jest.Mock).mockResolvedValue({
+      id: 'ch1',
+      deletedAt: new Date(),
+      family: { deletedAt: new Date() },
+    });
+    const svc = new AdminService(p, makePasswordReset());
+    await expect(svc.restoreChild('ch1')).rejects.toBeInstanceOf(BadRequestException);
   });
 });

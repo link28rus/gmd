@@ -5,6 +5,15 @@
          и keep-screen-awake (для high-priority data-message в Doze). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <!-- v0.56.0 самообновление с собственного сервера (AppUpdater.kt).
+         REQUEST_INSTALL_PACKAGES — установка скачанного APK через PackageInstaller
+         (пользователь один раз разрешает «Установку неизвестных приложений»).
+         UPDATE_PACKAGES_WITHOUT_USER_ACTION (Android 12+) — обновление самого
+         себя без диалога подтверждения.
+         ВНИМАНИЕ: RuStore-модерация отклоняет сборки с REQUEST_INSTALL_PACKAGES
+         (lesson #36) — перед возвратом в RuStore убрать или вынести во flavor. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION"/>
 
     <application
         android:name="${applicationName}"
@@ -42,6 +51,20 @@
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
+
+        <!-- v0.56.0: результат PackageInstaller-сессии самообновления. -->
+        <receiver
+            android:name=".AppUpdateStatusReceiver"
+            android:exported="false"/>
+        <!-- v0.56.0: новая версия встала — почистить кэш APK, позвать обратно
+             уведомлением, если обновляли по кнопке. -->
+        <receiver
+            android:name=".AppUpdatedReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+            </intent-filter>
+        </receiver>
 
         <!-- Default notification icon и channel id для FCM (если payload не указывает иначе). -->
         <meta-data

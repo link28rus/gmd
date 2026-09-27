@@ -11,6 +11,27 @@ export type AdminUserAction =
   | 'reset_password'
   | 'delete';
 
+export type SortDir = 'asc' | 'desc';
+
+/**
+ * Собирает Prisma orderBy из пользовательского sortBy с whitelist'ом полей.
+ * Неизвестное поле → fallback. Защищает от инъекции произвольного имени
+ * колонки в orderBy.
+ */
+function buildOrderBy(
+  sortBy: string | undefined,
+  sortDir: SortDir | undefined,
+  allowed: readonly string[],
+  fallback: string,
+): Record<string, SortDir> {
+  const field = sortBy && allowed.includes(sortBy) ? sortBy : fallback;
+  return { [field]: sortDir ?? 'desc' };
+}
+
+const USER_SORT_FIELDS = ['createdAt', 'email', 'name', 'lastSeenAt', 'role'] as const;
+const FAMILY_SORT_FIELDS = ['createdAt', 'name', 'deletedAt'] as const;
+const CHILD_SORT_FIELDS = ['createdAt', 'name', 'dateOfBirth', 'deletedAt'] as const;
+
 @Injectable()
 export class AdminService {
   constructor(
@@ -67,6 +88,9 @@ export class AdminService {
     page: number,
     limit: number,
     q?: string,
+    showDeleted = false,
+    sortBy?: string,
+    sortDir?: SortDir,
   ): Promise<{
     items: Array<{
       id: string;
@@ -88,27 +112,54 @@ export class AdminService {
     limit: number;
     total: number;
   }> {
-    const where = q ? { email: { contains: q, mode: 'insensitive' as const } } : {};
+    const where: Record<string, unknown> = {};
+    if (!showDeleted) where.deletedAt = null;
+    if (q) where.email = { contains: q, mode: 'insensitive' as const };
+
+    const orderBy = buildOrderBy(sortBy, sortDir, USER_SORT_FIELDS, 'createdAt');
+
     const [total, rows] = await Promise.all([
       this.prisma.user.count({ where }),
       this.prisma.user.findMany({
         where,
         skip: (page - 1) * limit,
         take: limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy,
         include: {
+          // Все membership'ы: первый (по времени) — для отображения «основной»
+          // семьи, остальные familyId нужны для подсчёта childrenCount.
           memberships: {
             include: { family: { select: { name: true } } },
             orderBy: { createdAt: 'asc' },
-            take: 1,
           },
-          _count: { select: { memberships: true } },
         },
       }),
     ]);
 
+    // childrenCount = число не-удалённых детей во всех семьях пользователя.
+    // Считаем одним groupBy по всем familyId страницы (без N+1).
+    const allFamilyIds = [
+      ...new Set((rows as any[]).flatMap((u) => u.memberships.map((m: any) => m.familyId))),
+    ] as string[];
+    const childCounts =
+      allFamilyIds.length > 0
+        ? await this.prisma.child.groupBy({
+            by: ['familyId'],
+            where: { familyId: { in: allFamilyIds }, deletedAt: null },
+            _count: { _all: true },
+          })
+        : [];
+    const countByFamily = new Map(
+      (childCounts as any[]).map((c) => [c.familyId, c._count._all as number]),
+    );
+
     const items = (rows as any[]).map((u) => {
       const primaryMembership = u.memberships[0] ?? null;
+      const uniqueFamilyIds = [...new Set(u.memberships.map((m: any) => m.familyId))] as string[];
+      const childrenCount = uniqueFamilyIds.reduce(
+        (sum, fid) => sum + (countByFamily.get(fid) ?? 0),
+        0,
+      );
       return {
         id: u.id,
         email: u.email,
@@ -123,11 +174,33 @@ export class AdminService {
         deletedAt: u.deletedAt,
         familyId: primaryMembership?.familyId ?? null,
         familyName: primaryMembership?.family?.name ?? null,
-        childrenCount: 0,
+        childrenCount,
       };
     });
 
     return { items, page, limit, total };
+  }
+
+  /** Снять soft-delete с пользователя (восстановление до ночного hard-delete cron). */
+  async restoreUser(targetUserId: string): Promise<void> {
+    const target = await this.prisma.user.findUnique({
+      where: { id: targetUserId },
+      select: { id: true, deletedAt: true },
+    });
+    if (!target) {
+      throw new NotFoundException({ code: 'not_found', message: 'User not found' });
+    }
+    if (!target.deletedAt) {
+      throw new BadRequestException({ code: 'not_deleted', message: 'User is not deleted' });
+    }
+    // Восстанавливаем только сам аккаунт. Membership'ы при удалении были
+    // удалены физически (delete, не soft) — если семья ушла каскадом, её
+    // восстанавливают отдельно. blockedById чистим (он использовался как
+    // «кто удалил»).
+    await this.prisma.user.update({
+      where: { id: targetUserId },
+      data: { deletedAt: null, blockedById: null },
+    });
   }
 
   async setRole(
@@ -369,6 +442,8 @@ export class AdminService {
     limit: number,
     q?: string,
     showDeleted = false,
+    sortBy?: string,
+    sortDir?: SortDir,
   ): Promise<{
     items: Array<{
       id: string;
@@ -387,13 +462,15 @@ export class AdminService {
     if (!showDeleted) where.deletedAt = null;
     if (q) where.name = { contains: q, mode: 'insensitive' as const };
 
+    const orderBy = buildOrderBy(sortBy, sortDir, FAMILY_SORT_FIELDS, 'createdAt');
+
     const [total, rows] = await Promise.all([
       this.prisma.family.count({ where }),
       this.prisma.family.findMany({
         where,
         skip: (page - 1) * limit,
         take: limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy,
         include: {
           _count: { select: { memberships: true, children: true } },
           children: {
@@ -427,6 +504,8 @@ export class AdminService {
     limit: number,
     q?: string,
     showDeleted = false,
+    sortBy?: string,
+    sortDir?: SortDir,
   ): Promise<{
     items: Array<{
       id: string;
@@ -446,13 +525,15 @@ export class AdminService {
     if (!showDeleted) where.deletedAt = null;
     if (q) where.name = { contains: q, mode: 'insensitive' as const };
 
+    const orderBy = buildOrderBy(sortBy, sortDir, CHILD_SORT_FIELDS, 'createdAt');
+
     const [total, rows] = await Promise.all([
       this.prisma.child.count({ where }),
       this.prisma.child.findMany({
         where,
         skip: (page - 1) * limit,
         take: limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy,
         include: {
           family: { select: { name: true } },
           device: { select: { revokedAt: true, lastSeenAt: true } },
@@ -528,6 +609,35 @@ export class AdminService {
     ]);
   }
 
+  /**
+   * Восстановить soft-deleted семью. Возвращаем deletedAt=null самой семье и
+   * тем детям, которые были удалены ТЕМ ЖЕ каскадом (child.deletedAt точно
+   * равен family.deletedAt — softDeleteFamily ставит единый timestamp через
+   * updateMany). Дети, удалённые раньше отдельно, остаются удалёнными.
+   * Устройства/инвайты не восстанавливаем: устройство ребёнок перепривяжет,
+   * QR-код создаётся заново.
+   */
+  async restoreFamily(familyId: string): Promise<void> {
+    const family = await this.prisma.family.findUnique({
+      where: { id: familyId },
+      select: { id: true, deletedAt: true },
+    });
+    if (!family) {
+      throw new NotFoundException({ code: 'not_found', message: 'Family not found' });
+    }
+    if (!family.deletedAt) {
+      throw new BadRequestException({ code: 'not_deleted', message: 'Family is not deleted' });
+    }
+    const deletedAt = family.deletedAt;
+    await this.prisma.$transaction([
+      this.prisma.family.update({ where: { id: familyId }, data: { deletedAt: null } }),
+      this.prisma.child.updateMany({
+        where: { familyId, deletedAt },
+        data: { deletedAt: null },
+      }),
+    ]);
+  }
+
   async softDeleteChild(childId: string): Promise<void> {
     const child = await this.prisma.child.findUnique({
       where: { id: childId },
@@ -554,6 +664,30 @@ export class AdminService {
         data: { expiresAt: now },
       }),
     ]);
+  }
+
+  /**
+   * Восстановить soft-deleted ребёнка. Требует, чтобы его семья была активна
+   * (иначе сначала восстанови семью). Устройство/инвайты не трогаем.
+   */
+  async restoreChild(childId: string): Promise<void> {
+    const child = await this.prisma.child.findUnique({
+      where: { id: childId },
+      select: { id: true, deletedAt: true, family: { select: { deletedAt: true } } },
+    });
+    if (!child) {
+      throw new NotFoundException({ code: 'not_found', message: 'Child not found' });
+    }
+    if (!child.deletedAt) {
+      throw new BadRequestException({ code: 'not_deleted', message: 'Child is not deleted' });
+    }
+    if ((child as any).family?.deletedAt) {
+      throw new BadRequestException({
+        code: 'family_deleted',
+        message: 'Restore the family first',
+      });
+    }
+    await this.prisma.child.update({ where: { id: childId }, data: { deletedAt: null } });
   }
 
   async resetChildDevice(childId: string): Promise<void> {
@@ -583,7 +717,11 @@ export class AdminService {
     });
   }
 
-  async listActiveInvites(): Promise<{
+  async listInvites(
+    page: number,
+    limit: number,
+    q?: string,
+  ): Promise<{
     items: Array<{
       id: string;
       code: string;
@@ -593,19 +731,38 @@ export class AdminService {
       familyName: string;
       expiresAt: Date;
       consumedAt: Date | null;
+      maxUses: number;
+      usesCount: number;
       createdAt: Date;
       createdByEmail: string | null;
     }>;
+    page: number;
+    limit: number;
+    total: number;
   }> {
     const now = new Date();
-    const rows = await this.prisma.invite.findMany({
-      where: { consumedAt: null, expiresAt: { gt: now } },
-      orderBy: { createdAt: 'desc' },
-      include: {
-        child: { select: { name: true } },
-        family: { select: { name: true } },
-      },
-    });
+    const where: Record<string, unknown> = { consumedAt: null, expiresAt: { gt: now } };
+    if (q) {
+      where.OR = [
+        { code: { contains: q, mode: 'insensitive' as const } },
+        { child: { name: { contains: q, mode: 'insensitive' as const } } },
+        { family: { name: { contains: q, mode: 'insensitive' as const } } },
+      ];
+    }
+
+    const [total, rows] = await Promise.all([
+      this.prisma.invite.count({ where }),
+      this.prisma.invite.findMany({
+        where,
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          child: { select: { name: true } },
+          family: { select: { name: true } },
+        },
+      }),
+    ]);
 
     // Fetch creator emails
     const creatorIds = [...new Set((rows as any[]).map((r) => r.createdBy))];
@@ -627,10 +784,34 @@ export class AdminService {
       familyName: i.family?.name ?? '',
       expiresAt: i.expiresAt,
       consumedAt: i.consumedAt,
+      maxUses: i.maxUses,
+      usesCount: i.usesCount,
       createdAt: i.createdAt,
       createdByEmail: creatorMap.get(i.createdBy) ?? null,
     }));
 
-    return { items };
+    return { items, page, limit, total };
+  }
+
+  /**
+   * Отозвать активный QR-инвайт: гасим через expiresAt=now (invite исчезает из
+   * active-списка и claim по нему возвращает invite_invalid).
+   */
+  async revokeInvite(inviteId: string): Promise<void> {
+    const now = new Date();
+    const invite = await this.prisma.invite.findUnique({
+      where: { id: inviteId },
+      select: { id: true, consumedAt: true, expiresAt: true },
+    });
+    if (!invite) {
+      throw new NotFoundException({ code: 'not_found', message: 'Invite not found' });
+    }
+    if (invite.consumedAt || invite.expiresAt <= now) {
+      throw new BadRequestException({
+        code: 'already_inactive',
+        message: 'Invite already inactive',
+      });
+    }
+    await this.prisma.invite.update({ where: { id: inviteId }, data: { expiresAt: now } });
   }
 }

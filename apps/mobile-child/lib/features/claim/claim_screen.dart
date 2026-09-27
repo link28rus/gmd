@@ -20,7 +20,7 @@ class _ClaimScreenState extends ConsumerState<ClaimScreen> {
   Widget build(BuildContext context) {
     ref.listen<ClaimState>(claimControllerProvider, (prev, next) {
       if (next.status == ClaimStatus.success) {
-        context.go('/permissions/notifications');
+        context.go('/permissions/intro');
       }
       // При ошибке НЕ сбрасываем _handled автоматически — иначе камера
       // тут же детектит тот же QR и запускает submitCode снова, зацикливая
