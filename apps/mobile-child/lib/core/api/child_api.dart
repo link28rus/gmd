@@ -65,20 +65,32 @@ class LocationPoint {
   final String? mobileOperator;
   final DateTime recordedAt;
 
-  Map<String, dynamic> toJson() => {
-        'lat': lat,
-        'lon': lon,
-        if (accuracy != null) 'accuracy': accuracy,
-        if (altitude != null) 'altitude': altitude,
-        if (speed != null) 'speed': speed,
-        if (bearing != null) 'bearing': bearing,
-        if (batteryLevel != null) 'batteryLevel': batteryLevel,
-        if (isCharging != null) 'isCharging': isCharging,
-        if (provider != null) 'provider': provider,
-        if (networkType != null) 'networkType': networkType,
-        if (mobileOperator != null) 'mobileOperator': mobileOperator,
-        'recordedAt': recordedAt.toUtc().toIso8601String(),
-      };
+  // Сервер валидирует пачку целиком: NaN/Infinity (jsonEncode на них падает),
+  // отрицательные accuracy/speed и bearing = 360 отбрасываем здесь, чтобы
+  // одна кривая точка не блокировала очередь.
+  static double? _finite(double? v) => v != null && v.isFinite ? v : null;
+  static double? _nonNegative(double? v) {
+    final f = _finite(v);
+    return f != null && f >= 0 ? f : null;
+  }
+
+  Map<String, dynamic> toJson() {
+    final brg = _nonNegative(bearing);
+    return {
+      'lat': lat,
+      'lon': lon,
+      'accuracy': ?_nonNegative(accuracy),
+      'altitude': ?_finite(altitude),
+      'speed': ?_nonNegative(speed),
+      'bearing': ?(brg == null ? null : brg % 360),
+      if (batteryLevel != null) 'batteryLevel': batteryLevel,
+      if (isCharging != null) 'isCharging': isCharging,
+      if (provider != null) 'provider': provider,
+      if (networkType != null) 'networkType': networkType,
+      if (mobileOperator != null) 'mobileOperator': mobileOperator,
+      'recordedAt': recordedAt.toUtc().toIso8601String(),
+    };
+  }
 }
 
 class IngestResponse {
@@ -178,6 +190,10 @@ class ChildApi {
       if (status == 401 || status == 403) {
         throw const UnauthorizedException();
       }
+      // 429 и 413 — не «плохие данные»: точки должны остаться в очереди.
+      // До v0.59.0 они попадали в общую ветку 4xx, и пачка удалялась.
+      if (status == 429) throw const TooManyRequestsException();
+      if (status == 413) throw const BatchTooLargeException();
       if (status != null && status >= 400 && status < 500) {
         throw const BadRequestIngestException();
       }

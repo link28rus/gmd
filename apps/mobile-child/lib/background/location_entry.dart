@@ -90,7 +90,7 @@ Future<void> _bootstrap() async {
     Connectivity().onConnectivityChanged.listen((list) {
       if (list.any((r) => r != ConnectivityResult.none)) {
         diagLog('bg', 'connectivity changed → flushQueue');
-        ingestor.flushQueue();
+        ingestor.onConnectivityRestored();
       }
     });
   } catch (e, st) {

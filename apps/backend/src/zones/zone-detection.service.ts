@@ -22,6 +22,12 @@ export interface ProcessPointInput {
 
 export const DEBOUNCE_MS = 60_000;
 
+// v0.59.0: событие по точке, записанной раньше этого срока, считаем
+// запоздавшим — ребёнок был без сети, телефон отдал точки пачкой. Push
+// всё равно шлём, но с флагом delayed: приложение родителя покажет реальное
+// время события, а не «прямо сейчас».
+export const LATE_EVENT_MS = 3 * 60_000;
+
 export function buffer(radius: number): number {
   return Math.max(30, radius * 0.15);
 }
@@ -222,6 +228,9 @@ export class ZoneDetectionService {
       zoneName: zone?.name ?? '',
       recordedAt: args.recordedAt.toISOString(),
     };
+    if (Date.now() - args.recordedAt.getTime() > LATE_EVENT_MS) {
+      data.delayed = '1';
+    }
     await Promise.all(
       devices.map((d) =>
         fcmService.sendHybridToToken({

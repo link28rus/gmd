@@ -37,10 +37,12 @@ class LocationQueueRepository {
         );
   }
 
-  Future<List<PendingLocation>> takeBatch({int limit = 100, int maxAttempts = 5}) {
+  /// Самые старые точки очереди. Счётчик попыток не учитывается: до v0.59.0
+  /// точка после 5 неудачных отправок навсегда выпадала из выборки, и за
+  /// минуту без сети терялся весь трек (поездка рисовалась прямой).
+  Future<List<PendingLocation>> takeBatch({int limit = 500}) {
     return (_db.select(_db.pendingLocations)
-          ..where((t) => t.uploadAttempts.isSmallerThanValue(maxAttempts))
-          ..orderBy([(t) => OrderingTerm.asc(t.recordedAt)])
+          ..orderBy([(t) => OrderingTerm.asc(t.recordedAt), (t) => OrderingTerm.asc(t.id)])
           ..limit(limit))
         .get();
   }
@@ -50,15 +52,11 @@ class LocationQueueRepository {
     await (_db.delete(_db.pendingLocations)..where((t) => t.id.isIn(ids))).go();
   }
 
-  Future<void> markRetry(List<int> ids) async {
-    if (ids.isEmpty) return;
-    final placeholders = List.filled(ids.length, '?').join(',');
-    await _db.customStatement(
-      'UPDATE pending_locations '
-      'SET upload_attempts = upload_attempts + 1, last_attempt_at = ? '
-      'WHERE id IN ($placeholders)',
-      [DateTime.now().millisecondsSinceEpoch ~/ 1000, ...ids],
-    );
+  /// Удалить точки старше [cutoff] — сервер их уже не примет (окно 7 суток).
+  Future<int> deleteOlderThan(DateTime cutoff) {
+    return (_db.delete(_db.pendingLocations)
+          ..where((t) => t.recordedAt.isSmallerThanValue(cutoff)))
+        .go();
   }
 
   Future<int> count() async {

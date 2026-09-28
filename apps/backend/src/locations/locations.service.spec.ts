@@ -324,6 +324,60 @@ describe('LocationsService.ingestBatch', () => {
     expect(res.rejected).toBe(1);
     expect(res.rejectedReasons.jitter).toBe(1);
   });
+
+  // v0.59.0 — телефон досылает точки, накопленные без сети.
+  describe('late points from the offline queue', () => {
+    const latest = new Date('2026-09-28T01:00:00Z');
+
+    function withLatest(svc: LocationsService) {
+      (svc as any).prisma.location.findFirst.mockResolvedValue({
+        lat: 48.48,
+        lon: 135.08,
+        recordedAt: latest,
+      });
+    }
+
+    beforeEach(() => {
+      jest.useFakeTimers({ now: new Date('2026-09-28T01:05:00Z') });
+    });
+    afterEach(() => jest.useRealTimers());
+
+    it('stores points older than the latest one but skips zone detection for them', async () => {
+      const svc = makeService({ insertResult: 3 });
+      withLatest(svc);
+      const res = await svc.ingestBatch(ctx, [
+        { lat: 48.4, lon: 135.0, recordedAt: '2026-09-27T22:00:00Z' },
+        { lat: 48.41, lon: 135.01, recordedAt: '2026-09-27T22:00:05Z' },
+        { lat: 48.49, lon: 135.09, recordedAt: '2026-09-28T01:04:00Z' },
+      ]);
+      expect(res.accepted).toBe(3);
+      const zone = (svc as any).zoneDetection.processPoint as jest.Mock;
+      expect(zone).toHaveBeenCalledTimes(1);
+      expect(zone.mock.calls[0][1].recordedAt).toEqual(new Date('2026-09-28T01:04:00Z'));
+    });
+
+    it('does not treat an old point near the latest position as jitter', async () => {
+      const svc = makeService({ insertResult: 1 });
+      withLatest(svc);
+      // Вчера ребёнок стоял в той же точке, где сейчас, — это не дрожание GPS.
+      const res = await svc.ingestBatch(ctx, [
+        { lat: 48.48, lon: 135.08, accuracy: 10, recordedAt: '2026-09-27T23:00:00Z' },
+      ]);
+      expect(res.accepted).toBe(1);
+      expect(res.rejectedReasons.jitter ?? 0).toBe(0);
+    });
+
+    it('still dedups jitter inside the old tail itself', async () => {
+      const svc = makeService({ insertResult: 1 });
+      withLatest(svc);
+      const res = await svc.ingestBatch(ctx, [
+        { lat: 48.4, lon: 135.0, accuracy: 10, recordedAt: '2026-09-27T22:00:00Z' },
+        { lat: 48.40005, lon: 135.0, accuracy: 10, recordedAt: '2026-09-27T22:00:20Z' },
+      ]);
+      expect(res.accepted).toBe(1);
+      expect(res.rejectedReasons.jitter).toBe(1);
+    });
+  });
 });
 
 describe('LocationsService.getLatest', () => {

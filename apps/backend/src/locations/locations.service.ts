@@ -179,6 +179,12 @@ export class LocationsService {
       })
       .then((r) => (r ? { lat: r.lat, lon: r.lon, ts: r.recordedAt.getTime() } : null));
 
+    // v0.59.0: время последней уже сохранённой точки. Точки не новее неё —
+    // «старый хвост» из офлайн-очереди телефона или повтор после таймаута:
+    // трек они дополняют, но геозоны по ним не считаем, иначе состояние зоны
+    // откатится назад и родитель получит ложные «вошёл/вышел».
+    const zoneCutoffTs = lastKnown?.ts ?? Number.NEGATIVE_INFINITY;
+
     // Сортируем точки по времени, чтобы jitter-dedup сравнивал в хронологическом
     // порядке (клиент может слать батч в произвольном порядке).
     const sortedPoints = [...points].sort(
@@ -203,7 +209,9 @@ export class LocationsService {
 
       // v0.31.0 jitter-dedup — если точка близко к предыдущей за короткое
       // время, считаем дрожанием GPS при стоянке.
-      if (lastKnown !== null && ts - lastKnown.ts < jitterWindowMs) {
+      // Только вперёд по времени: точка из старого хвоста очереди не должна
+      // сравниваться с более новой уже сохранённой.
+      if (lastKnown !== null && ts >= lastKnown.ts && ts - lastKnown.ts < jitterWindowMs) {
         const dist = distanceMeters(lastKnown.lat, lastKnown.lon, p.lat, p.lon);
         const threshold = Math.max(jitterMinDistM, (p.accuracy ?? 0) * 2);
         if (dist < threshold) {
@@ -252,9 +260,10 @@ export class LocationsService {
           rejectedReasons.duplicate = (rejectedReasons.duplicate ?? 0) + duplicates;
         }
 
-        // Zone detection for every valid (window-passed) point. Duplicates re-processed but
-        // they deterministically produce the same state — safe no-op effectively.
+        // Геозоны — по каждой валидной точке новее последней сохранённой, в
+        // хронологическом порядке (validPoints отсортированы).
         for (const p of validPoints) {
+          if (new Date(p.recordedAt).getTime() <= zoneCutoffTs) continue;
           await this.zoneDetection.processPoint(tx, {
             familyId: child.familyId,
             childId: ctx.childId,

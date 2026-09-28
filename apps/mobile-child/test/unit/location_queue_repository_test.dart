@@ -30,21 +30,34 @@ void main() {
     expect(left.first.id, id2);
   });
 
-  test('markRetry increments attempts', () async {
-    final id = await repo.enqueue(lat: 1, lon: 1, recordedAt: DateTime.now());
-    await repo.markRetry([id]);
-    await repo.markRetry([id]);
-    final rows = await repo.takeBatch(limit: 1);
-    expect(rows.first.uploadAttempts, 2);
+  test('takeBatch returns oldest first', () async {
+    final base = DateTime(2026, 9, 28, 8);
+    await repo.enqueue(lat: 3, lon: 3, recordedAt: base.add(const Duration(minutes: 2)));
+    await repo.enqueue(lat: 1, lon: 1, recordedAt: base);
+    await repo.enqueue(lat: 2, lon: 2, recordedAt: base.add(const Duration(minutes: 1)));
+    final rows = await repo.takeBatch(limit: 10);
+    expect(rows.map((r) => r.lat), [1, 2, 3]);
   });
 
-  test('takeBatch excludes exhausted rows', () async {
+  test('takeBatch ignores upload attempts left by old versions', () async {
+    // До v0.59.0 точка после 5 неудач выпадала из выборки навсегда.
     final id = await repo.enqueue(lat: 1, lon: 1, recordedAt: DateTime.now());
-    for (var i = 0; i < 5; i++) {
-      await repo.markRetry([id]);
-    }
+    await db.customStatement(
+      'UPDATE pending_locations SET upload_attempts = 5 WHERE id = ?',
+      [id],
+    );
     final rows = await repo.takeBatch(limit: 10);
-    expect(rows, isEmpty);
+    expect(rows.map((r) => r.id), [id]);
+  });
+
+  test('deleteOlderThan drops only expired points', () async {
+    final now = DateTime(2026, 9, 28, 8);
+    await repo.enqueue(lat: 1, lon: 1, recordedAt: now.subtract(const Duration(days: 8)));
+    await repo.enqueue(lat: 2, lon: 2, recordedAt: now.subtract(const Duration(days: 6)));
+    final dropped = await repo.deleteOlderThan(now.subtract(const Duration(days: 7)));
+    expect(dropped, 1);
+    final rows = await repo.takeBatch(limit: 10);
+    expect(rows.map((r) => r.lat), [2]);
   });
 
   test('trimOverflow drops oldest beyond cap', () async {

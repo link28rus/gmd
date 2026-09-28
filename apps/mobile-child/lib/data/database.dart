@@ -41,7 +41,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -69,6 +69,21 @@ class AppDatabase extends _$AppDatabase {
             // ignore: experimental_member_use
             await m.alterTable(TableMigration(pendingLocations));
           }
+          if (from < 5) {
+            // v0.59.0: раньше точка после 5 неудачных отправок навсегда
+            // выпадала из очереди, но физически оставалась в базе. Обнуляем
+            // счётчик — такие точки уйдут на сервер при первой связи (сервер
+            // принимает до 7 суток назад, более старые отсеются по возрасту).
+            await customStatement('UPDATE pending_locations SET upload_attempts = 0');
+          }
+        },
+        beforeOpen: (details) async {
+          // Очередь офлайн-точек может дорасти до десятков тысяч строк;
+          // выборка «самые старые» и чистка по возрасту идут по recorded_at.
+          await customStatement(
+            'CREATE INDEX IF NOT EXISTS idx_pending_locations_recorded_at '
+            'ON pending_locations (recorded_at)',
+          );
         },
       );
 }

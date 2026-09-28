@@ -38,6 +38,12 @@ class BadRequestIngestException extends ApiException {
   const BadRequestIngestException() : super('Invalid batch');
 }
 
+// 413 на приёме точек — пачка больше серверного лимита (MAX_BATCH_SIZE).
+// Точки не удаляем: ingestor уменьшит пачку и отправит заново.
+class BatchTooLargeException extends ApiException {
+  const BatchTooLargeException() : super('Batch too large');
+}
+
 class TooManyRequestsException extends ApiException {
   const TooManyRequestsException([String? message])
       : super(message ?? 'Слишком часто. Подождите немного.');

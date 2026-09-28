@@ -1,8 +1,9 @@
 'use client';
-import { useMemo, type ReactElement } from 'react';
+import { Fragment, useMemo, type ReactElement } from 'react';
 import { Marker, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import type { LocationDto, TripDto } from '@/lib/api/locations';
+import { formatGapLabel, splitTrackByGaps, type TrackGap } from '@/lib/geo/track-gaps';
 
 interface Props {
   items: LocationDto[];
@@ -22,6 +23,25 @@ const UI_ACCURACY_GATE_M = 50;
 // Чтобы не перегружать карту при больших треках, показываем кружочки
 // каждую N-ю точку. Первая и последняя — всегда.
 const MAX_DOTS = 120;
+
+// Непрерывный участок трека — сплошная линия.
+const TRACK_PATH: L.PathOptions = { color: '#2563eb', weight: 3 };
+
+// Участок без данных (см. lib/geo/track-gaps.ts) — тонкий серый пунктир,
+// чтобы не выдавать прямую между двумя точками за реальный маршрут.
+// Цвет фиксированный: Leaflet пишет его в SVG-атрибут stroke, а там
+// var(--…) не работает. slate-500 = --muted-foreground светлой темы,
+// читается и на обычных, и на затемнённых (dim/dark) тайлах.
+const GAP_PATH: L.PathOptions = {
+  color: '#64748b',
+  weight: 2,
+  dashArray: '4 6',
+  interactive: false,
+};
+
+// Подпись разрыва кладём под все остальные маркеры (старт/финиш, точки,
+// стоянки, аватар ребёнка): Leaflet считает z-index как y + zIndexOffset.
+const GAP_LABEL_Z_OFFSET = -1000;
 
 function hhmm(iso: string): string {
   const d = new Date(iso);
@@ -50,6 +70,18 @@ function sampleForDots(items: LocationDto[]): LocationDto[] {
   return out;
 }
 
+/**
+ * Одиночная точка между двумя разрывами линии не имеет — видна только как
+ * кружок. Гарантируем, что прореживание sampleForDots её не выбросило.
+ */
+function withLonePoints(dots: LocationDto[], segments: LocationDto[][]): LocationDto[] {
+  const lone = segments.filter((s) => s.length === 1).map((s) => s[0]);
+  if (lone.length === 0) return dots;
+  const present = new Set(dots);
+  const missing = lone.filter((p) => !present.has(p));
+  return missing.length === 0 ? dots : [...dots, ...missing];
+}
+
 const dotIcon = (bg: string, border: string, size = 12): L.DivIcon =>
   L.divIcon({
     html: `<div style="width:${size}px;height:${size}px;border-radius:50%;border:2px solid ${border};background:${bg};box-shadow:0 1px 2px rgba(0,0,0,0.2);transform:translate(-50%,-50%);position:absolute;left:0;top:0;"></div>`,
@@ -66,6 +98,29 @@ const stopIcon = (label: string, title: string): L.DivIcon =>
     iconAnchor: [0, 0],
   });
 
+// Компактная плашка «нет данных N мин» по центру разрыва. Видна всегда,
+// без наведения — кабинет открывают и с телефона. Цвета из токенов темы
+// (в globals.css они HSL-тройками, поэтому hsl(var(--…))).
+const gapLabelIcon = (label: string): L.DivIcon =>
+  L.divIcon({
+    html: `<div style="transform:translate(-50%,-50%);position:absolute;left:0;top:0;white-space:nowrap;pointer-events:none;border-radius:9999px;border:1px solid hsl(var(--border, 214.3 31.8% 91.4%));background:hsl(var(--card, 0 0% 100%) / 0.92);padding:0 6px;font-size:11px;line-height:16px;font-weight:500;color:hsl(var(--muted-foreground, 215.4 16.3% 46.9%));box-shadow:0 1px 2px rgba(0,0,0,0.15);">${escapeHtml(label)}</div>`,
+    className: 'gmd-gap-label',
+    iconSize: [0, 0],
+    iconAnchor: [0, 0],
+  });
+
+/**
+ * Середина отрезка в той же проекции, в которой Leaflet его рисует
+ * (Web Mercator), — подпись ложится ровно на пунктир и на длинных разрывах.
+ */
+function gapMidpoint(gap: TrackGap<LocationDto>): [number, number] {
+  const proj = L.Projection.SphericalMercator;
+  const a = proj.project(L.latLng(gap.from.lat, gap.from.lon));
+  const b = proj.project(L.latLng(gap.to.lat, gap.to.lon));
+  const mid = proj.unproject(a.add(b).divideBy(2));
+  return [mid.lat, mid.lng];
+}
+
 export function TrackPolyline({ items, stops }: Props): ReactElement | null {
   // Шаг 1: accuracy-фильтр.
   const filtered = useMemo(
@@ -73,14 +128,35 @@ export function TrackPolyline({ items, stops }: Props): ReactElement | null {
     [items],
   );
 
-  // Шаг 2: координаты polyline — те же отфильтрованные точки, что и
-  // маркеры. Раньше тут было Douglas-Peucker упрощение (epsilon 10м), но
-  // оно «спрямляло» маршрут через 2-3 опорные вершины — линия проходила
-  // мимо реальных маркеров точек. Теперь линия идёт ровно через все
-  // отображаемые точки.
-  const positions = useMemo<Array<[number, number]>>(
-    () => filtered.map((p) => [p.lat, p.lon]),
-    [filtered],
+  // Шаг 2: режем трек по «дырам» в данных (телефон выключен/сел/без GPS).
+  // Непрерывные сегменты рисуем сплошной линией, разрывы — отдельно, иначе
+  // карта соединяет соседние точки прямой «через поле».
+  // Упрощения Douglas-Peucker здесь нет намеренно (epsilon 10м «спрямлял»
+  // маршрут мимо реальных маркеров точек) — линия идёт через все
+  // отображаемые точки. Если вернуть упрощение — применять к каждому
+  // сегменту отдельно, разрывы не упрощать.
+  const { segments, gaps } = useMemo(() => splitTrackByGaps(filtered), [filtered]);
+
+  // Мемоизируем позиции и иконки: react-leaflet на каждый новый объект в
+  // props зовёт setLatLngs/setIcon, а карта ре-рендерится на каждом опросе.
+  const segmentLines = useMemo(
+    () =>
+      segments
+        .filter((s) => s.length >= 2)
+        .map((s) => s.map((p): [number, number] => [p.lat, p.lon])),
+    [segments],
+  );
+  const gapViews = useMemo(
+    () =>
+      gaps.map((g) => ({
+        line: [
+          [g.from.lat, g.from.lon],
+          [g.to.lat, g.to.lon],
+        ] as Array<[number, number]>,
+        mid: gapMidpoint(g),
+        icon: gapLabelIcon(formatGapLabel(g.durationMs)),
+      })),
+    [gaps],
   );
 
   const stopMarkers = useMemo(() => {
@@ -88,20 +164,29 @@ export function TrackPolyline({ items, stops }: Props): ReactElement | null {
     return stops.filter((t) => !t.isActive);
   }, [stops]);
 
-  if (positions.length < 2 && stopMarkers.length === 0) return null;
+  if (filtered.length < 2 && stopMarkers.length === 0) return null;
 
   const first = filtered[0];
   const last = filtered[filtered.length - 1];
-  const dots = sampleForDots(filtered);
+  const dots = withLonePoints(sampleForDots(filtered), segments);
 
   return (
     <>
-      {positions.length >= 2 && (
-        <Polyline
-          positions={positions}
-          pathOptions={{ color: '#2563eb', weight: 3, dashArray: '8 6' }}
-        />
-      )}
+      {gapViews.map((g, i) => (
+        <Fragment key={`gap-${i}`}>
+          <Polyline positions={g.line} pathOptions={GAP_PATH} />
+          <Marker
+            position={g.mid}
+            icon={g.icon}
+            interactive={false}
+            keyboard={false}
+            zIndexOffset={GAP_LABEL_Z_OFFSET}
+          />
+        </Fragment>
+      ))}
+      {segmentLines.map((line, i) => (
+        <Polyline key={`seg-${i}`} positions={line} pathOptions={TRACK_PATH} />
+      ))}
       {stopMarkers.length === 0 &&
         dots.map((p, i) => {
           if (p === first || p === last) return null;

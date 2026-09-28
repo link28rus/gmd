@@ -27,4 +27,6 @@ export const IngestLocationsSchema = z
 export type LocationPoint = z.infer<typeof LocationPointSchema>;
 export type IngestLocationsDto = z.infer<typeof IngestLocationsSchema>;
 
-export const MAX_BATCH_SIZE = 100;
+// v0.59.0: 500 вместо 100 — телефон ребёнка выгружает накопленную без сети
+// очередь; 500 точек ≈ 40 минут движения, ~120 КБ JSON.
+export const MAX_BATCH_SIZE = 500;

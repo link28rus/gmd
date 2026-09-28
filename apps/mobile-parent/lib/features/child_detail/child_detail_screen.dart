@@ -7,6 +7,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../children/child_models.dart';
 import '../children/children_providers.dart';
+import '../children/widgets/track_layers.dart';
 import 'widgets/child_action_sheet.dart';
 
 /// Экран ребёнка: OSM-карта (flutter_map) + последняя локация + активный
@@ -124,20 +125,8 @@ class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen> {
                             keepBuffer: 4,
                             panBuffer: 2,
                           ),
-                          if (track.length >= 2)
-                            PolylineLayer(
-                              polylines: [
-                                Polyline(
-                                  points: track
-                                      .map((p) => LatLng(p.lat, p.lon))
-                                      .toList(),
-                                  strokeWidth: 4,
-                                  color: const Color(0xFF2E7D32),
-                                  borderStrokeWidth: 1,
-                                  borderColor: Colors.white,
-                                ),
-                              ],
-                            ),
+                          // Сплошная линия по кускам + серый пунктир на разрывах.
+                          ...buildTrackLayers(track),
                           if (latest != null)
                             MarkerLayer(
                               markers: [

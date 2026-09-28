@@ -5,6 +5,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../children/child_models.dart';
 import '../children/children_providers.dart';
+import '../children/widgets/track_layers.dart';
 
 /// Экран маршрута одной поездки: OSM-карта (flutter_map) с polyline трека и
 /// маркерами старта (зелёный) и финиша (красный).
@@ -121,18 +122,8 @@ class _TripRouteScreenState extends ConsumerState<TripRouteScreen> {
               keepBuffer: 4,
               panBuffer: 2,
             ),
-            if (points.length >= 2)
-              PolylineLayer(
-                polylines: [
-                  Polyline(
-                    points: points.map((p) => LatLng(p.lat, p.lon)).toList(),
-                    strokeWidth: 4,
-                    color: const Color(0xFF2E7D32),
-                    borderStrokeWidth: 1,
-                    borderColor: Colors.white,
-                  ),
-                ],
-              ),
+            // Сплошная линия по кускам + серый пунктир на разрывах.
+            ...buildTrackLayers(points),
             MarkerLayer(
               markers: [
                 Marker(

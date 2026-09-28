@@ -208,6 +208,10 @@ LocationIngestor (Riverpod provider, auto-keep-alive)
         markRetry(batch) // uploadAttempts++, lastAttemptAt = now
 ```
 
+> **С v0.59.0 устарело:** очередь больше не выбрасывает точки по числу попыток,
+> пачка до 500, без сети — пауза 15 с…5 мин. См.
+> [2026-09-28-offline-track.md](2026-09-28-offline-track.md).
+
 ### Параметры (tuneable через AppSettings)
 
 - GPS interval: 30 сек baseline, 15 сек при активной SOS-сессии, 60 сек при battery < 15%

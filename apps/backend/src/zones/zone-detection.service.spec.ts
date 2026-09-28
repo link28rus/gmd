@@ -182,3 +182,74 @@ describe('ZoneDetectionService.processPoint', () => {
     // Should not upsert since state is already stable
   });
 });
+
+// v0.59.0 — событие по точке, досланной из офлайн-очереди телефона.
+describe('ZoneDetectionService push: delayed flag', () => {
+  let svc: ZoneDetectionService;
+  let sendHybrid: jest.Mock;
+  const prisma = {
+    ...prismaMock,
+    child: { findUnique: jest.fn().mockResolvedValue({ name: 'Тимофей' }) },
+    zone: { findUnique: jest.fn().mockResolvedValue({ name: 'Школа' }) },
+  };
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    sendHybrid = jest.fn().mockResolvedValue(true);
+    const module = await Test.createTestingModule({
+      providers: [
+        ZoneDetectionService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: FcmService, useValue: { sendHybridToToken: sendHybrid } },
+        {
+          provide: ParentDevicesService,
+          useValue: {
+            findActiveByFamilyId: jest
+              .fn()
+              .mockResolvedValue([{ fcmToken: 'fcm1', rustorePushToken: null }]),
+            clearTokenByExpired: jest.fn(),
+            clearRustoreByExpired: jest.fn(),
+          },
+        },
+      ],
+    }).compile();
+    svc = module.get(ZoneDetectionService);
+    prisma.$queryRaw.mockResolvedValue([{ id: 'z1', radius: 250, distance_m: 100 }]);
+  });
+
+  async function entryAt(recordedAt: Date): Promise<Record<string, string>> {
+    prisma.zoneState.findMany.mockResolvedValue([
+      {
+        zoneId: 'z1',
+        childId: 'c1',
+        isInside: false,
+        pendingTransition: true,
+        pendingSince: new Date(recordedAt.getTime() - 65_000),
+      },
+    ]);
+    await svc.processPoint(prisma as never, {
+      familyId: 'f1',
+      childId: 'c1',
+      deviceId: 'd1',
+      lat: 48.48,
+      lon: 135.08,
+      accuracy: 10,
+      recordedAt,
+    });
+    // push уходит fire-and-forget после события — дождёмся цепочки промисов
+    await new Promise((r) => setImmediate(r));
+    expect(sendHybrid).toHaveBeenCalledTimes(1);
+    return sendHybrid.mock.calls[0][0].data as Record<string, string>;
+  }
+
+  it('marks the push as delayed when the point is older than 3 minutes', async () => {
+    const data = await entryAt(new Date(Date.now() - 60 * 60_000));
+    expect(data.type).toBe('GEOFENCE_ENTER');
+    expect(data.delayed).toBe('1');
+  });
+
+  it('live event has no delayed flag', async () => {
+    const data = await entryAt(new Date(Date.now() - 30_000));
+    expect(data.delayed).toBeUndefined();
+  });
+});

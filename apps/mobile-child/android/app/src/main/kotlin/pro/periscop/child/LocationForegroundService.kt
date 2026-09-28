@@ -5,9 +5,11 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.net.ConnectivityManager
+import android.net.Network
 import android.net.NetworkCapabilities
 import android.os.BatteryManager
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
@@ -119,6 +121,20 @@ class LocationForegroundService : Service() {
         private const val SPEED_STILL_MS = 0.5f
         private const val STILL_DEBOUNCE_MS = 15 * 60_000L
 
+        // v0.59.0 — офлайн-накопление. Без интернета в ACTIVE точки всё так же
+        // снимаются каждые 5 с, но FLP копит их (в GPS-чипе, если он умеет
+        // batching) и отдаёт пачкой раз в OFFLINE_BATCH_DELAY_MS: процессор и
+        // Dart-изолят просыпаются в ~24 раза реже, а отправлять всё равно
+        // некуда — точки лягут в очередь и уйдут, когда появится сеть.
+        // В STILL не копим: там и так точка раз в минуту, а speed из неё нужен
+        // сразу, чтобы заметить начало движения.
+        private const val OFFLINE_BATCH_DELAY_MS = 2 * 60_000L
+        // Сеть «моргает» (лифт, переход Wi-Fi → мобильная) — подписку FLP
+        // пересоздаём, только если состояние продержалось. Появление сети
+        // применяем быстрее: накопленные точки нужны родителю сразу.
+        private const val NETWORK_OFFLINE_DEBOUNCE_MS = 20_000L
+        private const val NETWORK_ONLINE_DEBOUNCE_MS = 3_000L
+
         // v0.31.2 — текущий профиль экспозится Dart-стороне через SharedPreferences.
         // UI-engine читает эти prefs через MainActivity MethodChannel и рендерит
         // chip-индикатор на home-экране ребёнка.
@@ -165,6 +181,14 @@ class LocationForegroundService : Service() {
     // быстрее чем Activity Recognition transitions (которые лагают 30-90с).
     private var lastMovingTimeMs: Long = 0L
 
+    // v0.59.0 — есть ли интернет (INTERNET + VALIDATED) и копит ли текущая
+    // подписка FLP точки пачками (setMaxUpdateDelayMillis).
+    private var online: Boolean = true
+    private var subscribedBatched: Boolean = false
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
+    private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
+    private val applyNetworkState = Runnable { onNetworkStateSettled() }
+
     private fun log(msg: String) = DiagLog.write(this, "svc", msg)
     private fun logErr(msg: String, e: Throwable) =
         DiagLog.write(this, "svc", "$msg: ${e.javaClass.simpleName}: ${e.message}")
@@ -184,6 +208,7 @@ class LocationForegroundService : Service() {
         when (intent?.action) {
             ACTION_STOP -> {
                 cancelHeartbeatAlarm()
+                unregisterNetworkMonitor()
                 unregisterActivityTransitions()
                 motionMonitor.stop()
                 releaseWakeLock()
@@ -197,9 +222,16 @@ class LocationForegroundService : Service() {
                 // в 5 сек = ANR. Если сервис уже живой, повторный startForeground
                 // безопасен.
                 startForeground(NOTIF_ID, buildNotification())
-                handleHeartbeat()
-                // v0.57: страховка realtime-канала — поднять упавший / порвать «тихий».
-                ChildRealtimeClient.ensureConnected(this)
+                if (callback != null && subscribedBatched) {
+                    // v0.59.0: без сети в движении FLP сам копит точки каждые
+                    // 5 с — heartbeat лишь будил бы Dart-изолят, а realtime-
+                    // каналу всё равно некуда подключаться.
+                    log("heartbeat tick: offline, FLP batching — skip")
+                } else {
+                    handleHeartbeat()
+                    // v0.57: страховка realtime-канала — поднять упавший / порвать «тихий».
+                    ChildRealtimeClient.ensureConnected(this)
+                }
                 // Перепланируем следующий alarm — делаем это всегда, в т.ч.
                 // после ошибок lastLocation, иначе цепочка оборвётся.
                 scheduleHeartbeatAlarm()
@@ -414,6 +446,7 @@ class LocationForegroundService : Service() {
         log("start: motion sensor support: ${motionMonitor.sensorLabel} (supported=${motionMonitor.isSupported})")
         profile = initial
         persistProfile(initial)
+        registerNetworkMonitor()
         subscribeLocationUpdates(initial)
         // Если стартуем в STILL — сразу регистрируем motion sensor для wake-on-motion.
         // (switchProfile сделает то же самое при переключении, но при первом
@@ -475,10 +508,12 @@ class LocationForegroundService : Service() {
             // Indoor multipath GPS-шум тоже отсекается (accuracy gate работает).
             Profile.STILL -> Triple(STILL_INTERVAL_MS, STILL_MIN_DIST_M, Priority.PRIORITY_BALANCED_POWER_ACCURACY)
         }
-        val request = LocationRequest.Builder(priority, interval)
+        val batched = p == Profile.ACTIVE && !online
+        val builder = LocationRequest.Builder(priority, interval)
             .setMinUpdateDistanceMeters(minDist)
             .setMinUpdateIntervalMillis(interval / 2)
-            .build()
+        if (batched) builder.setMaxUpdateDelayMillis(OFFLINE_BATCH_DELAY_MS)
+        val request = builder.build()
         val cb = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
                 log("onLocationResult size=${result.locations.size} profile=$p")
@@ -488,12 +523,101 @@ class LocationForegroundService : Service() {
             }
         }
         callback = cb
+        subscribedBatched = batched
         try {
             fused.requestLocationUpdates(request, cb, Looper.getMainLooper())
-            log("requestLocationUpdates OK profile=$p interval=${interval}ms minDist=${minDist}m")
+            log("requestLocationUpdates OK profile=$p interval=${interval}ms minDist=${minDist}m batched=$batched")
         } catch (e: SecurityException) {
             logErr("requestLocationUpdates SecurityException", e)
             stopSelf()
+        }
+    }
+
+    /**
+     * Пересоздать подписку FLP под профиль [p]. FLP не даёт менять параметры
+     * на лету — только remove + request. Если текущая подписка копит точки
+     * пачкой, сначала забираем накопленное (flushLocations): иначе
+     * removeLocationUpdates выбросит до 2 минут трека.
+     */
+    private fun resubscribe(p: Profile) {
+        val old = callback
+        val oldBatched = subscribedBatched
+        callback = null
+        subscribedBatched = false
+        if (old == null) {
+            subscribeLocationUpdates(p)
+            return
+        }
+        if (!oldBatched) {
+            fused.removeLocationUpdates(old)
+            subscribeLocationUpdates(p)
+            return
+        }
+        fused.flushLocations().addOnCompleteListener { task ->
+            if (!task.isSuccessful) logErr("flushLocations failed", task.exception ?: Exception("unknown"))
+            fused.removeLocationUpdates(old)
+            // Пока ждали flush, подписку мог уже пересоздать кто-то другой
+            // (switchProfile, start) — тогда вторую не делаем.
+            if (callback == null) subscribeLocationUpdates(profile)
+        }
+    }
+
+    // v0.59.0 — слежение за интернетом для офлайн-накопления точек.
+    private fun isOnlineNow(): Boolean {
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            ?: return true
+        val active = cm.activeNetwork ?: return false
+        val caps = cm.getNetworkCapabilities(active) ?: return false
+        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+            caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+    }
+
+    private fun registerNetworkMonitor() {
+        online = isOnlineNow()
+        log("network: initial ${if (online) "ONLINE" else "OFFLINE"}")
+        if (networkCallback != null) return
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return
+        val cb = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) = scheduleNetworkCheck()
+            override fun onLost(network: Network) = scheduleNetworkCheck()
+            override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) =
+                scheduleNetworkCheck()
+        }
+        try {
+            cm.registerDefaultNetworkCallback(cb, mainHandler)
+            networkCallback = cb
+        } catch (e: Throwable) {
+            // Без монитора живём как раньше: подписка без накопления.
+            logErr("registerDefaultNetworkCallback failed", e)
+        }
+    }
+
+    private fun unregisterNetworkMonitor() {
+        mainHandler.removeCallbacks(applyNetworkState)
+        val cb = networkCallback ?: return
+        networkCallback = null
+        try {
+            (getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager)
+                ?.unregisterNetworkCallback(cb)
+        } catch (_: Throwable) {
+            // ignore
+        }
+    }
+
+    private fun scheduleNetworkCheck() {
+        mainHandler.removeCallbacks(applyNetworkState)
+        val delay = if (isOnlineNow()) NETWORK_ONLINE_DEBOUNCE_MS else NETWORK_OFFLINE_DEBOUNCE_MS
+        mainHandler.postDelayed(applyNetworkState, delay)
+    }
+
+    private fun onNetworkStateSettled() {
+        val now = isOnlineNow()
+        if (now == online) return
+        online = now
+        log("network: ${if (now) "ONLINE" else "OFFLINE"} (profile=$profile)")
+        val wantBatched = profile == Profile.ACTIVE && !online
+        if (callback != null && wantBatched != subscribedBatched) {
+            resubscribe(profile)
         }
     }
 
@@ -550,10 +674,7 @@ class LocationForegroundService : Service() {
         profile = newProfile
         persistProfile(newProfile)
         // Снимаем текущий callback и подписываемся заново с новыми параметрами.
-        // FLP не даёт менять interval/minDistance на лету — только re-request.
-        callback?.let { fused.removeLocationUpdates(it) }
-        callback = null
-        subscribeLocationUpdates(newProfile)
+        resubscribe(newProfile)
         // v0.40.3 — motion sensor только в STILL для wake-on-motion. В ACTIVE
         // он не нужен (FLP и так шлёт обновления каждые 5 сек). Это ещё немного
         // экономит батарею + предотвращает «двойные» switch'и (sensor + speed).
@@ -746,11 +867,14 @@ class LocationForegroundService : Service() {
         // и прошло меньше DEDUP_WINDOW — считаем это GPS-дрожанием при
         // стоянке на месте. Heartbeat'у dedup НЕ применяем: его задача —
         // гарантированная доставка "жив" каждые 2 минуты.
+        // v0.59.0: окно считаем по времени фиксации (loc.time), а не по часам
+        // доставки — офлайн FLP отдаёт точки пачкой раз в 2 минуты, и у всех
+        // точек пачки «сейчас» одинаковое.
         if (!heartbeat) {
             val lastLat = lastSentLat
             val lastLon = lastSentLon
-            val now = System.currentTimeMillis()
-            if (lastLat != null && lastLon != null && now - lastSentTimeMs < DEDUP_WINDOW_MS) {
+            val dt = loc.time - lastSentTimeMs
+            if (lastLat != null && lastLon != null && dt in 0 until DEDUP_WINDOW_MS) {
                 val dist = haversineMeters(lastLat, lastLon, loc.latitude, loc.longitude)
                 val threshold = maxOf(DEDUP_MIN_DIST_M, (loc.accuracy.takeIf { loc.hasAccuracy() } ?: 0f) * 2f)
                 if (dist < threshold) {
@@ -762,7 +886,7 @@ class LocationForegroundService : Service() {
 
         lastSentLat = loc.latitude
         lastSentLon = loc.longitude
-        lastSentTimeMs = System.currentTimeMillis()
+        lastSentTimeMs = loc.time
         log("sendToDart lat=${loc.latitude} lon=${loc.longitude} acc=${loc.accuracy} hasSpeed=${loc.hasSpeed()} provider=${loc.provider} hb=$heartbeat")
         val (batteryLevel, isCharging) = batterySnapshot()
         val payload = mapOf(
@@ -896,8 +1020,10 @@ class LocationForegroundService : Service() {
         // сохранит heartbeat. Отменяем только при явном ACTION_STOP.
         // Activity transitions тоже оставляем подписанными — ресивер умеет
         // стартануть service при надобности, пере-подписка при ACTION_STOP.
+        unregisterNetworkMonitor()
         callback?.let { fused.removeLocationUpdates(it) }
         callback = null
+        subscribedBatched = false
         // Motion sensor отписываем — иначе если service rebornит, при start()
         // будет регистрация поверх старой (хотя isRegistered защищает).
         motionMonitor.stop()

@@ -22,6 +22,8 @@ import com.google.firebase.messaging.RemoteMessage
  * - `type`: GEOFENCE_ENTER / GEOFENCE_EXIT / SOS / LOW_BATTERY / CHILD_OFFLINE
  * - `childId`, `childName` (опционально)
  * - тип-специфичные поля (zoneId, sosId, lat, lon, recordedAt)
+ * - `delayed` = "1" у GEOFENCE_* (v0.59.0), если событие старше 3 мин —
+ *   текст строит [GeofenceNotificationText].
  *
  * Сервис строит нативный notification с deeplink на /home/child/{id} и кладёт
  * его в один из каналов (default events / sos с высокой важностью).
@@ -94,24 +96,32 @@ class ParentFirebaseMessagingService : FirebaseMessagingService() {
     private fun render(type: String, data: Map<String, String>): Render? {
         val childName = data["childName"]?.takeIf { it.isNotBlank() } ?: "Ребёнок"
         val zoneName = data["zoneName"]?.takeIf { it.isNotBlank() }
+        // v0.59.0: delayed=1 — событие старше 3 мин (точки пришли с опозданием),
+        // в тексте показываем реальное время события из recordedAt.
+        val delayed = data["delayed"] == "1"
+        val recordedAt = data["recordedAt"]
         return when (type) {
             "GEOFENCE_ENTER" -> Render(
                 title = if (zoneName != null) "Вход в зону «$zoneName»" else "Вход в зону",
-                body = if (zoneName != null) {
-                    "$childName вошёл в зону «$zoneName»."
-                } else {
-                    "$childName вошёл в одну из геозон."
-                },
+                body = GeofenceNotificationText.body(
+                    enter = true,
+                    childName = childName,
+                    zoneName = zoneName,
+                    delayed = delayed,
+                    recordedAtIso = recordedAt,
+                ),
                 channelId = CHANNEL_EVENTS,
                 importance = NotificationCompat.PRIORITY_DEFAULT,
             )
             "GEOFENCE_EXIT" -> Render(
                 title = if (zoneName != null) "Выход из зоны «$zoneName»" else "Выход из зоны",
-                body = if (zoneName != null) {
-                    "$childName вышел из зоны «$zoneName»."
-                } else {
-                    "$childName вышел из одной из геозон."
-                },
+                body = GeofenceNotificationText.body(
+                    enter = false,
+                    childName = childName,
+                    zoneName = zoneName,
+                    delayed = delayed,
+                    recordedAtIso = recordedAt,
+                ),
                 channelId = CHANNEL_EVENTS,
                 importance = NotificationCompat.PRIORITY_DEFAULT,
             )
