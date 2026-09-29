@@ -70,3 +70,9 @@ sudo systemctl start gmd-cleanup.service
 # Лог
 tail -50 /var/log/gmd-cleanup.log
 ```
+
+## gmd-geoip-update (monthly GeoIP DB, v0.64.0)
+
+Раз в месяц (3-го, 05:15) скачивает базу DB-IP City Lite в `/opt/gmd/data/geoip/`
+(временный файл + `mv -f`). Скрипт — `infra/server/bin/geoip-update.sh`, установка и
+проверка — `docs/deploy.md`, раздел «GeoIP — город по IP».

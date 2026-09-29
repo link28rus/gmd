@@ -67,7 +67,20 @@ export interface ActiveTrackDto {
   stays?: StayDto[];
 }
 
+/** Геозоны v2: последняя хорошая точка ребёнка (без outlier и mock). */
+export interface FamilyLatestItem {
+  childId: string;
+  lat: number;
+  lon: number;
+  accuracy: number | null;
+  recordedAt: string;
+  ageSec: number;
+}
+
 export const locationsApi = {
+  /** Последние точки всех детей семьи одним запросом; дети без точек не попадают. */
+  getFamilyLatest: () => apiFetch<{ items: FamilyLatestItem[] }>('/api/family/locations/latest'),
+
   getLatest: (childId: string) =>
     apiFetch<LatestLocationDto | null>(
       `/api/children/${encodeURIComponent(childId)}/location/latest`,

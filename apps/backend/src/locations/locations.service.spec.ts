@@ -68,7 +68,9 @@ function makeService(
     userRequiresConsent: (v: string | null) => v !== (overrides.currentVersion ?? '1.0'),
   };
   const zoneDetection: any = {
-    processPoint: jest.fn().mockResolvedValue(undefined),
+    processPoint: jest.fn().mockResolvedValue([]),
+    lockChild: jest.fn().mockResolvedValue(undefined),
+    notifyParents: jest.fn(),
     findCandidateZones: jest.fn().mockResolvedValue([]),
   };
   const trips: any = {

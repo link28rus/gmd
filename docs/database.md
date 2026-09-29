@@ -18,7 +18,7 @@
 Все изменения модели данных:
 
 1. Описываются в `schema.prisma`
-2. Генерируют миграцию: `pnpm --filter @gmd/backend prisma migrate dev --name <описание>`
+2. Генерируют миграцию: `pnpm --filter @periscop/backend prisma migrate dev --name <описание>`
 3. Автоматически применяются к БД при старте контейнера
 4. На production — выполняются в составе рутины deploy (`infra/deploy/deploy.sh`)
 
@@ -255,12 +255,16 @@ TTL 24 ч) или сам при сбое. Смотрит только админ
 - `color` (varchar) — HEX-цвет границы (e.g. `'#FF5733'`), валидируется regex `^#[0-9a-fA-F]{6}$`
 - `icon` (varchar) — иконка из фиксированного набора (e.g. `'school'`, `'home'`, `'basketball'`)
 - `centerLat`, `centerLon` (float8) — координаты центра WGS84
-- `radius` (int) — радиус в метрах, CHECK `BETWEEN 50 AND 5000`
+- `radius` (int) — радиус в метрах, CHECK `BETWEEN 50 AND 5000` (с v0.64.0 API принимает 100..5000)
+- `allChildren` (bool, default false, v0.64.0) — зона для всех детей семьи, включая будущих; явных
+  назначений в `zone_child_assignments` у такой зоны нет
 - `createdBy` (uuid) — foreign key → users (RESTRICT, чтобы не ломать историю)
 - `createdAt`, `updatedAt` (timestamptz)
 - `deletedAt` (timestamptz) — soft-delete зоны
 
-**Generated-колонка (PostGIS):** `center_geo geography(Point, 4326)` — вычисляемая точка для быстрых ST_DWithin запросов.
+**Generated-колонка (PostGIS):** `center_geo geography(Point, 4326)` — вычисляемая точка для
+`ST_Distance` при обработке GPS-точек. Prisma её не видит: `migrate diff` генерирует
+`DROP COLUMN "center_geo"`, из новых миграций его вычищать руками.
 
 **Индексы:**
 
@@ -295,6 +299,8 @@ M2M таблица связи зон и детей.
 - `lat`, `lon` (float8) — координаты точки, которая сработала событие
 - `accuracy` (float8) — точность в момент события
 - `recordedAt` (timestamptz) — время точки на устройстве
+- `durationSec` (int, nullable, v0.64.0) — у `exit`: сколько ребёнок пробыл в зоне от
+  подтверждённого входа; NULL, если вход не наблюдался (начальное состояние)
 - `createdAt` (timestamptz) — время события на сервере
 
 **Индексы:**
@@ -321,12 +327,18 @@ M2M таблица связи зон и детей.
 
 **Индекс:** `(childId)` — быстрый поиск всех состояний ребёнка.
 
-**Логика debounce:**
+**Логика детекции (v0.64.0, подробно — `docs/superpowers/specs/2026-09-29-geofences-v2.md`):**
 
-1. GPS-точка обрабатывается, проверяется, находится ли ребёнок внутри/снаружи зоны (ST_DWithin + buffer).
-2. Если состояние отличается от `isInside` → устанавливается `pendingTransition = true`, `pendingSince = now()`.
-3. Каждые 60 секунд cron-задача проверяет, есть ли точки в течение этих 60 сек, подтверждающие состояние → переводит в `isInside`, создаёт ZoneEvent, очищает pending-флаги.
-4. Буферная зона при exit: использует `max(30 м, 15% от radius)` чтобы избежать ложных срабатываний при колебаниях GPS у границы.
+1. При приёме точки (в транзакции, под `pg_advisory_xact_lock` по ребёнку) для каждой зоны ребёнка
+   считается `d = ST_Distance(center_geo, точка)`. Вердикт с учётом погрешности `acc`:
+   внутри, если `d + acc/2 ≤ R`; снаружи, если `d − acc > R + max(30, 0.15R)`; иначе «неясно» —
+   состояние и ожидание не трогаются.
+2. Вердикт отличается от `isInside` → `pendingTransition = true`, `pendingSince = recordedAt`.
+3. Следующая точка с тем же вердиктом через ≥ 60 с по времени фикса → ZoneEvent, новое `isInside`,
+   `lastConfirmedChange = recordedAt`; push родителям — после commit транзакции.
+4. Строки нет (зона «все дети», новый ребёнок) — первая однозначная точка задаёт состояние без события.
+5. При создании зоны, добавлении ребёнка и правке центра или радиуса состояние считается по
+   последней хорошей точке ребёнка (без `outlier` и `mock`) — без события.
 
 ---
 
@@ -362,10 +374,10 @@ M2M таблица связи зон и детей.
 
 ```bash
 # На dev-машине
-pnpm --filter @gmd/backend prisma migrate dev
+pnpm --filter @periscop/backend prisma migrate dev
 
 # На production (автоматически в deploy.sh)
-pnpm --filter @gmd/backend prisma migrate deploy
+pnpm --filter @periscop/backend prisma migrate deploy
 ```
 
 Миграции идемпотентны и безопасны для production (используется таблица `_prisma_migrations` для отслеживания версии).
@@ -379,7 +391,7 @@ pnpm --filter @gmd/backend prisma migrate deploy
 | Приоритет | Таблица         | Индекс                               | Причина                           |
 | --------- | --------------- | ------------------------------------ | --------------------------------- |
 | P0        | locations       | `(childId, recordedAt DESC)`         | основной запрос истории локаций   |
-| P0        | zones           | GIST на `center_geo`                 | ST_DWithin в обработке GPS-точек  |
+| P0        | zones           | GIST на `center_geo`                 | геометрия зон (ST_Distance)       |
 | P0        | zone_events     | `(childId, recordedAt DESC)`         | лента событий ребёнка             |
 | P1        | children        | `(familyId, deletedAt)`              | список детей семьи                |
 | P1        | users           | `(email)`                            | поиск по email при входе          |
@@ -401,7 +413,7 @@ pnpm --filter @gmd/backend prisma migrate deploy
 **Визуализация в Prisma Studio:**
 
 ```bash
-pnpm --filter @gmd/backend prisma studio
+pnpm --filter @periscop/backend prisma studio
 ```
 
 Откроется интерактивная веб-GUI для просмотра и редактирования данных (только для dev).

@@ -1,11 +1,20 @@
 // apps/web/app/cabinet/zones/components/zone-editor-map-inner.tsx
 'use client';
 
-import { useEffect, useMemo, type ReactElement } from 'react';
-import { Circle, MapContainer, Marker, TileLayer, useMapEvents, ZoomControl } from 'react-leaflet';
+import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import {
+  Circle,
+  MapContainer,
+  Marker,
+  TileLayer,
+  useMap,
+  useMapEvents,
+  ZoomControl,
+} from 'react-leaflet';
 import L from 'leaflet';
 import { useTheme } from '@/components/theme/theme-provider';
 import { tileConfigFor } from '@/lib/maps/tile-config';
+import { ZONE_RADIUS_MAX, ZONE_RADIUS_MIN } from '@/lib/api/zones';
 
 export interface ZoneEditorMapInnerProps {
   centerLat: number;
@@ -14,6 +23,13 @@ export interface ZoneEditorMapInnerProps {
   color: string;
   onCenterChange: (lat: number, lon: number) => void;
   onRadiusChange: (m: number) => void;
+  /**
+   * Счётчик «центр сменили извне» (выбор адреса): при каждом изменении карта
+   * перелетает к текущему центру. Клик и перетаскивание на самой карте его не меняют.
+   */
+  recenterSeq?: number;
+  /** Стартовый масштаб. По умолчанию 15. */
+  initialZoom?: number;
 }
 
 /**
@@ -41,12 +57,28 @@ function dotIcon(color: string, size: number, cursor: string): L.DivIcon {
   return L.divIcon({
     html:
       `<div style="width:${size}px;height:${size}px;border-radius:50%;` +
-      `background:var(--card,#ffffff);border:2px solid ${color};cursor:${cursor};` +
+      `background:hsl(var(--card,0 0% 100%));border:2px solid ${color};cursor:${cursor};` +
       `transform:translate(-50%,-50%);position:absolute;left:0;top:0;"></div>`,
     className: 'gmd-zone-handle',
     iconSize: [0, 0],
     iconAnchor: [0, 0],
   });
+}
+
+/** Перелёт к центру зоны, когда центр сменили извне (выбор адреса). */
+function Recenter({ lat, lon, seq }: { lat: number; lon: number; seq: number }): null {
+  const map = useMap();
+  const seqRef = useRef(seq);
+  useEffect(() => {
+    if (seqRef.current === seq) return;
+    seqRef.current = seq;
+    map.flyTo([lat, lon], Math.max(map.getZoom(), 15), { duration: 0.6 });
+  }, [seq, lat, lon, map]);
+  return null;
+}
+
+function clampRadius(m: number): number {
+  return Math.max(ZONE_RADIUS_MIN, Math.min(ZONE_RADIUS_MAX, m));
 }
 
 function MapClickListener({ onClick }: { onClick: (lat: number, lon: number) => void }): null {
@@ -65,6 +97,8 @@ export function ZoneEditorMapInner({
   color,
   onCenterChange,
   onRadiusChange,
+  recenterSeq = 0,
+  initialZoom = 15,
 }: ZoneEditorMapInnerProps): ReactElement {
   const { theme } = useTheme();
   const tile = tileConfigFor(theme);
@@ -79,12 +113,11 @@ export function ZoneEditorMapInner({
     });
   }, []);
 
-  // Hardcoded init view — карта дальше управляется свободно пользователем.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const initial = useMemo(
-    () => ({ center: [centerLat, centerLon] as [number, number], zoom: 15 }),
-    [],
-  );
+  // Стартовый вид — один раз; дальше карту двигает пользователь или Recenter.
+  const [initial] = useState(() => ({
+    center: [centerLat, centerLon] as [number, number],
+    zoom: initialZoom,
+  }));
 
   // Координаты ручки радиуса — на восточной границе круга.
   const handleLat = centerLat;
@@ -111,6 +144,7 @@ export function ZoneEditorMapInner({
         <ZoomControl position="topright" />
 
         <MapClickListener onClick={(lat, lon) => onCenterChange(lat, lon)} />
+        <Recenter lat={centerLat} lon={centerLon} seq={recenterSeq} />
 
         <Circle
           center={[centerLat, centerLon]}
@@ -143,9 +177,15 @@ export function ZoneEditorMapInner({
           icon={handleIcon}
           eventHandlers={{
             dragend: (e) => {
-              const ll = (e.target as L.Marker).getLatLng();
-              const newRadius = Math.round(haversineM(centerLat, centerLon, ll.lat, ll.lng));
-              onRadiusChange(Math.max(50, Math.min(5000, newRadius)));
+              const marker = e.target as L.Marker;
+              const ll = marker.getLatLng();
+              const newRadius = clampRadius(
+                Math.round(haversineM(centerLat, centerLon, ll.lat, ll.lng)),
+              );
+              // Ручку возвращаем на окружность: при упоре в предел радиус не
+              // меняется, и react-leaflet сам позицию маркера не обновит.
+              marker.setLatLng([centerLat, centerLon + radiusToLonDelta(newRadius, centerLat)]);
+              onRadiusChange(newRadius);
             },
           }}
         />

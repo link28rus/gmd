@@ -1,5 +1,5 @@
 'use client';
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { useMemo } from 'react';
 import { Circle, Marker } from 'react-leaflet';
 import L from 'leaflet';
@@ -14,6 +14,8 @@ interface Props {
   ageSec: number;
   /** Готовый src аватара (пресет или blob: URL фото); без него — буква имени. */
   avatarUrl?: string | null;
+  /** Содержимое маркера (например, `<Popup>` с действиями). */
+  children?: ReactNode;
 }
 
 /**
@@ -28,6 +30,7 @@ export function LatestMarker({
   childName,
   ageSec,
   avatarUrl,
+  children,
 }: Props): ReactElement {
   const initial = avatarInitial(childName);
   const color = avatarColor(childName);
@@ -72,7 +75,9 @@ export function LatestMarker({
           }}
         />
       )}
-      <Marker position={[lat, lon]} icon={icon} />
+      <Marker position={[lat, lon]} icon={icon}>
+        {children}
+      </Marker>
     </>
   );
 }

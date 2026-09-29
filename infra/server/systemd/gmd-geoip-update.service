@@ -1,0 +1,11 @@
+[Unit]
+Description=GMD GeoIP database update (DB-IP City Lite)
+Documentation=https://github.com/link28rus/gmd/blob/main/docs/deploy.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/gmd/bin/geoip-update.sh
+StandardOutput=append:/var/log/gmd-geoip-update.log
+StandardError=append:/var/log/gmd-geoip-update.log

@@ -155,6 +155,39 @@ RuStore на паузе, и канал RuStore Push не работает ни �
 токены из RuStore Console и показ уведомления родителю по тому же рендеру, что у FCM (с учётом, что
 плагин `flutter_rustore_push` регистрирует свой сервис сообщений).
 
+## GeoIP — город по IP (v0.64.0)
+
+`GET /api/geo/ip-center` отдаёт центр города по IP клиента — запасной центр карты геозон, когда
+у семьи ещё нет зон и точек детей. База локальная, IP никуда не уходит (152-ФЗ).
+
+- **База:** DB-IP City Lite (CC BY 4.0), файлы `dbip-city-ipv4.mmdb` и `dbip-city-ipv6.mmdb`
+  (~60–70 МБ каждый) с зеркала GitHub Releases `sapics/ip-location-db`. Официальный сайт DB-IP с
+  сервера режется (Cloudflare), MaxMind закрыт для РФ.
+- **Где лежит:** на хосте `/opt/gmd/data/geoip/`, в backend — `/srv/geoip` (`:ro`, каталог целиком:
+  после замены файла через `mv` bind-mount файла видел бы старый inode). Путь внутри контейнера
+  меняется env `GEOIP_DIR`.
+- **Обновление:** `gmd-geoip-update.timer` — 3-го числа каждого месяца, 05:15. Скрипт
+  `/opt/gmd/bin/geoip-update.sh` качает во временный файл в том же каталоге, проверяет размер и
+  маркер MaxMind DB и делает `mv -f`. Backend подхватывает новую базу сам (`watchForUpdates`),
+  рестарт не нужен. Лог — `/var/log/gmd-geoip-update.log`.
+- **Нет базы** — backend работает, ручка отдаёт `204`, кабинет берёт следующий центр (Москва).
+- **Атрибуция:** «IP Geolocation by DB-IP» со ссылкой на db-ip.com — в подписи карты, когда центр
+  взят по IP (требование лицензии).
+
+Установка (один раз):
+
+```bash
+scp infra/server/bin/geoip-update.sh infra/server/systemd/gmd-geoip-update.{service,timer} gmd-online:/tmp/
+ssh gmd-online 'install -m 0755 /tmp/geoip-update.sh /opt/gmd/bin/geoip-update.sh \
+  && install -m 0644 /tmp/gmd-geoip-update.service /tmp/gmd-geoip-update.timer /etc/systemd/system/ \
+  && systemctl daemon-reload && systemctl enable --now gmd-geoip-update.timer \
+  && systemctl start gmd-geoip-update.service && ls -la /opt/gmd/data/geoip'
+# база появилась ДО первого старта backend с монтированием — иначе перезапустить backend:
+ssh gmd-online 'docker restart gmd-backend && docker logs gmd-backend 2>&1 | grep GeoIP'
+```
+
+Проверка: `systemctl list-timers | grep geoip`; в логах backend — `GeoIP: база … загружена`.
+
 ## Обновление `.env.prod`
 
 Редактируется только на сервере (в git не коммитится):

@@ -17,7 +17,6 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { PrismaService } from '../prisma/prisma.service';
 import { ZodValidationPipe } from '../common/zod/zod-validation.pipe';
 import { ZonesService } from './zones.service';
 import { CreateZoneSchema } from './dto/create-zone.schema';
@@ -28,26 +27,21 @@ import { ZonesEventsQuerySchema } from './dto/zones-events-query.schema';
 import type { ZonesEventsQuery } from './dto/zones-events-query.schema';
 
 interface AuthedRequest extends Request {
-  user: { userId: string };
+  user: { userId: string; familyId?: string | null };
 }
 
 @Controller('zones')
 @UseGuards(JwtAuthGuard)
 export class ZonesController {
-  constructor(
-    @Inject(ZonesService) private readonly svc: ZonesService,
-    @Inject(PrismaService) private readonly prisma: PrismaService,
-  ) {}
+  constructor(@Inject(ZonesService) private readonly svc: ZonesService) {}
 
-  private async resolveFamilyId(userId: string): Promise<string> {
-    const membership = await this.prisma.membership.findFirst({
-      where: { userId },
-      select: { familyId: true },
-    });
-    if (!membership) {
+  /** v0.64.0: семья — из JWT, как в children.controller. */
+  private familyId(req: AuthedRequest): string {
+    const familyId = req.user.familyId;
+    if (!familyId) {
       throw new NotFoundException({ code: 'family_not_found', message: 'User has no family' });
     }
-    return membership.familyId;
+    return familyId;
   }
 
   @Post()
@@ -57,13 +51,13 @@ export class ZonesController {
     @Req() req: AuthedRequest,
     @Body(new ZodValidationPipe(CreateZoneSchema)) dto: CreateZoneDto,
   ) {
-    const familyId = await this.resolveFamilyId(req.user.userId);
+    const familyId = this.familyId(req);
     return this.svc.create(familyId, req.user.userId, dto);
   }
 
   @Get()
   async list(@Req() req: AuthedRequest) {
-    const familyId = await this.resolveFamilyId(req.user.userId);
+    const familyId = this.familyId(req);
     return this.svc.list(familyId);
   }
 
@@ -72,13 +66,13 @@ export class ZonesController {
     @Req() req: AuthedRequest,
     @Query(new ZodValidationPipe(ZonesEventsQuerySchema)) q: ZonesEventsQuery,
   ) {
-    const familyId = await this.resolveFamilyId(req.user.userId);
+    const familyId = this.familyId(req);
     return this.svc.listEvents(familyId, q);
   }
 
   @Get(':id')
   async get(@Req() req: AuthedRequest, @Param('id') id: string) {
-    const familyId = await this.resolveFamilyId(req.user.userId);
+    const familyId = this.familyId(req);
     return this.svc.get(familyId, id);
   }
 
@@ -89,7 +83,7 @@ export class ZonesController {
     @Param('id') id: string,
     @Body(new ZodValidationPipe(UpdateZoneSchema)) dto: UpdateZoneDto,
   ) {
-    const familyId = await this.resolveFamilyId(req.user.userId);
+    const familyId = this.familyId(req);
     return this.svc.update(familyId, id, dto);
   }
 
@@ -97,7 +91,7 @@ export class ZonesController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @Throttle({ default: { ttl: 60_000, limit: 10 } })
   async softDelete(@Req() req: AuthedRequest, @Param('id') id: string): Promise<void> {
-    const familyId = await this.resolveFamilyId(req.user.userId);
+    const familyId = this.familyId(req);
     await this.svc.softDelete(familyId, id);
   }
 }

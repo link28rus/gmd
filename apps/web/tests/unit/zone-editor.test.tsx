@@ -11,6 +11,7 @@ import { ZoneEditorDialog } from '@/app/cabinet/zones/components/zone-editor-dia
 // ---------------------------------------------------------------------------
 
 jest.mock('@/lib/api/zones', () => ({
+  ...jest.requireActual('@/lib/api/zones'),
   zonesApi: {
     create: jest.fn().mockResolvedValue({
       id: 'z1',
@@ -21,6 +22,8 @@ jest.mock('@/lib/api/zones', () => ({
       centerLat: 55.75,
       centerLon: 37.62,
       radius: 250,
+      allChildren: true,
+      states: [],
       createdBy: 'u1',
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
@@ -96,6 +99,8 @@ describe('ZoneEditorDialog', () => {
       centerLat: 55.75,
       centerLon: 37.62,
       radius: 300,
+      allChildren: false,
+      states: [],
       createdBy: 'u1',
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
@@ -132,7 +137,7 @@ describe('ZoneEditorDialog', () => {
     expect(onSaved).not.toHaveBeenCalled();
   });
 
-  it('рендерит чекбоксы для каждого ребёнка', () => {
+  it('новая зона — «Все дети» включено, после снятия видны чекбоксы детей', () => {
     const kids = [
       { id: 'c1', name: 'Аня' },
       { id: 'c2', name: 'Вася' },
@@ -140,10 +145,33 @@ describe('ZoneEditorDialog', () => {
     render(<ZoneEditorDialog open onOpenChange={() => {}} kids={kids} onSaved={() => {}} />, {
       wrapper: makeWrapper(),
     });
+    const all = screen.getByRole('checkbox', { name: 'Все дети, включая будущих' });
+    expect(all).toBeChecked();
+    expect(screen.queryByText('Аня')).not.toBeInTheDocument();
+
+    fireEvent.click(all);
     expect(screen.getByText('Аня')).toBeInTheDocument();
     expect(screen.getByText('Вася')).toBeInTheDocument();
-    const checkboxes = screen.getAllByRole('checkbox');
-    expect(checkboxes).toHaveLength(2);
+    expect(screen.getAllByRole('checkbox')).toHaveLength(3);
+  });
+
+  it('без выбранных детей и без «Все дети» сохранить нельзя', () => {
+    render(<ZoneEditorDialog open onOpenChange={() => {}} kids={KIDS} onSaved={() => {}} />, {
+      wrapper: makeWrapper(),
+    });
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Все дети, включая будущих' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Аня' }));
+    expect(screen.getByRole('button', { name: 'Сохранить' })).toBeDisabled();
+  });
+
+  it('радиус новой зоны по умолчанию 150 м, диапазон 100..5000', () => {
+    render(<ZoneEditorDialog open onOpenChange={() => {}} kids={KIDS} onSaved={() => {}} />, {
+      wrapper: makeWrapper(),
+    });
+    const slider = screen.getByLabelText(/Радиус/);
+    expect(slider).toHaveValue('150');
+    expect(slider).toHaveAttribute('min', '100');
+    expect(slider).toHaveAttribute('max', '5000');
   });
 
   it('кнопка Отмена закрывает диалог', async () => {

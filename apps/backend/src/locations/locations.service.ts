@@ -12,6 +12,7 @@ import { createId } from '@paralleldrive/cuid2';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConsentService } from '../consent/consent.service';
 import { ZoneDetectionService } from '../zones/zone-detection.service';
+import type { ZoneEventNotice } from '../zones/zone-detection.service';
 import { TripsService } from './trips.service';
 import { distanceMeters } from '../common/geo-distance';
 import {
@@ -29,6 +30,16 @@ export interface IngestResult {
   accepted: number;
   rejected: number;
   rejectedReasons: Record<string, number>;
+}
+
+/** v0.64.0: элемент GET /family/locations/latest. */
+export interface FamilyLatestPoint {
+  childId: string;
+  lat: number;
+  lon: number;
+  accuracy: number | null;
+  recordedAt: string;
+  ageSec: number;
 }
 
 export interface LocationDto {
@@ -285,6 +296,7 @@ export class LocationsService {
     );
 
     let accepted = 0;
+    const zoneNotices: ZoneEventNotice[] = [];
     if (validRows.length > 0) {
       await this.prisma.$transaction(async (tx) => {
         const inserted = await tx.$executeRaw(Prisma.sql`
@@ -308,10 +320,16 @@ export class LocationsService {
         // Геозоны — по каждой валидной точке новее последней сохранённой, в
         // хронологическом порядке (validPoints отсортированы). Телепорты и
         // подделку GPS пропускаем — иначе ложные «вышел/вошёл».
+        // v0.64.0: под блокировкой по ребёнку; события копим, push — после commit.
+        let zoneLocked = false;
         for (const [i, p] of validPoints.entries()) {
           if (new Date(p.recordedAt).getTime() <= zoneCutoffTs) continue;
           if (flags.incoming[i] === 'outlier' || flags.incoming[i] === 'mock') continue;
-          await this.zoneDetection.processPoint(tx, {
+          if (!zoneLocked) {
+            await this.zoneDetection.lockChild(tx, ctx.childId);
+            zoneLocked = true;
+          }
+          const notices = await this.zoneDetection.processPoint(tx, {
             familyId: child.familyId,
             childId: ctx.childId,
             deviceId: ctx.deviceId,
@@ -320,9 +338,12 @@ export class LocationsService {
             accuracy: p.accuracy ?? null,
             recordedAt: new Date(p.recordedAt),
           });
+          zoneNotices.push(...notices);
         }
       });
     }
+    // Транзакция закоммичена — теперь можно слать push о геозонах.
+    this.zoneDetection.notifyParents(zoneNotices);
 
     const rejected = points.length - accepted;
 
@@ -352,6 +373,41 @@ export class LocationsService {
     if (!row) return null;
     const ageSec = Math.floor((Date.now() - row.recordedAt.getTime()) / 1000);
     return { ...toDto(row), ageSec };
+  }
+
+  /**
+   * v0.64.0: последняя хорошая точка (без outlier и mock) каждого ребёнка
+   * семьи одним запросом — для карты геозон и начального состояния зон.
+   * Дети без точек в ответ не попадают.
+   */
+  async getLatestGoodForFamily(familyId: string): Promise<FamilyLatestPoint[]> {
+    const rows = await this.prisma.$queryRaw<
+      Array<{
+        childId: string;
+        lat: number;
+        lon: number;
+        accuracy: number | null;
+        recordedAt: Date;
+      }>
+    >(Prisma.sql`
+      SELECT DISTINCT ON (l."childId")
+             l."childId", l.lat, l.lon, l.accuracy, l."recordedAt"
+      FROM locations l
+      JOIN children c ON c.id = l."childId"
+      WHERE c."familyId" = ${familyId}
+        AND c."deletedAt" IS NULL
+        AND (l."trackFlag" IS NULL OR l."trackFlag" NOT IN ('outlier', 'mock'))
+      ORDER BY l."childId", l."recordedAt" DESC
+    `);
+    const now = Date.now();
+    return rows.map((r) => ({
+      childId: r.childId,
+      lat: r.lat,
+      lon: r.lon,
+      accuracy: r.accuracy,
+      recordedAt: r.recordedAt.toISOString(),
+      ageSec: Math.max(0, Math.floor((now - r.recordedAt.getTime()) / 1000)),
+    }));
   }
 
   /**

@@ -1,0 +1,13 @@
+[Unit]
+Description=Monthly GMD GeoIP database update (3rd, 05:15)
+Documentation=https://github.com/link28rus/gmd/blob/main/docs/deploy.md
+
+[Timer]
+# DB-IP выпускает Lite-базу в начале месяца, зеркало пересобирается следом.
+# Persistent=true — если сервер был выключен, обновить при следующем старте.
+OnCalendar=*-*-03 05:15:00
+Persistent=true
+RandomizedDelaySec=30m
+
+[Install]
+WantedBy=timers.target

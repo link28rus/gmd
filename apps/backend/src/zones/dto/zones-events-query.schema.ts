@@ -6,7 +6,8 @@ export const ZonesEventsQuerySchema = z
     zoneId: z.string().cuid().optional(),
     from: z.string().datetime().optional(),
     to: z.string().datetime().optional(),
-    cursor: z.string().datetime().optional(),
+    // Непрозрачный курсор из nextCursor: пара (recordedAt, id).
+    cursor: z.string().max(200).optional(),
     limit: z.coerce.number().int().gte(1).lte(100).default(50),
   })
   .strict();

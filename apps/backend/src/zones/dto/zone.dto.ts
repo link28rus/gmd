@@ -10,6 +10,9 @@ export interface ZoneDto {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+  /** v0.64.0: зона для всех детей семьи, включая будущих. */
+  allChildren: boolean;
+  /** Явные назначения (пусто при allChildren). */
   childIds: string[];
   states?: Array<{ childId: string; isInside: boolean }>;
 }

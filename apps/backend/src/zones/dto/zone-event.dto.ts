@@ -12,4 +12,6 @@ export interface ZoneEventDto {
   accuracy: number | null;
   recordedAt: string;
   createdAt: string;
+  /** v0.64.0: у выхода — сколько пробыл в зоне, секунды; иначе null. */
+  durationSec: number | null;
 }

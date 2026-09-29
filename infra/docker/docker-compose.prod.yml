@@ -273,6 +273,10 @@ services:
     volumes:
       - /opt/gmd/secrets/jwt-private.pem:/run/secrets/jwt-private.pem:ro
       - /opt/gmd/secrets/jwt-public.pem:/run/secrets/jwt-public.pem:ro
+      # v0.64.0: база GeoIP (DB-IP City Lite) для /geo/ip-center. Каталог
+      # целиком, не файл: gmd-geoip-update.timer заменяет файлы через mv, и
+      # bind-mount файла видел бы старый inode.
+      - /opt/gmd/data/geoip:/srv/geoip:ro
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }

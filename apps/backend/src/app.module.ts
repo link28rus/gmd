@@ -17,6 +17,7 @@ import { ConsentModule } from './consent/consent.module';
 import { LocationsModule } from './locations/locations.module';
 import { SosModule } from './sos/sos.module';
 import { ZonesModule } from './zones/zones.module';
+import { GeoModule } from './geo/geo.module';
 import { DeviceCommandsModule } from './device-commands/device-commands.module';
 import { AudioModule } from './audio/audio.module';
 import { FcmModule } from './fcm/fcm.module';
@@ -51,6 +52,7 @@ import { SecretsModule } from './common/secrets/secrets.module';
     LocationsModule,
     SosModule,
     ZonesModule,
+    GeoModule,
     DeviceCommandsModule,
     AudioModule,
     FcmModule,

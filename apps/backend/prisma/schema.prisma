@@ -596,6 +596,9 @@ model Zone {
   centerLat Float
   centerLon Float
   radius    Int
+  // v0.64.0: зона для всех детей семьи, включая будущих. Явные назначения
+  // (assignments) при этом пустые.
+  allChildren Boolean @default(false)
   // PostGIS generated column `center_geo` существует в БД (см.
   // 20260420064916_phase4_zones_postgis), но в schema.prisma её НЕТ — Prisma 5
   // не умеет корректно описывать GENERATED ALWAYS AS. Поэтому каждый migrate
@@ -644,6 +647,9 @@ model ZoneEvent {
   lon        Float
   accuracy   Float?
   recordedAt DateTime
+  // v0.64.0: у события выхода — сколько ребёнок пробыл в зоне (от
+  // подтверждённого входа). NULL, если вход не наблюдался.
+  durationSec Int?
   createdAt  DateTime      @default(now())
 
   zone  Zone  @relation(fields: [zoneId], references: [id], onDelete: Cascade)

@@ -160,9 +160,9 @@ pnpm stack:logs
 
 # Приложения
 pnpm dev                    # backend (3001) + web (3000) параллельно
-pnpm --filter @gmd/backend dev
-pnpm --filter @gmd/backend prisma migrate dev --name <name>
-pnpm --filter @gmd/backend prisma studio
+pnpm --filter @periscop/backend dev
+pnpm --filter @periscop/backend prisma migrate dev --name <name>
+pnpm --filter @periscop/backend prisma studio
 
 # Mobile (требует flutter в PATH)
 cd apps/mobile-parent && flutter run

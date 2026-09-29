@@ -107,9 +107,19 @@ export async function bootTestApp(): Promise<TestAppHandle> {
 }
 
 export async function truncateAll(h: TestAppHandle): Promise<void> {
-  await h.prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE zone_events, zone_states, zone_child_assignments, zones, sos_events, locations, consent_records, child_devices, invites, children, refresh_tokens, otp_codes, memberships, families, users RESTART IDENTITY CASCADE;',
-  );
+  // Приём точек запускает пересчёт поездок в фоне (fire-and-forget); если он
+  // ещё идёт от прошлого теста, TRUNCATE ловит deadlock (40P01) — повторяем.
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await h.prisma.$executeRawUnsafe(
+        'TRUNCATE TABLE zone_events, zone_states, zone_child_assignments, zones, sos_events, locations, consent_records, child_devices, invites, children, refresh_tokens, otp_codes, memberships, families, users RESTART IDENTITY CASCADE;',
+      );
+      break;
+    } catch (e) {
+      if (attempt >= 5 || !String(e).includes('40P01')) throw e;
+      await new Promise((r) => setTimeout(r, 200 * attempt));
+    }
+  }
   await h.redis.flushdb();
   h.delivery.reset();
   h.mailer.reset();

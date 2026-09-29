@@ -1,6 +1,6 @@
 {
   "name": "@periscop/backend",
-  "version": "0.63.0",
+  "version": "0.64.0",
   "private": true,
   "description": "Перископ backend — NestJS API",
   "scripts": {
@@ -34,6 +34,7 @@
     "firebase-admin": "^13.8.0",
     "ioredis": "^5.10.1",
     "jose": "^5.9.6",
+    "maxmind": "^5.0.7",
     "nodemailer": "^6.9.16",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
