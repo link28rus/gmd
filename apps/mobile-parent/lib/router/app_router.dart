@@ -14,6 +14,9 @@ import '../features/splash/splash_screen.dart';
 import '../features/trip_history/trip_history_screen.dart';
 import '../features/trip_history/trip_route_screen.dart';
 import '../features/children/child_models.dart';
+import '../features/zones/zone_editor_screen.dart';
+import '../features/zones/zone_events_screen.dart';
+import '../features/zones/zones_screen.dart';
 
 class AppRouter {
   static GoRouter build(WidgetRef ref) {
@@ -42,6 +45,41 @@ class AppRouter {
           path: '/home',
           builder: (_, _) => const HomeScreen(),
           routes: [
+            // v0.66.0: геозоны (спека геозон v2, раздел 3.1).
+            GoRoute(
+              path: 'zones',
+              builder: (_, _) => const ZonesScreen(),
+              routes: [
+                GoRoute(
+                  // /home/zones/new?lat=&lon=&zoom=&childId= — центр новой
+                  // зоны (текущий вид карты или точка ребёнка).
+                  path: 'new',
+                  builder: (_, state) {
+                    final q = state.uri.queryParameters;
+                    return ZoneEditorScreen(
+                      initialLat: double.tryParse(q['lat'] ?? ''),
+                      initialLon: double.tryParse(q['lon'] ?? ''),
+                      initialZoom: double.tryParse(q['zoom'] ?? ''),
+                      initialChildId: q['childId'],
+                    );
+                  },
+                ),
+                GoRoute(
+                  // /home/zones/events?zoneId=&childId= — сюда же ведёт тап
+                  // по push о зоне.
+                  path: 'events',
+                  builder: (_, state) => ZoneEventsScreen(
+                    initialZoneId: state.uri.queryParameters['zoneId'],
+                    initialChildId: state.uri.queryParameters['childId'],
+                  ),
+                ),
+                GoRoute(
+                  path: ':zoneId/edit',
+                  builder: (_, state) =>
+                      ZoneEditorScreen(zoneId: state.pathParameters['zoneId']),
+                ),
+              ],
+            ),
             GoRoute(
               path: 'child/:id',
               builder: (_, state) =>

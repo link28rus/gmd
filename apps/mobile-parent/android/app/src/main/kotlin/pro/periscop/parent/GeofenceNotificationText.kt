@@ -20,6 +20,8 @@ import java.util.TimeZone
  * «Тимофей вошёл в зону «Школа» в 08:40 — данные пришли с опозданием.».
  * Событие не сегодняшнего дня — с датой: «… 27.09 в 08:40 — …».
  *
+ * v0.66.0: + тексты GEOFENCE_MISSED / GEOFENCE_NO_DATA и id уведомления.
+ *
  * java.time не используем: minSdk приложения 24, а java.time без desugaring
  * доступен только с API 26.
  */
@@ -54,6 +56,47 @@ object GeofenceNotificationText {
             .orEmpty()
         return "$childName $action$at — $LATE_NOTE."
     }
+
+    // ─── v0.66.0: «не пришёл к сроку» (GEOFENCE_MISSED / GEOFENCE_NO_DATA) ───
+    // Тексты совпадают с мостом backend'а (zone-detection.service.ts) и лентой
+    // кабинета; род нейтральный — «пришёл(а)». [deadline] — «08:30» из
+    // data.deadline, может отсутствовать.
+
+    private fun whereText(zoneName: String?): String =
+        if (zoneName != null) "«$zoneName»" else "зону"
+
+    /** «Аня: не в зоне «Школа»». */
+    fun missedTitle(childName: String, zoneName: String?): String =
+        if (zoneName != null) "$childName: не в зоне «$zoneName»" else "$childName: не в зоне"
+
+    /** «Аня не пришёл(а) в «Школа» к 08:30.» / «… к сроку.» без срока. */
+    fun missedBody(childName: String, zoneName: String?, deadline: String?): String {
+        val at = if (deadline != null) " к $deadline" else " к сроку"
+        return "$childName не пришёл(а) в ${whereText(zoneName)}$at."
+    }
+
+    /** «Аня: нет данных к сроку». */
+    fun noDataTitle(childName: String): String = "$childName: нет данных к сроку"
+
+    /** «Телефон не присылал местоположение — не знаем, пришёл(а) ли Аня в «Школа» к 08:30.» */
+    fun noDataBody(childName: String, zoneName: String?, deadline: String?): String {
+        val at = if (deadline != null) " к $deadline" else ""
+        return "Телефон не присылал местоположение — не знаем, пришёл(а) ли " +
+            "$childName в ${whereText(zoneName)}$at."
+    }
+
+    /**
+     * v0.66.0: id уведомления. У GEOFENCE_* — по паре ребёнок × зона: раньше
+     * `hash(type:childId)`, и события двух зон одного ребёнка затирали друг
+     * друга. Он же — requestCode PendingIntent (иначе extras последнего
+     * уведомления достаются всем с тем же requestCode).
+     */
+    fun notificationId(type: String, childId: String?, zoneId: String?): Int =
+        if (type.startsWith("GEOFENCE_") && !zoneId.isNullOrBlank()) {
+            "zone:${childId ?: "_"}:$zoneId".hashCode()
+        } else {
+            "$type:${childId ?: "_"}".hashCode()
+        }
 
     /** ISO-8601 UTC → epoch ms; null, если строка не распознана. */
     fun parseIsoUtc(iso: String): Long? {

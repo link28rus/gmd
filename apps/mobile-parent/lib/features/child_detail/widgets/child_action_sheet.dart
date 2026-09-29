@@ -100,6 +100,12 @@ class _ChildActionSheetState extends ConsumerState<ChildActionSheet> {
             label: 'История передвижений',
             onTap: _onHistory,
           ),
+          // v0.66.0: геозоны семьи (круги зон ребёнка — на карте выше).
+          _ActionTile(
+            icon: Icons.share_location_outlined,
+            label: 'Геозоны',
+            onTap: () => context.push('/home/zones'),
+          ),
           if (kAppControlEnabled)
             _ActionTile(
               icon: Icons.shield_outlined,

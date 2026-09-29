@@ -86,6 +86,25 @@ const PUSH_TYPE: Record<ZoneEventNotice['eventType'], string> = {
 // Канал событий в приложении родителя (ParentFirebaseMessagingService.CHANNEL_EVENTS).
 const PARENT_EVENTS_CHANNEL = 'periscop_parent_events';
 
+/** С этой версии APK родителя сам рисует GEOFENCE_MISSED / GEOFENCE_NO_DATA. */
+export const PARENT_NATIVE_ZONE_PUSH_VERSION = [0, 66, 0] as const;
+
+/**
+ * v0.66.0: нужен ли мост — видимое уведомление FCM. Новым APK он вреден:
+ * в фоне Android рисует уведомление сам и onMessageReceived не вызывается.
+ * Версия неизвестна (старые регистрации) — считаем старым приложением.
+ */
+export function needsNotificationBridge(appVersion: string | null | undefined): boolean {
+  const m = /^(\d+)\.(\d+)\.(\d+)/.exec(appVersion ?? '');
+  if (!m) return true;
+  const v = [Number(m[1]), Number(m[2]), Number(m[3])];
+  for (let i = 0; i < 3; i++) {
+    if (v[i] !== PARENT_NATIVE_ZONE_PUSH_VERSION[i])
+      return v[i] < PARENT_NATIVE_ZONE_PUSH_VERSION[i];
+  }
+  return false;
+}
+
 @Injectable()
 export class ZoneDetectionService {
   private readonly logger = new Logger(ZoneDetectionService.name);
@@ -357,7 +376,8 @@ export class ZoneDetectionService {
         this.fcm.sendHybridToToken({
           tokens: { fcmToken: d.fcmToken, rustorePushToken: d.rustorePushToken },
           data,
-          notification,
+          notification:
+            notification && needsNotificationBridge(d.appVersion) ? notification : undefined,
           label: `${data.type} child=${args.childId} zone=${args.zoneId}`,
           onInvalidFcmToken: (token) => this.parentDevices.clearTokenByExpired(token),
           onInvalidRustoreToken: (token) => this.parentDevices.clearRustoreByExpired(token),

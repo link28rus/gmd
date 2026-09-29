@@ -1,7 +1,7 @@
 name: periscop_parent
 description: "Перископ Родителя — родительский контроль и геолокация ребёнка"
 publish_to: 'none'
-version: 0.65.0+34
+version: 0.66.0+35
 
 environment:
   sdk: ^3.11.5
@@ -69,6 +69,11 @@ dependencies:
   # (сжатие на клиенте через maxWidth/imageQuality, см. child_avatar_sheet.dart).
   flutter_svg: ^2.3.0
   image_picker: ^1.2.3
+
+  # v0.66: кнопка «Где я» на карте геозон — одна точка по нажатию, грубая
+  # точность (ACCESS_COARSE_LOCATION). Фоновый сервис плагина вычищен из
+  # манифеста (tools:node="remove").
+  geolocator: ^14.0.2
 
 dev_dependencies:
   flutter_test:

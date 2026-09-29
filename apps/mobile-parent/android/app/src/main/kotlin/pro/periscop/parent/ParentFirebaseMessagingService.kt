@@ -19,14 +19,18 @@ import com.google.firebase.messaging.RemoteMessage
  * v0.46: handler входящих FCM data-message для родителя.
  *
  * Бэкенд шлёт `data` payload (без `notification`) с полями:
- * - `type`: GEOFENCE_ENTER / GEOFENCE_EXIT / SOS / LOW_BATTERY / CHILD_OFFLINE
+ * - `type`: GEOFENCE_ENTER / GEOFENCE_EXIT / GEOFENCE_MISSED / GEOFENCE_NO_DATA /
+ *   SOS / LOW_BATTERY / CHILD_OFFLINE
  * - `childId`, `childName` (опционально)
- * - тип-специфичные поля (zoneId, sosId, lat, lon, recordedAt)
- * - `delayed` = "1" у GEOFENCE_* (v0.59.0), если событие старше 3 мин —
+ * - тип-специфичные поля (zoneId, zoneName, sosId, lat, lon, recordedAt,
+ *   `deadline` «08:30» у GEOFENCE_MISSED / GEOFENCE_NO_DATA)
+ * - `delayed` = "1" у GEOFENCE_ENTER/EXIT (v0.59.0), если событие старше 3 мин —
  *   текст строит [GeofenceNotificationText].
  *
- * Сервис строит нативный notification с deeplink на /home/child/{id} и кладёт
- * его в один из каналов (default events / sos с высокой важностью).
+ * Сервис строит нативный notification и кладёт его в один из каналов (default
+ * events / sos с высокой важностью). Тап открывает MainActivity с extras
+ * `fcm_type` / `deeplink_child_id` / `zone_id` — v0.66.0: Dart открывает ленту
+ * зоны (GEOFENCE_*) или экран ребёнка (остальные).
  */
 class ParentFirebaseMessagingService : FirebaseMessagingService() {
     companion object {
@@ -52,19 +56,29 @@ class ParentFirebaseMessagingService : FirebaseMessagingService() {
         val (title, body, channelId, importance) = render(type, data) ?: return
 
         val deeplinkChildId = data["childId"]
+        val zoneId = data["zoneId"]
+        // v0.66.0: у GEOFENCE_* — по паре ребёнок × зона (см. notificationId).
+        val notificationId = GeofenceNotificationText.notificationId(type, deeplinkChildId, zoneId)
+        // Тап → MainActivity: extras уходят в Dart через канал
+        // pro.periscop.parent/push (getInitialPush / onPush).
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             if (!deeplinkChildId.isNullOrBlank()) {
-                putExtra("deeplink_child_id", deeplinkChildId)
+                putExtra(MainActivity.EXTRA_CHILD_ID, deeplinkChildId)
             }
-            putExtra("fcm_type", type)
+            if (!zoneId.isNullOrBlank()) {
+                putExtra(MainActivity.EXTRA_ZONE_ID, zoneId)
+            }
+            putExtra(MainActivity.EXTRA_FCM_TYPE, type)
         }
         val pendingFlag = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         } else {
             PendingIntent.FLAG_UPDATE_CURRENT
         }
-        val pi = PendingIntent.getActivity(this, type.hashCode(), intent, pendingFlag)
+        // requestCode = id уведомления: с общим requestCode на тип FLAG_UPDATE_CURRENT
+        // перезаписывал extras, и все уведомления вели туда же, куда последнее.
+        val pi = PendingIntent.getActivity(this, notificationId, intent, pendingFlag)
 
         val notif = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(android.R.drawable.ic_dialog_info) // TODO: бренд-иконка
@@ -77,8 +91,6 @@ class ParentFirebaseMessagingService : FirebaseMessagingService() {
             .build()
 
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        // Уникальный id на тип+childId, чтобы новый event не затирал предыдущий по тому же ребёнку.
-        val notificationId = ("$type:${deeplinkChildId ?: "_"}").hashCode()
         nm.notify(notificationId, notif)
     }
 
@@ -121,6 +133,29 @@ class ParentFirebaseMessagingService : FirebaseMessagingService() {
                     zoneName = zoneName,
                     delayed = delayed,
                     recordedAtIso = recordedAt,
+                ),
+                channelId = CHANNEL_EVENTS,
+                importance = NotificationCompat.PRIORITY_DEFAULT,
+            )
+            // v0.66.0: «не пришёл к сроку» — раньше их рисовал только мост
+            // backend'а (FCM notification), теперь сами. data.deadline может
+            // отсутствовать.
+            "GEOFENCE_MISSED" -> Render(
+                title = GeofenceNotificationText.missedTitle(childName, zoneName),
+                body = GeofenceNotificationText.missedBody(
+                    childName,
+                    zoneName,
+                    data["deadline"]?.takeIf { it.isNotBlank() },
+                ),
+                channelId = CHANNEL_EVENTS,
+                importance = NotificationCompat.PRIORITY_DEFAULT,
+            )
+            "GEOFENCE_NO_DATA" -> Render(
+                title = GeofenceNotificationText.noDataTitle(childName),
+                body = GeofenceNotificationText.noDataBody(
+                    childName,
+                    zoneName,
+                    data["deadline"]?.takeIf { it.isNotBlank() },
                 ),
                 channelId = CHANNEL_EVENTS,
                 importance = NotificationCompat.PRIORITY_DEFAULT,

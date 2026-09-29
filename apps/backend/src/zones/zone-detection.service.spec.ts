@@ -7,6 +7,7 @@ import {
   buffer,
   classifyPoint,
   initialInside,
+  needsNotificationBridge,
 } from './zone-detection.service';
 
 describe('classifyPoint (v0.64.0, учёт погрешности)', () => {
@@ -60,7 +61,12 @@ type Tx = ReturnType<typeof makeTx>;
 
 async function makeService(opts: {
   sendHybrid?: jest.Mock;
-  devices?: Array<{ userId?: string; fcmToken: string; rustorePushToken: string | null }>;
+  devices?: Array<{
+    userId?: string;
+    fcmToken: string;
+    rustorePushToken: string | null;
+    appVersion?: string | null;
+  }>;
   zone?: {
     timezone?: string;
     scheduleDaysMask?: number;
@@ -388,5 +394,39 @@ describe('ZoneDetectionService push: личные настройки и расп
     ]);
     await new Promise((r) => setImmediate(r));
     expect(sendHybrid.mock.calls[0][0].notification).toBeUndefined();
+  });
+});
+
+describe('needsNotificationBridge (v0.66.0)', () => {
+  it.each([
+    ['0.63.0+34', true],
+    ['0.65.9+99', true],
+    ['0.66.0+35', false],
+    ['0.67.1', false],
+    ['1.0.0+1', false],
+    [null, true],
+    ['мусор', true],
+  ])('%s → %s', (v, expected) => {
+    expect(needsNotificationBridge(v)).toBe(expected);
+  });
+
+  it('новому APK «не пришёл» уходит без видимого уведомления, старому — с ним', async () => {
+    const sendHybrid = jest.fn().mockResolvedValue(true);
+    const svc = await makeService({
+      sendHybrid,
+      devices: [
+        { fcmToken: 'old', rustorePushToken: null, appVersion: '0.63.0+34' },
+        { fcmToken: 'new', rustorePushToken: null, appVersion: '0.66.0+35' },
+      ],
+    });
+    svc.notifyParents([
+      { familyId: 'f1', childId: 'c1', zoneId: 'z1', eventType: 'no_data', recordedAt: new Date() },
+    ]);
+    await new Promise((r) => setImmediate(r));
+    const byToken = new Map(
+      sendHybrid.mock.calls.map((c) => [c[0].tokens.fcmToken, c[0].notification]),
+    );
+    expect(byToken.get('old')).toBeDefined();
+    expect(byToken.get('new')).toBeUndefined();
   });
 });

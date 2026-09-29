@@ -9,6 +9,8 @@ import '../children/child_models.dart';
 import '../children/children_providers.dart';
 import '../children/widgets/child_avatar.dart';
 import '../children/widgets/track_layers.dart';
+import '../zones/widgets/zone_widgets.dart';
+import '../zones/zones_providers.dart';
 import 'widgets/child_action_sheet.dart';
 
 /// Экран ребёнка: OSM-карта (flutter_map) + последняя локация + активный
@@ -41,6 +43,11 @@ class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen> {
     final childrenAsync = ref.watch(childrenListProvider);
     final latestAsync = ref.watch(childLatestLocationProvider(widget.childId));
     final trackAsync = ref.watch(childActiveTrackProvider(widget.childId));
+    // v0.66.0: круги зон ребёнка (для всех детей или с назначением). Ошибка
+    // загрузки зон карту не ломает — просто без кругов.
+    final childZones = (ref.watch(zonesListProvider).valueOrNull ?? const [])
+        .where((z) => z.appliesTo(widget.childId))
+        .toList();
 
     final child = childrenAsync.maybeWhen(
       data: (list) => list.firstWhere(
@@ -71,6 +78,7 @@ class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen> {
             onPressed: () {
               ref.invalidate(childLatestLocationProvider(widget.childId));
               ref.invalidate(childActiveTrackProvider(widget.childId));
+              ref.invalidate(zonesListProvider);
               setState(() => _firstFitDone = false);
             },
           ),
@@ -127,6 +135,10 @@ class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen> {
                             keepBuffer: 4,
                             panBuffer: 2,
                           ),
+                          if (childZones.isNotEmpty) ...[
+                            CircleLayer(circles: zoneCircles(childZones)),
+                            MarkerLayer(markers: zoneCenterMarkers(childZones)),
+                          ],
                           // Сплошная линия по кускам + серый пунктир на разрывах
                           // + стоянки «П». До маркера ребёнка — он рисуется поверх.
                           ...buildTrackLayers(track, stays: trackData.stays),

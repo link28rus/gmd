@@ -6,7 +6,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/auth/auth_models.dart';
 import '../../core/auth/auth_repository.dart';
+import '../../core/diag/diag_channel.dart';
 import '../../core/providers.dart';
+import '../../core/push/push_deeplink.dart';
 
 /// Заставка: восстанавливает сессию из secure storage и решает /home vs /login.
 ///
@@ -39,9 +41,15 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   Future<void> _bootstrap() async {
     // Стартуем восстановление сессии и таймер одновременно, ждём оба (max).
     final routeFuture = _resolveRoute();
+    // v0.66.0: приложение запустили тапом по уведомлению — после входа ведём
+    // туда (лента зоны / экран ребёнка). Без сессии — на /login, push забываем.
+    final pushFuture = PushDeepLinkChannel.takeInitial();
     await Future<void>.delayed(_minSplash);
     final route = await routeFuture;
-    _go(route);
+    final push = await pushFuture;
+    final target = route == '/home' ? (push?.route ?? route) : route;
+    if (push != null) unawaited(diagLog('push', 'initial ${push.type} -> $target'));
+    _go(target);
   }
 
   /// Решает, куда идти после старта: `/home` (сессия восстановлена) или

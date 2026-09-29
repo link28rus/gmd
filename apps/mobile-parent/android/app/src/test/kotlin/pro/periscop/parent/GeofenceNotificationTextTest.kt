@@ -1,6 +1,7 @@
 package pro.periscop.parent
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 import java.util.TimeZone
@@ -107,6 +108,56 @@ class GeofenceNotificationTextTest {
         assertEquals(
             "Тимофей вышел из зоны «Дом» — данные пришли с опозданием.",
             body(false, "Дом", true, null),
+        )
+    }
+
+    @Test
+    fun `missed arrival with deadline`() {
+        assertEquals("Аня: не в зоне «Школа»", GeofenceNotificationText.missedTitle("Аня", "Школа"))
+        assertEquals(
+            "Аня не пришёл(а) в «Школа» к 08:30.",
+            GeofenceNotificationText.missedBody("Аня", "Школа", "08:30"),
+        )
+    }
+
+    @Test
+    fun `missed arrival without deadline and zone`() {
+        assertEquals("Аня: не в зоне", GeofenceNotificationText.missedTitle("Аня", null))
+        assertEquals(
+            "Аня не пришёл(а) в зону к сроку.",
+            GeofenceNotificationText.missedBody("Аня", null, null),
+        )
+    }
+
+    @Test
+    fun `no data with and without deadline`() {
+        assertEquals("Аня: нет данных к сроку", GeofenceNotificationText.noDataTitle("Аня"))
+        assertEquals(
+            "Телефон не присылал местоположение — не знаем, пришёл(а) ли Аня в «Школа» к 08:30.",
+            GeofenceNotificationText.noDataBody("Аня", "Школа", "08:30"),
+        )
+        assertEquals(
+            "Телефон не присылал местоположение — не знаем, пришёл(а) ли Аня в «Школа».",
+            GeofenceNotificationText.noDataBody("Аня", "Школа", null),
+        )
+    }
+
+    @Test
+    fun `notification id per child and zone for geofence`() {
+        val enterA = GeofenceNotificationText.notificationId("GEOFENCE_ENTER", "c1", "zA")
+        val exitA = GeofenceNotificationText.notificationId("GEOFENCE_EXIT", "c1", "zA")
+        val enterB = GeofenceNotificationText.notificationId("GEOFENCE_ENTER", "c1", "zB")
+        assertEquals("zone:c1:zA".hashCode(), enterA)
+        assertEquals(enterA, exitA)
+        assertNotEquals(enterA, enterB)
+    }
+
+    @Test
+    fun `notification id for other types unchanged`() {
+        assertEquals("SOS:c1".hashCode(), GeofenceNotificationText.notificationId("SOS", "c1", null))
+        assertEquals(
+            "GEOFENCE_ENTER:c1".hashCode(),
+            GeofenceNotificationText.notificationId("GEOFENCE_ENTER", "c1", null),
         )
     }
 

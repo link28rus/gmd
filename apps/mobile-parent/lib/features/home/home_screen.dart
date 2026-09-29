@@ -28,6 +28,12 @@ class HomeScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Мои дети'),
         actions: [
+          // v0.66.0: геозоны семьи.
+          IconButton(
+            tooltip: 'Геозоны',
+            icon: const Icon(Icons.share_location_outlined),
+            onPressed: () => context.push('/home/zones'),
+          ),
           // Версия: нажатие — проверить обновления, long-press — /debug.
           // Аналог mobile-child header'а.
           GestureDetector(
