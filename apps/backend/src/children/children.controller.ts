@@ -53,6 +53,8 @@ export class ChildrenController {
               deviceName: c.device.deviceName,
               osVersion: c.device.osVersion,
               appVersion: c.device.appVersion,
+              // v0.62: false — микрофон заблокирован (после перезагрузки), null — неизвестно
+              micReady: c.device.micReady,
               lastSeenAt: c.device.lastSeenAt,
               revokedAt: c.device.revokedAt,
             }

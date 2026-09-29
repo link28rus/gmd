@@ -373,3 +373,32 @@ describe('ChildDeviceService.verifyToken', () => {
     expect(ctx).toBeNull();
   });
 });
+
+describe('ChildDeviceService.setMicReady', () => {
+  function makeSvcWith(updateMany: jest.Mock): ChildDeviceService {
+    return new ChildDeviceService(
+      { childDevice: { updateMany } } as unknown as PrismaService,
+      makeConsentMock(),
+    );
+  }
+
+  it('пишет micReady+micReadyAt только если значение отличается (или было null)', async () => {
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const svc = makeSvcWith(updateMany);
+    await expect(svc.setMicReady('dev-1', false)).resolves.toBe(true);
+    const arg = updateMany.mock.calls[0][0];
+    expect(arg.where).toEqual({ id: 'dev-1', OR: [{ micReady: null }, { micReady: true }] });
+    expect(arg.data.micReady).toBe(false);
+    expect(arg.data.micReadyAt).toBeInstanceOf(Date);
+  });
+
+  it('то же значение → UPDATE ничего не меняет, возвращает false', async () => {
+    const svc = makeSvcWith(jest.fn().mockResolvedValue({ count: 0 }));
+    await expect(svc.setMicReady('dev-1', true)).resolves.toBe(false);
+  });
+
+  it('ошибка БД не пробрасывается', async () => {
+    const svc = makeSvcWith(jest.fn().mockRejectedValue(new Error('db down')));
+    await expect(svc.setMicReady('dev-1', true)).resolves.toBe(false);
+  });
+});

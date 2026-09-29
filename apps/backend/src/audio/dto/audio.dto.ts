@@ -11,7 +11,16 @@ export type CreateAudioSessionDto = z.infer<typeof CreateAudioSessionSchema>;
 // Child: error report (legacy HTTP — оставлен для обратной совместимости с mobile-child v0.34.x;
 // в v0.35 child должен слать через WS control frame {op:'error', code, message}).
 export const ChildErrorSchema = z.object({
-  code: z.enum(['PERMISSION_DENIED', 'MIC_BUSY', 'OEM_BLOCKED', 'NETWORK_ERROR', 'UNKNOWN']),
+  // v0.62: MIC_BLOCKED — Android 14+ не дал запустить FGS microphone из фона
+  // (шлёт нативный код телефона сразу при сбое startForeground).
+  code: z.enum([
+    'PERMISSION_DENIED',
+    'MIC_BUSY',
+    'OEM_BLOCKED',
+    'NETWORK_ERROR',
+    'MIC_BLOCKED',
+    'UNKNOWN',
+  ]),
   message: z.string().max(500).optional(),
 });
 export type ChildErrorDto = z.infer<typeof ChildErrorSchema>;

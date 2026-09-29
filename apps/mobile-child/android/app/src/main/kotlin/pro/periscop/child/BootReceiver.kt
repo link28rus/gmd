@@ -28,6 +28,15 @@ class BootReceiver : BroadcastReceiver() {
             action != "com.htc.intent.action.QUICKBOOT_POWERON"
         ) return
 
+        // v0.62.0: причина запуска — после неё prewarm микрофона из фона обычно
+        // падает на Android 14+ (см. MicReadiness).
+        DiagLog.write(
+            context,
+            "boot",
+            "BootReceiver: received $action sdk=${Build.VERSION.SDK_INT} " +
+                "importance=${DiagSnapshot.processImportance()} serviceState=${SoundAroundService.state}",
+        )
+
         if (action == Intent.ACTION_MY_PACKAGE_REPLACED) {
             try {
                 AppUpdater.onPackageReplaced(context)
@@ -103,6 +112,8 @@ class BootReceiver : BroadcastReceiver() {
                     "${e.javaClass.simpleName}: ${e.message} (юзер откроет app для prewarm)",
             )
             DiagLog.debug(context, "sound", "BootReceiver: prewarm dispatch exception class=${e.javaClass.name}")
+            MicReadiness.set(context, false, "BootReceiver($action): prewarm dispatch FAILED")
+            MicReadiness.showBlockedNotification(context, "BootReceiver prewarm dispatch FAILED")
             DiagUpload.autoTrigger(context, DiagUpload.TRIGGER_PREWARM_FAILED)
         }
     }

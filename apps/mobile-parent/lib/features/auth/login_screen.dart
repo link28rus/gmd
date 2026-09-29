@@ -234,6 +234,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               hintText: 'you@example.com',
               border: OutlineInputBorder(),
             ),
+            // Без перерисовки кнопка «Получить код» остаётся неактивной после ввода.
+            onChanged: (_) => setState(() {}),
           ),
           const SizedBox(height: 16),
           FilledButton(
@@ -296,6 +298,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             labelText: 'Email',
             border: OutlineInputBorder(),
           ),
+          onChanged: (_) => setState(() {}),
         ),
         const SizedBox(height: 12),
         TextField(

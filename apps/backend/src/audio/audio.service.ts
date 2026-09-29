@@ -32,6 +32,7 @@ export type ChildErrorCode =
   | 'MIC_BUSY'
   | 'OEM_BLOCKED'
   | 'NETWORK_ERROR'
+  | 'MIC_BLOCKED'
   | 'UNKNOWN';
 
 @Injectable()

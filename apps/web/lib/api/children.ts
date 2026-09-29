@@ -8,6 +8,12 @@ export interface ChildDevice {
   appVersion: string | null;
   lastSeenAt: string | null;
   revokedAt: string | null;
+  /**
+   * Готов ли микрофон на телефоне ребёнка для «Звук вокруг» (v0.62.0).
+   * `false` — Android не дал включить микрофон из фона (после перезагрузки/обновления),
+   * `null`/нет поля — неизвестно (старое приложение ребёнка или старый backend).
+   */
+  micReady?: boolean | null;
 }
 
 export interface Child {

@@ -85,6 +85,7 @@ export class ChildrenService {
         deviceName: string | null;
         osVersion: string | null;
         appVersion: string | null;
+        micReady: boolean | null;
         lastSeenAt: Date | null;
         revokedAt: Date | null;
       } | null;
@@ -102,6 +103,7 @@ export class ChildrenService {
         deviceName: string | null;
         osVersion: string | null;
         appVersion: string | null;
+        micReady: boolean | null;
         lastSeenAt: Date | null;
         revokedAt: Date | null;
       } | null;
@@ -124,6 +126,7 @@ export class ChildrenService {
             deviceName: c.device.deviceName,
             osVersion: c.device.osVersion,
             appVersion: c.device.appVersion,
+            micReady: c.device.micReady ?? null,
             lastSeenAt: c.device.lastSeenAt,
             revokedAt: c.device.revokedAt,
           }

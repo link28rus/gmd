@@ -99,6 +99,8 @@ class SoundAroundService : Service() {
     // True после первого успешного startForeground(type=MICROPHONE) в этом instance.
     // Защищает от лишних `startForeground` при mode=stream поверх prewarm.
     private var inForegroundState: Boolean = false
+    // v0.62.0: true после ACTION_STOP — onDestroy тогда ожидаем, а не потеря службы.
+    private var stopRequested: Boolean = false
 
     private fun log(msg: String) = DiagLog.write(this, TAG, msg)
     private fun logErr(msg: String, e: Throwable) =
@@ -172,6 +174,7 @@ class SoundAroundService : Service() {
     private fun handlePrewarm() {
         if (inForegroundState) {
             log("prewarm: already in FGS state — no-op")
+            MicReadiness.set(this, true, "prewarm no-op, служба уже в FGS")
             return
         }
         try {
@@ -179,11 +182,15 @@ class SoundAroundService : Service() {
             inForegroundState = true
             state = STATE_PREWARM
             log("prewarm: startForeground(type=MICROPHONE) OK — service idle, ready for STREAM")
+            MicReadiness.set(this, true, "prewarm OK")
         } catch (e: Throwable) {
             // Если crash тут — значит prewarm вызван из background context.
             // Это известное Android 14 ограничение, документируем для пользователя.
             logErr("prewarm: startForeground FAILED (need foreground caller)", e)
             recordFailure("prewarm", e)
+            // v0.62.0: состояние видно родителю + просьба ребёнку коснуться уведомления.
+            MicReadiness.set(this, false, "prewarm FAILED: ${e.javaClass.simpleName}")
+            MicReadiness.showBlockedNotification(this, "prewarm FAILED")
             DiagUpload.autoTrigger(this, DiagUpload.TRIGGER_PREWARM_FAILED)
             stopSelf()
         }
@@ -200,15 +207,26 @@ class SoundAroundService : Service() {
             log("stream: Flutter engine already active — duplicate start ignored")
             return
         }
+        val sessionId = intent?.getStringExtra(EXTRA_SESSION_ID).orEmpty()
         // Идемпотентный startForeground — если уже в prewarm, system не делает ничего лишнего.
         if (!inForegroundState) {
             try {
                 startForegroundCompat()
                 inForegroundState = true
                 log("stream: startForeground OK (lazy, no prewarm before)")
+                MicReadiness.set(this, true, "stream: lazy startForeground OK")
             } catch (e: Throwable) {
                 logErr("stream: startForeground FAILED — likely no prewarm + background caller", e)
                 recordFailure("stream", e)
+                // v0.62.0: сразу сообщаем серверу (родитель не ждёт 45 с) и просим
+                // ребёнка коснуться уведомления, чтобы следующий запуск прошёл.
+                MicReadiness.set(this, false, "stream FAILED: ${e.javaClass.simpleName}")
+                MicReadiness.showBlockedNotification(this, "stream FAILED")
+                MicReadiness.reportMicBlocked(
+                    this,
+                    sessionId,
+                    "startForeground(microphone) из фона: ${e.javaClass.simpleName}: ${e.message}",
+                )
                 DiagUpload.autoTrigger(this, DiagUpload.TRIGGER_START_FAILED)
                 stopSelf()
                 return
@@ -217,7 +235,6 @@ class SoundAroundService : Service() {
             debug("stream: already in FGS state — startForeground not needed")
         }
 
-        val sessionId = intent?.getStringExtra(EXTRA_SESSION_ID).orEmpty()
         val wsUrl = intent?.getStringExtra(EXTRA_WS_URL).orEmpty()
         val durationSec = intent?.getIntExtra(EXTRA_DURATION_SEC, 300) ?: 300
 
@@ -257,6 +274,7 @@ class SoundAroundService : Service() {
      * Снимает FGS, освобождает все ресурсы, stopSelf.
      */
     private fun handleFullStop() {
+        stopRequested = true
         try {
             flutterEngine?.destroy()
         } catch (_: Throwable) { /* ignore */ }
@@ -271,6 +289,7 @@ class SoundAroundService : Service() {
         }
         inForegroundState = false
         state = STATE_NONE
+        MicReadiness.set(this, false, "ACTION_STOP")
         stopSelf()
     }
 
@@ -283,7 +302,10 @@ class SoundAroundService : Service() {
     }
 
     override fun onDestroy() {
-        log("onDestroy")
+        // v0.62.0: режим на момент уничтожения — без stop-команды это потеря
+        // готовности микрофона (система/OEM убили службу).
+        log("onDestroy mode=$state inForegroundState=$inForegroundState stopRequested=$stopRequested")
+        if (!stopRequested) MicReadiness.set(this, false, "onDestroy без stop-команды (режим был $state)")
         flutterEngine?.destroy()
         flutterEngine = null
         bgChannel = null

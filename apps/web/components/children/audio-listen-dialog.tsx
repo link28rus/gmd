@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import type { Child } from '@/lib/api/children';
 import { useAudioSession, type AudioUiState } from '@/lib/hooks/use-audio-session';
 import { createVuMeter } from '@/lib/audio/vu-meter';
+import { failReasonLabel, shouldShowMicBlockedWarning } from '@/lib/audio/fail-reason';
+import { MicBlockedWarning } from './mic-blocked-warning';
 
 interface Props {
   child: Child;
@@ -60,21 +62,6 @@ function connectingLabel(s: AudioUiState, waitSec: number): string {
     return waitSec >= 5 ? 'Будим телефон ребёнка…' : 'Устанавливаем соединение…';
   }
   return stateLabel(s);
-}
-
-function failReasonLabel(reason: string | null): string {
-  switch (reason) {
-    case 'PERMISSION_DENIED':
-      return 'На устройстве ребёнка отключено разрешение на микрофон.';
-    case 'MIC_BUSY':
-      return 'Микрофон занят другим приложением (например, звонком). Попробуйте позже.';
-    case 'OEM_BLOCKED':
-      return 'Оболочка устройства заблокировала работу в фоне. Откройте инструкции для Xiaomi/Honor.';
-    case 'NETWORK_ERROR':
-      return 'Сетевая ошибка на устройстве ребёнка.';
-    default:
-      return 'Не удалось установить соединение. Попробуйте снова.';
-  }
 }
 
 export function AudioListenDialog({ child, open, onOpenChange }: Props): ReactElement {
@@ -202,6 +189,10 @@ export function AudioSessionPane({
       </header>
 
       <div className="space-y-4 py-2">
+        {shouldShowMicBlockedWarning(child.device?.micReady, session.state) && (
+          <MicBlockedWarning />
+        )}
+
         <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 px-4 py-3">
           <div className="flex items-center gap-2 text-sm">
             {session.state === 'active' ? (

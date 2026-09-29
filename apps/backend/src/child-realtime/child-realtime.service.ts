@@ -18,7 +18,8 @@ import { PrismaService } from '../prisma/prisma.service';
  *                     {op:'ping'}           — раз в PING_INTERVAL_MS
  *   ребёнок → сервер: {op:'ack', id}         — push получен
  *                     {op:'pong'}
- *                     {op:'hello', appVersion}
+ *                     {op:'hello', appVersion, micReady?}
+ *                     {op:'status', micReady}  — v0.62, смена готовности микрофона
  *
  * Push, подтверждённый ack'ом, с `data.commandId` помечает DeviceCommand
  * выполненной — иначе ближайший poll отдал бы ту же команду второй раз.

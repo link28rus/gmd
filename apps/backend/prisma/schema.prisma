@@ -337,6 +337,12 @@ model ChildDevice {
   // по мгновенному каналу (DIAG_CONFIG) и через GET /child/diag/config.
   diagConfig         Json?
 
+  // v0.62: готовность микрофона на телефоне («Звук вокруг» запустится из фона).
+  // null = неизвестно (старое приложение не шлёт). Приходит в realtime
+  // hello.micReady и {op:'status', micReady}; micReadyAt — время последней смены.
+  micReady   Boolean?
+  micReadyAt DateTime?
+
   child         Child           @relation(fields: [childId], references: [id], onDelete: Cascade)
   locations     Location[]
   sosEvents     SosEvent[]
@@ -462,6 +468,9 @@ enum AudioFailureReason {
   CHILD_OFFLINE
   PARENT_TIMEOUT
   UNKNOWN
+  // v0.62: Android 14+ не дал запустить FGS типа microphone из фона
+  // (после перезагрузки/самообновления, пока ребёнок не открыл приложение).
+  MIC_BLOCKED
 }
 
 enum AudioAuditEvent {

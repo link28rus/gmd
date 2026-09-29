@@ -37,7 +37,13 @@ export interface AudioWsState {
 
 export interface AudioWsError {
   op: 'error';
-  code: 'PERMISSION_DENIED' | 'MIC_BUSY' | 'OEM_BLOCKED' | 'NETWORK_ERROR' | 'UNKNOWN';
+  code:
+    | 'PERMISSION_DENIED'
+    | 'MIC_BUSY'
+    | 'OEM_BLOCKED'
+    | 'NETWORK_ERROR'
+    | 'MIC_BLOCKED'
+    | 'UNKNOWN';
   message?: string;
 }
 

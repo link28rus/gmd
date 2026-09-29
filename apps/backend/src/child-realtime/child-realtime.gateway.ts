@@ -87,7 +87,7 @@ export class ChildRealtimeGateway implements OnGatewayInit, OnGatewayConnection,
     if (!st) return;
     st.lastSeenAt = Date.now();
 
-    let msg: { op?: unknown; id?: unknown; appVersion?: unknown };
+    let msg: { op?: unknown; id?: unknown; appVersion?: unknown; micReady?: unknown };
     try {
       msg = JSON.parse(text);
     } catch {
@@ -108,10 +108,23 @@ export class ChildRealtimeGateway implements OnGatewayInit, OnGatewayConnection,
         if (typeof msg.appVersion === 'string' && msg.appVersion.length <= 32) {
           void this.devices.setAppVersion(st.deviceId, msg.appVersion);
         }
+        this.applyMicReady(st.deviceId, msg.micReady);
+        break;
+      case 'status':
+        // v0.62: телефон сообщает смену готовности микрофона сразу, не дожидаясь
+        // переподключения. Не-boolean (старые/чужие клиенты) игнорируем.
+        this.applyMicReady(st.deviceId, msg.micReady);
         break;
       default:
         break;
     }
+  }
+
+  private applyMicReady(deviceId: string, micReady: unknown): void {
+    if (typeof micReady !== 'boolean') return;
+    void this.devices.setMicReady(deviceId, micReady).then((changed) => {
+      if (changed) this.logger.log(`device=${deviceId} micReady=${micReady}`);
+    });
   }
 
   private handleClose(client: WsWithState, code: number): void {

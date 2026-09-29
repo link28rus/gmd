@@ -238,6 +238,22 @@ export class ChildDeviceService {
       .catch(() => undefined);
   }
 
+  // v0.62: готовность микрофона («Звук вокруг» запустится из фона) — из
+  // realtime hello.micReady и {op:'status', micReady}. Условный UPDATE: строка
+  // меняется только при смене значения (или с null), поэтому hello с тем же
+  // значением не трогает micReadyAt и не создаёт лишнюю запись.
+  async setMicReady(deviceId: string, micReady: boolean): Promise<boolean> {
+    try {
+      const res = await this.prisma.childDevice.updateMany({
+        where: { id: deviceId, OR: [{ micReady: null }, { micReady: !micReady }] },
+        data: { micReady, micReadyAt: new Date() },
+      });
+      return res.count > 0;
+    } catch {
+      return false;
+    }
+  }
+
   // v0.37: child регистрирует свой FCM token (или null если получил
   // INSTANCE_ID_RESET / устройство сменило). Backend хранит его в child_devices
   // и использует для high-priority push при createAudioSession (мгновенный

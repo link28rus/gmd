@@ -119,7 +119,14 @@ object ChildPushDispatcher {
         // state ~10с; realtime-путь полагается на то, что у процесса уже есть
         // FGS (геолокация + prewarm), — так же, как poll-путь из headless-изолята.
         val started = startServiceCompat(ctx, intent, source, "START_AUDIO")
-        if (!started) DiagUpload.autoTrigger(ctx, DiagUpload.TRIGGER_START_FAILED)
+        if (!started) {
+            // v0.62.0: служба микрофона даже не стартовала — сразу FAILED на сервер,
+            // уведомление ребёнку «нажми, чтобы Перископ снова работал».
+            MicReadiness.set(ctx, false, "START_AUDIO via $source: служба не запустилась")
+            MicReadiness.showBlockedNotification(ctx, "START_AUDIO start FAILED")
+            MicReadiness.reportMicBlocked(ctx, sessionId, "START_AUDIO via $source: службу микрофона не запустить из фона")
+            DiagUpload.autoTrigger(ctx, DiagUpload.TRIGGER_START_FAILED)
+        }
     }
 
     private fun handleStopAudio(ctx: Context, data: Map<String, String>, source: String) {

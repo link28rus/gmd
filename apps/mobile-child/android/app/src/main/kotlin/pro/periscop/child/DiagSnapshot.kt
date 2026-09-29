@@ -108,6 +108,10 @@ object DiagSnapshot {
             "${serviceState(am, SoundAroundService::class.java.name)}, режим=${SoundAroundService.state}" +
                 (SoundAroundService.lastFailure?.let { ", последний сбой: $it" } ?: "")
         }
+        // v0.62.0: готовность микрофона и уведомление «микрофон заблокирован».
+        line("micReady") { MicReadiness.describe(ctx) }
+        line("уведомление «микрофон заблокирован»") { MicReadiness.describeNotification(ctx) }
+        line("канал ${MicReadiness.CHANNEL_ID}") { MicReadiness.describeChannel(ctx) }
         line("мгновенный канал") { ChildRealtimeClient.describe() }
         line("Device Admin активен") {
             val dpm = ctx.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager

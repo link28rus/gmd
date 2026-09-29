@@ -82,6 +82,14 @@ object SoundAroundChannel {
                         )
                         // v0.60.0: START_AUDIO (poll-путь) не смог запустить службу микрофона.
                         DiagLog.debug(appContext, "sound_around", "start exception class=${e.javaClass.name}")
+                        // v0.62.0: сразу FAILED на сервер + уведомление ребёнку.
+                        MicReadiness.set(appContext, false, "start (poll): служба не запустилась")
+                        MicReadiness.showBlockedNotification(appContext, "start (poll) FAILED")
+                        MicReadiness.reportMicBlocked(
+                            appContext,
+                            sessionId,
+                            "start (poll): ${e.javaClass.simpleName}: ${e.message}",
+                        )
                         DiagUpload.autoTrigger(appContext, DiagUpload.TRIGGER_START_FAILED)
                     }
                     result.success(null)

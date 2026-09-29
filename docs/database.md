@@ -155,6 +155,17 @@
   `NULL` = значения по умолчанию. Телефон получает их по realtime-каналу (`DIAG_CONFIG`) при каждом
   подключении и после изменения в админке, плюс `GET /child/diag/config`. Контракт —
   [spec](superpowers/specs/2026-09-29-child-diag-logs.md)
+- `micReady` (boolean, nullable, v0.62.0) — готовность микрофона для «Звука вокруг» (служба
+  микрофона на телефоне в foreground). `false` — Android 14+ не дал запустить её из фона (после
+  перезагрузки/самообновления, пока ребёнок не нажал уведомление или не открыл приложение);
+  `NULL` — неизвестно (старое приложение). Пишется из realtime `hello.micReady` и
+  `{op:'status', micReady}` только при смене значения; отдаётся в `GET /family/children` как
+  `device.micReady`. Контракт — [spec](superpowers/specs/2026-09-29-sound-around-mic-blocked.md)
+- `micReadyAt` (timestamptz, nullable, v0.62.0) — время последней смены `micReady`
+
+Enum `AudioFailureReason` (`audio_sessions.failureReason`) с v0.62.0 дополнен `MIC_BLOCKED` —
+телефон сообщает его через `POST /child/audio/sessions/:id/error`, когда система не дала включить
+микрофон из фона.
 
 **Безопасность:** токен используется для аутентификации всех запросов ребёнка через заголовок `X-Child-Token`.
 

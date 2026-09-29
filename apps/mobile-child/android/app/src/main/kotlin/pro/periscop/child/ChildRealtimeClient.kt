@@ -30,7 +30,8 @@ import java.util.concurrent.TimeUnit
  *   - stop() — когда creds стёрты (escape-mode).
  *
  * Протокол (JSON, поле `op`): сервер шлёт `push {id, data}` и `ping`,
- * телефон отвечает `ack {id}` и `pong`, на серверный `hello` — `hello {appVersion}`.
+ * телефон отвечает `ack {id}` и `pong`, на серверный `hello` — `hello {appVersion, micReady}`.
+ * v0.62.0: при смене готовности микрофона — `status {micReady}` ([sendMicStatus]).
  * `data` — тот же map, что в FCM, обрабатывается [ChildPushDispatcher].
  */
 object ChildRealtimeClient {
@@ -49,6 +50,8 @@ object ChildRealtimeClient {
     private var started = false
     private var socket: WebSocket? = null
     private var connected = false
+    // v0.62.0: сервер слушает кадры только после своего hello — status шлём после ответа на него.
+    private var helloDone = false
     private var attempt = 0
     private var lastNetwork: Network? = null
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
@@ -79,6 +82,20 @@ object ChildRealtimeClient {
         val silent = if (lastServerMsgAt > 0) "${(System.currentTimeMillis() - lastServerMsgAt) / 1000}с" else "-"
         return "подключён=$isConnected (started=$isStarted socket=$hasSocket attempt=$att, " +
             "с последнего сообщения сервера $silent)"
+    }
+
+    /**
+     * v0.62.0: кадр `{op:"status", micReady}` при смене готовности микрофона.
+     * Если канал не подключён — значение уйдёт в следующем `hello`.
+     */
+    fun sendMicStatus(ctx: Context, micReady: Boolean) {
+        val ws = synchronized(lock) { if (connected && helloDone) socket else null }
+        if (ws == null) {
+            debug(ctx.applicationContext, "status micReady=$micReady deferred to next hello (not connected)")
+            return
+        }
+        val sent = ws.send(JSONObject().put("op", "status").put("micReady", micReady).toString())
+        log(ctx.applicationContext, "status micReady=$micReady sent=$sent")
     }
 
     fun start(ctx: Context) {
@@ -120,6 +137,7 @@ object ChildRealtimeClient {
             ws = socket
             socket = null
             connected = false
+            helloDone = false
         }
         handler.removeCallbacks(reconnectRunnable)
         unregisterNetworkCallback(ctx.applicationContext)
@@ -134,6 +152,7 @@ object ChildRealtimeClient {
             old = socket
             socket = null
             connected = false
+            helloDone = false
             attempt = 0
         }
         handler.removeCallbacks(reconnectRunnable)
@@ -173,6 +192,7 @@ object ChildRealtimeClient {
             if (ws !== socket) return // старый сокет после reconnect — игнор
             socket = null
             connected = false
+            helloDone = false
             if (!started) return
             delay = if (code == CLOSE_AUTH_FAILED) {
                 AUTH_FAILED_RETRY_MS
@@ -209,10 +229,15 @@ object ChildRealtimeClient {
                 // Отвечаем на hello сервера, а не шлём свой в onOpen: сервер
                 // слушает сообщения только после проверки токена в БД.
                 "hello" -> {
+                    val micReady = MicReadiness.isReady(ctx)
                     webSocket.send(
-                        JSONObject().put("op", "hello").put("appVersion", appVersion(ctx)).toString(),
+                        JSONObject().put("op", "hello")
+                            .put("appVersion", appVersion(ctx))
+                            .put("micReady", micReady)
+                            .toString(),
                     )
-                    debug(ctx, "hello answered (appVersion=${appVersion(ctx)})")
+                    synchronized(lock) { if (webSocket === socket) helloDone = true }
+                    debug(ctx, "hello answered (appVersion=${appVersion(ctx)} micReady=$micReady)")
                 }
                 "ping" -> webSocket.send("{\"op\":\"pong\"}")
                 "push" -> {

@@ -16,6 +16,7 @@ import java.net.URL
  * Endpoints:
  *   POST /child/commands/{id}/ack   — подтверждение команды (PLAY_SIGNAL)
  *   POST /child/devices/fcm-token   — регистрация FCM-токена
+ *   POST /child/audio/sessions/{id}/error — сбой «Звука вокруг» (v0.62.0, MIC_BLOCKED)
  *
  * Блокировка приложений и экранное время (installed-apps, app-icons,
  * usage-reports, active-block, app-rules, schedules) временно отключены в
@@ -57,6 +58,19 @@ object AppControlHttp {
   fun postFcmToken(ctx: Context, token: String?): Result {
     val payload = JSONObject().apply { put("fcmToken", token ?: JSONObject.NULL) }
     return doPost(ctx, "/child/devices/fcm-token", payload)
+  }
+
+  /**
+   * v0.62.0: POST /child/audio/sessions/{id}/error — отчёт о сбое «Звука вокруг»
+   * без Dart-изолята (например MIC_BLOCKED: Android не дал поднять службу
+   * микрофона из фона). Backend сразу помечает сессию FAILED.
+   */
+  fun postAudioSessionError(ctx: Context, sessionId: String, code: String, message: String?): Result {
+    val payload = JSONObject().apply {
+      put("code", code)
+      if (!message.isNullOrEmpty()) put("message", message)
+    }
+    return doPost(ctx, "/child/audio/sessions/$sessionId/error", payload)
   }
 
   private fun doPost(ctx: Context, path: String, payload: JSONObject): Result {

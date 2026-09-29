@@ -74,6 +74,16 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- v0.62.0: прозрачная активность из уведомления «микрофон заблокирован»
+             (MicReadiness). Видимая активность даёт право поднять службу
+             type=microphone (запрет Android 14+ на старт из фона); сразу закрывается. -->
+        <activity
+            android:name=".MicWakeActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"/>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

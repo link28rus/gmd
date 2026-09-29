@@ -132,7 +132,7 @@ export function useAudioSession({ childId, durationSec }: Params): UseAudioSessi
       }
       if (code === 4008) {
         // v0.35.0-rc.5: backend передаёт reason='child_error:<CODE>' когда сессия
-        // упала из-за ошибки на устройстве ребёнка (PERMISSION_DENIED / MIC_BUSY / OEM_BLOCKED / NETWORK_ERROR).
+        // упала из-за ошибки на устройстве ребёнка (PERMISSION_DENIED / MIC_BUSY / MIC_BLOCKED / OEM_BLOCKED / NETWORK_ERROR).
         // Парсим и кладём в errorReason — failReasonLabel в UI покажет читаемый текст.
         if (reason && reason.startsWith('child_error:')) {
           setErrorReason(reason.slice('child_error:'.length));
