@@ -110,6 +110,51 @@ AUDIO_WS_PUBLIC_URL=wss://gmd-online.ru/audio/ws
 
 Записать в `/opt/gmd/.env.prod`. Не коммитить.
 
+## Push-уведомления (FCM)
+
+Команды ребёнку идут по своему WebSocket-каналу (`/api/child/ws`, v0.57), FCM для них — запасной
+путь. **Родителю другого канала нет**: push о входе/выходе из геозоны и SOS уходят только через FCM
+(`FcmService.sendHybridToToken`). Без ключа backend пишет при старте
+`FIREBASE_SA_KEY не задан — FCM disabled`, и родитель эти события не получает.
+
+Ключ — service-account JSON Firebase-проекта `gmd-prod-7d1f8` (в нём зарегистрированы
+`pro.periscop.parent` и `pro.periscop.child`), в `.env.prod` лежит **base64 одной строкой**.
+
+1. Firebase Console → проект `gmd-prod` → ⚙ Project settings → Service accounts →
+   **Generate new private key**. Файл отдаётся один раз; в чат/git не класть.
+2. Загрузить на сервер, не выводя содержимое:
+   ```bash
+   ssh gmd-online 'umask 077; cat > /root/fcm-sa.json' < ~/Downloads/gmd-prod-7d1f8-firebase-adminsdk-*.json
+   ```
+3. На сервере: `base64 -w0 /root/fcm-sa.json` → значение `FIREBASE_SA_KEY=` в `/opt/gmd/.env.prod`
+   (base64 без `$`, кавычки не нужны), затем `shred -u /root/fcm-sa.json`.
+4. Пересоздать backend (образ не пересобирается):
+   ```bash
+   ssh gmd-online 'cd /opt/gmd/docker && docker compose --env-file /opt/gmd/.env.prod -f docker-compose.prod.yml up -d backend'
+   ssh gmd-online 'docker logs gmd-backend 2>&1 | grep FcmService'   # FCM initialized (project=gmd-prod-7d1f8)
+   ```
+5. После проверки доставки — удалить старые ключи сервисного аккаунта (Service accounts →
+   Manage service account permissions → `firebase-adminsdk-fbsvc@…` → Keys).
+
+### Известное ограничение: RuStore Push выключен
+
+RuStore на паузе, и канал RuStore Push не работает ни на одном уровне:
+
+- **сборка** — в `apps/mobile-{parent,child}/android/` нет `rustore.properties`, `project_id` в
+  манифесте пустой, приложения не получают RuStore-токен (в `parent_devices` их нет);
+- **compose** — `docker-compose.prod.yml` не передаёт backend'у `RUSTORE_PUSH_*`, в
+  `.env.prod.example` их тоже нет — заданные на сервере значения backend не увидит;
+- **ключи** — сервисные токены RuStore Push утеряны вместе со старым VPS;
+- **mobile-parent** — RuStore-сообщения принимает только Dart-колбэк в
+  `lib/core/push/parent_rustore_push_registrar.dart`, он их лишь логирует: уведомление о геозоне/SOS
+  не показывается (FCM-путь рисует его нативно в `ParentFirebaseMessagingService.kt` +
+  `GeofenceNotificationText.kt`).
+
+При возврате в RuStore нужно всё сразу: `rustore.properties` в обоих приложениях, проброс
+`RUSTORE_PUSH_PROJECT_ID_*` / `RUSTORE_PUSH_SERVICE_TOKEN_*` в compose и `.env.prod.example`, новые
+токены из RuStore Console и показ уведомления родителю по тому же рендеру, что у FCM (с учётом, что
+плагин `flutter_rustore_push` регистрирует свой сервис сообщений).
+
 ## Обновление `.env.prod`
 
 Редактируется только на сервере (в git не коммитится):
