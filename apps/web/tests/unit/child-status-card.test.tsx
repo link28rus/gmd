@@ -21,6 +21,39 @@ describe('ChildStatusCard', () => {
     expect(screen.getByText(/Был тут .* мин назад/)).toBeInTheDocument();
   });
 
+  it('версия приложения ребёнка без номера сборки, полная — в подсказке', () => {
+    render(
+      <ChildStatusCard
+        childName="Артем"
+        ageSec={30}
+        accuracy={18}
+        batteryLevel={30}
+        isCharging={false}
+        provider="gps"
+        networkType="wifi"
+        appVersion="0.59.0+6100"
+      />,
+    );
+    const badge = screen.getByText('v0.59.0');
+    expect(badge).toHaveAttribute('title', expect.stringContaining('0.59.0+6100'));
+  });
+
+  it('без версии бейдж не показывается', () => {
+    render(
+      <ChildStatusCard
+        childName="Артем"
+        ageSec={30}
+        accuracy={18}
+        batteryLevel={30}
+        isCharging={false}
+        provider="gps"
+        networkType="wifi"
+        appVersion={null}
+      />,
+    );
+    expect(screen.queryByText(/^v\d/)).not.toBeInTheDocument();
+  });
+
   it('батарея % и точность ±м', () => {
     render(
       <ChildStatusCard

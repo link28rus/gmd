@@ -256,6 +256,7 @@ function MapArea({ child }: { child: Child }): ReactElement {
             networkType={latest.networkType}
             wifiSsid={latest.wifiSsid}
             mobileOperator={latest.mobileOperator}
+            appVersion={child.device?.appVersion}
             actions={<ChildActions child={child} showReset={true} />}
           />
         </div>

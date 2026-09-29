@@ -13,6 +13,8 @@ interface Props {
   networkType: 'wifi' | 'mobile' | 'offline' | 'unknown' | null;
   wifiSsid?: string | null;
   mobileOperator?: string | null;
+  /** Версия приложения на телефоне ребёнка, формат «0.59.0+6100». */
+  appVersion?: string | null;
   /** Блок действий (напр. «Отвязать устройство», «Удалить ребёнка») под метриками. */
   actions?: ReactNode;
 }
@@ -27,6 +29,7 @@ export function ChildStatusCard({
   networkType,
   wifiSsid,
   mobileOperator,
+  appVersion,
   actions,
 }: Props): ReactElement {
   const initial = avatarInitial(childName);
@@ -42,7 +45,17 @@ export function ChildStatusCard({
           <span className="text-base font-semibold">{initial}</span>
         </div>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-semibold text-foreground">{childName}</div>
+          <div className="flex items-baseline gap-2">
+            <div className="truncate text-sm font-semibold text-foreground">{childName}</div>
+            {appVersion && (
+              <span
+                className="ml-auto shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
+                title={`Версия приложения на телефоне ребёнка: ${appVersion}`}
+              >
+                v{shortVersion(appVersion)}
+              </span>
+            )}
+          </div>
           <div className="truncate text-xs text-muted-foreground">
             Был тут {formatAgeShort(ageSec)}
           </div>
@@ -165,6 +178,11 @@ function networkIcon(n: 'wifi' | 'mobile' | 'offline' | 'unknown' | null): strin
     default:
       return '❓';
   }
+}
+
+/** «0.59.0+6100» → «0.59.0»: номер сборки родителю не нужен, он есть в подсказке. */
+function shortVersion(v: string): string {
+  return v.split('+')[0] ?? v;
 }
 
 function accuracyQuality(m: number): string {
