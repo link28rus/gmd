@@ -7,6 +7,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../children/child_models.dart';
 import '../children/children_providers.dart';
+import '../children/widgets/child_avatar.dart';
 import '../children/widgets/track_layers.dart';
 import 'widgets/child_action_sheet.dart';
 
@@ -135,7 +136,7 @@ class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen> {
                                   width: 56,
                                   height: 56,
                                   alignment: Alignment.topCenter,
-                                  child: _ChildMarker(letter: _firstLetter(child.name)),
+                                  child: _ChildMarker(child: child),
                                 ),
                               ],
                             ),
@@ -263,12 +264,13 @@ String _firstLetter(String name) {
 }
 
 class _ChildMarker extends StatelessWidget {
-  const _ChildMarker({required this.letter});
+  const _ChildMarker({required this.child});
 
-  final String letter;
+  final Child child;
 
   @override
   Widget build(BuildContext context) {
+    final letter = _firstLetter(child.name);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -288,12 +290,20 @@ class _ChildMarker extends StatelessWidget {
             ],
           ),
           alignment: Alignment.center,
-          child: Text(
-            letter,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
-              fontSize: 16,
+          // Внутри белой рамки 3px остаётся круг 34px: аватар (фото /
+          // стандартный), без него — буква на зелёном, как раньше.
+          child: ChildAvatar(
+            name: child.name,
+            childId: child.id,
+            avatarKey: child.avatarKey,
+            size: 34,
+            fallback: (_) => Text(
+              letter,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 16,
+              ),
             ),
           ),
         ),

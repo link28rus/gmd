@@ -1,7 +1,7 @@
 name: periscop_parent
 description: "Перископ Родителя — родительский контроль и геолокация ребёнка"
 publish_to: 'none'
-version: 0.60.0+32
+version: 0.61.0+32
 
 environment:
   sdk: ^3.11.5
@@ -65,6 +65,11 @@ dependencies:
   # паузе, обновления — самообновлением с нашего сервера (AppUpdater.kt).
   flutter_rustore_push: ^7.2.0
 
+  # v0.61: аватары детей — стандартные зверята (SVG) и своё фото из галереи/камеры
+  # (сжатие на клиенте через maxWidth/imageQuality, см. child_avatar_sheet.dart).
+  flutter_svg: ^2.3.0
+  image_picker: ^1.2.3
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -81,6 +86,8 @@ flutter:
   uses-material-design: true
   assets:
     - assets/icon/
+    # v0.61: стандартные аватары детей (генератор tools/avatars/generate_presets.py).
+    - assets/avatars/
 
 # Нативная заставка — брендовый зелёный фон + логотип «Перископ» (foreground
 # адаптивной иконки). Показывается ОС до инициализации Flutter, затем виджет

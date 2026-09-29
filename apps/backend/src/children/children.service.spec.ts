@@ -1,12 +1,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { ChildrenService } from './children.service';
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException, PayloadTooLargeException } from '@nestjs/common';
+import { createHash } from 'node:crypto';
 import type { PrismaService } from '../prisma/prisma.service';
 
 interface MockPrisma {
   _children: any[];
   _devices: any[];
   _invites: any[];
+  _photos: any[];
   child: {
     create: jest.Mock;
     findFirst: jest.Mock;
@@ -15,6 +17,7 @@ interface MockPrisma {
   };
   childDevice: { updateMany: jest.Mock };
   invite: { updateMany: jest.Mock };
+  childAvatarPhoto: { upsert: jest.Mock; deleteMany: jest.Mock; findUnique: jest.Mock };
   $transaction: jest.Mock;
 }
 
@@ -22,10 +25,12 @@ function makePrismaMock(): MockPrisma {
   const children: any[] = [];
   const devices: any[] = [];
   const invites: any[] = [];
+  const photos: any[] = [];
   const api: MockPrisma = {
     _children: children,
     _devices: devices,
     _invites: invites,
+    _photos: photos,
     child: {
       create: jest.fn(({ data }: any) => {
         const row = {
@@ -86,6 +91,24 @@ function makePrismaMock(): MockPrisma {
         });
         return Promise.resolve({ count });
       }),
+    },
+    childAvatarPhoto: {
+      upsert: jest.fn(({ where, create, update }: any) => {
+        const existing = photos.find((x) => x.childId === where.childId);
+        if (existing) Object.assign(existing, update);
+        else photos.push({ ...create });
+        return Promise.resolve(existing ?? photos[photos.length - 1]);
+      }),
+      deleteMany: jest.fn(({ where }: any) => {
+        const before = photos.length;
+        for (let i = photos.length - 1; i >= 0; i--) {
+          if (photos[i].childId === where.childId) photos.splice(i, 1);
+        }
+        return Promise.resolve({ count: before - photos.length });
+      }),
+      findUnique: jest.fn(({ where }: any) =>
+        Promise.resolve(photos.find((x) => x.childId === where.childId) ?? null),
+      ),
     },
     $transaction: jest.fn((ops: any[] | ((tx: any) => unknown)) => {
       if (typeof ops === 'function') return ops(api);
@@ -260,6 +283,170 @@ describe('ChildrenService', () => {
       await expect(svc.setProtection('f1', 'missing', true, 'u1')).rejects.toThrow(
         NotFoundException,
       );
+    });
+  });
+
+  describe('avatar', () => {
+    const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46]);
+    const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const WEBP = Buffer.concat([
+      Buffer.from('RIFF', 'latin1'),
+      Buffer.from([0x10, 0, 0, 0]),
+      Buffer.from('WEBPVP8 ', 'latin1'),
+    ]);
+
+    function setup() {
+      const p = makePrismaMock();
+      const svc = new ChildrenService(p as unknown as PrismaService);
+      p._children.push({ id: 'c1', familyId: 'f1', name: 'A', deletedAt: null, avatarKey: null });
+      return { p, svc };
+    }
+
+    it('preset → avatarKey preset:<id>, фото удаляется', async () => {
+      const { p, svc } = setup();
+      p._photos.push({ childId: 'c1', mime: 'image/jpeg', sha256: 'x', data: JPEG });
+      const r = await svc.setAvatar('f1', 'c1', { preset: 'fox' });
+      expect(r).toEqual({ avatarKey: 'preset:fox' });
+      expect(p._children[0].avatarKey).toBe('preset:fox');
+      expect(p._photos).toHaveLength(0);
+      expect(p.$transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('неизвестный пресет → 400 invalid_avatar', async () => {
+      const { p, svc } = setup();
+      const call = svc.setAvatar('f1', 'c1', { preset: 'dragon' });
+      await expect(call).rejects.toThrow(BadRequestException);
+      await expect(call).rejects.toMatchObject({ response: { code: 'invalid_avatar' } });
+      expect(p._children[0].avatarKey).toBeNull();
+    });
+
+    it('и preset, и photo сразу или пустое тело → 400 invalid_avatar', async () => {
+      const { svc } = setup();
+      await expect(
+        svc.setAvatar('f1', 'c1', {
+          preset: 'fox',
+          photo: { mime: 'image/jpeg', base64: JPEG.toString('base64') },
+        }),
+      ).rejects.toMatchObject({ response: { code: 'invalid_avatar' } });
+      await expect(svc.setAvatar('f1', 'c1', {})).rejects.toThrow(BadRequestException);
+    });
+
+    it('jpeg-фото → upsert + avatarKey photo:<12 hex sha256> в одной транзакции', async () => {
+      const { p, svc } = setup();
+      const sha = createHash('sha256').update(JPEG).digest('hex');
+      const r = await svc.setAvatar('f1', 'c1', {
+        photo: { mime: 'image/jpeg', base64: JPEG.toString('base64') },
+      });
+      expect(r).toEqual({ avatarKey: `photo:${sha.slice(0, 12)}` });
+      expect(p._children[0].avatarKey).toBe(`photo:${sha.slice(0, 12)}`);
+      expect(p._photos).toHaveLength(1);
+      expect(p._photos[0]).toMatchObject({ childId: 'c1', mime: 'image/jpeg', sha256: sha });
+      expect(Buffer.compare(p._photos[0].data, JPEG)).toBe(0);
+      expect(p.$transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('png и webp с верной сигнатурой принимаются, повторная загрузка — upsert', async () => {
+      const { p, svc } = setup();
+      await svc.setAvatar('f1', 'c1', {
+        photo: { mime: 'image/png', base64: PNG.toString('base64') },
+      });
+      await svc.setAvatar('f1', 'c1', {
+        photo: { mime: 'image/webp', base64: WEBP.toString('base64') },
+      });
+      expect(p._photos).toHaveLength(1);
+      expect(p._photos[0].mime).toBe('image/webp');
+    });
+
+    it('сигнатура не совпадает с mime → 400 invalid_avatar', async () => {
+      const { p, svc } = setup();
+      await expect(
+        svc.setAvatar('f1', 'c1', {
+          photo: { mime: 'image/png', base64: JPEG.toString('base64') },
+        }),
+      ).rejects.toMatchObject({ response: { code: 'invalid_avatar' } });
+      expect(p._photos).toHaveLength(0);
+    });
+
+    it('не base64 → 400 invalid_avatar', async () => {
+      const { svc } = setup();
+      await expect(
+        svc.setAvatar('f1', 'c1', { photo: { mime: 'image/jpeg', base64: '%%% not base64' } }),
+      ).rejects.toMatchObject({ response: { code: 'invalid_avatar' } });
+    });
+
+    it('больше 300 КБ → 413 avatar_too_large', async () => {
+      const { p, svc } = setup();
+      const big = Buffer.alloc(300 * 1024 + 1, 0);
+      JPEG.copy(big);
+      const call = svc.setAvatar('f1', 'c1', {
+        photo: { mime: 'image/jpeg', base64: big.toString('base64') },
+      });
+      await expect(call).rejects.toThrow(PayloadTooLargeException);
+      await expect(call).rejects.toMatchObject({ response: { code: 'avatar_too_large' } });
+      expect(p._photos).toHaveLength(0);
+    });
+
+    it('ровно 300 КБ принимается', async () => {
+      const { p, svc } = setup();
+      const max = Buffer.alloc(300 * 1024, 0);
+      JPEG.copy(max);
+      await svc.setAvatar('f1', 'c1', {
+        photo: { mime: 'image/jpeg', base64: max.toString('base64') },
+      });
+      expect(p._photos).toHaveLength(1);
+    });
+
+    it('setAvatar для ребёнка чужой семьи → 404', async () => {
+      const { svc } = setup();
+      await expect(svc.setAvatar('f2', 'c1', { preset: 'fox' })).rejects.toThrow(NotFoundException);
+    });
+
+    it('removeAvatar → avatarKey null + фото удалено', async () => {
+      const { p, svc } = setup();
+      p._children[0].avatarKey = 'photo:abcdef012345';
+      p._photos.push({ childId: 'c1', mime: 'image/jpeg', sha256: 'x', data: JPEG });
+      await svc.removeAvatar('f1', 'c1');
+      expect(p._children[0].avatarKey).toBeNull();
+      expect(p._photos).toHaveLength(0);
+    });
+
+    it('getAvatarPhoto отдаёт байты, mime и sha256', async () => {
+      const { p, svc } = setup();
+      p._photos.push({ childId: 'c1', mime: 'image/jpeg', sha256: 'abc', data: JPEG });
+      const r = await svc.getAvatarPhoto('f1', 'c1');
+      expect(r.mime).toBe('image/jpeg');
+      expect(r.sha256).toBe('abc');
+      expect(Buffer.compare(r.data, JPEG)).toBe(0);
+    });
+
+    it('getAvatarPhoto чужой семьи → 404 child_not_found, фото не читается', async () => {
+      const { p, svc } = setup();
+      p._photos.push({ childId: 'c1', mime: 'image/jpeg', sha256: 'abc', data: JPEG });
+      await expect(svc.getAvatarPhoto('f2', 'c1')).rejects.toMatchObject({
+        response: { code: 'child_not_found' },
+      });
+      expect(p.childAvatarPhoto.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('getAvatarPhoto удалённого ребёнка → 404', async () => {
+      const { p, svc } = setup();
+      p._children[0].deletedAt = new Date();
+      p._photos.push({ childId: 'c1', mime: 'image/jpeg', sha256: 'abc', data: JPEG });
+      await expect(svc.getAvatarPhoto('f1', 'c1')).rejects.toThrow(NotFoundException);
+    });
+
+    it('getAvatarPhoto без фото → 404 avatar_not_found', async () => {
+      const { svc } = setup();
+      await expect(svc.getAvatarPhoto('f1', 'c1')).rejects.toMatchObject({
+        response: { code: 'avatar_not_found' },
+      });
+    });
+
+    it('listChildren отдаёт avatarKey', async () => {
+      const { p, svc } = setup();
+      p._children[0].avatarKey = 'preset:owl';
+      const list = await svc.listChildren('f1');
+      expect(list[0].avatarKey).toBe('preset:owl');
     });
   });
 });

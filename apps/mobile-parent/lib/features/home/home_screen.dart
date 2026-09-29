@@ -11,6 +11,7 @@ import '../../core/version/app_version.dart';
 import '../children/child_models.dart';
 import '../children/children_providers.dart';
 import '../children/widgets/add_child_flow.dart';
+import '../children/widgets/child_avatar.dart';
 import 'update_banner.dart';
 
 /// Главный экран. Phase A: список детей + быстрые действия (placeholders).
@@ -305,12 +306,19 @@ class _ChildCard extends StatelessWidget {
           child: Stack(
             clipBehavior: Clip.none,
             children: [
-              CircleAvatar(
-                radius: 24,
-                backgroundColor: avatarBg,
-                child: Text(
-                  initials.toUpperCase(),
-                  style: TextStyle(fontWeight: FontWeight.w600, color: avatarFg),
+              ChildAvatar(
+                name: child.name,
+                childId: child.id,
+                avatarKey: child.avatarKey,
+                size: 48,
+                // Буква — как до аватаров: фон зависит от online-статуса.
+                fallback: (_) => CircleAvatar(
+                  radius: 24,
+                  backgroundColor: avatarBg,
+                  child: Text(
+                    initials.toUpperCase(),
+                    style: TextStyle(fontWeight: FontWeight.w600, color: avatarFg),
+                  ),
                 ),
               ),
               // Явный online-индикатор — зелёная точка поверх аватара, не

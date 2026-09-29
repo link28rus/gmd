@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../children/child_models.dart';
+import '../../children/widgets/child_avatar.dart';
 
 /// Карточка статуса ребёнка для bottom-sheet'а на `ChildDetailScreen`.
 ///
 /// Видна и в свернутом, и в развёрнутом состоянии. Содержит:
-///   - Avatar (буква имени) + имя
+///   - Avatar (фото / стандартный / буква имени) + имя
 ///   - Подзаголовок «Был тут N мин назад»
 ///   - Inline-строка с метриками: 🔋батарея · 🎯точность · 📶связь
 ///
@@ -17,11 +18,15 @@ import '../../children/child_models.dart';
 class ChildStatusCard extends StatelessWidget {
   const ChildStatusCard({
     super.key,
+    required this.childId,
     required this.childName,
     required this.latest,
+    this.avatarKey,
   });
 
+  final String childId;
   final String childName;
+  final String? avatarKey;
   final ChildLocation? latest;
 
   @override
@@ -34,7 +39,12 @@ class ChildStatusCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          _Avatar(name: childName),
+          ChildAvatar(
+            name: childName,
+            childId: childId,
+            avatarKey: avatarKey,
+            size: 40,
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -207,61 +217,5 @@ class _InlineMetrics extends StatelessWidget {
       case NetworkType.unknown:
         return null; // не показывать вообще, чтобы не загромождать
     }
-  }
-}
-
-class _Avatar extends StatelessWidget {
-  const _Avatar({required this.name});
-
-  final String name;
-
-  @override
-  Widget build(BuildContext context) {
-    final letter = _firstLetter(name);
-    final color = _avatarColor(name);
-    return Container(
-      width: 40,
-      height: 40,
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        letter,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-
-  static String _firstLetter(String name) {
-    final t = name.trim();
-    if (t.isEmpty) return '?';
-    return t.characters.first.toUpperCase();
-  }
-
-  /// Простой стабильный цвет на основе имени — как в web `avatarColor`.
-  static Color _avatarColor(String name) {
-    if (name.isEmpty) return const Color(0xFF64748B);
-    int hash = 0;
-    for (final ch in name.codeUnits) {
-      hash = (hash * 31 + ch) & 0x7FFFFFFF;
-    }
-    const palette = <int>[
-      0xFF2563EB, // blue
-      0xFF7C3AED, // violet
-      0xFFDB2777, // pink
-      0xFFE11D48, // rose
-      0xFFEA580C, // orange
-      0xFFCA8A04, // amber
-      0xFF16A34A, // green
-      0xFF0891B2, // cyan
-      0xFF0D9488, // teal
-    ];
-    return Color(palette[hash % palette.length]);
   }
 }

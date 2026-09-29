@@ -61,4 +61,37 @@ describe('LatestMarker', () => {
     expect(screen.getByTestId('marker').querySelector('b')).toBeNull();
     expect(screen.getByText('<b>Иван</b>')).toBeInTheDocument();
   });
+
+  it('с avatarUrl — картинка вместо буквы', () => {
+    render(
+      <LatestMarker
+        lat={55.75}
+        lon={37.61}
+        accuracy={null}
+        childName="Иван"
+        ageSec={5}
+        avatarUrl="/avatars/fox.svg"
+      />,
+    );
+    const img = screen.getByTestId('marker').querySelector('img');
+    expect(img).not.toBeNull();
+    expect(img?.getAttribute('src')).toBe('/avatars/fox.svg');
+    expect(screen.queryByText('И')).not.toBeInTheDocument();
+  });
+
+  it('avatarUrl экранируется в атрибуте src', () => {
+    render(
+      <LatestMarker
+        lat={55.75}
+        lon={37.61}
+        accuracy={null}
+        childName="Иван"
+        ageSec={5}
+        avatarUrl={'x" onerror="alert(1)'}
+      />,
+    );
+    const img = screen.getByTestId('marker').querySelector('img');
+    expect(img?.getAttribute('src')).toBe('x" onerror="alert(1)');
+    expect(img?.hasAttribute('onerror')).toBe(false);
+  });
 });

@@ -12,6 +12,7 @@ import { useTripsList } from '@/lib/hooks/use-trips-list';
 import { refreshAccessToken } from '@/lib/auth/refresh-singleflight';
 import { ChildMap } from '@/components/locations/child-map';
 import { ChildStatusCard } from '@/components/locations/child-status-card';
+import { ChildAvatarDialog } from '@/components/children/child-avatar-dialog';
 import { DateSelector } from '@/components/locations/date-selector';
 import { TrackTruncatedBanner } from '@/components/locations/track-truncated-banner';
 import { MapErrorFallback } from '@/components/locations/map-error-fallback';
@@ -29,6 +30,7 @@ export default function MapClient({ childId }: Props): ReactElement {
   const [bootstrapping, setBootstrapping] = useState(accessToken === null);
   const [date, setDate] = useState(todayIso());
   const [mapFailed, setMapFailed] = useState(false);
+  const [avatarOpen, setAvatarOpen] = useState(false);
 
   useEffect(() => {
     if (accessToken !== null) {
@@ -125,6 +127,7 @@ export default function MapClient({ childId }: Props): ReactElement {
             <ChildMap
               childId={child.id}
               childName={child.name}
+              avatarKey={child.avatarKey}
               latest={latest}
               track={track}
               stops={tripsQ.data?.trips}
@@ -134,6 +137,9 @@ export default function MapClient({ childId }: Props): ReactElement {
               <div className="absolute left-4 top-4">
                 <ChildStatusCard
                   childName={child.name}
+                  childId={child.id}
+                  avatarKey={child.avatarKey}
+                  onAvatarClick={() => setAvatarOpen(true)}
                   ageSec={latest.ageSec}
                   accuracy={latest.accuracy}
                   batteryLevel={latest.batteryLevel}
@@ -149,6 +155,7 @@ export default function MapClient({ childId }: Props): ReactElement {
           </>
         )}
       </div>
+      <ChildAvatarDialog child={child} open={avatarOpen} onOpenChange={setAvatarOpen} />
     </div>
   );
 }

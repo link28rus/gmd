@@ -12,6 +12,8 @@ interface Props {
   accuracy: number | null;
   childName: string;
   ageSec: number;
+  /** Готовый src аватара (пресет или blob: URL фото); без него — буква имени. */
+  avatarUrl?: string | null;
 }
 
 /**
@@ -19,19 +21,29 @@ interface Props {
  * Используем DivIcon с произвольным HTML — сохраняем визуал как был у Yandex
  * (badge с возрастом + аватар + плашка с именем).
  */
-export function LatestMarker({ lat, lon, accuracy, childName, ageSec }: Props): ReactElement {
+export function LatestMarker({
+  lat,
+  lon,
+  accuracy,
+  childName,
+  ageSec,
+  avatarUrl,
+}: Props): ReactElement {
   const initial = avatarInitial(childName);
   const color = avatarColor(childName);
   const ageText = formatAgeShort(ageSec);
 
   const icon = useMemo(() => {
+    const avatar = avatarUrl
+      ? `<img src="${escapeHtml(avatarUrl)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;" />`
+      : escapeHtml(initial);
     const html = `
       <div style="display:flex;flex-direction:column;align-items:center;transform:translate(-50%,-100%);position:absolute;left:0;top:0;">
         <div style="margin-bottom:4px;white-space:nowrap;border-radius:9999px;background:#2563eb;padding:2px 10px;font-size:11px;font-weight:500;color:white;box-shadow:0 1px 2px rgba(0,0,0,0.15);">
           Был тут ${escapeHtml(ageText)}
         </div>
-        <div style="display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;border:3px solid white;color:white;background:${color};box-shadow:0 2px 6px rgba(0,0,0,0.2);font-weight:600;font-size:16px;">
-          ${escapeHtml(initial)}
+        <div style="display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;border:3px solid white;color:white;background:${color};box-shadow:0 2px 6px rgba(0,0,0,0.2);font-weight:600;font-size:16px;overflow:hidden;">
+          ${avatar}
         </div>
         <div style="margin-top:2px;white-space:nowrap;border-radius:6px;background:rgba(255,255,255,0.95);padding:2px 8px;font-size:12px;font-weight:500;color:#111827;box-shadow:0 1px 3px rgba(0,0,0,0.15);">
           ${escapeHtml(childName)}
@@ -44,7 +56,7 @@ export function LatestMarker({ lat, lon, accuracy, childName, ageSec }: Props): 
       iconSize: [0, 0],
       iconAnchor: [0, 0],
     });
-  }, [ageText, color, initial, childName]);
+  }, [ageText, color, initial, childName, avatarUrl]);
 
   return (
     <>

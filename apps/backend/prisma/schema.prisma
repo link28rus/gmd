@@ -215,6 +215,8 @@ model Child {
   familyId             String
   name                 String
   dateOfBirth          DateTime?
+  // v0.61: null — буква имени; "preset:<id>" — стандартный аватар;
+  // "photo:<version>" — своё фото в child_avatar_photos (version = 12 hex sha256).
   avatarKey            String?
   // Защита от удаления приложения (Device Admin на mobile-child).
   // Включается/выключается родителем из web-кабинета (простой тумблер,
@@ -239,10 +241,27 @@ model Child {
   zoneStates      ZoneState[]
   audioSessions   AudioSession[]
   diagUploads     DiagLogUpload[]
+  avatarPhoto     ChildAvatarPhoto?
 
   @@index([familyId])
   @@index([familyId, deletedAt])
   @@map("children")
+}
+
+// v0.61: своё фото ребёнка (docs/superpowers/specs/2026-09-29-child-avatars.md).
+// 1:1 с children, отдельной таблицей — чтобы байты не тянулись в каждую выборку Child.
+// Child.avatarKey = "photo:<первые 12 hex sha256>" пока фото активно;
+// при выборе пресета или «Убрать» строка удаляется. ПДн (152-ФЗ): отдаётся
+// только под JWT родителя этой семьи.
+model ChildAvatarPhoto {
+  childId   String   @id
+  child     Child    @relation(fields: [childId], references: [id], onDelete: Cascade)
+  mime      String   // image/jpeg | image/png | image/webp
+  sha256    String   // hex lowercase, 64 символа (ETag)
+  data      Bytes    // ≤300 КБ, сжатие на клиенте, сервер не перекодирует
+  updatedAt DateTime @updatedAt
+
+  @@map("child_avatar_photos")
 }
 
 model Invite {

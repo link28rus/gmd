@@ -111,11 +111,33 @@
 - `familyId` (uuid) — foreign key → families (каскадное удаление)
 - `name` (varchar) — имя ребёнка
 - `dateOfBirth` (date) — дата рождения (опционально, используется для согласия 14+)
-- `avatarKey` (varchar) — ключ изображения в MinIO (опционально)
+- `avatarKey` (varchar, nullable, с v0.61.0) — аватар ребёнка:
+  `NULL` — первая буква имени (по умолчанию); `preset:<id>` — стандартный аватар, `<id>` из
+  `fox bear panda cat bunny owl penguin frog lion koala puppy tiger` (`CHILD_AVATAR_PRESETS`
+  в `apps/backend/src/children/dto/set-child-avatar.dto.ts`); `photo:<version>` — своё фото
+  в `child_avatar_photos`, `<version>` = первые 12 hex sha256 байтов (ключ кэша на клиентах).
+  Пишется вместе с `child_avatar_photos` в одной транзакции
+  (`PUT`/`DELETE /family/children/:childId/avatar`). Контракт —
+  [spec](superpowers/specs/2026-09-29-child-avatars.md)
 - `createdAt`, `updatedAt` (timestamptz)
 - `deletedAt` (timestamptz) — soft-delete
 
 **Связи:** каскадное удаление при удалении семьи → удаляются также device, зоны, события.
+
+#### `child_avatar_photos` (v0.61.0)
+
+Своё фото ребёнка, 1:1 с `children`. Отдельной таблицей, чтобы байты не тянулись в каждую
+выборку `Child`. Фото — ПДн (152-ФЗ): отдаётся только через `GET /family/children/:childId/avatar`
+под JWT родителя семьи ребёнка; у soft-deleted ребёнка не отдаётся (404).
+
+- `childId` — первичный ключ, foreign key → children (CASCADE — уходит вместе с hard-delete ребёнка)
+- `mime` (text) — `image/jpeg` | `image/png` | `image/webp`; сигнатура файла сверяется с `mime`
+- `sha256` (text) — hex sha256 байтов (64 символа); отдаётся как `ETag`
+- `data` (bytea) — байты фото, ≤300 КБ (иначе `413 avatar_too_large`). Сжимает клиент, сервер
+  не перекодирует
+- `updatedAt` (timestamptz)
+
+Строка удаляется при выборе пресета и при «Убрать» (`DELETE .../avatar`).
 
 #### `child_devices`
 

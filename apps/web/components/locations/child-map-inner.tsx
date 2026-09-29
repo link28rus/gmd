@@ -5,12 +5,15 @@ import L from 'leaflet';
 import type { LatestLocationDto, LocationDto, TripDto } from '@/lib/api/locations';
 import { useTheme } from '@/components/theme/theme-provider';
 import { tileConfigFor } from '@/lib/maps/tile-config';
+import { useChildAvatarSrc } from '@/lib/hooks/use-child-avatar';
 import { LatestMarker } from './latest-marker';
 import { TrackPolyline } from './track-polyline';
 
 export interface ChildMapInnerProps {
   childId: string;
   childName: string;
+  /** avatarKey ребёнка для маркера; без него — буква имени. */
+  avatarKey?: string | null;
   latest: LatestLocationDto | null;
   track: LocationDto[];
   /** Сохранён в API ради обратной совместимости с обёрткой ChildMap. */
@@ -109,11 +112,13 @@ function GoToChildControl({ latest }: { latest: LatestLocationDto | null }): Rea
 export function ChildMapInner({
   childId,
   childName,
+  avatarKey,
   latest,
   track,
   stops,
 }: ChildMapInnerProps): ReactElement {
   const { theme } = useTheme();
+  const avatarUrl = useChildAvatarSrc(childId, avatarKey);
   const tile = tileConfigFor(theme);
 
   // Чиним default Leaflet marker icons, которые иначе ищут assets по
@@ -155,6 +160,7 @@ export function ChildMapInner({
           accuracy={latest.accuracy}
           childName={childName}
           ageSec={latest.ageSec}
+          avatarUrl={avatarUrl}
         />
       )}
       <TrackPolyline items={track} stops={stops} />

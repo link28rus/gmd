@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 
 import 'child_models.dart';
@@ -75,6 +78,55 @@ class ChildrenRepository {
     final res = await _dio.delete<dynamic>('/family/children/$childId/device');
     final data = res.data as Map<String, dynamic>?;
     return (data?['unbound'] as bool?) ?? true;
+  }
+
+  /// Выбрать стандартный аватар. `PUT /family/children/:id/avatar {preset}`
+  /// → `{avatarKey}`. Фото ребёнка на сервере при этом удаляется.
+  /// Ошибки: `invalid_avatar` (400), `child_not_found` (404).
+  Future<String?> setAvatarPreset(String childId, String presetId) async {
+    final res = await _dio.put<dynamic>(
+      '/family/children/$childId/avatar',
+      data: {'preset': presetId},
+    );
+    return (res.data as Map<String, dynamic>?)?['avatarKey'] as String?;
+  }
+
+  /// Загрузить своё фото (уже сжатое на клиенте, ≤ 300 КБ).
+  /// `PUT /family/children/:id/avatar {photo: {mime, base64}}` → `{avatarKey}`.
+  /// Ошибки: `invalid_avatar` (400, сигнатура не совпала с mime),
+  /// `avatar_too_large` (413).
+  Future<String?> uploadAvatarPhoto(
+    String childId,
+    Uint8List bytes,
+    String mime,
+  ) async {
+    final res = await _dio.put<dynamic>(
+      '/family/children/$childId/avatar',
+      data: {
+        'photo': {'mime': mime, 'base64': base64Encode(bytes)},
+      },
+    );
+    return (res.data as Map<String, dynamic>?)?['avatarKey'] as String?;
+  }
+
+  /// Вернуть букву имени вместо аватара. `DELETE /family/children/:id/avatar` → 204.
+  Future<void> removeAvatar(String childId) async {
+    await _dio.delete<dynamic>('/family/children/$childId/avatar');
+  }
+
+  /// Байты фото ребёнка. `GET /family/children/:id/avatar` — только под JWT
+  /// родителя этой семьи (фото — ПДн), поэтому через Dio с auth-интерсептором,
+  /// а не `Image.network`. 404 — фото нет.
+  Future<Uint8List> fetchAvatarPhoto(String childId) async {
+    final res = await _dio.get<List<int>>(
+      '/family/children/$childId/avatar',
+      options: Options(responseType: ResponseType.bytes),
+    );
+    final data = res.data;
+    if (data == null || data.isEmpty) {
+      throw StateError('empty avatar response');
+    }
+    return data is Uint8List ? data : Uint8List.fromList(data);
   }
 
   /// Создать нового ребёнка. Backend проверяет лимит (макс 10 на семью)

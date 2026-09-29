@@ -1,5 +1,5 @@
 // apps/web/lib/api/children.ts
-import { apiFetch } from './client';
+import { apiFetch, apiFetchBlob } from './client';
 
 export interface ChildDevice {
   id: string;
@@ -16,6 +16,8 @@ export interface Child {
   dateOfBirth: string | null;
   protectionEnabled: boolean;
   protectionEnabledAt: string | null;
+  /** `null` — буква имени, `preset:<id>` — стандартный аватар, `photo:<version>` — своё фото. */
+  avatarKey: string | null;
   device: ChildDevice | null;
 }
 
@@ -41,6 +43,10 @@ export interface UpdateChildInput {
   name?: string;
   dateOfBirth?: string | null;
 }
+
+export type SetAvatarInput =
+  | { preset: string }
+  | { photo: { mime: 'image/jpeg' | 'image/png' | 'image/webp'; base64: string } };
 
 export const childrenApi = {
   list: () => apiFetch<{ children: Child[] }>('/api/children'),
@@ -72,4 +78,12 @@ export const childrenApi = {
       method: 'PATCH',
       body: JSON.stringify({ enabled }),
     }),
+  setAvatar: (id: string, body: SetAvatarInput) =>
+    apiFetch<{ avatarKey: string | null }>(`/api/children/${id}/avatar`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+  removeAvatar: (id: string) => apiFetch<void>(`/api/children/${id}/avatar`, { method: 'DELETE' }),
+  /** Фото — ПДн, отдаётся только под JWT родителя, поэтому не `<img src>`, а blob. */
+  fetchAvatar: (id: string) => apiFetchBlob(`/api/children/${id}/avatar`),
 };

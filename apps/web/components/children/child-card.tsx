@@ -10,6 +10,8 @@ import { EditChildDialog } from './edit-child-dialog';
 import { DeleteChildDialog } from './delete-child-dialog';
 import { InviteQrDialog } from './invite-qr-dialog';
 import { ResetDeviceDialog } from './reset-device-dialog';
+import { ChildAvatarDialog } from './child-avatar-dialog';
+import { ChildAvatar } from '@/components/avatar/child-avatar';
 import type { Child } from '@/lib/api/children';
 import { APP_CONTROL_ENABLED } from '@/lib/features';
 
@@ -34,6 +36,7 @@ export function ChildCard({ child }: Props) {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
+  const [avatarOpen, setAvatarOpen] = useState(false);
 
   const hasActiveDevice = child.device != null && child.device.revokedAt == null;
   const age = ageYears(child.dateOfBirth);
@@ -41,11 +44,27 @@ export function ChildCard({ child }: Props) {
   return (
     <article className="rounded-lg border border-border bg-card p-5 shadow-sm">
       <header className="flex items-start justify-between gap-4">
-        <div>
-          <h3 className="text-lg font-semibold text-foreground">{child.name}</h3>
-          {age && <p className="text-sm text-muted-foreground">{age}</p>}
-          <div className="mt-2">
-            <DeviceStatusBadge device={child.device} />
+        <div className="flex min-w-0 items-start gap-3">
+          <button
+            type="button"
+            onClick={() => setAvatarOpen(true)}
+            aria-label="Фото профиля"
+            title="Фото профиля"
+            className="shrink-0 rounded-full transition hover:opacity-80"
+          >
+            <ChildAvatar
+              name={child.name}
+              avatarKey={child.avatarKey}
+              childId={child.id}
+              size={48}
+            />
+          </button>
+          <div className="min-w-0">
+            <h3 className="text-lg font-semibold text-foreground">{child.name}</h3>
+            {age && <p className="text-sm text-muted-foreground">{age}</p>}
+            <div className="mt-2">
+              <DeviceStatusBadge device={child.device} />
+            </div>
           </div>
         </div>
         <div className="relative">
@@ -65,6 +84,15 @@ export function ChildCard({ child }: Props) {
                 }}
               >
                 Редактировать
+              </button>
+              <button
+                className="w-full px-3 py-2 text-left text-sm hover:bg-muted"
+                onClick={() => {
+                  setMenu(false);
+                  setAvatarOpen(true);
+                }}
+              >
+                Фото профиля
               </button>
               <button
                 className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
@@ -118,6 +146,7 @@ export function ChildCard({ child }: Props) {
       <DeleteChildDialog child={child} open={deleteOpen} onOpenChange={setDeleteOpen} />
       <InviteQrDialog child={child} open={inviteOpen} onOpenChange={setInviteOpen} />
       <ResetDeviceDialog child={child} open={resetOpen} onOpenChange={setResetOpen} />
+      <ChildAvatarDialog child={child} open={avatarOpen} onOpenChange={setAvatarOpen} />
     </article>
   );
 }

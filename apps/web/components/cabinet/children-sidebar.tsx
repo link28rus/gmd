@@ -3,7 +3,7 @@
 import { UserPlus, X } from 'lucide-react';
 import type { ReactElement } from 'react';
 import type { Child } from '@/lib/api/children';
-import { avatarColor, avatarInitial } from '@/lib/color/avatar-color';
+import { ChildAvatar } from '@/components/avatar/child-avatar';
 import { CreateChildDialog } from '@/components/children/create-child-dialog';
 
 interface Props {
@@ -54,12 +54,7 @@ export function ChildrenSidebar({
               selectedId === c.id ? 'bg-accent/30 ring-1 ring-accent' : 'hover:bg-muted'
             }`}
           >
-            <div
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white"
-              style={{ backgroundColor: avatarColor(c.name) }}
-            >
-              <span className="text-sm font-semibold">{avatarInitial(c.name)}</span>
-            </div>
+            <ChildAvatar name={c.name} avatarKey={c.avatarKey} childId={c.id} size={36} />
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-medium text-foreground">{c.name}</div>
               <div className="truncate text-xs text-muted-foreground">

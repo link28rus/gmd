@@ -9,10 +9,12 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Req,
+  Res,
   UseGuards,
 } from '@nestjs/common';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { ChildrenService } from './children.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -42,6 +44,7 @@ export class ChildrenController {
         id: c.id,
         name: c.name,
         dateOfBirth: c.dateOfBirth,
+        avatarKey: c.avatarKey,
         protectionEnabled: c.protectionEnabled,
         protectionEnabledAt: c.protectionEnabledAt,
         device: c.device
@@ -99,6 +102,43 @@ export class ChildrenController {
     @Param('childId') childId: string,
   ): Promise<{ unbound: boolean }> {
     return this.children.unbindDevice(req.user.familyId, childId);
+  }
+
+  // Аватар ребёнка (v0.61, docs/superpowers/specs/2026-09-29-child-avatars.md).
+  // Тело валидирует сервис: ошибки — `invalid_avatar` (400) / `avatar_too_large` (413).
+  @Put(':childId/avatar')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(ConsentRequiredGuard)
+  async setAvatar(
+    @Req() req: AuthedRequest,
+    @Param('childId') childId: string,
+    @Body() body: unknown,
+  ): Promise<{ avatarKey: string }> {
+    return this.children.setAvatar(req.user.familyId, childId, body);
+  }
+
+  // Убрать аватар (вернуть букву). Consent не требуется — это удаление ПДн,
+  // а не новая обработка (как и отвязка устройства).
+  @Delete(':childId/avatar')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async removeAvatar(@Req() req: AuthedRequest, @Param('childId') childId: string): Promise<void> {
+    await this.children.removeAvatar(req.user.familyId, childId);
+  }
+
+  // Байты фото — ПДн, только под JWT родителя этой семьи; `private` — не для общих кэшей.
+  @Get(':childId/avatar')
+  async getAvatar(
+    @Req() req: AuthedRequest,
+    @Param('childId') childId: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    const photo = await this.children.getAvatarPhoto(req.user.familyId, childId);
+    res.set({
+      'Content-Type': photo.mime,
+      'Cache-Control': 'private, max-age=86400',
+      ETag: `"${photo.sha256}"`,
+    });
+    res.send(photo.data);
   }
 
   @Get(':childId/protection')

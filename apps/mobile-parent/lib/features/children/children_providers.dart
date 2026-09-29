@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers.dart';
@@ -45,4 +47,21 @@ final tripPointsProvider =
     FutureProvider.autoDispose.family<List<ChildLocation>, TripPointsKey>((ref, key) async {
   final repo = ref.watch(childrenRepositoryProvider);
   return repo.tripPoints(key.childId, key.tripId);
+});
+
+/// Ключ для [childAvatarPhotoProvider] — (childId, version из `photo:<version>`).
+/// Новая версия фото = новый ключ → старые байты не показываются.
+typedef ChildAvatarPhotoKey = ({String childId, String version});
+
+/// Байты фото ребёнка. Успешный результат держится в памяти (keepAlive): одно
+/// и то же фото рисуется на главной, в карточке статуса и в маркере — грузим
+/// один раз на версию. Ошибка (404, сеть) не кэшируется навсегда: provider
+/// освобождается без слушателей и при следующем показе пробует снова.
+/// Пока грузится или при ошибке виджет показывает букву имени.
+final childAvatarPhotoProvider = FutureProvider.autoDispose
+    .family<Uint8List, ChildAvatarPhotoKey>((ref, key) async {
+  final repo = ref.watch(childrenRepositoryProvider);
+  final bytes = await repo.fetchAvatarPhoto(key.childId);
+  ref.keepAlive();
+  return bytes;
 });

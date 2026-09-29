@@ -15,6 +15,7 @@ import { ChildActions } from '@/components/cabinet/child-actions';
 import { ChildNotAttachedView } from '@/components/cabinet/child-not-attached-view';
 import { ChildMap } from '@/components/locations/child-map';
 import { ChildStatusCard } from '@/components/locations/child-status-card';
+import { ChildAvatarDialog } from '@/components/children/child-avatar-dialog';
 import { MapErrorFallback } from '@/components/locations/map-error-fallback';
 import { ApiError } from '@/lib/api/client';
 import type { Child } from '@/lib/api/children';
@@ -181,6 +182,7 @@ function hasActiveDevice(c: Child): boolean {
 function MapArea({ child }: { child: Child }): ReactElement {
   const router = useRouter();
   const [mapFailed, setMapFailed] = useState(false);
+  const [avatarOpen, setAvatarOpen] = useState(false);
   const latestQ = useLatestLocation(child.id);
   const activeQ = useActiveTrack(child.id);
 
@@ -240,6 +242,7 @@ function MapArea({ child }: { child: Child }): ReactElement {
       <ChildMap
         childId={child.id}
         childName={child.name}
+        avatarKey={child.avatarKey}
         latest={latest}
         track={track}
         onMapError={() => setMapFailed(true)}
@@ -248,6 +251,9 @@ function MapArea({ child }: { child: Child }): ReactElement {
         <div className="absolute inset-x-3 bottom-3 z-10 md:inset-x-auto md:bottom-auto md:left-4 md:top-4">
           <ChildStatusCard
             childName={child.name}
+            childId={child.id}
+            avatarKey={child.avatarKey}
+            onAvatarClick={() => setAvatarOpen(true)}
             ageSec={latest.ageSec}
             accuracy={latest.accuracy}
             batteryLevel={latest.batteryLevel}
@@ -261,6 +267,7 @@ function MapArea({ child }: { child: Child }): ReactElement {
           />
         </div>
       )}
+      <ChildAvatarDialog child={child} open={avatarOpen} onOpenChange={setAvatarOpen} />
     </>
   );
 }

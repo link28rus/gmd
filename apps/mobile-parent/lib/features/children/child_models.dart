@@ -6,6 +6,7 @@ class Child {
     this.dateOfBirth,
     this.protectionEnabled = false,
     this.device,
+    this.avatarKey,
   });
 
   final String id;
@@ -13,6 +14,11 @@ class Child {
   final DateTime? dateOfBirth;
   final bool protectionEnabled;
   final ChildDevice? device;
+
+  /// Аватар (v0.61): `null` — буква имени, `preset:<id>` — стандартный
+  /// зверёк из `assets/avatars/`, `photo:<version>` — своё фото
+  /// (`GET /family/children/:id/avatar`). См. `ChildAvatarKey`.
+  final String? avatarKey;
 
   factory Child.fromJson(Map<String, dynamic> json) {
     return Child(
@@ -23,6 +29,7 @@ class Child {
       device: json['device'] is Map<String, dynamic>
           ? ChildDevice.fromJson(json['device'] as Map<String, dynamic>)
           : null,
+      avatarKey: json['avatarKey'] as String?,
     );
   }
 
@@ -259,4 +266,37 @@ class InviteResponse {
   final int expiresIn;
 
   DateTime get expiresAt => DateTime.now().add(Duration(seconds: expiresIn));
+}
+
+/// Разбор `Child.avatarKey` (спека `2026-09-29-child-avatars.md`).
+class ChildAvatarKey {
+  const ChildAvatarKey._({this.presetId, this.photoVersion});
+
+  /// Стандартные аватары — порядок как в сетке выбора и в web-кабинете.
+  static const presets = <String>[
+    'fox', 'bear', 'panda', 'cat', 'bunny', 'owl',
+    'penguin', 'frog', 'lion', 'koala', 'puppy', 'tiger',
+  ];
+
+  /// Разобрать ключ. `null` для пустого/неизвестного значения — показываем букву.
+  static ChildAvatarKey? parse(String? key) {
+    if (key == null) return null;
+    if (key.startsWith('preset:')) {
+      final id = key.substring('preset:'.length);
+      return presets.contains(id) ? ChildAvatarKey._(presetId: id) : null;
+    }
+    if (key.startsWith('photo:')) {
+      final v = key.substring('photo:'.length);
+      return v.isEmpty ? null : ChildAvatarKey._(photoVersion: v);
+    }
+    return null;
+  }
+
+  /// Id пресета (`fox`, `bear`…), если выбран стандартный аватар.
+  final String? presetId;
+
+  /// Версия фото (первые 12 hex sha256) — ключ кэша, если загружено своё фото.
+  final String? photoVersion;
+
+  static String presetAsset(String id) => 'assets/avatars/$id.svg';
 }

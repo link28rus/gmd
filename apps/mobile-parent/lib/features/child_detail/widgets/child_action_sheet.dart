@@ -6,6 +6,7 @@ import '../../../core/api/api_exception.dart';
 import '../../../core/features.dart';
 import '../../children/child_models.dart';
 import '../../children/children_providers.dart';
+import '../../children/widgets/child_avatar_sheet.dart';
 import 'child_status_card.dart';
 
 /// Собственно содержимое DraggableScrollableSheet — порт `_BottomPanel`.
@@ -82,11 +83,18 @@ class _ChildActionSheetState extends ConsumerState<ChildActionSheet> {
           const SizedBox(height: 8),
           // Always-visible: статус-карточка
           ChildStatusCard(
+            childId: widget.child.id,
             childName: widget.child.name,
+            avatarKey: widget.child.avatarKey,
             latest: widget.latest,
           ),
           const Divider(height: 24),
           // Action tiles
+          _ActionTile(
+            icon: Icons.account_circle_outlined,
+            label: 'Фото профиля',
+            onTap: () => showChildAvatarSheet(context, widget.child),
+          ),
           _ActionTile(
             icon: Icons.timeline_outlined,
             label: 'История передвижений',

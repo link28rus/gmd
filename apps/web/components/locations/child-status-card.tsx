@@ -1,10 +1,15 @@
 'use client';
 import type { ReactElement, ReactNode } from 'react';
-import { avatarColor, avatarInitial } from '@/lib/color/avatar-color';
+import { ChildAvatar } from '@/components/avatar/child-avatar';
 import { formatAgeShort } from '@/lib/date/age-format';
 
 interface Props {
   childName: string;
+  /** id и avatarKey ребёнка — для стандартного аватара/фото; без них — буква. */
+  childId?: string;
+  avatarKey?: string | null;
+  /** Клик по аватару (открыть «Фото профиля»). Без обработчика аватар не кликабелен. */
+  onAvatarClick?: () => void;
   ageSec: number;
   accuracy: number | null;
   batteryLevel: number | null;
@@ -21,6 +26,9 @@ interface Props {
 
 export function ChildStatusCard({
   childName,
+  childId,
+  avatarKey,
+  onAvatarClick,
   ageSec,
   accuracy,
   batteryLevel,
@@ -32,18 +40,22 @@ export function ChildStatusCard({
   appVersion,
   actions,
 }: Props): ReactElement {
-  const initial = avatarInitial(childName);
-  const color = avatarColor(childName);
-
   return (
     <div className="w-full rounded-lg border border-border bg-card shadow-md md:w-[280px]">
       <div className="flex items-center gap-3 border-b border-border px-3 py-2.5">
-        <div
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white"
-          style={{ backgroundColor: color }}
-        >
-          <span className="text-base font-semibold">{initial}</span>
-        </div>
+        {onAvatarClick ? (
+          <button
+            type="button"
+            onClick={onAvatarClick}
+            aria-label="Фото профиля"
+            title="Фото профиля"
+            className="shrink-0 rounded-full transition hover:opacity-80"
+          >
+            <ChildAvatar name={childName} avatarKey={avatarKey} childId={childId} size={40} />
+          </button>
+        ) : (
+          <ChildAvatar name={childName} avatarKey={avatarKey} childId={childId} size={40} />
+        )}
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2">
             <div className="truncate text-sm font-semibold text-foreground">{childName}</div>

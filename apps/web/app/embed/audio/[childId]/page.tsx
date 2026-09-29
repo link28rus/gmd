@@ -64,6 +64,7 @@ export default function AudioEmbedPage({
       dateOfBirth: null,
       protectionEnabled: false,
       protectionEnabledAt: null,
+      avatarKey: null,
       device: null,
     });
 

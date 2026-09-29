@@ -5,7 +5,8 @@ import { QrCode } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { InviteQrDialog } from '@/components/children/invite-qr-dialog';
 import { ChildActions } from '@/components/cabinet/child-actions';
-import { avatarColor, avatarInitial } from '@/lib/color/avatar-color';
+import { ChildAvatar } from '@/components/avatar/child-avatar';
+import { ChildAvatarDialog } from '@/components/children/child-avatar-dialog';
 import type { Child } from '@/lib/api/children';
 
 interface Props {
@@ -14,18 +15,27 @@ interface Props {
 
 export function ChildNotAttachedView({ child }: Props): ReactElement {
   const [qrOpen, setQrOpen] = useState(false);
+  const [avatarOpen, setAvatarOpen] = useState(false);
 
   return (
     <>
       <div className="flex h-full items-center justify-center bg-muted p-4 sm:p-6">
         <div className="w-full max-w-[360px] overflow-hidden rounded-lg border border-border bg-card shadow-sm">
           <div className="flex items-center gap-3 border-b border-border px-4 py-3">
-            <div
-              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-white"
-              style={{ backgroundColor: avatarColor(child.name) }}
+            <button
+              type="button"
+              onClick={() => setAvatarOpen(true)}
+              aria-label="Фото профиля"
+              title="Фото профиля"
+              className="shrink-0 rounded-full transition hover:opacity-80"
             >
-              <span className="text-lg font-semibold">{avatarInitial(child.name)}</span>
-            </div>
+              <ChildAvatar
+                name={child.name}
+                avatarKey={child.avatarKey}
+                childId={child.id}
+                size={48}
+              />
+            </button>
             <div className="min-w-0 flex-1">
               <div className="truncate text-base font-semibold text-foreground">{child.name}</div>
               <div className="truncate text-xs text-muted-foreground">устройство не привязано</div>
@@ -45,6 +55,7 @@ export function ChildNotAttachedView({ child }: Props): ReactElement {
         </div>
       </div>
       <InviteQrDialog child={child} open={qrOpen} onOpenChange={setQrOpen} />
+      <ChildAvatarDialog child={child} open={avatarOpen} onOpenChange={setAvatarOpen} />
     </>
   );
 }
