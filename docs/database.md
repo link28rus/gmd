@@ -258,6 +258,13 @@ TTL 24 ч) или сам при сбое. Смотрит только админ
 - `radius` (int) — радиус в метрах, CHECK `BETWEEN 50 AND 5000` (с v0.64.0 API принимает 100..5000)
 - `allChildren` (bool, default false, v0.64.0) — зона для всех детей семьи, включая будущих; явных
   назначений в `zone_child_assignments` у такой зоны нет
+- `timezone` (text, nullable, v0.65.0) — IANA-пояс зоны (из браузера родителя при сохранении);
+  обязателен, если задано расписание или срок
+- `scheduleDaysMask`, `scheduleStartMin`, `scheduleEndMin` (int, nullable, v0.65.0) — окно
+  уведомлений о приходе/уходе: маска дней (бит0 = ПН … бит6 = ВС), минуты дня `[start, end)`,
+  через полночь, если `end < start`. Вне окна push не шлётся, событие пишется
+- `arrivalDeadlineMin`, `arrivalDaysMask` (int, nullable), `arrivalGraceMin` (int, default 10)
+  (v0.65.0) — «не пришёл к сроку»: срок (минута дня), дни, запас в минутах
 - `createdBy` (uuid) — foreign key → users (RESTRICT, чтобы не ломать историю)
 - `createdAt`, `updatedAt` (timestamptz)
 - `deletedAt` (timestamptz) — soft-delete зоны
@@ -295,7 +302,8 @@ M2M таблица связи зон и детей.
 - `id` (uuid) — первичный ключ
 - `zoneId` (uuid) — foreign key → zones (CASCADE)
 - `childId` (uuid) — foreign key → children (CASCADE)
-- `type` (enum: entry | exit) — направление события
+- `type` (enum: entry | exit | missed_arrival | no_data) — вход, выход; с v0.65.0 также «не пришёл
+  к сроку» и «нет данных от телефона к сроку» (координаты — последняя точка ребёнка или центр зоны)
 - `lat`, `lon` (float8) — координаты точки, которая сработала событие
 - `accuracy` (float8) — точность в момент события
 - `recordedAt` (timestamptz) — время точки на устройстве
@@ -339,6 +347,33 @@ M2M таблица связи зон и детей.
 4. Строки нет (зона «все дети», новый ребёнок) — первая однозначная точка задаёт состояние без события.
 5. При создании зоны, добавлении ребёнка и правке центра или радиуса состояние считается по
    последней хорошей точке ребёнка (без `outlier` и `mock`) — без события.
+
+### `zone_notification_prefs` (v0.65.0)
+
+Личные настройки уведомлений родителя по паре зона × ребёнок. Нет строки — всё включено.
+
+- `userId`, `zoneId`, `childId` — foreign keys (CASCADE)
+- `onEntry`, `onExit`, `onMissedArrival` (bool, default true)
+- `updatedAt` (timestamptz)
+
+**Уникальность:** `(userId, zoneId, childId)`. **Индекс:** `(zoneId)`.
+
+### `zone_arrival_checks` (v0.65.0)
+
+Проверка «пришёл ли к сроку» — одна на зону, ребёнка и местную дату (идемпотентность
+ежеминутного тика `ZoneArrivalService`).
+
+- `zoneId`, `childId` — foreign keys (CASCADE)
+- `localDate` (varchar 10) — дата `YYYY-MM-DD` в поясе зоны
+- `verdict` (text) — `arrived` | `missed` | `no_data`
+- `createdAt` (timestamptz)
+
+**Уникальность:** `(zoneId, childId, localDate)`.
+
+Логика: к сроку + запасу ребёнок внутри зоны (или в ожидании входа) либо входил в неё за местные
+сутки до срока — `arrived`; иначе при точке свежее 20 минут — `missed` (событие
+`missed_arrival`), иначе — `no_data`. Проверяются только дети с живым устройством; окно
+догоняния после срока — 120 минут.
 
 ---
 

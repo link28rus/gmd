@@ -15,4 +15,17 @@ export interface ZoneDto {
   /** Явные назначения (пусто при allChildren). */
   childIds: string[];
   states?: Array<{ childId: string; isInside: boolean }>;
+  /** v0.65.0: IANA-пояс зоны для расписания и срока. */
+  timezone: string | null;
+  schedule: { daysMask: number; startMin: number; endMin: number } | null;
+  arrival: { deadlineMin: number; daysMask: number; graceMin: number } | null;
+  /** Личные настройки уведомлений текущего пользователя по детям зоны. */
+  myPrefs?: ZoneNotificationPrefDto[];
+}
+
+export interface ZoneNotificationPrefDto {
+  childId: string;
+  onEntry: boolean;
+  onExit: boolean;
+  onMissedArrival: boolean;
 }

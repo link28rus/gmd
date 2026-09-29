@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { FcmService } from '../fcm/fcm.service';
 import { ParentDevicesService } from '../parent-devices/parent-devices.service';
+import { formatMinute, isZoneScheduleActive } from './zone-time';
 
 export interface ZoneCandidate {
   id: string;
@@ -70,9 +71,20 @@ export interface ZoneEventNotice {
   familyId: string;
   childId: string;
   zoneId: string;
-  eventType: 'entry' | 'exit';
+  /** v0.65.0: + missed_arrival / no_data — от проверки «пришёл к сроку». */
+  eventType: 'entry' | 'exit' | 'missed_arrival' | 'no_data';
   recordedAt: Date;
 }
+
+const PUSH_TYPE: Record<ZoneEventNotice['eventType'], string> = {
+  entry: 'GEOFENCE_ENTER',
+  exit: 'GEOFENCE_EXIT',
+  missed_arrival: 'GEOFENCE_MISSED',
+  no_data: 'GEOFENCE_NO_DATA',
+};
+
+// Канал событий в приложении родителя (ParentFirebaseMessagingService.CHANNEL_EVENTS).
+const PARENT_EVENTS_CHANNEL = 'periscop_parent_events';
 
 @Injectable()
 export class ZoneDetectionService {
@@ -243,42 +255,109 @@ export class ZoneDetectionService {
   }
 
   /**
-   * v0.46: разослать FCM data-message всем активным parent-devices семьи.
-   * data: { type: GEOFENCE_ENTER|GEOFENCE_EXIT, childId, childName, zoneId, zoneName, recordedAt }.
-   * Mobile-parent ловит, кладёт notification + deeplink на /home/child/{id}.
+   * Разослать push о событии зоны активным устройствам родителей семьи.
+   * v0.65.0: учитываются личные настройки каждого родителя (зона × ребёнок) и
+   * расписание зоны (вне окна — push о приходе/уходе не шлём, событие в ленте
+   * остаётся). data: { type, childId, childName, zoneId, zoneName, recordedAt,
+   * delayed?, deadline? }.
    */
   private async notifyParentsOnZoneEvent(args: ZoneEventNotice): Promise<void> {
     const devices = await this.parentDevices.findActiveByFamilyId(args.familyId);
     if (devices.length === 0) return;
     // Резолвим имена ребёнка и зоны — без них родитель видит generic
     // «Ребёнок вошёл в одну из геозон» и не понимает, кто и куда.
-    const [child, zone] = await Promise.all([
-      this.prisma.child.findUnique({
-        where: { id: args.childId },
-        select: { name: true },
-      }),
+    const [child, zone, prefs] = await Promise.all([
+      this.prisma.child.findUnique({ where: { id: args.childId }, select: { name: true } }),
       this.prisma.zone.findUnique({
         where: { id: args.zoneId },
-        select: { name: true },
+        select: {
+          name: true,
+          timezone: true,
+          scheduleDaysMask: true,
+          scheduleStartMin: true,
+          scheduleEndMin: true,
+          arrivalDeadlineMin: true,
+        },
+      }),
+      this.prisma.zoneNotificationPref.findMany({
+        where: { zoneId: args.zoneId, childId: args.childId },
       }),
     ]);
-    const fcmService = this.fcm;
+    const isMove = args.eventType === 'entry' || args.eventType === 'exit';
+    if (
+      isMove &&
+      zone?.timezone &&
+      zone.scheduleDaysMask !== null &&
+      zone.scheduleStartMin !== null &&
+      zone.scheduleEndMin !== null &&
+      !isZoneScheduleActive(
+        {
+          daysMask: zone.scheduleDaysMask,
+          startMin: zone.scheduleStartMin,
+          endMin: zone.scheduleEndMin,
+        },
+        args.recordedAt,
+        zone.timezone,
+      )
+    ) {
+      this.logger.log(`zone push skipped: outside schedule zone=${args.zoneId}`);
+      return;
+    }
+
+    const prefByUser = new Map(prefs.map((p) => [p.userId, p]));
+    const wants = (userId: string): boolean => {
+      const p = prefByUser.get(userId);
+      if (!p) return true; // нет строки — всё включено
+      if (args.eventType === 'entry') return p.onEntry;
+      if (args.eventType === 'exit') return p.onExit;
+      return p.onMissedArrival;
+    };
+    const targets = devices.filter((d) => wants(d.userId));
+    if (targets.length === 0) return;
+
+    const childName = child?.name ?? '';
+    const zoneName = zone?.name ?? '';
     const data: Record<string, string> = {
-      type: args.eventType === 'entry' ? 'GEOFENCE_ENTER' : 'GEOFENCE_EXIT',
+      type: PUSH_TYPE[args.eventType],
       childId: args.childId,
-      childName: child?.name ?? '',
+      childName,
       zoneId: args.zoneId,
-      zoneName: zone?.name ?? '',
+      zoneName,
       recordedAt: args.recordedAt.toISOString(),
     };
-    if (Date.now() - args.recordedAt.getTime() > LATE_EVENT_MS) {
+    if (isMove && Date.now() - args.recordedAt.getTime() > LATE_EVENT_MS) {
       data.delayed = '1';
     }
+    // Новые типы текущий APK родителя не рисует — мост до этапа 3: видимое
+    // уведомление FCM, которое Android покажет сам, пока приложение свёрнуто.
+    let notification: { title: string; body: string; channelId: string } | undefined;
+    if (!isMove) {
+      const deadline =
+        zone?.arrivalDeadlineMin !== null && zone?.arrivalDeadlineMin !== undefined
+          ? formatMinute(zone.arrivalDeadlineMin)
+          : null;
+      if (deadline) data.deadline = deadline;
+      const who = childName || 'Ребёнок';
+      const where = zoneName ? `«${zoneName}»` : 'зону';
+      notification =
+        args.eventType === 'missed_arrival'
+          ? {
+              title: `${who}: не в зоне ${where}`,
+              body: `${who} не пришёл(а) в ${where}${deadline ? ` к ${deadline}` : ' к сроку'}.`,
+              channelId: PARENT_EVENTS_CHANNEL,
+            }
+          : {
+              title: `${who}: нет данных к сроку`,
+              body: `Телефон не присылал местоположение — не знаем, пришёл(а) ли ${who} в ${where}${deadline ? ` к ${deadline}` : ''}.`,
+              channelId: PARENT_EVENTS_CHANNEL,
+            };
+    }
     await Promise.all(
-      devices.map((d) =>
-        fcmService.sendHybridToToken({
+      targets.map((d) =>
+        this.fcm.sendHybridToToken({
           tokens: { fcmToken: d.fcmToken, rustorePushToken: d.rustorePushToken },
           data,
+          notification,
           label: `${data.type} child=${args.childId} zone=${args.zoneId}`,
           onInvalidFcmToken: (token) => this.parentDevices.clearTokenByExpired(token),
           onInvalidRustoreToken: (token) => this.parentDevices.clearRustoreByExpired(token),

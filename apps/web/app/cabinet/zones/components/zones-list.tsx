@@ -2,10 +2,42 @@
 'use client';
 
 import type { ReactElement } from 'react';
-import { Pencil, Trash2 } from 'lucide-react';
+import { AlarmClock, CalendarClock, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { MAX_ZONES, type Zone } from '@/lib/api/zones';
-import { ZONE_ICON_EMOJI } from './zone-format';
+import { ZONE_ICON_EMOJI, formatDaysMask, formatScheduleShort, minutesToHHMM } from './zone-format';
+import { MyNotifications } from './my-notifications';
+
+const RULE_BADGE_CLASS =
+  'inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-xs text-muted-foreground';
+
+function RuleBadges({ zone }: { zone: Zone }): ReactElement | null {
+  const { schedule, arrival } = zone;
+  if (!schedule && !arrival) return null;
+  const tz = zone.timezone ? ` (${zone.timezone})` : '';
+  return (
+    <div className="mt-1.5 flex flex-wrap gap-1">
+      {schedule && (
+        <span
+          className={RULE_BADGE_CLASS}
+          title={`Уведомления о приходе и уходе только в это время${tz}`}
+        >
+          <CalendarClock className="h-3 w-3" aria-hidden />
+          по расписанию {formatScheduleShort(schedule)}
+        </span>
+      )}
+      {arrival && (
+        <span
+          className={RULE_BADGE_CLASS}
+          title={`Не пришёл к сроку: ${formatDaysMask(arrival.daysMask)}, запас ${arrival.graceMin} мин${tz}`}
+        >
+          <AlarmClock className="h-3 w-3" aria-hidden />
+          срок {minutesToHHMM(arrival.deadlineMin)}
+        </span>
+      )}
+    </div>
+  );
+}
 
 interface Props {
   zones: Zone[];
@@ -101,6 +133,7 @@ export function ZonesList({
                   <p className="mt-1 text-xs text-muted-foreground">
                     Радиус {zone.radius} м · {assignedText(zone, kidNames)}
                   </p>
+                  <RuleBadges zone={zone} />
                   {inside.length > 0 && (
                     <div className="mt-1.5 flex flex-wrap items-center gap-1">
                       <span className="text-xs text-muted-foreground">Сейчас в зоне:</span>
@@ -115,6 +148,11 @@ export function ZonesList({
                     </div>
                   )}
                 </button>
+                {isSelected && (
+                  <div className="px-4 pb-3">
+                    <MyNotifications zone={zone} kidNames={kidNames} />
+                  </div>
+                )}
                 {isSelected && (onEdit || onDelete) && (
                   <div className="flex justify-end gap-1 px-4 pb-3">
                     {onEdit && (

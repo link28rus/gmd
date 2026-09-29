@@ -10,6 +10,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   Req,
   UseGuards,
@@ -25,6 +26,8 @@ import { UpdateZoneSchema } from './dto/update-zone.schema';
 import type { UpdateZoneDto } from './dto/update-zone.schema';
 import { ZonesEventsQuerySchema } from './dto/zones-events-query.schema';
 import type { ZonesEventsQuery } from './dto/zones-events-query.schema';
+import { ZoneMyNotificationsSchema } from './dto/zone-notifications.schema';
+import type { ZoneMyNotificationsDto } from './dto/zone-notifications.schema';
 
 interface AuthedRequest extends Request {
   user: { userId: string; familyId?: string | null };
@@ -58,7 +61,7 @@ export class ZonesController {
   @Get()
   async list(@Req() req: AuthedRequest) {
     const familyId = this.familyId(req);
-    return this.svc.list(familyId);
+    return this.svc.list(familyId, req.user.userId);
   }
 
   @Get('events')
@@ -73,7 +76,7 @@ export class ZonesController {
   @Get(':id')
   async get(@Req() req: AuthedRequest, @Param('id') id: string) {
     const familyId = this.familyId(req);
-    return this.svc.get(familyId, id);
+    return this.svc.get(familyId, id, req.user.userId);
   }
 
   @Patch(':id')
@@ -84,7 +87,19 @@ export class ZonesController {
     @Body(new ZodValidationPipe(UpdateZoneSchema)) dto: UpdateZoneDto,
   ) {
     const familyId = this.familyId(req);
-    return this.svc.update(familyId, id, dto);
+    return this.svc.update(familyId, id, dto, req.user.userId);
+  }
+
+  /** v0.65.0: личные настройки уведомлений текущего родителя по детям зоны. */
+  @Put(':id/my-notifications')
+  @Throttle({ default: { ttl: 60_000, limit: 30 } })
+  async setMyNotifications(
+    @Req() req: AuthedRequest,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(ZoneMyNotificationsSchema)) body: ZoneMyNotificationsDto,
+  ) {
+    const familyId = this.familyId(req);
+    return this.svc.setMyNotifications(familyId, req.user.userId, id, body);
   }
 
   @Delete(':id')

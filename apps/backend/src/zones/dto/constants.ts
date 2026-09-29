@@ -25,3 +25,6 @@ export const MIN_RADIUS_M = 100;
 export const DEFAULT_RADIUS_M = 150;
 export const MAX_CHILDREN_PER_ZONE = 50;
 export const MAX_RADIUS_M = 5000;
+// v0.65.0: запас к сроку «не пришёл».
+export const DEFAULT_ARRIVAL_GRACE_MIN = 10;
+export const MAX_ARRIVAL_GRACE_MIN = 120;

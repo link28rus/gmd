@@ -24,6 +24,10 @@ jest.mock('@/lib/api/zones', () => ({
       radius: 250,
       allChildren: true,
       states: [],
+      timezone: null,
+      schedule: null,
+      arrival: null,
+      myPrefs: [],
       createdBy: 'u1',
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
@@ -101,6 +105,10 @@ describe('ZoneEditorDialog', () => {
       radius: 300,
       allChildren: false,
       states: [],
+      timezone: null,
+      schedule: null,
+      arrival: null,
+      myPrefs: [],
       createdBy: 'u1',
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
@@ -183,6 +191,85 @@ describe('ZoneEditorDialog', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Отмена' }));
     });
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  describe('расписание и срок (этап 2)', () => {
+    it('блоки по умолчанию выключены, поля времени скрыты', () => {
+      render(<ZoneEditorDialog open onOpenChange={() => {}} kids={KIDS} onSaved={() => {}} />, {
+        wrapper: makeWrapper(),
+      });
+      expect(screen.getByRole('switch', { name: 'Расписание уведомлений' })).toHaveAttribute(
+        'aria-checked',
+        'false',
+      );
+      expect(screen.getByRole('switch', { name: 'Не пришёл к сроку' })).toHaveAttribute(
+        'aria-checked',
+        'false',
+      );
+      expect(screen.queryByLabelText('С')).not.toBeInTheDocument();
+      expect(screen.queryByText(/Время по поясу/)).not.toBeInTheDocument();
+    });
+
+    it('расписание: Пн–Пт 08:00–15:00, подсказка про полночь, «с» = «до» блокирует сохранение', () => {
+      render(<ZoneEditorDialog open onOpenChange={() => {}} kids={KIDS} onSaved={() => {}} />, {
+        wrapper: makeWrapper(),
+      });
+      fireEvent.click(screen.getByRole('switch', { name: 'Расписание уведомлений' }));
+      expect(screen.getByLabelText('С')).toHaveValue('08:00');
+      expect(screen.getByLabelText('До')).toHaveValue('15:00');
+      expect(screen.getByRole('button', { name: 'Понедельник' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+      expect(screen.getByRole('button', { name: 'Суббота' })).toHaveAttribute(
+        'aria-pressed',
+        'false',
+      );
+      expect(screen.getByText(/Время по поясу/)).toBeInTheDocument();
+
+      fireEvent.change(screen.getByLabelText('С'), { target: { value: '22:00' } });
+      fireEvent.change(screen.getByLabelText('До'), { target: { value: '07:00' } });
+      expect(screen.getByText(/Окно через полночь/)).toBeInTheDocument();
+
+      fireEvent.change(screen.getByLabelText('До'), { target: { value: '22:00' } });
+      expect(screen.getByText('Время «с» и «до» не должны совпадать.')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Сохранить' })).toBeDisabled();
+    });
+
+    it('срок: запас по умолчанию 10, вне 0..120 — ошибка', () => {
+      render(<ZoneEditorDialog open onOpenChange={() => {}} kids={KIDS} onSaved={() => {}} />, {
+        wrapper: makeWrapper(),
+      });
+      fireEvent.click(screen.getByRole('switch', { name: 'Не пришёл к сроку' }));
+      expect(screen.getByLabelText('Срок')).toHaveValue('08:30');
+      const grace = screen.getByLabelText('Запас, мин');
+      expect(grace).toHaveValue(10);
+      fireEvent.change(grace, { target: { value: '121' } });
+      expect(screen.getByText(/Запас — целое число минут от 0 до 120/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Сохранить' })).toBeDisabled();
+    });
+
+    it('сохранение отправляет timezone, schedule и arrival (выключенный блок = null)', async () => {
+      const { zonesApi } = jest.requireMock('@/lib/api/zones') as {
+        zonesApi: { create: jest.Mock };
+      };
+      render(<ZoneEditorDialog open onOpenChange={() => {}} kids={KIDS} onSaved={() => {}} />, {
+        wrapper: makeWrapper(),
+      });
+      fireEvent.change(screen.getByLabelText('Название'), { target: { value: 'Школа' } });
+      fireEvent.click(screen.getByRole('switch', { name: 'Не пришёл к сроку' }));
+      fireEvent.change(screen.getByLabelText('Срок'), { target: { value: '08:45' } });
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+      });
+
+      await waitFor(() => expect(zonesApi.create).toHaveBeenCalled());
+      const payload = zonesApi.create.mock.calls[0][0];
+      expect(payload.timezone).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone);
+      expect(payload.schedule).toBeNull();
+      expect(payload.arrival).toEqual({ deadlineMin: 525, daysMask: 31, graceMin: 10 });
+    });
   });
 
   // TODO: test that saving with valid name calls onSaved

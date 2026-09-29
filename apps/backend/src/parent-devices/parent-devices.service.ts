@@ -123,7 +123,9 @@ export class ParentDevicesService {
 
   async findActiveByFamilyId(
     familyId: string,
-  ): Promise<Array<{ id: string; fcmToken: string | null; rustorePushToken: string | null }>> {
+  ): Promise<
+    Array<{ id: string; userId: string; fcmToken: string | null; rustorePushToken: string | null }>
+  > {
     const memberships = await this.prisma.membership.findMany({
       where: { familyId },
       select: { userId: true },
@@ -134,7 +136,8 @@ export class ParentDevicesService {
         userId: { in: memberships.map((m) => m.userId) },
         revokedAt: null,
       },
-      select: { id: true, fcmToken: true, rustorePushToken: true },
+      // v0.65.0: userId — чтобы push о зонах учитывал личные настройки родителя.
+      select: { id: true, userId: true, fcmToken: true, rustorePushToken: true },
     });
     return rows;
   }

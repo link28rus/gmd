@@ -60,7 +60,15 @@ type Tx = ReturnType<typeof makeTx>;
 
 async function makeService(opts: {
   sendHybrid?: jest.Mock;
-  devices?: Array<{ fcmToken: string; rustorePushToken: string | null }>;
+  devices?: Array<{ userId?: string; fcmToken: string; rustorePushToken: string | null }>;
+  zone?: {
+    timezone?: string;
+    scheduleDaysMask?: number;
+    scheduleStartMin?: number;
+    scheduleEndMin?: number;
+    arrivalDeadlineMin?: number;
+  };
+  prefs?: Array<{ userId: string; onEntry: boolean; onExit: boolean; onMissedArrival: boolean }>;
 }): Promise<ZoneDetectionService> {
   const module = await Test.createTestingModule({
     providers: [
@@ -69,7 +77,17 @@ async function makeService(opts: {
         provide: PrismaService,
         useValue: {
           child: { findUnique: jest.fn().mockResolvedValue({ name: 'Тимофей' }) },
-          zone: { findUnique: jest.fn().mockResolvedValue({ name: 'Школа' }) },
+          zone: {
+            findUnique: jest.fn().mockResolvedValue({
+              name: 'Школа',
+              timezone: opts.zone?.timezone ?? null,
+              scheduleDaysMask: opts.zone?.scheduleDaysMask ?? null,
+              scheduleStartMin: opts.zone?.scheduleStartMin ?? null,
+              scheduleEndMin: opts.zone?.scheduleEndMin ?? null,
+              arrivalDeadlineMin: opts.zone?.arrivalDeadlineMin ?? null,
+            }),
+          },
+          zoneNotificationPref: { findMany: jest.fn().mockResolvedValue(opts.prefs ?? []) },
         },
       },
       {
@@ -79,7 +97,9 @@ async function makeService(opts: {
       {
         provide: ParentDevicesService,
         useValue: {
-          findActiveByFamilyId: jest.fn().mockResolvedValue(opts.devices ?? []),
+          findActiveByFamilyId: jest
+            .fn()
+            .mockResolvedValue((opts.devices ?? []).map((d) => ({ userId: 'u1', ...d }))),
           clearTokenByExpired: jest.fn(),
           clearRustoreByExpired: jest.fn(),
         },
@@ -275,5 +295,98 @@ describe('ZoneDetectionService push: delayed flag', () => {
   it('live event has no delayed flag', async () => {
     const data = await entryAt(new Date(Date.now() - 30_000));
     expect(data.delayed).toBeUndefined();
+  });
+});
+
+describe('ZoneDetectionService push: личные настройки и расписание (v0.65.0)', () => {
+  const recent = (): Date => new Date(Date.now() - 30_000);
+
+  it('родитель с выключенным «приход» не получает push, другой получает', async () => {
+    const sendHybrid = jest.fn().mockResolvedValue(true);
+    const svc = await makeService({
+      sendHybrid,
+      devices: [
+        { userId: 'mom', fcmToken: 'fcm-mom', rustorePushToken: null },
+        { userId: 'dad', fcmToken: 'fcm-dad', rustorePushToken: null },
+      ],
+      prefs: [{ userId: 'dad', onEntry: false, onExit: true, onMissedArrival: true }],
+    });
+    svc.notifyParents([
+      { familyId: 'f1', childId: 'c1', zoneId: 'z1', eventType: 'entry', recordedAt: recent() },
+    ]);
+    await new Promise((r) => setImmediate(r));
+    expect(sendHybrid).toHaveBeenCalledTimes(1);
+    expect(sendHybrid.mock.calls[0][0].tokens.fcmToken).toBe('fcm-mom');
+  });
+
+  it('вне окна расписания push о приходе не уходит', async () => {
+    const sendHybrid = jest.fn().mockResolvedValue(true);
+    // Окно 03:00–04:00 по Владивостоку каждый день — «сейчас» в него почти не попадает;
+    // событие — 12:00 по Владивостоку.
+    const svc = await makeService({
+      sendHybrid,
+      devices: [{ fcmToken: 'fcm1', rustorePushToken: null }],
+      zone: {
+        timezone: 'Asia/Vladivostok',
+        scheduleDaysMask: 127,
+        scheduleStartMin: 180,
+        scheduleEndMin: 240,
+      },
+    });
+    svc.notifyParents([
+      {
+        familyId: 'f1',
+        childId: 'c1',
+        zoneId: 'z1',
+        eventType: 'exit',
+        recordedAt: new Date('2026-09-30T02:00:00Z'),
+      },
+    ]);
+    await new Promise((r) => setImmediate(r));
+    expect(sendHybrid).not.toHaveBeenCalled();
+  });
+
+  it('«не пришёл» уходит с видимым уведомлением и сроком, расписание его не гасит', async () => {
+    const sendHybrid = jest.fn().mockResolvedValue(true);
+    const svc = await makeService({
+      sendHybrid,
+      devices: [{ fcmToken: 'fcm1', rustorePushToken: null }],
+      zone: {
+        timezone: 'Asia/Vladivostok',
+        scheduleDaysMask: 127,
+        scheduleStartMin: 180,
+        scheduleEndMin: 240,
+        arrivalDeadlineMin: 510,
+      },
+    });
+    svc.notifyParents([
+      {
+        familyId: 'f1',
+        childId: 'c1',
+        zoneId: 'z1',
+        eventType: 'missed_arrival',
+        recordedAt: new Date('2026-09-30T02:00:00Z'),
+      },
+    ]);
+    await new Promise((r) => setImmediate(r));
+    expect(sendHybrid).toHaveBeenCalledTimes(1);
+    const args = sendHybrid.mock.calls[0][0];
+    expect(args.data.type).toBe('GEOFENCE_MISSED');
+    expect(args.data.deadline).toBe('08:30');
+    expect(args.notification.body).toContain('к 08:30');
+    expect(args.notification.channelId).toBe('periscop_parent_events');
+  });
+
+  it('приход/уход — без видимого уведомления (рисует сам APK)', async () => {
+    const sendHybrid = jest.fn().mockResolvedValue(true);
+    const svc = await makeService({
+      sendHybrid,
+      devices: [{ fcmToken: 'fcm1', rustorePushToken: null }],
+    });
+    svc.notifyParents([
+      { familyId: 'f1', childId: 'c1', zoneId: 'z1', eventType: 'entry', recordedAt: recent() },
+    ]);
+    await new Promise((r) => setImmediate(r));
+    expect(sendHybrid.mock.calls[0][0].notification).toBeUndefined();
   });
 });

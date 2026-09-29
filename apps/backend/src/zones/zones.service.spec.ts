@@ -29,6 +29,7 @@ const prismaMock: any = {
     findMany: jest.fn(),
   },
   child: { findMany: jest.fn() },
+  zoneNotificationPref: { findMany: jest.fn(), upsert: jest.fn() },
   // Последние хорошие точки детей с расстоянием до центра зоны.
   $queryRaw: jest.fn(),
 };
@@ -47,6 +48,13 @@ function zoneRow(over: Record<string, unknown> = {}) {
     centerLon: 0,
     radius: 100,
     allChildren: false,
+    timezone: null,
+    scheduleDaysMask: null,
+    scheduleStartMin: null,
+    scheduleEndMin: null,
+    arrivalDeadlineMin: null,
+    arrivalDaysMask: null,
+    arrivalGraceMin: 10,
     createdBy: 'u1',
     createdAt: new Date('2026-04-20T10:00:00Z'),
     updatedAt: new Date('2026-04-20T10:00:00Z'),
@@ -57,6 +65,7 @@ function zoneRow(over: Record<string, unknown> = {}) {
 async function makeService(): Promise<ZonesService> {
   jest.clearAllMocks();
   prismaMock.$queryRaw.mockResolvedValue([]);
+  prismaMock.zoneNotificationPref.findMany.mockResolvedValue([]);
   const module = await Test.createTestingModule({
     providers: [ZonesService, { provide: PrismaService, useValue: prismaMock }],
   }).compile();
@@ -365,5 +374,77 @@ describe('ZonesService.listEvents', () => {
   it('битый курсор — BadRequest', () => {
     expect(() => decodeEventsCursor('не курсор')).toThrow();
     expect(() => decodeEventsCursor(Buffer.from('[1,2]').toString('base64url'))).toThrow();
+  });
+});
+
+describe('ZonesService — расписание, срок, личные настройки (v0.65.0)', () => {
+  let svc: ZonesService;
+  beforeEach(async () => {
+    svc = await makeService();
+    prismaMock.zone.count.mockResolvedValue(0);
+    prismaMock.child.findMany.mockResolvedValue([{ id: 'c1' }]);
+  });
+
+  it('срок без пояса — 400 timezone_required', async () => {
+    await expect(
+      svc.create('f1', 'u1', {
+        ...baseInput,
+        childIds: ['c1'],
+        arrival: { deadlineMin: 510, daysMask: 31, graceMin: 10 },
+      }),
+    ).rejects.toMatchObject({ response: { code: 'timezone_required' } });
+  });
+
+  it('неизвестный пояс — 400 invalid_timezone', async () => {
+    await expect(
+      svc.create('f1', 'u1', { ...baseInput, childIds: ['c1'], timezone: 'Mars/Olympus' }),
+    ).rejects.toMatchObject({ response: { code: 'invalid_timezone' } });
+  });
+
+  it('create пишет колонки расписания и срока и отдаёт myPrefs по умолчанию', async () => {
+    prismaMock.zone.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) =>
+      zoneRow({ ...data, id: 'z9' }),
+    );
+    const res = await svc.create('f1', 'u1', {
+      ...baseInput,
+      childIds: ['c1'],
+      timezone: 'Asia/Vladivostok',
+      schedule: { daysMask: 31, startMin: 480, endMin: 900 },
+      arrival: { deadlineMin: 510, daysMask: 31, graceMin: 15 },
+    });
+    expect(prismaMock.zone.create.mock.calls[0][0].data).toMatchObject({
+      timezone: 'Asia/Vladivostok',
+      scheduleDaysMask: 31,
+      scheduleStartMin: 480,
+      scheduleEndMin: 900,
+      arrivalDeadlineMin: 510,
+      arrivalDaysMask: 31,
+      arrivalGraceMin: 15,
+    });
+    expect(res.schedule).toEqual({ daysMask: 31, startMin: 480, endMin: 900 });
+    expect(res.arrival).toEqual({ deadlineMin: 510, daysMask: 31, graceMin: 15 });
+    expect(res.myPrefs).toEqual([
+      { childId: 'c1', onEntry: true, onExit: true, onMissedArrival: true },
+    ]);
+  });
+
+  it('setMyNotifications: ребёнок не из зоны — 404', async () => {
+    prismaMock.zone.findFirst.mockResolvedValue({
+      ...zoneRow(),
+      assignments: [{ childId: 'c1' }],
+      states: [],
+    });
+    await expect(
+      svc.setMyNotifications('f1', 'u1', 'z1', {
+        items: [
+          {
+            childId: 'c2xxxxxxxxxxxxxxxxxxxxxx',
+            onEntry: false,
+            onExit: true,
+            onMissedArrival: true,
+          },
+        ],
+      }),
+    ).rejects.toThrow(NotFoundException);
   });
 });

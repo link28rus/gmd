@@ -6,11 +6,12 @@ import { ParentDevicesModule } from '../parent-devices/parent-devices.module';
 import { ZonesController } from './zones.controller';
 import { ZonesService } from './zones.service';
 import { ZoneDetectionService } from './zone-detection.service';
+import { ZoneArrivalService } from './zone-arrival.service';
 
 @Module({
   imports: [PrismaModule, AuthModule, FcmModule, ParentDevicesModule],
   controllers: [ZonesController],
-  providers: [ZonesService, ZoneDetectionService],
-  exports: [ZonesService, ZoneDetectionService],
+  providers: [ZonesService, ZoneDetectionService, ZoneArrivalService],
+  exports: [ZonesService, ZoneDetectionService, ZoneArrivalService],
 })
 export class ZonesModule {}

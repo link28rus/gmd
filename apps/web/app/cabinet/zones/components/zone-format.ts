@@ -93,3 +93,85 @@ export function writeSavedMapView(key: string, v: SavedMapView): void {
     // квота/приватный режим — не критично
   }
 }
+
+// ---------------------------------------------------------------------------
+// Расписание и срок (этап 2): минуты от начала суток ↔ «HH:MM», маска дней.
+// ---------------------------------------------------------------------------
+
+/** Подписи дней недели в порядке битов маски: бит 0 — Пн … бит 6 — Вс. */
+export const WEEKDAY_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'] as const;
+export const DAYS_ALL = 0b1111111;
+export const DAYS_WORKDAYS = 0b0011111;
+
+/** 510 → «08:30». Значение приводится к суткам (0..1439). */
+export function minutesToHHMM(min: number): string {
+  const m = ((Math.round(min) % 1440) + 1440) % 1440;
+  const h = Math.floor(m / 60);
+  return `${String(h).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+}
+
+/** «08:30» → 510; «8:05» тоже принимается. Невалидное или пустое — null. */
+export function hhmmToMinutes(s: string): number | null {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(s.trim());
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (h > 23 || min > 59) return null;
+  return h * 60 + min;
+}
+
+export function hasDay(mask: number, day: number): boolean {
+  return (mask & (1 << day)) !== 0;
+}
+
+export function toggleDay(mask: number, day: number): number {
+  return (mask ^ (1 << day)) & DAYS_ALL;
+}
+
+/**
+ * 31 → «Пн–Пт», 127 → «ежедневно», 96 → «Сб, Вс», 21 → «Пн, Ср, Пт»,
+ * 0b1110111 → «Пн–Ср, Пт–Вс». Подряд три дня и больше — диапазоном.
+ */
+export function formatDaysMask(mask: number): string {
+  const m = mask & DAYS_ALL;
+  if (m === DAYS_ALL) return 'ежедневно';
+  if (m === 0) return 'дни не выбраны';
+  const parts: string[] = [];
+  let d = 0;
+  while (d < 7) {
+    if (!hasDay(m, d)) {
+      d++;
+      continue;
+    }
+    let end = d;
+    while (end + 1 < 7 && hasDay(m, end + 1)) end++;
+    if (end - d >= 2) parts.push(`${WEEKDAY_SHORT[d]}–${WEEKDAY_SHORT[end]}`);
+    else for (let i = d; i <= end; i++) parts.push(WEEKDAY_SHORT[i]);
+    d = end + 1;
+  }
+  return parts.join(', ');
+}
+
+/** Окно расписания переходит через полночь (22:00–07:00). */
+export function isOvernight(startMin: number, endMin: number): boolean {
+  return endMin < startMin;
+}
+
+/** { daysMask: 31, startMin: 480, endMin: 900 } → «Пн–Пт 08:00–15:00». */
+export function formatScheduleShort(s: {
+  daysMask: number;
+  startMin: number;
+  endMin: number;
+}): string {
+  return `${formatDaysMask(s.daysMask)} ${minutesToHHMM(s.startMin)}–${minutesToHHMM(s.endMin)}`;
+}
+
+/** IANA-пояс браузера; null, если среда его не отдаёт. */
+export function browserTimeZone(): string | null {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return typeof tz === 'string' && tz.length > 0 ? tz : null;
+  } catch {
+    return null;
+  }
+}

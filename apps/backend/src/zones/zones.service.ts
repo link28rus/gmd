@@ -9,11 +9,14 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CreateZoneDto } from './dto/create-zone.schema';
 import type { UpdateZoneDto } from './dto/update-zone.schema';
-import type { ZoneDto } from './dto/zone.dto';
+import type { ZoneDto, ZoneNotificationPrefDto } from './dto/zone.dto';
+import type { ZoneMyNotificationsDto } from './dto/zone-notifications.schema';
+import type { ZoneArrival, ZoneSchedule } from './dto/zone-rules.schema';
 import type { ZoneEventDto } from './dto/zone-event.dto';
 import type { ZonesEventsQuery } from './dto/zones-events-query.schema';
 import { MAX_ZONES_PER_FAMILY } from './dto/constants';
 import { initialInside } from './zone-detection.service';
+import { isValidTimeZone } from './zone-time';
 
 interface ZoneRow {
   id: string;
@@ -25,9 +28,81 @@ interface ZoneRow {
   centerLon: number;
   radius: number;
   allChildren: boolean;
+  timezone: string | null;
+  scheduleDaysMask: number | null;
+  scheduleStartMin: number | null;
+  scheduleEndMin: number | null;
+  arrivalDeadlineMin: number | null;
+  arrivalDaysMask: number | null;
+  arrivalGraceMin: number;
   createdBy: string;
   createdAt: Date;
   updatedAt: Date;
+}
+
+type RuleColumns = Pick<
+  ZoneRow,
+  | 'timezone'
+  | 'scheduleDaysMask'
+  | 'scheduleStartMin'
+  | 'scheduleEndMin'
+  | 'arrivalDeadlineMin'
+  | 'arrivalDaysMask'
+  | 'arrivalGraceMin'
+>;
+
+function scheduleOf(row: RuleColumns): ZoneSchedule | null {
+  return row.scheduleDaysMask !== null &&
+    row.scheduleStartMin !== null &&
+    row.scheduleEndMin !== null
+    ? { daysMask: row.scheduleDaysMask, startMin: row.scheduleStartMin, endMin: row.scheduleEndMin }
+    : null;
+}
+
+function arrivalOf(row: RuleColumns): ZoneArrival | null {
+  return row.arrivalDeadlineMin !== null && row.arrivalDaysMask !== null
+    ? {
+        deadlineMin: row.arrivalDeadlineMin,
+        daysMask: row.arrivalDaysMask,
+        graceMin: row.arrivalGraceMin,
+      }
+    : null;
+}
+
+/**
+ * v0.65.0: колонки расписания и срока с проверкой пояса. undefined в dto —
+ * «не менять» (берём из existing), null — «снять».
+ */
+function ruleColumns(
+  dto: { timezone?: string | null; schedule?: ZoneSchedule | null; arrival?: ZoneArrival | null },
+  existing: RuleColumns | null,
+): Partial<RuleColumns> {
+  const schedule =
+    dto.schedule !== undefined ? dto.schedule : existing ? scheduleOf(existing) : null;
+  const arrival = dto.arrival !== undefined ? dto.arrival : existing ? arrivalOf(existing) : null;
+  const timezone = dto.timezone !== undefined ? dto.timezone : (existing?.timezone ?? null);
+  if (timezone && !isValidTimeZone(timezone)) {
+    throw new BadRequestException({ code: 'invalid_timezone', message: 'Unknown IANA time zone' });
+  }
+  if ((schedule || arrival) && !timezone) {
+    throw new BadRequestException({
+      code: 'timezone_required',
+      message: 'timezone is required for schedule or arrival',
+    });
+  }
+  const out: Partial<RuleColumns> = {};
+  if (dto.timezone !== undefined) out.timezone = dto.timezone;
+  if (dto.schedule !== undefined) {
+    out.scheduleDaysMask = dto.schedule?.daysMask ?? null;
+    out.scheduleStartMin = dto.schedule?.startMin ?? null;
+    out.scheduleEndMin = dto.schedule?.endMin ?? null;
+  }
+  if (dto.arrival !== undefined) {
+    out.arrivalDeadlineMin = dto.arrival?.deadlineMin ?? null;
+    out.arrivalDaysMask = dto.arrival?.daysMask ?? null;
+    if (dto.arrival) out.arrivalGraceMin = dto.arrival.graceMin;
+  }
+  return out;
 }
 
 interface ZoneStateLite {
@@ -57,6 +132,9 @@ function toDto(row: ZoneRow, childIds: string[], states?: ZoneStateLite[]): Zone
     centerLon: row.centerLon,
     radius: row.radius,
     allChildren: row.allChildren,
+    timezone: row.timezone,
+    schedule: scheduleOf(row),
+    arrival: arrivalOf(row),
     createdBy: row.createdBy,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -104,8 +182,9 @@ export class ZonesService {
 
     const explicitIds = dto.allChildren ? [] : dto.childIds;
     await this.assertChildrenInFamily(familyId, explicitIds);
+    const rules = ruleColumns(dto, null);
 
-    return this.prisma.$transaction(async (tx) => {
+    const created = await this.prisma.$transaction(async (tx) => {
       const zone = await tx.zone.create({
         data: {
           familyId,
@@ -116,6 +195,7 @@ export class ZonesService {
           centerLon: dto.centerLon,
           radius: dto.radius,
           allChildren: dto.allChildren,
+          ...rules,
           createdBy: userId,
         },
       });
@@ -146,24 +226,26 @@ export class ZonesService {
         targetIds.map((childId) => ({ childId, isInside: inside.get(childId) ?? false })),
       );
     });
+    return (await this.withMyPrefs(familyId, userId, [created]))[0];
   }
 
-  async list(familyId: string): Promise<ZoneDto[]> {
+  async list(familyId: string, userId?: string): Promise<ZoneDto[]> {
     const rows = await this.prisma.zone.findMany({
       where: { familyId, deletedAt: null },
       orderBy: { createdAt: 'desc' },
       include: ZONE_INCLUDE,
     });
-    return rows.map((row) =>
+    const dtos = rows.map((row) =>
       toDto(
         row,
         row.assignments.map((a) => a.childId),
         row.states,
       ),
     );
+    return userId ? this.withMyPrefs(familyId, userId, dtos) : dtos;
   }
 
-  async get(familyId: string, zoneId: string): Promise<ZoneDto> {
+  async get(familyId: string, zoneId: string, userId?: string): Promise<ZoneDto> {
     const row = await this.prisma.zone.findFirst({
       where: { id: zoneId, familyId, deletedAt: null },
       include: ZONE_INCLUDE,
@@ -171,14 +253,20 @@ export class ZonesService {
     if (!row) {
       throw new NotFoundException({ code: 'zone_not_found', message: 'Zone not found' });
     }
-    return toDto(
+    const dto = toDto(
       row,
       row.assignments.map((a) => a.childId),
       row.states,
     );
+    return userId ? (await this.withMyPrefs(familyId, userId, [dto]))[0] : dto;
   }
 
-  async update(familyId: string, zoneId: string, dto: UpdateZoneDto): Promise<ZoneDto> {
+  async update(
+    familyId: string,
+    zoneId: string,
+    dto: UpdateZoneDto,
+    userId?: string,
+  ): Promise<ZoneDto> {
     const existing = await this.prisma.zone.findFirst({
       where: { id: zoneId, familyId, deletedAt: null },
       include: ZONE_INCLUDE,
@@ -205,8 +293,9 @@ export class ZonesService {
       geometry.centerLat !== existing.centerLat ||
       geometry.centerLon !== existing.centerLon ||
       geometry.radius !== existing.radius;
+    const rules = ruleColumns(dto, existing);
 
-    return this.prisma.$transaction(async (tx) => {
+    const updatedDto = await this.prisma.$transaction(async (tx) => {
       if (toRemove.length > 0) {
         await tx.zoneChildAssignment.deleteMany({ where: { zoneId, childId: { in: toRemove } } });
       }
@@ -224,6 +313,7 @@ export class ZonesService {
       if (dto.centerLon !== undefined) scalarPatch.centerLon = dto.centerLon;
       if (dto.radius !== undefined) scalarPatch.radius = dto.radius;
       if (dto.allChildren !== undefined) scalarPatch.allChildren = dto.allChildren;
+      Object.assign(scalarPatch, rules);
       await tx.zone.update({ where: { id: zoneId }, data: scalarPatch });
 
       // Состояния: убрать у тех, к кому зона больше не относится; новым детям
@@ -261,6 +351,82 @@ export class ZonesService {
         updated.states,
       );
     });
+    return userId ? (await this.withMyPrefs(familyId, userId, [updatedDto]))[0] : updatedDto;
+  }
+
+  /**
+   * v0.65.0: личные настройки уведомлений текущего родителя по детям зоны.
+   * Ребёнок, к которому зона не относится, — 404 child_not_found.
+   */
+  async setMyNotifications(
+    familyId: string,
+    userId: string,
+    zoneId: string,
+    body: ZoneMyNotificationsDto,
+  ): Promise<{ items: ZoneNotificationPrefDto[] }> {
+    const zone = await this.get(familyId, zoneId);
+    const applicable = new Set(await this.zoneChildIds(familyId, zone));
+    if (body.items.some((i) => !applicable.has(i.childId))) {
+      throw new NotFoundException({
+        code: 'child_not_found',
+        message: 'Child is not assigned to this zone',
+      });
+    }
+    await this.prisma.$transaction(
+      body.items.map((i) =>
+        this.prisma.zoneNotificationPref.upsert({
+          where: { userId_zoneId_childId: { userId, zoneId, childId: i.childId } },
+          create: {
+            userId,
+            zoneId,
+            childId: i.childId,
+            onEntry: i.onEntry,
+            onExit: i.onExit,
+            onMissedArrival: i.onMissedArrival,
+          },
+          update: { onEntry: i.onEntry, onExit: i.onExit, onMissedArrival: i.onMissedArrival },
+        }),
+      ),
+    );
+    const [withPrefs] = await this.withMyPrefs(familyId, userId, [zone]);
+    return { items: withPrefs.myPrefs ?? [] };
+  }
+
+  /** Дети, к которым относится зона: все дети семьи или явные назначения. */
+  private async zoneChildIds(
+    familyId: string,
+    zone: Pick<ZoneDto, 'allChildren' | 'childIds'>,
+  ): Promise<string[]> {
+    if (!zone.allChildren) return zone.childIds;
+    return this.familyChildIds(this.prisma, familyId);
+  }
+
+  /** Дополняет зоны личными настройками пользователя (нет строки — всё включено). */
+  private async withMyPrefs(
+    familyId: string,
+    userId: string,
+    zones: ZoneDto[],
+  ): Promise<ZoneDto[]> {
+    if (zones.length === 0) return zones;
+    const [familyKids, prefs] = await Promise.all([
+      zones.some((z) => z.allChildren) ? this.familyChildIds(this.prisma, familyId) : [],
+      this.prisma.zoneNotificationPref.findMany({
+        where: { userId, zoneId: { in: zones.map((z) => z.id) } },
+      }),
+    ]);
+    const byKey = new Map(prefs.map((p) => [`${p.zoneId}:${p.childId}`, p]));
+    return zones.map((z) => ({
+      ...z,
+      myPrefs: (z.allChildren ? familyKids : z.childIds).map((childId) => {
+        const p = byKey.get(`${z.id}:${childId}`);
+        return {
+          childId,
+          onEntry: p?.onEntry ?? true,
+          onExit: p?.onExit ?? true,
+          onMissedArrival: p?.onMissedArrival ?? true,
+        };
+      }),
+    }));
   }
 
   async listEvents(

@@ -168,16 +168,27 @@ export class FcmService implements OnModuleInit {
     data: Record<string, string>;
     onInvalidToken?: (token: string) => Promise<void>;
     label?: string;
+    /**
+     * v0.65.0: видимое уведомление, которое Android покажет сам, пока
+     * приложение свёрнуто, — для типов, которые текущий APK ещё не рисует.
+     */
+    notification?: { title: string; body: string; channelId?: string };
   }): Promise<boolean> {
     if (!this.app) return false;
-    const { fcmToken, data, onInvalidToken, label } = args;
+    const { fcmToken, data, onInvalidToken, label, notification } = args;
     try {
       const msg = await admin.messaging(this.app).send({
         token: fcmToken,
         data,
+        ...(notification
+          ? { notification: { title: notification.title, body: notification.body } }
+          : {}),
         android: {
           priority: 'high',
           ttl: 300_000,
+          ...(notification?.channelId
+            ? { notification: { channelId: notification.channelId } }
+            : {}),
         },
       });
       this.logger.log(`FCM ${label ?? 'token'}: ${msg}`);
@@ -325,6 +336,8 @@ export class FcmService implements OnModuleInit {
     onInvalidRustoreToken?: (token: string) => Promise<void>;
     label?: string;
     ttlSec?: number;
+    /** v0.65.0: видимое уведомление для FCM (см. sendToToken). */
+    notification?: { title: string; body: string; channelId?: string };
   }): Promise<boolean> {
     const ttlSec = args.ttlSec ?? 300;
     const label = args.label ?? 'parent';
@@ -345,6 +358,7 @@ export class FcmService implements OnModuleInit {
         data: args.data,
         onInvalidToken: args.onInvalidFcmToken,
         label,
+        notification: args.notification,
       });
     }
     return false;

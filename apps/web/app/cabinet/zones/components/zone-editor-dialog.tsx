@@ -26,6 +26,18 @@ import {
   type ZoneIcon,
 } from '@/lib/api/zones';
 import type { GeocodeHit } from '@/lib/api/geocode';
+import { browserTimeZone } from './zone-format';
+import {
+  ArrivalFields,
+  ScheduleFields,
+  TimeZoneNote,
+  arrivalError,
+  arrivalPayload,
+  initialArrivalDraft,
+  initialScheduleDraft,
+  scheduleError,
+  schedulePayload,
+} from './zone-rules-fields';
 import { toast } from 'sonner';
 
 export interface KidOption {
@@ -142,12 +154,21 @@ function ZoneEditorForm({
     return kids.map((c) => c.id);
   });
   const [recenterSeq, setRecenterSeq] = useState(0);
+  const [schedule, setSchedule] = useState(() => initialScheduleDraft(initial));
+  const [arrival, setArrival] = useState(() => initialArrivalDraft(initial));
+  // Пояс берётся из браузера молча и уходит при каждом сохранении (спека 2.1).
+  const [browserTz] = useState(browserTimeZone);
   const allChildrenId = useId();
 
   const create = useCreateZone();
   const update = useUpdateZone();
   const saving = create.isPending || update.isPending;
   const noChildrenSelected = !allChildren && childIds.length === 0;
+  const rulesOn = schedule.on || arrival.on;
+  const rulesInvalid =
+    scheduleError(schedule) !== null ||
+    arrivalError(arrival) !== null ||
+    (rulesOn && browserTz === null);
 
   const handleAddressPick = (hit: GeocodeHit) => {
     setCenterLat(hit.lat);
@@ -165,6 +186,14 @@ function ZoneEditorForm({
       toast.error('Выберите хотя бы одного ребёнка или включите «Все дети»');
       return;
     }
+    const rulesProblem =
+      scheduleError(schedule) ??
+      arrivalError(arrival) ??
+      (rulesOn && browserTz === null ? 'Не удалось определить часовой пояс браузера.' : null);
+    if (rulesProblem) {
+      toast.error(rulesProblem);
+      return;
+    }
     const payload = {
       name: name.trim(),
       color,
@@ -174,6 +203,9 @@ function ZoneEditorForm({
       radius,
       allChildren,
       childIds: allChildren ? [] : childIds,
+      ...(browserTz ? { timezone: browserTz } : {}),
+      schedule: schedulePayload(schedule),
+      arrival: arrivalPayload(arrival),
     };
     try {
       const saved = initial
@@ -304,13 +336,24 @@ function ZoneEditorForm({
             </div>
           )}
         </fieldset>
+
+        <div className="space-y-3">
+          <ScheduleFields value={schedule} onChange={setSchedule} />
+          <ArrivalFields value={arrival} onChange={setArrival} />
+          {rulesOn && (
+            <TimeZoneNote
+              browserTz={browserTz}
+              zoneTz={initial?.schedule || initial?.arrival ? initial.timezone : null}
+            />
+          )}
+        </div>
       </div>
 
       <DialogFooter>
         <Button variant="outline" onClick={onCancel} disabled={saving}>
           Отмена
         </Button>
-        <Button onClick={onSubmit} disabled={saving || noChildrenSelected}>
+        <Button onClick={onSubmit} disabled={saving || noChildrenSelected || rulesInvalid}>
           {saving ? 'Сохраняем…' : 'Сохранить'}
         </Button>
       </DialogFooter>

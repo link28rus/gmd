@@ -1,17 +1,11 @@
 import { z } from 'zod';
+import { ZONE_COLORS, ZONE_ICONS, MIN_RADIUS_M, MAX_RADIUS_M } from './constants';
 import {
-  ZONE_COLORS,
-  ZONE_ICONS,
-  MIN_RADIUS_M,
-  MAX_RADIUS_M,
-  MAX_CHILDREN_PER_ZONE,
-} from './constants';
-
-// Дубли id убираем (иначе createMany назначений падал с 500).
-const childIdsSchema = z
-  .array(z.string().cuid())
-  .max(MAX_CHILDREN_PER_ZONE)
-  .transform((ids) => [...new Set(ids)]);
+  childIdsSchema,
+  timezoneSchema,
+  ZoneArrivalSchema,
+  ZoneScheduleSchema,
+} from './zone-rules.schema';
 
 export const CreateZoneSchema = z
   .object({
@@ -24,6 +18,10 @@ export const CreateZoneSchema = z
     // Зона для всех детей семьи, включая будущих; childIds тогда игнорируются.
     allChildren: z.boolean().default(false),
     childIds: childIdsSchema.default([]),
+    // v0.65.0: пояс обязателен, если задано расписание или срок.
+    timezone: timezoneSchema.nullable().optional(),
+    schedule: ZoneScheduleSchema.nullable().optional(),
+    arrival: ZoneArrivalSchema.nullable().optional(),
   })
   .strict();
 

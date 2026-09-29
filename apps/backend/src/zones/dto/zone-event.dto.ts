@@ -6,7 +6,8 @@ export interface ZoneEventDto {
   zoneIcon: string;
   childId: string;
   childName: string;
-  type: 'entry' | 'exit';
+  /** v0.65.0: + missed_arrival (не пришёл к сроку), no_data (телефон молчал к сроку). */
+  type: 'entry' | 'exit' | 'missed_arrival' | 'no_data';
   lat: number;
   lon: number;
   accuracy: number | null;
