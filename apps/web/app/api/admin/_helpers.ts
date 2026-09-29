@@ -1,7 +1,7 @@
 // apps/web/app/api/admin/_helpers.ts
 import 'server-only';
 import { NextResponse, type NextRequest } from 'next/server';
-import { backend } from '@/lib/backend';
+import { backend, type BackendResponse } from '@/lib/backend';
 
 export function getBearer(req: NextRequest): string | null {
   const h = req.headers.get('authorization');
@@ -16,6 +16,15 @@ export function unauthorizedResponse(): NextResponse {
 }
 
 /**
+ * Ответ бекенда → NextResponse. 204 отдаём без тела: `NextResponse.json` с
+ * 204 бросает TypeError (null-body status), а DELETE-эндпоинты могут так ответить.
+ */
+function adminResponse(r: BackendResponse<unknown>): NextResponse {
+  if (r.status === 204) return new NextResponse(null, { status: 204 });
+  return NextResponse.json(r.body ?? {}, { status: r.status });
+}
+
+/**
  * Proxy a GET request to the backend admin API, forwarding the query string.
  */
 export async function proxyAdminGet(backendPath: string, req: NextRequest): Promise<NextResponse> {
@@ -23,7 +32,7 @@ export async function proxyAdminGet(backendPath: string, req: NextRequest): Prom
   if (!token) return unauthorizedResponse();
   const qs = req.nextUrl.search; // includes "?" or empty string
   const r = await backend('GET', `${backendPath}${qs}`, undefined, token);
-  return NextResponse.json(r.body ?? {}, { status: r.status });
+  return adminResponse(r);
 }
 
 /**
@@ -41,5 +50,5 @@ export async function proxyAdminWrite(
   if (!token) return unauthorizedResponse();
   const body = method === 'DELETE' ? undefined : ((await req.json().catch(() => ({}))) as unknown);
   const r = await backend(method, backendPath, body, token);
-  return NextResponse.json(r.body ?? {}, { status: r.status });
+  return adminResponse(r);
 }

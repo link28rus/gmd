@@ -62,6 +62,9 @@ class SoundAroundController {
   Timer? _autoStopTimer;
   bool _stopped = false;
   final BytesBuilder _byteBuffer = BytesBuilder(copy: false);
+  // v0.60.0: счётчики для подробного журнала (diagDebug).
+  bool _firstChunkLogged = false;
+  int _framesSent = 0;
 
   static Dio _buildDio() => Dio(
     BaseOptions(
@@ -77,6 +80,8 @@ class SoundAroundController {
     required int durationSec,
   }) async {
     unawaited(diagLog(_tag, 'start sessionId=$sessionId duration=${durationSec}s'));
+    // v0.60.0: на каком шаге упал старт — для журнала на сервере.
+    var stage = 'permission_check';
 
     try {
       // v0.35.0-rc.5: НЕ проверяем _recorder.hasPermission() — record_android 6.x
@@ -87,6 +92,8 @@ class SoundAroundController {
       final permStatusLog = await _recorder.hasPermission();
       unawaited(diagLog(_tag, 'recorder.hasPermission()=$permStatusLog (advisory only)'));
 
+      stage = 'opus_encoder';
+
       // Encoder создаётся per-сессию, чтобы освобождать ресурсы при stop().
       // Application.voip — самый агрессивный режим компрессии для голоса.
       _encoder = SimpleOpusEncoder(
@@ -95,15 +102,27 @@ class SoundAroundController {
         application: Application.voip,
       );
 
+      unawaited(diagDebug(_tag, 'opus encoder created'));
+
       // WebSocket: URL уже содержит query (?role=child&sessionId=…&token=…),
       // выдан backend'ом в payload START_AUDIO команды.
+      stage = 'ws_connect';
+      final wsUri = Uri.tryParse(wsUrl);
+      unawaited(diagDebug(
+        _tag,
+        'ws connect attempt host=${wsUri?.host}:${wsUri?.port} path=${wsUri?.path}',
+      ));
+      final connectStartedAt = DateTime.now();
       _ws = await WebSocket.connect(wsUrl);
+      final connectMs = DateTime.now().difference(connectStartedAt).inMilliseconds;
+      unawaited(diagDebug(_tag, 'ws connected in ${connectMs}ms'));
       _ws!.listen(
         (dynamic data) {
           // Backend control-frames в эту сторону не шлёт сейчас; молча игнорируем.
         },
         onError: (dynamic e) {
           unawaited(diagLog(_tag, 'ws error: $e'));
+          _reportFatal('ws_error');
           unawaited(stop(reason: 'ws_error'));
         },
         onDone: () {
@@ -120,6 +139,8 @@ class SoundAroundController {
 
       // record v6: startStream возвращает Stream<Uint8List> с raw PCM-байтами.
       // Кадры приходят НЕ ровно по 20ms; накапливаем в BytesBuilder.
+      stage = 'recorder_start';
+      unawaited(diagDebug(_tag, 'recorder startStream (pcm16 ${_sampleRateHz}Hz mono)'));
       final stream = await _recorder.startStream(
         const RecordConfig(
           encoder: AudioEncoder.pcm16bits,
@@ -134,9 +155,12 @@ class SoundAroundController {
         _onPcmChunk,
         onError: (Object e) {
           unawaited(diagLog(_tag, 'record stream error: $e'));
+          _reportFatal('record_error');
           unawaited(stop(reason: 'record_error'));
         },
       );
+      unawaited(diagDebug(_tag, 'recorder started'));
+      stage = 'streaming';
 
       _autoStopTimer = Timer(Duration(seconds: durationSec + 5), () {
         unawaited(diagLog(_tag, 'auto-stop по durationSec timeout'));
@@ -146,6 +170,8 @@ class SoundAroundController {
       unawaited(diagLog(_tag, 'streaming start OK, ws=open, recorder=running'));
     } on Exception catch (e) {
       unawaited(diagLog(_tag, 'start failed: $e'));
+      unawaited(diagDebug(_tag, 'start failed at stage=$stage type=${e.runtimeType}'));
+      _reportFatal('start_$stage');
       String code = 'UNKNOWN';
       final msg = e.toString().toLowerCase();
       if (msg.contains('securityexception') ||
@@ -165,6 +191,8 @@ class SoundAroundController {
     } catch (e) {
       // PlatformException и прочее не-Exception
       unawaited(diagLog(_tag, 'start crashed (non-Exception): $e'));
+      unawaited(diagDebug(_tag, 'start crashed at stage=$stage type=${e.runtimeType}'));
+      _reportFatal('start_$stage');
       String code = 'UNKNOWN';
       final msg = e.toString().toLowerCase();
       if (msg.contains('securityexception') ||
@@ -181,6 +209,10 @@ class SoundAroundController {
 
   void _onPcmChunk(Uint8List bytes) {
     if (_stopped) return;
+    if (!_firstChunkLogged) {
+      _firstChunkLogged = true;
+      unawaited(diagDebug(_tag, 'first PCM chunk ${bytes.length} bytes'));
+    }
     _byteBuffer.add(bytes);
     while (_byteBuffer.length >= _frameBytes) {
       // takeBytes() возвращает накопленный буфер и обнуляет builder.
@@ -209,10 +241,22 @@ class SoundAroundController {
       }
       final opus = encoder.encode(input: pcm);
       ws.add(opus);
+      _framesSent++;
+      if (_framesSent == 1) {
+        unawaited(diagDebug(_tag, 'first Opus frame sent (${opus.length} bytes)'));
+      }
     } catch (e) {
       // Один проблемный кадр не должен ронять сессию — следующий через 20ms.
       unawaited(diagLog(_tag, 'encode/send frame failed: $e'));
     }
+  }
+
+  /// v0.60.0: фатальный сбой стрима — автоотправка журнала (лимит частоты
+  /// и выключатель autoUpload — на native-стороне).
+  void _reportFatal(String what) {
+    if (_stopped) return;
+    unawaited(diagDebug(_tag, 'fatal: $what → auto upload'));
+    unawaited(diagUpload(reason: 'auto', trigger: 'audio_stream_failed'));
   }
 
   Future<void> _reportErrorAndStop(
@@ -250,6 +294,11 @@ class SoundAroundController {
     _stopped = true;
     _autoStopTimer?.cancel();
     unawaited(diagLog(_tag, 'stop reason=$reason'));
+    unawaited(diagDebug(
+      _tag,
+      'stop: framesSent=$_framesSent wsState=${_ws?.readyState} '
+      'wsClose=${_ws?.closeCode}/${_ws?.closeReason}',
+    ));
     try {
       await _pcmSub?.cancel();
       _pcmSub = null;

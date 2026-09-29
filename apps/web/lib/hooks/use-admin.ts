@@ -93,3 +93,32 @@ export function useAdminInvites({
     queryFn: () => adminApi.listInvites({ page, limit, q }),
   });
 }
+
+export const adminChildDiagKey = (childId: string) =>
+  ['admin', 'children', childId, 'diag'] as const;
+
+/**
+ * Журнал приложения ребёнка: устройство, настройки, запрос и список журналов.
+ * `pollMs` — интервал опроса после «Запросить журнал» (false = без опроса).
+ */
+export function useAdminChildDiag(childId: string, pollMs: number | false = false) {
+  return useQuery({
+    queryKey: adminChildDiagKey(childId),
+    queryFn: () => adminApi.getChildDiag(childId),
+    enabled: Boolean(childId),
+    refetchInterval: pollMs,
+  });
+}
+
+export const adminDiagUploadKey = (uploadId: string | null) =>
+  ['admin', 'diag-upload', uploadId] as const;
+
+export function useAdminDiagUpload(uploadId: string | null) {
+  return useQuery({
+    queryKey: adminDiagUploadKey(uploadId),
+    queryFn: () => adminApi.getDiagUpload(uploadId as string),
+    enabled: Boolean(uploadId),
+    // Содержимое журнала неизменно — повторно не тянем мегабайты.
+    staleTime: Infinity,
+  });
+}

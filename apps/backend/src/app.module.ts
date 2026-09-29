@@ -22,6 +22,7 @@ import { AudioModule } from './audio/audio.module';
 import { FcmModule } from './fcm/fcm.module';
 import { AppControlModule } from './app-control/app-control.module';
 import { ParentDevicesModule } from './parent-devices/parent-devices.module';
+import { DiagModule } from './diag/diag.module';
 import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storage';
 import { SecretsModule } from './common/secrets/secrets.module';
 
@@ -55,6 +56,7 @@ import { SecretsModule } from './common/secrets/secrets.module';
     FcmModule,
     AppControlModule,
     ParentDevicesModule,
+    DiagModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

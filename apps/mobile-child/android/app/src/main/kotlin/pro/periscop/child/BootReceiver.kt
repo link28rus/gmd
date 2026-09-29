@@ -78,6 +78,14 @@ class BootReceiver : BroadcastReceiver() {
         // startForeground(type=MICROPHONE) ИНОГДА проходит. Если crashes —
         // SoundAroundService.handlePrewarm логирует и stopSelf'ится, ничего страшного.
         // Юзер может открыть приложение для повторного prewarm через MainActivity.onCreate.
+        // v0.60.0: подробности — под тегом "sound" (категория audio), чтобы
+        // включались вместе с остальным путём «Звука вокруг».
+        DiagLog.debug(
+            context,
+            "sound",
+            "BootReceiver($action): prewarm dispatch, serviceState=${SoundAroundService.state} " +
+                "importance=${DiagSnapshot.processImportance()} sdk=${Build.VERSION.SDK_INT}",
+        )
         try {
             val prewarmIntent = Intent(context, SoundAroundService::class.java)
                 .putExtra(SoundAroundService.EXTRA_MODE, SoundAroundService.MODE_PREWARM)
@@ -94,6 +102,8 @@ class BootReceiver : BroadcastReceiver() {
                 "BootReceiver: pre-warm SoundAroundService FAILED: " +
                     "${e.javaClass.simpleName}: ${e.message} (юзер откроет app для prewarm)",
             )
+            DiagLog.debug(context, "sound", "BootReceiver: prewarm dispatch exception class=${e.javaClass.name}")
+            DiagUpload.autoTrigger(context, DiagUpload.TRIGGER_PREWARM_FAILED)
         }
     }
 }

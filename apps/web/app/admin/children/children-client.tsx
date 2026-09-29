@@ -1,6 +1,8 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { FileText } from 'lucide-react';
 import { useAdminChildren } from '@/lib/hooks/use-admin';
 import { useTableSort } from '@/lib/hooks/use-table-sort';
 import { DataTable, type Column } from '@/components/admin/data-table';
@@ -80,6 +82,21 @@ export function ChildrenClient() {
         ) : (
           '—'
         ),
+    },
+    {
+      key: 'diag',
+      header: '',
+      align: 'right',
+      render: (row) => (
+        <Link
+          href={`/admin/children/${row.id}/diag?name=${encodeURIComponent(row.name)}`}
+          className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+          title="Журнал приложения ребёнка"
+        >
+          <FileText className="h-3.5 w-3.5" />
+          Журнал
+        </Link>
+      ),
     },
     {
       key: 'actions',

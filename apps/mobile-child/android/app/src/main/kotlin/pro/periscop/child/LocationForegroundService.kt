@@ -201,6 +201,8 @@ class LocationForegroundService : Service() {
         ensureBackgroundEngine()
         // v0.57: realtime-канал команд живёт вместе с FGS геолокации.
         ChildRealtimeClient.start(this)
+        // v0.60.0: настройки журнала — один раз за процесс, в фоновом потоке.
+        DiagConfigSync.fetchOnce(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -352,19 +354,8 @@ class LocationForegroundService : Service() {
             bgEngine = engine
             bgChannel = MethodChannel(engine.dartExecutor.binaryMessenger, METHOD_CHANNEL)
 
-            // Диагностический канал для headless-Dart: принимает diagLog('bg', 'msg').
-            MethodChannel(engine.dartExecutor.binaryMessenger, DIAG_CHANNEL)
-                .setMethodCallHandler { call, result ->
-                    when (call.method) {
-                        "write" -> {
-                            val tag = call.argument<String>("tag") ?: "bg"
-                            val msg = call.argument<String>("msg") ?: ""
-                            DiagLog.write(applicationContext, tag, msg)
-                            result.success(null)
-                        }
-                        else -> result.notImplemented()
-                    }
-                }
+            // Диагностический канал для headless-Dart: diagLog/diagDebug/diagUpload.
+            DiagChannel.register(applicationContext, engine.dartExecutor.binaryMessenger, "bg")
 
             // Канал сигнала — Dart (ingestor) вызывает play при PLAY_SIGNAL
             // команде с сервера. Запускаем отдельный SignalSoundService с

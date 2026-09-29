@@ -1,5 +1,6 @@
 package pro.periscop.child
 
+import android.app.ForegroundServiceStartNotAllowedException
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -16,6 +17,9 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.dart.DartExecutor
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugins.GeneratedPluginRegistrant
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * FGS type=microphone для «Звук вокруг ребёнка» (D-lite архитектура, v0.36.0).
@@ -73,6 +77,20 @@ class SoundAroundService : Service() {
             "package:periscop_child/features/sound_around/sound_around_entry.dart"
         private const val DART_ENTRYPOINT = "soundAroundEntryPoint"
         private const val BG_CHANNEL = "pro.periscop.child/sound_around_bg"
+
+        // v0.60.0 — состояние для снимка журнала (DiagSnapshot).
+        const val STATE_NONE = "none"
+        const val STATE_PREWARM = "prewarm"
+        const val STATE_STREAM = "stream"
+
+        @Volatile
+        var state: String = STATE_NONE
+            private set
+
+        /** Последний сбой startForeground / движка: "время где класс: текст". */
+        @Volatile
+        var lastFailure: String? = null
+            private set
     }
 
     private var flutterEngine: FlutterEngine? = null
@@ -85,6 +103,24 @@ class SoundAroundService : Service() {
     private fun log(msg: String) = DiagLog.write(this, TAG, msg)
     private fun logErr(msg: String, e: Throwable) =
         DiagLog.write(this, TAG, "$msg: ${e.javaClass.simpleName}: ${e.message}")
+    private fun debug(msg: String) = DiagLog.debug(this, TAG, msg)
+
+    /**
+     * v0.60.0: подробности сбоя startForeground(type=MICROPHONE) — именно тут
+     * ломается «Звук вокруг» после обновления/перезагрузки (запрет старта FGS
+     * с микрофоном из фона на Android 12+/14+).
+     */
+    private fun recordFailure(where: String, e: Throwable) {
+        val fgsNotAllowed = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            e is ForegroundServiceStartNotAllowedException
+        lastFailure = "${SimpleDateFormat("MM-dd HH:mm:ss", Locale.US).format(Date())} " +
+            "$where ${e.javaClass.name}: ${e.message}"
+        debug(
+            "$where: exception class=${e.javaClass.name} " +
+                "fgsStartNotAllowed=$fgsNotAllowed security=${e is SecurityException} " +
+                "sdk=${Build.VERSION.SDK_INT} importance=${DiagSnapshot.processImportance()} msg=${e.message}",
+        )
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -98,6 +134,10 @@ class SoundAroundService : Service() {
         val action = intent?.action
         val mode = intent?.getStringExtra(EXTRA_MODE) ?: MODE_PREWARM
         log("onStartCommand action=$action mode=$mode flags=$flags startId=$startId")
+        debug(
+            "onStartCommand mode=$mode nullIntent=${intent == null} inForegroundState=$inForegroundState " +
+                "state=$state engine=${flutterEngine != null} importance=${DiagSnapshot.processImportance()}",
+        )
 
         // Legacy ACTION_STOP — полное завершение (cleanup, для админских сценариев).
         if (action == ACTION_STOP) {
@@ -137,11 +177,14 @@ class SoundAroundService : Service() {
         try {
             startForegroundCompat()
             inForegroundState = true
+            state = STATE_PREWARM
             log("prewarm: startForeground(type=MICROPHONE) OK — service idle, ready for STREAM")
         } catch (e: Throwable) {
             // Если crash тут — значит prewarm вызван из background context.
             // Это известное Android 14 ограничение, документируем для пользователя.
             logErr("prewarm: startForeground FAILED (need foreground caller)", e)
+            recordFailure("prewarm", e)
+            DiagUpload.autoTrigger(this, DiagUpload.TRIGGER_PREWARM_FAILED)
             stopSelf()
         }
     }
@@ -165,9 +208,13 @@ class SoundAroundService : Service() {
                 log("stream: startForeground OK (lazy, no prewarm before)")
             } catch (e: Throwable) {
                 logErr("stream: startForeground FAILED — likely no prewarm + background caller", e)
+                recordFailure("stream", e)
+                DiagUpload.autoTrigger(this, DiagUpload.TRIGGER_START_FAILED)
                 stopSelf()
                 return
             }
+        } else {
+            debug("stream: already in FGS state — startForeground not needed")
         }
 
         val sessionId = intent?.getStringExtra(EXTRA_SESSION_ID).orEmpty()
@@ -178,6 +225,7 @@ class SoundAroundService : Service() {
             log("stream: missing sessionId/wsUrl — abort STREAM, остаюсь в prewarm")
             return
         }
+        debug("stream: sessionId=${sessionId.take(8)}… durationSec=$durationSec → startFlutterEngine")
 
         // Wake lock только когда реально стримим — экономия батареи в prewarm idle.
         acquireWakeLock()
@@ -190,14 +238,17 @@ class SoundAroundService : Service() {
      */
     private fun handleStopStream() {
         log("stop_stream: tearing down Flutter engine, staying in prewarm FGS")
+        debug("stop_stream: engine=${flutterEngine != null} inForegroundState=$inForegroundState")
         try {
             flutterEngine?.destroy()
+            debug("stop_stream: Flutter engine destroyed")
         } catch (e: Throwable) {
             logErr("stop_stream: engine.destroy failed", e)
         }
         flutterEngine = null
         bgChannel = null
         releaseWakeLock()
+        state = if (inForegroundState) STATE_PREWARM else STATE_NONE
         // НЕ stopForeground/stopSelf — service остаётся живым для следующей сессии.
     }
 
@@ -219,6 +270,7 @@ class SoundAroundService : Service() {
             stopForeground(true)
         }
         inForegroundState = false
+        state = STATE_NONE
         stopSelf()
     }
 
@@ -237,6 +289,7 @@ class SoundAroundService : Service() {
         bgChannel = null
         releaseWakeLock()
         inForegroundState = false
+        state = STATE_NONE
         super.onDestroy()
     }
 
@@ -270,8 +323,10 @@ class SoundAroundService : Service() {
             val loader = FlutterInjector.instance().flutterLoader()
             loader.startInitialization(applicationContext)
             loader.ensureInitializationComplete(applicationContext, null)
+            debug("startFlutterEngine: loader initialized")
 
             val engine = FlutterEngine(applicationContext)
+            debug("startFlutterEngine: engine created")
             // КРИТИЧНО: при ручном создании FlutterEngine (не через FlutterActivity) плагины
             // НЕ регистрируются автоматически. Без этого вызова в headless-изоляте все
             // MethodChannel'ы падают с MissingPluginException.
@@ -283,6 +338,7 @@ class SoundAroundService : Service() {
                 DART_ENTRYPOINT,
             )
             engine.dartExecutor.executeDartEntrypoint(entrypoint)
+            debug("startFlutterEngine: Dart entrypoint executed")
 
             val channel = MethodChannel(engine.dartExecutor.binaryMessenger, BG_CHANNEL)
             channel.setMethodCallHandler { call, result ->
@@ -299,21 +355,8 @@ class SoundAroundService : Service() {
                 }
             }
 
-            // Диагностический канал для headless Dart: принимает diagLog('sa_bg', 'msg').
-            MethodChannel(
-                engine.dartExecutor.binaryMessenger,
-                "pro.periscop.child/diag",
-            ).setMethodCallHandler { call, result ->
-                when (call.method) {
-                    "write" -> {
-                        val diagTag = call.argument<String>("tag") ?: "sa_bg"
-                        val msg = call.argument<String>("msg") ?: ""
-                        DiagLog.write(applicationContext, diagTag, msg)
-                        result.success(null)
-                    }
-                    else -> result.notImplemented()
-                }
-            }
+            // Диагностический канал для headless Dart: diagLog/diagDebug/diagUpload.
+            DiagChannel.register(applicationContext, engine.dartExecutor.binaryMessenger, "sa_bg")
 
             // Передать параметры сессии в Dart entry-point.
             channel.invokeMethod(
@@ -327,9 +370,12 @@ class SoundAroundService : Service() {
 
             flutterEngine = engine
             bgChannel = channel
+            state = STATE_STREAM
             log("startFlutterEngine OK")
         } catch (e: Throwable) {
             logErr("startFlutterEngine FAILED", e)
+            recordFailure("engine", e)
+            DiagUpload.autoTrigger(this, DiagUpload.TRIGGER_START_FAILED)
             handleStopStream()
         }
     }

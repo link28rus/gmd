@@ -46,9 +46,11 @@
          (lesson #36) — перед возвратом в RuStore убрать или вынести во flavor. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
     <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION"/>
+    <!-- v0.60.0: свой Application (PeriscopApplication.kt) — обработчик падений
+         и отправка журнала после падения на старте любого процесса. -->
     <application
         android:label="Перископ Ребёнка"
-        android:name="${applicationName}"
+        android:name=".PeriscopApplication"
         android:icon="@mipmap/ic_launcher">
         <activity
             android:name=".MainActivity"

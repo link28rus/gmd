@@ -14,7 +14,6 @@ import io.flutter.plugin.common.MethodChannel
 // `periscop_bg_location_engine`), чтобы локации продолжали приходить после закрытия
 // UI, убийства процесса системой и ребута (см. BootReceiver).
 private const val UI_METHOD_CHANNEL = "pro.periscop.child/location"
-private const val DIAG_METHOD_CHANNEL = "pro.periscop.child/diag"
 private const val PROTECTION_METHOD_CHANNEL = "pro.periscop.child/protection"
 // Задача #61: флаг «первый запуск после обновления APK». Имя канала историческое
 // (v0.38 screen-time) — блокировка и экранное время временно отключены в v0.58.0.
@@ -155,23 +154,8 @@ class MainActivity : FlutterActivity() {
                 }
             }
 
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, DIAG_METHOD_CHANNEL)
-            .setMethodCallHandler { call, result ->
-                when (call.method) {
-                    "read" -> result.success(DiagLog.readAll(this))
-                    "clear" -> {
-                        DiagLog.clear(this)
-                        result.success(null)
-                    }
-                    "write" -> {
-                        val tag = (call.argument<String>("tag") ?: "dart")
-                        val msg = (call.argument<String>("msg") ?: "")
-                        DiagLog.write(this, tag, msg)
-                        result.success(null)
-                    }
-                    else -> result.notImplemented()
-                }
-            }
+        // v0.60.0: общий обработчик журнала (write/debug/read/clear/upload/configSummary).
+        DiagChannel.register(this, flutterEngine.dartExecutor.binaryMessenger, "dart")
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, PROTECTION_METHOD_CHANNEL)
             .setMethodCallHandler { call, result ->

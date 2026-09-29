@@ -133,6 +133,81 @@ export interface PaginatedInvites {
   total: number;
 }
 
+// ─── Diag logs (журнал приложения ребёнка, v0.60.0) ───────────────────────────
+// Контракт: docs/superpowers/specs/2026-09-29-child-diag-logs.md, раздел «Администратор».
+
+export type DiagCategory =
+  | 'audio'
+  | 'location'
+  | 'realtime'
+  | 'push'
+  | 'update'
+  | 'system'
+  | 'other';
+
+export const DIAG_CATEGORIES: readonly DiagCategory[] = [
+  'audio',
+  'location',
+  'realtime',
+  'push',
+  'update',
+  'system',
+  'other',
+];
+
+export interface DiagConfig {
+  /** Какие категории попадают в отправляемый журнал. */
+  send: DiagCategory[];
+  /** Для каких категорий писать подробные (DEBUG) записи. */
+  debug: DiagCategory[];
+  /** ISO-время, после которого подробный режим сам выключается; null = бессрочно. */
+  debugUntil: string | null;
+  /** Прикладывать системный logcat своего процесса. */
+  logcat: boolean;
+  /** Прикладывать снимок состояния телефона. */
+  snapshot: boolean;
+  /** Сам отправлять журнал при сбоях. */
+  autoUpload: boolean;
+}
+
+export const DEFAULT_DIAG_CONFIG: DiagConfig = {
+  send: [...DIAG_CATEGORIES],
+  debug: [],
+  debugUntil: null,
+  logcat: false,
+  snapshot: true,
+  autoUpload: true,
+};
+
+export interface DiagUploadRow {
+  id: string;
+  reason: 'manual' | 'auto';
+  trigger: string | null;
+  appVersion: string | null;
+  sizeBytes: number;
+  createdAt: string;
+}
+
+export interface DiagUploadDetail extends DiagUploadRow {
+  childId: string;
+  commandId: string | null;
+  snapshot: string | null;
+  log: string | null;
+  logcat: string | null;
+}
+
+export interface AdminChildDiag {
+  device: {
+    id: string;
+    appVersion: string | null;
+    lastSeenAt: string | null;
+    online: boolean;
+  } | null;
+  config: DiagConfig;
+  pendingRequest: { commandId: string; createdAt: string; expiresAt: string } | null;
+  uploads: DiagUploadRow[];
+}
+
 // ─── API methods ──────────────────────────────────────────────────────────────
 
 export const adminApi = {
@@ -226,6 +301,33 @@ export const adminApi = {
 
   resetChildDevice: (id: string) =>
     apiFetch<{ ok: true }>(`/api/admin/children/${id}/reset-device`, { method: 'POST' }),
+
+  getChildDiag: (childId: string) =>
+    apiFetch<AdminChildDiag>(`/api/admin/children/${encodeURIComponent(childId)}/diag`),
+
+  updateChildDiagConfig: (childId: string, config: DiagConfig) =>
+    apiFetch<{ config: DiagConfig; delivered: boolean }>(
+      `/api/admin/children/${encodeURIComponent(childId)}/diag/config`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(config),
+        headers: { 'content-type': 'application/json' },
+      },
+    ),
+
+  requestChildDiag: (childId: string) =>
+    apiFetch<{ commandId: string; delivered: boolean; expiresAt: string }>(
+      `/api/admin/children/${encodeURIComponent(childId)}/diag/request`,
+      { method: 'POST' },
+    ),
+
+  getDiagUpload: (uploadId: string) =>
+    apiFetch<DiagUploadDetail>(`/api/admin/diag/uploads/${encodeURIComponent(uploadId)}`),
+
+  deleteDiagUpload: (uploadId: string) =>
+    apiFetch<{ ok: true }>(`/api/admin/diag/uploads/${encodeURIComponent(uploadId)}`, {
+      method: 'DELETE',
+    }),
 
   listInvites: ({
     page = 1,

@@ -59,6 +59,16 @@ Future<void> _bootstrap() async {
           await signalChannel.play();
           return; // ack
         }
+        // v0.60.0: запрос журнала админом. Native ставит отправку в
+        // WorkManager (commandId уйдёт вместе с журналом); не поставилась —
+        // без ack, сервер отдаст команду в следующем poll'е.
+        if (cmd.type == 'UPLOAD_DIAG') {
+          final queued = await diagUpload(reason: 'manual', commandId: cmd.id);
+          if (!queued) {
+            throw Exception('UPLOAD_DIAG enqueue failed — skip ack for retry');
+          }
+          return; // ack
+        }
         final handled = await audioHandler.handle(cmd);
         if (!handled) {
           // Неизвестный тип — ack, чтобы сервер не гонял команду бесконечно.

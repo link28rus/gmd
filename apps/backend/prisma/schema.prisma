@@ -238,6 +238,7 @@ model Child {
   zoneEvents      ZoneEvent[]
   zoneStates      ZoneState[]
   audioSessions   AudioSession[]
+  diagUploads     DiagLogUpload[]
 
   @@index([familyId])
   @@index([familyId, deletedAt])
@@ -311,6 +312,12 @@ model ChildDevice {
   // показывает «нет данных».
   timezone           String?
 
+  // v0.60: настройки журнала приложения (DiagConfig — состав отправляемого
+  // журнала, подробный режим, logcat/снимок, автоотправка). null = значения
+  // по умолчанию; нормализация — diag/diag-config.ts. Телефон получает их
+  // по мгновенному каналу (DIAG_CONFIG) и через GET /child/diag/config.
+  diagConfig         Json?
+
   child         Child           @relation(fields: [childId], references: [id], onDelete: Cascade)
   locations     Location[]
   sosEvents     SosEvent[]
@@ -321,6 +328,7 @@ model ChildDevice {
   appRules      AppRule[]
   blockSessions BlockSession[]
   appBlockSchedules AppBlockSchedule[]
+  diagUploads   DiagLogUpload[]
 
   @@map("child_devices")
 }
@@ -330,6 +338,8 @@ enum DeviceCommandType {
   START_AUDIO
   STOP_AUDIO
   AUDIO_ANSWER
+  // v0.60: запрос журнала приложения ребёнка из админки (TTL 24 ч).
+  UPLOAD_DIAG
 }
 
 enum DeviceCommandStatus {
@@ -836,4 +846,31 @@ model AppBlockSchedule {
 
   @@index([childDeviceId, enabled])
   @@map("app_block_schedules")
+}
+
+// v0.60: журнал приложения ребёнка (DiagLog + logcat + снимок состояния),
+// загруженный телефоном по запросу администратора (reason=manual, commandId
+// UPLOAD_DIAG) или сам при сбое (reason=auto, trigger). Смотрит только
+// администратор. Хранение 14 дней и не больше 30 журналов на устройство —
+// чистка при каждой новой загрузке (DiagService.saveUpload).
+model DiagLogUpload {
+  id            String   @id @default(cuid())
+  childDeviceId String
+  childId       String
+  reason        String   // 'manual' | 'auto'
+  trigger       String?  // для auto: audio_start_failed, crash, …
+  commandId     String?  // для manual: DeviceCommand UPLOAD_DIAG
+  appVersion    String?
+  sizeBytes     Int      // сумма UTF-8 длин snapshot + log + logcat
+  snapshot      String?
+  log           String?
+  logcat        String?
+  createdAt     DateTime @default(now())
+
+  childDevice ChildDevice @relation(fields: [childDeviceId], references: [id], onDelete: Cascade)
+  child       Child       @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@index([childId, createdAt(sort: Desc)])
+  @@index([childDeviceId, createdAt(sort: Desc)])
+  @@map("diag_log_uploads")
 }

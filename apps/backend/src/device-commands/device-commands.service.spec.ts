@@ -227,6 +227,13 @@ describe('toPushData (v0.57 realtime replay)', () => {
     });
   });
 
+  it('UPLOAD_DIAG (v0.60) → {type, commandId}', () => {
+    expect(toPushData('c7', 'UPLOAD_DIAG', null)).toEqual({
+      type: 'UPLOAD_DIAG',
+      commandId: 'c7',
+    });
+  });
+
   it('битый payload и неизвестный тип → null', () => {
     expect(toPushData('c4', 'START_AUDIO', { sessionId: 's1' })).toBeNull();
     expect(toPushData('c5', 'STOP_AUDIO', {})).toBeNull();

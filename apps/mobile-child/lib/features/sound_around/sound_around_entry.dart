@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' show DartPluginRegistrant;
 
 import 'package:flutter/services.dart';
@@ -41,6 +42,7 @@ void soundAroundEntryPoint() {
       diagLog('sound_around', 'opus init OK');
     } catch (e, st) {
       diagLog('sound_around', 'opus init failed: $e\n$st');
+      unawaited(diagUpload(reason: 'auto', trigger: 'audio_stream_failed'));
     }
   })();
 
@@ -57,6 +59,7 @@ void soundAroundEntryPoint() {
   bgChannel.setMethodCallHandler((call) async {
     switch (call.method) {
       case 'init':
+        diagDebug('sound_around', 'init received from native');
         try {
           await opusReady; // ждём загрузку libopus прежде чем стартовать encoder
           final args = (call.arguments as Map).cast<String, dynamic>();
@@ -74,6 +77,8 @@ void soundAroundEntryPoint() {
           );
         } catch (e, st) {
           diagLog('sound_around', 'init failed: $e\n$st');
+          // v0.60.0: изолят не смог начать сессию — журнал на сервер.
+          unawaited(diagUpload(reason: 'auto', trigger: 'audio_stream_failed'));
           await bgChannel.invokeMethod('stopSelf', {'reason': 'init_failed'});
         }
         return null;

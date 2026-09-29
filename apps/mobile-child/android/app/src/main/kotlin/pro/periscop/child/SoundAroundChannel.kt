@@ -68,12 +68,21 @@ object SoundAroundChannel {
                         } else {
                             appContext.startService(intent)
                         }
+                        DiagLog.debug(
+                            appContext,
+                            "sound_around",
+                            "start (poll): startForegroundService OK serviceState=${SoundAroundService.state} " +
+                                "importance=${DiagSnapshot.processImportance()}",
+                        )
                     } catch (e: Throwable) {
                         DiagLog.write(
                             appContext,
                             "sound_around",
                             "start failed: ${e.javaClass.simpleName}: ${e.message}",
                         )
+                        // v0.60.0: START_AUDIO (poll-путь) не смог запустить службу микрофона.
+                        DiagLog.debug(appContext, "sound_around", "start exception class=${e.javaClass.name}")
+                        DiagUpload.autoTrigger(appContext, DiagUpload.TRIGGER_START_FAILED)
                     }
                     result.success(null)
                 }

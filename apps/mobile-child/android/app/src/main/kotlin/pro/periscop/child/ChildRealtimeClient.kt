@@ -71,6 +71,16 @@ object ChildRealtimeClient {
 
     private val reconnectRunnable = Runnable { connectIfNeeded("backoff") }
 
+    /** v0.60.0: состояние канала для снимка журнала (DiagSnapshot). */
+    fun describe(): String {
+        val (isStarted, isConnected, hasSocket, att) = synchronized(lock) {
+            listOf(started, connected, socket != null, attempt)
+        }
+        val silent = if (lastServerMsgAt > 0) "${(System.currentTimeMillis() - lastServerMsgAt) / 1000}с" else "-"
+        return "подключён=$isConnected (started=$isStarted socket=$hasSocket attempt=$att, " +
+            "с последнего сообщения сервера $silent)"
+    }
+
     fun start(ctx: Context) {
         synchronized(lock) {
             appCtx = ctx.applicationContext
@@ -118,6 +128,7 @@ object ChildRealtimeClient {
     }
 
     private fun reconnect(reason: String) {
+        appCtx?.let { debug(it, "reconnect requested: $reason") }
         val old: WebSocket?
         synchronized(lock) {
             old = socket
@@ -171,6 +182,7 @@ object ChildRealtimeClient {
             attempt++
         }
         log(ctx, "disconnected code=$code reason=$reason — retry in ${delay / 1000}s")
+        debug(ctx, "disconnected: attempt=$attempt authFailed=${code == CLOSE_AUTH_FAILED}")
         handler.postDelayed(reconnectRunnable, delay)
     }
 
@@ -183,6 +195,7 @@ object ChildRealtimeClient {
             }
             lastServerMsgAt = System.currentTimeMillis()
             log(ctx, "connected")
+            debug(ctx, "connected: http=${response.code} protocol=${response.protocol}")
         }
 
         override fun onMessage(webSocket: WebSocket, text: String) {
@@ -195,9 +208,12 @@ object ChildRealtimeClient {
             when (msg.optString("op")) {
                 // Отвечаем на hello сервера, а не шлём свой в onOpen: сервер
                 // слушает сообщения только после проверки токена в БД.
-                "hello" -> webSocket.send(
-                    JSONObject().put("op", "hello").put("appVersion", appVersion(ctx)).toString(),
-                )
+                "hello" -> {
+                    webSocket.send(
+                        JSONObject().put("op", "hello").put("appVersion", appVersion(ctx)).toString(),
+                    )
+                    debug(ctx, "hello answered (appVersion=${appVersion(ctx)})")
+                }
                 "ping" -> webSocket.send("{\"op\":\"pong\"}")
                 "push" -> {
                     val id = msg.optString("id")
@@ -206,6 +222,7 @@ object ChildRealtimeClient {
                     webSocket.send(JSONObject().put("op", "ack").put("id", id).toString())
                     val map = HashMap<String, String>()
                     for (key in data.keys()) map[key] = data.optString(key)
+                    debug(ctx, "push id=${id.take(8)} type=${map["type"]} acked")
                     holdWakeLock(ctx)
                     ChildPushDispatcher.dispatch(ctx, map, TAG)
                 }
@@ -232,6 +249,7 @@ object ChildRealtimeClient {
         val cb = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
                 handler.post {
+                    debug(ctx, "network available (changed=${lastNetwork != null && lastNetwork != network})")
                     val prev = lastNetwork
                     lastNetwork = network
                     if (prev != null && prev != network) {
@@ -246,6 +264,7 @@ object ChildRealtimeClient {
             override fun onLost(network: Network) {
                 handler.post {
                     if (network != lastNetwork) return@post
+                    debug(ctx, "network lost — cancel socket")
                     lastNetwork = null
                     // Сокет был привязан к ушедшей сети — он уже мёртв.
                     val ws = synchronized(lock) { socket }
@@ -295,4 +314,5 @@ object ChildRealtimeClient {
     }
 
     private fun log(ctx: Context, msg: String) = DiagLog.write(ctx, TAG, msg)
+    private fun debug(ctx: Context, msg: String) = DiagLog.debug(ctx, TAG, msg)
 }

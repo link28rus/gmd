@@ -128,8 +128,38 @@
   realtime-канала раз в 45 с)
 - `revokedAt` (timestamptz) — время отзыва токена родителем
 - `createdAt` (timestamptz)
+- `diagConfig` (jsonb, nullable, v0.60.0) — настройки журнала приложения (`DiagConfig`: какие
+  категории отправлять, подробный режим до `debugUntil`, logcat, снимок состояния, автоотправка);
+  `NULL` = значения по умолчанию. Телефон получает их по realtime-каналу (`DIAG_CONFIG`) при каждом
+  подключении и после изменения в админке, плюс `GET /child/diag/config`. Контракт —
+  [spec](superpowers/specs/2026-09-29-child-diag-logs.md)
 
 **Безопасность:** токен используется для аутентификации всех запросов ребёнка через заголовок `X-Child-Token`.
+
+#### `diag_log_uploads` (v0.60.0)
+
+Журнал приложения ребёнка (DiagLog + logcat + снимок состояния), загруженный телефоном через
+`POST /child/diag/logs` — по запросу администратора (команда `UPLOAD_DIAG` в `device_commands`,
+TTL 24 ч) или сам при сбое. Смотрит только администратор (в журнале бывают координаты и события).
+
+- `id` (cuid) — первичный ключ
+- `childDeviceId` — foreign key → child_devices (CASCADE)
+- `childId` — foreign key → children (CASCADE)
+- `reason` (text) — `manual` (по запросу) | `auto` (при сбое)
+- `trigger` (text, nullable) — причина автоотправки (`audio_start_failed`, `crash`, …)
+- `commandId` (text, nullable) — id команды `UPLOAD_DIAG`; при загрузке команда помечается `executed`
+- `appVersion` (text, nullable) — версия приложения на телефоне
+- `sizeBytes` (int) — сумма UTF-8 длин `snapshot` + `log` + `logcat`
+- `snapshot` (text, ≤64 КБ), `log` (text, ≤2 МБ), `logcat` (text, ≤2 МБ) — все nullable
+- `createdAt` (timestamptz)
+
+**Индексы:** `(childId, createdAt DESC)`, `(childDeviceId, createdAt DESC)`.
+
+**Retention:** без pg_cron — при каждой новой загрузке удаляются журналы старше 14 дней (всех
+устройств) и всё сверх 30 последних на устройство (`DiagService.applyRetention`).
+
+**Связанное:** `DeviceCommandType` пополнился значением `UPLOAD_DIAG` (миграция
+`20260929120000_child_diag_logs`).
 
 ---
 
@@ -279,6 +309,9 @@ M2M таблица связи зон и детей.
 2. **`zone_events_retention`** — удаляет из `zone_events` старше 30 дней (03:05 UTC ежедневно).
 3. **`users_hard_delete`** — удаляет пользователей с `deletedAt < now() - interval '30 days'` (03:10 UTC ежедневно).
 4. **`zones_hard_delete`** — удаляет зоны с `deletedAt < now() - interval '30 days'` (03:15 UTC ежедневно).
+
+Вне pg_cron: `diag_log_uploads` чистится приложением при каждой загрузке журнала (14 дней, не больше
+30 на устройство).
 
 **Каскадное удаление:** при hard-delete пользователя или семьи все связанные записи (дети, devices, локации, зоны, события, согласия) удаляются автоматически через foreign key CASCADE.
 

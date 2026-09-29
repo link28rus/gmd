@@ -290,7 +290,10 @@ export function toPushData(
     ws?: { url?: unknown; token?: unknown; ttlSec?: unknown };
   };
   switch (type) {
+    // UPLOAD_DIAG (v0.60) — запрос журнала приложения (DiagService.requestUpload,
+    // TTL 24 ч), досылается при подключении телефона к мгновенному каналу.
     case 'PLAY_SIGNAL':
+    case 'UPLOAD_DIAG':
       return { type, commandId };
     case 'STOP_AUDIO':
       if (typeof p.sessionId !== 'string') return null;

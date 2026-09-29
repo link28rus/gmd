@@ -9,8 +9,9 @@ import android.os.Build
  * она приехала: FCM ([MyFirebaseMessagingService]) или собственный realtime-канал
  * ([ChildRealtimeClient], WebSocket `/api/child/ws`). Формат data-map одинаковый
  * (его собирает backend в `sendHybridDataMessage`):
- *   - type: START_AUDIO | STOP_AUDIO | PLAY_SIGNAL
+ *   - type: START_AUDIO | STOP_AUDIO | PLAY_SIGNAL | DIAG_CONFIG | UPLOAD_DIAG
  *   - sessionId, wsUrl, durationSec (START_AUDIO); commandId (если есть очередь)
+ *   - config — DiagConfig JSON-строкой (DIAG_CONFIG, v0.60.0)
  *
  * `source` — тег для DiagLog ("fcm" / "realtime"), чтобы в логе было видно канал.
  *
@@ -20,6 +21,10 @@ import android.os.Build
  */
 object ChildPushDispatcher {
 
+    // v0.60.0: подробные записи пути START_AUDIO/STOP_AUDIO — под тегом
+    // категории audio, чтобы включались вместе с остальным «Звуком вокруг».
+    private const val AUDIO_TAG = "sound"
+
     fun dispatch(ctx: Context, data: Map<String, String>, source: String) {
         val type = data["type"]
         when (type) {
@@ -27,6 +32,10 @@ object ChildPushDispatcher {
             "STOP_AUDIO" -> handleStopAudio(ctx, data, source)
             // v0.43 — мгновенный сигнал «найди телефон» от родителя.
             "PLAY_SIGNAL" -> handlePlaySignal(ctx, data, source)
+            // v0.60.0 — журнал на сервере: настройки (состояние, не команда)
+            // и запрос журнала (команда из очереди, отметка — сам upload с commandId).
+            "DIAG_CONFIG" -> handleDiagConfig(ctx, data, source)
+            "UPLOAD_DIAG" -> DiagUpload.requestManual(ctx, data["commandId"], source)
             // BLOCK_APPS / UNBLOCK_APPS / SYNC_RULES / SYNC_SCHEDULES — блокировка
             // приложений временно отключена (v0.58.0), падают сюда и игнорируются.
             else -> DiagLog.write(ctx, source, "unknown type=$type — ignored")
@@ -71,7 +80,24 @@ object ChildPushDispatcher {
         }
     }
 
+    private fun handleDiagConfig(ctx: Context, data: Map<String, String>, source: String) {
+        val raw = data["config"]
+        if (raw.isNullOrBlank()) {
+            DiagLog.write(ctx, DiagUpload.TAG, "DIAG_CONFIG via $source without config — ignored")
+            return
+        }
+        val cfg = DiagConfigStore.save(ctx, raw)
+        DiagLog.write(ctx, DiagUpload.TAG, "config via $source: ${cfg.summary(System.currentTimeMillis())}")
+    }
+
     private fun handleStartAudio(ctx: Context, data: Map<String, String>, source: String) {
+        DiagLog.debug(
+            ctx,
+            AUDIO_TAG,
+            "START_AUDIO received via $source keys=${data.keys.sorted()} " +
+                "commandId=${data["commandId"]?.take(8) ?: "-"} serviceState=${SoundAroundService.state} " +
+                "importance=${DiagSnapshot.processImportance()} sdk=${Build.VERSION.SDK_INT}",
+        )
         val sessionId = data["sessionId"] ?: return logErr(ctx, source, "START_AUDIO without sessionId")
         val wsUrl = data["wsUrl"] ?: return logErr(ctx, source, "START_AUDIO without wsUrl")
         val durationSec = data["durationSec"]?.toIntOrNull() ?: 300
@@ -92,18 +118,25 @@ object ChildPushDispatcher {
         // живой FGS=microphone. FCM high-priority дополнительно даёт elevated
         // state ~10с; realtime-путь полагается на то, что у процесса уже есть
         // FGS (геолокация + prewarm), — так же, как poll-путь из headless-изолята.
-        startServiceCompat(ctx, intent, source, "START_AUDIO")
+        val started = startServiceCompat(ctx, intent, source, "START_AUDIO")
+        if (!started) DiagUpload.autoTrigger(ctx, DiagUpload.TRIGGER_START_FAILED)
     }
 
     private fun handleStopAudio(ctx: Context, data: Map<String, String>, source: String) {
         val sessionId = data["sessionId"]
         DiagLog.write(ctx, source, "STOP_AUDIO via $source: sessionId=${sessionId?.take(8) ?: "?"}…")
+        DiagLog.debug(
+            ctx,
+            AUDIO_TAG,
+            "STOP_AUDIO received via $source serviceState=${SoundAroundService.state}",
+        )
 
         val intent = Intent(ctx, SoundAroundService::class.java).apply {
             putExtra(SoundAroundService.EXTRA_MODE, SoundAroundService.MODE_STOP_STREAM)
         }
         try {
             ctx.startService(intent)
+            DiagLog.debug(ctx, AUDIO_TAG, "STOP_AUDIO startService OK")
         } catch (e: Throwable) {
             DiagLog.write(
                 ctx,
@@ -118,27 +151,35 @@ object ChildPushDispatcher {
      * старта FGS из фона без exemption) — обычный startService: сервис уже
      * живёт в foreground (prewarm), и процесс с FGS фоновым не считается.
      */
-    private fun startServiceCompat(ctx: Context, intent: Intent, source: String, label: String) {
+    private fun startServiceCompat(ctx: Context, intent: Intent, source: String, label: String): Boolean {
+        val debugTag = if (label.contains("AUDIO")) AUDIO_TAG else "signal"
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 ctx.startForegroundService(intent)
             } else {
                 ctx.startService(intent)
             }
+            DiagLog.debug(ctx, debugTag, "$label startForegroundService OK (via $source)")
+            return true
         } catch (e: Throwable) {
             DiagLog.write(
                 ctx,
                 source,
                 "$label startForegroundService FAILED: ${e.javaClass.simpleName}: ${e.message} — retry startService",
             )
+            DiagLog.debug(ctx, debugTag, "$label startForegroundService exception class=${e.javaClass.name}")
             try {
                 ctx.startService(intent)
+                DiagLog.debug(ctx, debugTag, "$label fallback startService OK (via $source)")
+                return true
             } catch (e2: Throwable) {
                 DiagLog.write(
                     ctx,
                     source,
                     "$label startService FAILED: ${e2.javaClass.simpleName}: ${e2.message}",
                 )
+                DiagLog.debug(ctx, debugTag, "$label startService exception class=${e2.javaClass.name}")
+                return false
             }
         }
     }

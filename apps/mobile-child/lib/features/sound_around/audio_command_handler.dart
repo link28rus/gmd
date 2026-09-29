@@ -59,6 +59,7 @@ class AudioCommandHandler {
         wsUrl: wsUrl,
         durationSec: durationSec,
       );
+      unawaited(diagDebug(_tag, 'START_AUDIO (poll) channel.start OK id=${cmd.id}'));
       return true;
     } catch (e) {
       unawaited(diagLog(_tag, 'START_AUDIO channel.start failed: $e'));
@@ -72,6 +73,7 @@ class AudioCommandHandler {
     );
     try {
       await _channel.stop();
+      unawaited(diagDebug(_tag, 'STOP_AUDIO (poll) channel.stop OK id=${cmd.id}'));
       return true;
     } catch (e) {
       unawaited(diagLog(_tag, 'STOP_AUDIO channel.stop failed: $e'));

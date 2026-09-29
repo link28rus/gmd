@@ -60,6 +60,12 @@ class AudioStartTrampolineReceiver : BroadcastReceiver() {
             DiagLog.write(context, TAG, "missing sessionId/wsUrl — abort")
             return
         }
+        DiagLog.debug(
+            context,
+            TAG,
+            "dispatch: serviceState=${SoundAroundService.state} " +
+                "importance=${DiagSnapshot.processImportance()} sdk=${Build.VERSION.SDK_INT}",
+        )
 
         // Внутри TempAllowList exemption (~10 сек). startForegroundService
         // → onCreate → onStartCommand → startForeground(type=MICROPHONE) разрешён,
@@ -82,6 +88,7 @@ class AudioStartTrampolineReceiver : BroadcastReceiver() {
                 TAG,
                 "startForegroundService FAILED: ${e.javaClass.simpleName}: ${e.message}",
             )
+            DiagLog.debug(context, TAG, "startForegroundService exception class=${e.javaClass.name}")
         }
     }
 }
