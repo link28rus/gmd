@@ -25,7 +25,6 @@ jest.mock('@/lib/hooks/use-audio-session', () => ({
 jest.mock('sonner', () => ({ toast: { error: jest.fn() } }));
 jest.mock('@/lib/audio/vu-meter', () => ({ createVuMeter: () => () => undefined }));
 
-// eslint-disable-next-line import/first
 import { AudioSessionPane } from '@/components/children/audio-listen-dialog';
 
 function makeChild(micReady: boolean | null | undefined): Child {

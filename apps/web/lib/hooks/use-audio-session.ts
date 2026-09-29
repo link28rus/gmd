@@ -166,8 +166,9 @@ export function useAudioSession({ childId, durationSec }: Params): UseAudioSessi
     setErrorReason(null);
     setElapsedSec(0);
 
-    let createdSessionId: string | null = null;
-    let wsUrl: string | null = null;
+    // Присваиваются в try; catch выходит из функции — дальше они всегда заданы.
+    let createdSessionId: string;
+    let wsUrl: string;
     try {
       const res = await audioApi.createSession({ childId, durationSec, hiddenMode: true });
       if (!mountedRef.current) {

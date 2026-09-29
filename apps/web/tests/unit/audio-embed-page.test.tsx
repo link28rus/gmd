@@ -24,7 +24,6 @@ jest.mock('@/lib/hooks/use-audio-session', () => ({
 jest.mock('sonner', () => ({ toast: { error: jest.fn() } }));
 jest.mock('@/lib/audio/vu-meter', () => ({ createVuMeter: () => () => undefined }));
 
-// eslint-disable-next-line import/first
 import AudioEmbedPage from '@/app/embed/audio/[childId]/page';
 
 const WARNING = /Микрофон на телефоне ребёнка выключен/;

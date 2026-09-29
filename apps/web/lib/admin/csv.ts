@@ -21,7 +21,7 @@ export function exportRowsToCsv<T>(filename: string, columns: CsvColumn<T>[], ro
   const body = rows
     .map((row) => columns.map((c) => escapeCell(c.value(row))).join(';'))
     .join('\r\n');
-  const csv = `﻿${head}\r\n${body}`;
+  const csv = `\uFEFF${head}\r\n${body}`;
 
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);

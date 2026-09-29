@@ -41,7 +41,6 @@ export async function POST(request: Request): Promise<Response> {
       headers: { 'content-type': 'application/x-sentry-envelope' },
     });
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.error('[sentry-tunnel] upstream error', err);
   }
 

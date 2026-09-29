@@ -10,14 +10,12 @@ import { LatestMarker } from '@/components/locations/latest-marker';
 jest.mock('react-leaflet', () => {
   const React = require('react');
   return {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     Circle: ({ center, radius }: any) =>
       React.createElement('div', {
         'data-testid': 'accuracy-circle',
         'data-center': JSON.stringify(center),
         'data-radius': String(radius),
       }),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     Marker: ({ position, icon }: any) =>
       React.createElement('div', {
         'data-testid': 'marker',

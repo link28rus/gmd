@@ -96,7 +96,7 @@ export async function streamDownloadFile(filename: string): Promise<Response> {
   }
 
   // fs.createReadStream → Node Readable → Web ReadableStream.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/consistent-type-imports
   const { Readable } = require('node:stream') as typeof import('node:stream');
   const nodeStream = fs.createReadStream(filePath);
   const webStream = Readable.toWeb(nodeStream) as unknown as NodeReadableStream<Uint8Array>;

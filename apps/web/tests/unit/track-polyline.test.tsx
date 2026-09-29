@@ -9,14 +9,12 @@ import { TrackPolyline } from '@/components/locations/track-polyline';
 jest.mock('react-leaflet', () => {
   const React = require('react');
   return {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     Polyline: ({ positions, pathOptions }: any) =>
       React.createElement('div', {
         'data-testid': 'polyline',
         'data-positions': JSON.stringify(positions),
         'data-dash': pathOptions?.dashArray ?? '',
       }),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     Marker: ({ position, icon, title }: any) =>
       React.createElement('div', {
         'data-testid': 'marker',
