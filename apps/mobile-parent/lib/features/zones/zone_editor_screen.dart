@@ -16,7 +16,8 @@ import 'zone_models.dart';
 import 'zones_providers.dart';
 
 /// Редактор зоны (спека 3.1): `/home/zones/new?lat=&lon=&zoom=&childId=` и
-/// `/home/zones/:id/edit`. Центр зоны = центр карты (перетаскиваемого маркера
+/// `/home/zones/:id/edit`. Из подсказки места новая зона приходит
+/// предзаполненной (название, иконка, цвет, радиус, дети). Центр зоны = центр карты (перетаскиваемого маркера
 /// у flutter_map нет) — пин нарисован поверх карты.
 class ZoneEditorScreen extends ConsumerWidget {
   const ZoneEditorScreen({
@@ -26,6 +27,11 @@ class ZoneEditorScreen extends ConsumerWidget {
     this.initialLon,
     this.initialZoom,
     this.initialChildId,
+    this.initialName,
+    this.initialIcon,
+    this.initialColor,
+    this.initialRadius,
+    this.initialChildIds,
   });
 
   /// null — новая зона.
@@ -36,6 +42,16 @@ class ZoneEditorScreen extends ConsumerWidget {
 
   /// Зона «от ребёнка» — его отмечаем, если снять «Все дети».
   final String? initialChildId;
+
+  /// Предзаполнение новой зоны из подсказки места. Иконка и цвет вне палитры
+  /// заменяются умолчаниями, радиус подтягивается в границы редактора.
+  final String? initialName;
+  final String? initialIcon;
+  final String? initialColor;
+  final int? initialRadius;
+
+  /// Дети подсказки. Если это не все дети семьи — «Все дети» снимается.
+  final List<String>? initialChildIds;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -84,6 +100,11 @@ class ZoneEditorScreen extends ConsumerWidget {
           : null,
       initialZoom: initialZoom,
       initialChildId: initialChildId,
+      initialName: initialName,
+      initialIcon: initialIcon,
+      initialColor: initialColor,
+      initialRadius: initialRadius,
+      initialChildIds: initialChildIds,
     );
   }
 }
@@ -122,6 +143,11 @@ class _ZoneEditorForm extends ConsumerStatefulWidget {
     this.initialCenter,
     this.initialZoom,
     this.initialChildId,
+    this.initialName,
+    this.initialIcon,
+    this.initialColor,
+    this.initialRadius,
+    this.initialChildIds,
   });
 
   final Zone? zone;
@@ -130,6 +156,11 @@ class _ZoneEditorForm extends ConsumerStatefulWidget {
   final LatLng? initialCenter;
   final double? initialZoom;
   final String? initialChildId;
+  final String? initialName;
+  final String? initialIcon;
+  final String? initialColor;
+  final int? initialRadius;
+  final List<String>? initialChildIds;
 
   @override
   ConsumerState<_ZoneEditorForm> createState() => _ZoneEditorFormState();
@@ -142,14 +173,15 @@ class _ZoneEditorFormState extends ConsumerState<_ZoneEditorForm> {
   bool _mapReady = false;
 
   late final TextEditingController _name =
-      TextEditingController(text: widget.zone?.name ?? '');
-  late String _color =
-      kZoneColors.contains(widget.zone?.color) ? widget.zone!.color : kZoneColorDefault;
-  late String _icon = widget.zone?.icon ?? kZoneIconDefault;
+      TextEditingController(text: widget.zone?.name ?? widget.initialName?.trim() ?? '');
+  late String _color = _initialColor();
+  late String _icon = _initialIcon();
   // Старые зоны могли быть меньше 100 м — подтягиваем в допустимое.
-  late int _radius = clampRadius(widget.zone?.radius ?? kZoneRadiusDefault);
-  // Новая зона — по умолчанию для всех детей, включая будущих.
-  late bool _allChildren = widget.zone?.allChildren ?? true;
+  late int _radius =
+      clampRadius(widget.zone?.radius ?? widget.initialRadius ?? kZoneRadiusDefault);
+  // Новая зона — по умолчанию для всех детей, включая будущих; подсказка
+  // места только для части детей — сразу для них.
+  late bool _allChildren = widget.zone?.allChildren ?? _suggestedChildIds() == null;
   late List<String> _childIds = _initialChildIds();
   late ScheduleDraft _schedule = ScheduleDraft.initial(widget.zone?.schedule);
   late ArrivalDraft _arrival = ArrivalDraft.initial(widget.zone?.arrival);
@@ -161,9 +193,36 @@ class _ZoneEditorFormState extends ConsumerState<_ZoneEditorForm> {
 
   bool get _isNew => widget.zone == null;
 
+  String _initialColor() {
+    final z = widget.zone;
+    if (z != null) return kZoneColors.contains(z.color) ? z.color : kZoneColorDefault;
+    final c = widget.initialColor;
+    return c != null && kZoneColors.contains(c) ? c : kZoneColorDefault;
+  }
+
+  String _initialIcon() {
+    final z = widget.zone;
+    if (z != null) return z.icon;
+    final i = widget.initialIcon;
+    return i != null && kZoneIcons.any((o) => o.id == i) ? i : kZoneIconDefault;
+  }
+
+  /// Дети подсказки, известные редактору, — если это НЕ все дети семьи.
+  /// null — назначать «Все дети» (подсказки нет или она про всех).
+  List<String>? _suggestedChildIds() {
+    final ids = widget.initialChildIds;
+    if (widget.zone != null || ids == null) return null;
+    final known = widget.kids.map((k) => k.id).toSet();
+    final picked = ids.where(known.contains).toSet().toList();
+    if (picked.isEmpty || picked.length == known.length) return null;
+    return picked;
+  }
+
   List<String> _initialChildIds() {
     final z = widget.zone;
     if (z != null) return [...z.childIds];
+    final suggested = _suggestedChildIds();
+    if (suggested != null) return suggested;
     final fromChild = widget.initialChildId;
     if (fromChild != null) return [fromChild];
     return widget.kids.map((k) => k.id).toList();
@@ -252,6 +311,9 @@ class _ZoneEditorFormState extends ConsumerState<_ZoneEditorForm> {
         await repo.update(widget.zone!.id, input);
       }
       ref.invalidate(zonesListProvider);
+      // Новая зона закрывает подсказку места; правка меняет статистику.
+      ref.invalidate(zoneSuggestionsProvider);
+      if (!_isNew) ref.invalidate(zoneStatsProvider(widget.zone!.id));
       messenger
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(content: Text(_isNew ? 'Зона создана' : 'Зона обновлена')));

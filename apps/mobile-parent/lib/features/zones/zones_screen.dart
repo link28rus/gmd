@@ -12,6 +12,7 @@ import '../../core/providers.dart';
 import '../children/child_models.dart';
 import '../children/children_providers.dart';
 import 'widgets/where_am_i.dart';
+import 'widgets/zone_places.dart';
 import 'widgets/zone_widgets.dart';
 import 'zone_format.dart';
 import 'zone_map_view.dart';
@@ -170,6 +171,22 @@ class _ZonesScreenState extends ConsumerState<ZonesScreen> {
     context.push(Uri(path: '/home/zones/new', queryParameters: q).toString());
   }
 
+  /// «Сохранить» у подсказки — редактор с её центром, названием, иконкой,
+  /// цветом, радиусом и детьми.
+  void _createFromSuggestion(PlaceSuggestion s) {
+    final q = <String, String>{
+      'lat': s.centerLat.toStringAsFixed(6),
+      'lon': s.centerLon.toStringAsFixed(6),
+      'zoom': '16',
+      if (s.name.isNotEmpty) 'name': s.name,
+      'icon': s.icon,
+      'color': s.color,
+      'radius': '${s.radius}',
+      if (s.childIds.isNotEmpty) 'childIds': s.childIds.join(','),
+    };
+    context.push(Uri(path: '/home/zones/new', queryParameters: q).toString());
+  }
+
   void _onKidTap(Child kid, FamilyLatestPoint point, bool canCreate) {
     showModalBottomSheet<void>(
       context: context,
@@ -210,6 +227,8 @@ class _ZonesScreenState extends ConsumerState<ZonesScreen> {
     ref.invalidate(zonesListProvider);
     ref.invalidate(familyLatestProvider);
     ref.invalidate(childrenListProvider);
+    ref.invalidate(zoneSuggestionsProvider);
+    ref.invalidate(zoneStatsProvider);
     try {
       await ref.read(zonesListProvider.future);
     } catch (_) {
@@ -291,6 +310,11 @@ class _ZonesScreenState extends ConsumerState<ZonesScreen> {
                           _createZone(at: LatLng(p.lat, p.lon), childId: kid.id),
                     ),
                   const SizedBox(height: 12),
+                  ZonePlaceSuggestions(
+                    kidNames: kidNames,
+                    canCreate: canCreate,
+                    onSave: _createFromSuggestion,
+                  ),
                   ..._buildZonesSection(context, zonesAsync, zones, kidNames),
                 ],
               ),
@@ -670,6 +694,8 @@ class _ZoneCard extends StatelessWidget {
               if (selected) ...[
                 const Divider(height: 20),
                 MyZoneNotifications(zone: zone, kidNames: kidNames),
+                const SizedBox(height: 8),
+                ZoneStatsSection(zoneId: zone.id, kidNames: kidNames),
                 const SizedBox(height: 4),
                 Wrap(
                   alignment: WrapAlignment.end,

@@ -8,12 +8,13 @@ import { useAuthStore } from '@/lib/auth-store';
 import { useFamilyLatestLocations, useZones } from '@/lib/hooks/use-zones';
 import { useChildren } from '@/lib/hooks/use-children';
 import { refreshAccessToken } from '@/lib/auth/refresh-singleflight';
-import { MAX_ZONES, zoneErrorMessage, type Zone } from '@/lib/api/zones';
+import { MAX_ZONES, zoneErrorMessage, type PlaceSuggestion, type Zone } from '@/lib/api/zones';
 import type { FamilyLatestItem } from '@/lib/api/locations';
 import { ZonesList } from './components/zones-list';
 import { ZonesMap } from './components/zones-map';
 import type { MapViewState } from './components/zones-map-inner';
-import { ZoneEditorDialog } from './components/zone-editor-dialog';
+import { ZoneEditorDialog, type ZonePrefill } from './components/zone-editor-dialog';
+import { PlaceSuggestions } from './components/place-suggestions';
 import { ZoneEventsFeed } from './components/zone-events-feed';
 import { DeleteZoneDialog } from './components/delete-zone-dialog';
 import { KidsPanel } from './components/kids-panel';
@@ -68,6 +69,7 @@ interface EditorState {
   center?: { lat: number; lon: number };
   zoom?: number;
   childId?: string;
+  prefill?: ZonePrefill;
 }
 
 /** Масштаб редактора для новой зоны: не мельче квартала, не крупнее дома. */
@@ -161,6 +163,22 @@ function ZonesContent(): ReactElement {
     openEditor({ zone: null, center: { lat, lon }, zoom: 16, childId });
   };
 
+  const handleSaveSuggestion = (sg: PlaceSuggestion): void => {
+    if (!guardLimit()) return;
+    openEditor({
+      zone: null,
+      center: { lat: sg.centerLat, lon: sg.centerLon },
+      zoom: 16,
+      prefill: {
+        name: sg.name,
+        icon: sg.icon,
+        color: sg.color,
+        radius: sg.radius,
+        childIds: sg.childIds,
+      },
+    });
+  };
+
   const handleFocusChild = (p: FamilyLatestItem): void => {
     setFocus((prev) => ({ lat: p.lat, lon: p.lon, seq: (prev?.seq ?? 0) + 1 }));
   };
@@ -197,6 +215,18 @@ function ZonesContent(): ReactElement {
             Совет: дважды кликните по карте — откроется создание зоны с центром в этой точке. Клик
             по ребёнку на карте — «Создать зону здесь».
           </p>
+          <PlaceSuggestions
+            kidNames={kidNames}
+            onSave={handleSaveSuggestion}
+            onShow={(sg) =>
+              setFocus((prev) => ({
+                lat: sg.centerLat,
+                lon: sg.centerLon,
+                seq: (prev?.seq ?? 0) + 1,
+              }))
+            }
+            saveDisabled={limitReached}
+          />
           <div className="flex flex-col gap-4 lg:h-[620px] lg:flex-row">
             <div className="flex flex-col gap-4 lg:min-h-0 lg:w-1/3">
               <KidsPanel
@@ -256,6 +286,7 @@ function ZonesContent(): ReactElement {
         initialCenter={editor.center}
         initialZoom={editor.zoom}
         initialChildId={editor.childId}
+        prefill={editor.prefill}
         onSaved={(saved) => setSelected(saved.id)}
       />
 

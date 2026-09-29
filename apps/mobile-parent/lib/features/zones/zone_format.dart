@@ -347,10 +347,119 @@ String formatRadius(int m) {
 }
 
 // ---------------------------------------------------------------------------
+// Подсказки мест и статистика визитов (этап 4)
+// ---------------------------------------------------------------------------
+
+/// Русское склонение по числу: 1 [one], 2–4 [few], 5+ и 11–14 [many].
+String pluralRu(int n, String one, String few, String many) {
+  final a = n.abs();
+  final mod100 = a % 100;
+  final mod10 = a % 10;
+  if (mod100 >= 11 && mod100 <= 14) return many;
+  if (mod10 == 1) return one;
+  if (mod10 >= 2 && mod10 <= 4) return few;
+  return many;
+}
+
+/// «1 ночь», «3 ночи», «7 ночей».
+String nightsCount(int n) => '$n ${pluralRu(n, 'ночь', 'ночи', 'ночей')}';
+
+/// «1 день», «3 дня», «12 дней».
+String daysCount(int n) => '$n ${pluralRu(n, 'день', 'дня', 'дней')}';
+
+/// «1 визит», «3 визита», «12 визитов».
+String visitsCount(int n) => '$n ${pluralRu(n, 'визит', 'визита', 'визитов')}';
+
+/// Заголовок карточки подсказки: «Дом?», «Школа?», «Частое место».
+String placeSuggestionTitle(String kind) => switch (kind) {
+      kPlaceKindHome => 'Дом?',
+      kPlaceKindSchool => 'Школа?',
+      _ => 'Частое место',
+    };
+
+/// Строка-доказательство подсказки по одному ребёнку (без имени):
+/// дом — «ночует здесь 7 ночей из 9»; школа — «по будням с 08:10 до 13:40 —
+/// 9 дней»; частое место — «бывает здесь 5 дней, обычно 15:00–17:30».
+/// Отсутствующее время опускается.
+String placeEvidenceLine(String kind, PlaceSuggestionChild c) {
+  final from = c.typicalFromMin;
+  final to = c.typicalToMin;
+  switch (kind) {
+    case kPlaceKindHome:
+      return 'ночует здесь ${nightsCount(c.days)} из ${c.daysWithData}';
+    case kPlaceKindSchool:
+      final times = [
+        if (from != null) 'с ${minutesToHhmm(from)}',
+        if (to != null) 'до ${minutesToHhmm(to)}',
+      ];
+      final when = times.isEmpty ? 'по будням' : 'по будням ${times.join(' ')}';
+      return '$when — ${daysCount(c.days)}';
+    default:
+      final base = 'бывает здесь ${daysCount(c.days)}';
+      if (from != null && to != null) {
+        return '$base, обычно ${minutesToHhmm(from)}–${minutesToHhmm(to)}';
+      }
+      if (from != null) return '$base, обычно с ${minutesToHhmm(from)}';
+      if (to != null) return '$base, обычно до ${minutesToHhmm(to)}';
+      return base;
+  }
+}
+
+/// «30.09».
+String formatDayMonth(DateTime d) =>
+    '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}';
+
+/// Строки статистики по ребёнку (без имени). Время визитов — локальное время
+/// телефона, «обычно» — минуты дня в поясе зоны.
+List<String> zoneStatsLines(ZoneChildStats s, DateTime now) {
+  if (s.visits <= 0) {
+    // «Сейчас здесь» бывает и без закрытых визитов — первый визит ещё идёт.
+    if (s.ongoing) return ['визитов не было', _ongoingLine(s.lastVisitFrom, now)];
+    return const ['визитов не было'];
+  }
+  final lines = <String>[
+    '${visitsCount(s.visits)} · в среднем ${formatDuration(s.avgSec)} · '
+        'всего ${formatDuration(s.totalSec)}',
+  ];
+  final arr = s.typicalArrivalMin;
+  final dep = s.typicalDepartureMin;
+  if (arr != null && dep != null) {
+    lines.add('обычно приходит в ${minutesToHhmm(arr)}, уходит в ${minutesToHhmm(dep)}');
+  } else if (arr != null) {
+    lines.add('обычно приходит в ${minutesToHhmm(arr)}');
+  } else if (dep != null) {
+    lines.add('обычно уходит в ${minutesToHhmm(dep)}');
+  }
+  final from = s.lastVisitFrom;
+  if (s.ongoing) {
+    lines.add(_ongoingLine(from, now));
+  } else if (from != null) {
+    final to = s.lastVisitTo;
+    final String range;
+    if (to == null) {
+      range = '${formatDayMonth(from)}, ${formatClock(from)}';
+    } else if (localDayKey(to) == localDayKey(from)) {
+      range = '${formatDayMonth(from)}, ${formatClock(from)}–${formatClock(to)}';
+    } else {
+      range = '${formatDayMonth(from)}, ${formatClock(from)} – '
+          '${formatDayMonth(to)}, ${formatClock(to)}';
+    }
+    lines.add('последний визит: $range');
+  }
+  return lines;
+}
+
+String _ongoingLine(DateTime? from, DateTime now) {
+  if (from == null) return 'сейчас здесь';
+  final day = localDayKey(from) == localDayKey(now) ? '' : '${formatDayMonth(from)}, ';
+  return 'сейчас здесь с $day${formatClock(from)}';
+}
+
+// ---------------------------------------------------------------------------
 // Ошибки backend'а → русский текст
 // ---------------------------------------------------------------------------
 
-enum ZoneAction { save, delete, load, prefs, events }
+enum ZoneAction { save, delete, load, prefs, events, dismiss }
 
 /// ApiException из DioException (его кладёт интерсептор DioFactory) или сам.
 ApiException? apiExceptionOf(Object e) {
@@ -413,6 +522,8 @@ String zoneErrorMessage(Object e, ZoneAction action) {
         return 'Не удалось сохранить настройки уведомлений (ошибка $status).';
       case ZoneAction.events:
         return 'Не удалось загрузить события (ошибка $status).';
+      case ZoneAction.dismiss:
+        return 'Не удалось скрыть подсказку (ошибка $status).';
       case ZoneAction.save:
         return 'Не удалось сохранить зону (ошибка $status).';
     }
@@ -432,6 +543,8 @@ String zoneErrorMessage(Object e, ZoneAction action) {
       return 'Не удалось сохранить настройки уведомлений.';
     case ZoneAction.events:
       return 'Не удалось загрузить события.';
+    case ZoneAction.dismiss:
+      return 'Не удалось скрыть подсказку.';
     case ZoneAction.save:
       return 'Не удалось сохранить зону.';
   }

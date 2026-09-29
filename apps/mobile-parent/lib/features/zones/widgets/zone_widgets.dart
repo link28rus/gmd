@@ -36,6 +36,8 @@ Future<bool> deleteZoneWithConfirm(BuildContext context, WidgetRef ref, Zone zon
   try {
     await ref.read(zonesRepositoryProvider).delete(zone.id);
     ref.invalidate(zonesListProvider);
+    // Место без зоны снова может стать подсказкой.
+    ref.invalidate(zoneSuggestionsProvider);
     messenger
       ..hideCurrentSnackBar()
       ..showSnackBar(const SnackBar(content: Text('Зона удалена')));

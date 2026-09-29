@@ -144,6 +144,61 @@ export interface ZoneEventsPage {
   nextCursor: string | null;
 }
 
+/** v0.67.0: подсказка места по частым стоянкам детей за 30 дней. */
+export type PlaceKind = 'home' | 'school' | 'frequent';
+
+export interface PlaceSuggestionChild {
+  childId: string;
+  /** Засчитанных дней: ночей (дом), будней (школа), дней (частое место). */
+  days: number;
+  /** Дней с точками за период — знаменатель «N из M». */
+  daysWithData: number;
+  /** Обычное время прихода и ухода, минута дня; у дома — null. */
+  typicalFromMin: number | null;
+  typicalToMin: number | null;
+}
+
+export interface PlaceSuggestion {
+  id: string;
+  kind: PlaceKind;
+  /** Предлагаемое имя; у частого места пустое — имя даёт родитель. */
+  name: string;
+  icon: ZoneIcon;
+  color: ZoneColor;
+  centerLat: number;
+  centerLon: number;
+  radius: number;
+  childIds: string[];
+  children: PlaceSuggestionChild[];
+}
+
+/** v0.67.0: статистика визитов ребёнка в зону за период. */
+export interface ZoneChildStats {
+  childId: string;
+  visits: number;
+  totalSec: number;
+  avgSec: number;
+  daysCount: number;
+  lastVisitFrom: string | null;
+  lastVisitTo: string | null;
+  /** Ребёнок в зоне сейчас — последний визит не закончился. */
+  ongoing: boolean;
+  /** Минуты дня в поясе `ZoneStats.timezone`. */
+  typicalArrivalMin: number | null;
+  typicalDepartureMin: number | null;
+}
+
+export interface ZoneStats {
+  zoneId: string;
+  periodDays: number;
+  timezone: string;
+  children: ZoneChildStats[];
+}
+
+function tzQuery(tz: string | null): string {
+  return tz ? `?tz=${encodeURIComponent(tz)}` : '';
+}
+
 export const zonesApi = {
   list: () => apiFetch<Zone[]>('/api/zones'),
 
@@ -171,6 +226,18 @@ export const zonesApi = {
       body: JSON.stringify({ items }),
     }),
 
+  suggestions: (tz: string | null) =>
+    apiFetch<PlaceSuggestion[]>(`/api/zones/suggestions${tzQuery(tz)}`),
+
+  dismissSuggestion: (s: Pick<PlaceSuggestion, 'kind' | 'centerLat' | 'centerLon'>) =>
+    apiFetch<void>('/api/zones/suggestions/dismiss', {
+      method: 'POST',
+      body: JSON.stringify({ kind: s.kind, centerLat: s.centerLat, centerLon: s.centerLon }),
+    }),
+
+  stats: (id: string, tz: string | null) =>
+    apiFetch<ZoneStats>(`/api/zones/${encodeURIComponent(id)}/stats${tzQuery(tz)}`),
+
   listEvents: (q: ListEventsQuery = {}) => {
     const params = new URLSearchParams();
     for (const [k, v] of Object.entries(q)) {
@@ -185,7 +252,10 @@ export const zonesApi = {
  * Русский текст ошибки операции с зоной по `code` из ответа backend'а
  * (`{ error: { code, message } }`, см. HttpExceptionFilter).
  */
-export function zoneErrorMessage(e: unknown, action: 'save' | 'delete' | 'load' | 'prefs'): string {
+export function zoneErrorMessage(
+  e: unknown,
+  action: 'save' | 'delete' | 'load' | 'prefs' | 'dismiss',
+): string {
   if (e instanceof ApiError) {
     switch (e.code) {
       case 'zone_limit_reached':
@@ -216,6 +286,7 @@ export function zoneErrorMessage(e: unknown, action: 'save' | 'delete' | 'load' 
   const status = e.status;
   if (action === 'delete') return `Не удалось удалить зону (ошибка ${status}).`;
   if (action === 'load') return `Не удалось загрузить зоны (ошибка ${status}).`;
+  if (action === 'dismiss') return `Не удалось скрыть подсказку (ошибка ${status}).`;
   if (action === 'prefs') return `Не удалось сохранить настройки уведомлений (ошибка ${status}).`;
   return `Не удалось сохранить зону (ошибка ${status}).`;
 }

@@ -47,13 +47,19 @@ export function detectStays(points: TrackInputPoint[], radiusM: number, minMs: n
   const stays: Stay[] = [];
   let i = 0;
   while (i < points.length) {
+    // Центр — накопительная взвешенная сумма принятых точек: O(1) на точку.
+    // Пересчёт по всей группе на каждой точке был O(L²) и на многодневной
+    // стоянке (дача, 30 дней для подсказок мест) вешал event loop.
+    const acc = { sw: 0, lat: 0, lon: 0 };
+    addWeighted(acc, points[i]);
     let c = { lat: points[i].lat, lon: points[i].lon };
     let last = i;
     let j = i + 1;
     while (j < points.length) {
       if (dist(c, points[j]) <= radiusM) {
         last = j;
-        c = centroid(points, i, last, c, radiusM);
+        addWeighted(acc, points[j]);
+        c = { lat: acc.lat / acc.sw, lon: acc.lon / acc.sw };
         j++;
         continue;
       }
@@ -85,28 +91,14 @@ export function detectStays(points: TrackInputPoint[], radiusM: number, minMs: n
   return stays;
 }
 
-// Центр группы [from..to]: среднее с весом 1/погрешность², только точки в
-// радиусе от текущего центра (вылеты не тянут центр на себя).
-function centroid(
-  points: TrackInputPoint[],
-  from: number,
-  to: number,
-  current: { lat: number; lon: number },
-  radiusM: number,
-): { lat: number; lon: number } {
-  let sw = 0;
-  let lat = 0;
-  let lon = 0;
-  for (let k = from; k <= to; k++) {
-    const p = points[k];
-    if (dist(current, p) > radiusM) continue;
-    const a = Math.max(5, p.accuracy ?? 25);
-    const w = 1 / (a * a);
-    sw += w;
-    lat += p.lat * w;
-    lon += p.lon * w;
-  }
-  return sw > 0 ? { lat: lat / sw, lon: lon / sw } : current;
+// Точка в центр группы с весом 1/погрешность². В сумму идут только точки,
+// принятые в радиусе от текущего центра, — вылеты центр на себя не тянут.
+function addWeighted(acc: { sw: number; lat: number; lon: number }, p: TrackInputPoint): void {
+  const a = Math.max(5, p.accuracy ?? 25);
+  const w = 1 / (a * a);
+  acc.sw += w;
+  acc.lat += p.lat * w;
+  acc.lon += p.lon * w;
 }
 
 // Сглаживание — Калман с обратным проходом (RTS), отдельно на каждом

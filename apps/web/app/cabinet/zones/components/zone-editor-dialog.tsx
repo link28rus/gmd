@@ -40,6 +40,15 @@ import {
 } from './zone-rules-fields';
 import { toast } from 'sonner';
 
+/** v0.67.0: заготовка новой зоны из подсказки места. */
+export interface ZonePrefill {
+  name: string;
+  icon: ZoneIcon;
+  color: ZoneColor;
+  radius: number;
+  childIds: string[];
+}
+
 export interface KidOption {
   id: string;
   name: string;
@@ -60,6 +69,8 @@ interface Props {
   initialZoom?: number;
   /** Зона создаётся «от ребёнка» — его отмечаем, если снять «Все дети». */
   initialChildId?: string;
+  /** Имя, иконка, цвет, радиус и дети из подсказки места. */
+  prefill?: ZonePrefill;
   onSaved: (z: Zone) => void;
 }
 
@@ -80,12 +91,13 @@ export function ZoneEditorDialog({
   initialCenter,
   initialZoom,
   initialChildId,
+  prefill,
   onSaved,
 }: Props) {
   // key пересоздаёт форму при смене режима/зоны/центра — чинит «второе открытие»
   const formKey =
     initial?.id ??
-    `new:${initialCenter?.lat ?? '_'}:${initialCenter?.lon ?? '_'}:${initialChildId ?? '_'}`;
+    `new:${initialCenter?.lat ?? '_'}:${initialCenter?.lon ?? '_'}:${initialChildId ?? '_'}:${prefill ? `${prefill.icon}:${prefill.radius}` : '_'}`;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -104,6 +116,7 @@ export function ZoneEditorDialog({
           initialCenter={initialCenter}
           initialZoom={initialZoom}
           initialChildId={initialChildId}
+          prefill={prefill}
           onCancel={() => onOpenChange(false)}
           onSaved={(z) => {
             onSaved(z);
@@ -121,6 +134,7 @@ interface FormProps {
   initialCenter?: { lat: number; lon: number };
   initialZoom?: number;
   initialChildId?: string;
+  prefill?: ZonePrefill;
   onCancel: () => void;
   onSaved: (z: Zone) => void;
 }
@@ -131,13 +145,14 @@ function ZoneEditorForm({
   initialCenter,
   initialZoom,
   initialChildId,
+  prefill,
   onCancel,
   onSaved,
 }: FormProps) {
   const [address, setAddress] = useState('');
-  const [name, setName] = useState(initial?.name ?? '');
-  const [color, setColor] = useState<ZoneColor>(initial?.color ?? DEFAULT_COLOR);
-  const [icon, setIcon] = useState<ZoneIcon>(initial?.icon ?? DEFAULT_ICON);
+  const [name, setName] = useState(initial?.name ?? prefill?.name ?? '');
+  const [color, setColor] = useState<ZoneColor>(initial?.color ?? prefill?.color ?? DEFAULT_COLOR);
+  const [icon, setIcon] = useState<ZoneIcon>(initial?.icon ?? prefill?.icon ?? DEFAULT_ICON);
   const [centerLat, setCenterLat] = useState(
     initial?.centerLat ?? initialCenter?.lat ?? DEFAULT_LAT,
   );
@@ -145,11 +160,17 @@ function ZoneEditorForm({
     initial?.centerLon ?? initialCenter?.lon ?? DEFAULT_LON,
   );
   // Старые зоны могли быть меньше 100 м (раньше UI разрешал 50) — подтягиваем в допустимое.
-  const [radius, setRadius] = useState(() => clampRadius(initial?.radius ?? ZONE_RADIUS_DEFAULT));
-  // Новая зона — по умолчанию для всех детей, включая будущих.
-  const [allChildren, setAllChildren] = useState(initial?.allChildren ?? true);
+  const [radius, setRadius] = useState(() =>
+    clampRadius(initial?.radius ?? prefill?.radius ?? ZONE_RADIUS_DEFAULT),
+  );
+  // Новая зона — по умолчанию для всех детей, включая будущих. Подсказка места
+  // одного из детей — только для него (место общее на всех — снова «все»).
+  const [allChildren, setAllChildren] = useState(
+    initial?.allChildren ?? (prefill ? kids.every((k) => prefill.childIds.includes(k.id)) : true),
+  );
   const [childIds, setChildIds] = useState<string[]>(() => {
     if (initial) return initial.childIds ?? [];
+    if (prefill) return prefill.childIds;
     if (initialChildId) return [initialChildId];
     return kids.map((c) => c.id);
   });

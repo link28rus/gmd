@@ -26,6 +26,15 @@ export function formatDuration(totalSec: number): string {
   return restH ? `${days} д ${restH} ч` : `${days} д`;
 }
 
+/** Русское склонение: plural(3, 'ночь', 'ночи', 'ночей') → «ночи». */
+export function plural(n: number, one: string, few: string, many: string): string {
+  const m10 = n % 10;
+  const m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+  return many;
+}
+
 /** Ключ календарного дня в локальном часовом поясе браузера. */
 export function localDayKey(d: Date): string {
   return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
@@ -174,4 +183,74 @@ export function browserTimeZone(): string | null {
   } catch {
     return null;
   }
+}
+
+/** v0.67.0: заголовок подсказки места. */
+export function suggestionTitle(kind: 'home' | 'school' | 'frequent'): string {
+  if (kind === 'home') return 'Дом?';
+  if (kind === 'school') return 'Школа?';
+  return 'Частое место';
+}
+
+/**
+ * v0.67.0: чем подсказка подкреплена, по одному ребёнку:
+ * «ночует здесь 7 ночей из 9», «по будням с 08:10 до 13:40 — 5 дней»,
+ * «бывает здесь 4 дня, обычно 16:00–17:30».
+ */
+export function suggestionEvidence(
+  kind: 'home' | 'school' | 'frequent',
+  c: {
+    days: number;
+    daysWithData: number;
+    typicalFromMin: number | null;
+    typicalToMin: number | null;
+  },
+): string {
+  const days = `${c.days} ${plural(c.days, 'день', 'дня', 'дней')}`;
+  const from = c.typicalFromMin;
+  const to = c.typicalToMin;
+  if (kind === 'home') {
+    return `ночует здесь ${c.days} ${plural(c.days, 'ночь', 'ночи', 'ночей')} из ${c.daysWithData}`;
+  }
+  if (kind === 'school') {
+    return from !== null && to !== null
+      ? `по будням с ${minutesToHHMM(from)} до ${minutesToHHMM(to)} — ${days}`
+      : `по будням — ${days}`;
+  }
+  return from !== null && to !== null
+    ? `бывает здесь ${days}, обычно ${minutesToHHMM(from)}–${minutesToHHMM(to)}`
+    : `бывает здесь ${days}`;
+}
+
+/** v0.67.0: строки статистики визитов ребёнка в зону. */
+export function zoneStatsLines(s: {
+  visits: number;
+  totalSec: number;
+  avgSec: number;
+  lastVisitFrom: string | null;
+  lastVisitTo: string | null;
+  ongoing: boolean;
+  typicalArrivalMin: number | null;
+  typicalDepartureMin: number | null;
+}): string[] {
+  if (s.visits === 0) return ['визитов не было'];
+  const lines = [
+    `${s.visits} ${plural(s.visits, 'визит', 'визита', 'визитов')} · в среднем ${formatDuration(s.avgSec)} · всего ${formatDuration(s.totalSec)}`,
+  ];
+  const times: string[] = [];
+  if (s.typicalArrivalMin !== null) times.push(`приходит в ${minutesToHHMM(s.typicalArrivalMin)}`);
+  if (s.typicalDepartureMin !== null) {
+    times.push(`уходит в ${minutesToHHMM(s.typicalDepartureMin)}`);
+  }
+  if (times.length > 0) lines.push(`обычно ${times.join(', ')}`);
+  if (s.ongoing && s.lastVisitFrom) {
+    lines.push(`сейчас здесь с ${formatClock(new Date(s.lastVisitFrom))}`);
+  } else if (s.lastVisitFrom && s.lastVisitTo) {
+    const from = new Date(s.lastVisitFrom);
+    const date = from.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+    lines.push(
+      `последний визит: ${date}, ${formatClock(from)}–${formatClock(new Date(s.lastVisitTo))}`,
+    );
+  }
+  return lines;
 }

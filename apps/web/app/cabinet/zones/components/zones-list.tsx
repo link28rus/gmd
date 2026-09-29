@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { MAX_ZONES, type Zone } from '@/lib/api/zones';
 import { ZONE_ICON_EMOJI, formatDaysMask, formatScheduleShort, minutesToHHMM } from './zone-format';
 import { MyNotifications } from './my-notifications';
+import { ZoneStats } from './zone-stats';
 
 const RULE_BADGE_CLASS =
   'inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-xs text-muted-foreground';
@@ -149,8 +150,9 @@ export function ZonesList({
                   )}
                 </button>
                 {isSelected && (
-                  <div className="px-4 pb-3">
+                  <div className="space-y-4 px-4 pb-3">
                     <MyNotifications zone={zone} kidNames={kidNames} />
+                    <ZoneStats zoneId={zone.id} kidNames={kidNames} />
                   </div>
                 )}
                 {isSelected && (onEdit || onDelete) && (

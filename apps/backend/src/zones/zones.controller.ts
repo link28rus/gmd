@@ -28,6 +28,9 @@ import { ZonesEventsQuerySchema } from './dto/zones-events-query.schema';
 import type { ZonesEventsQuery } from './dto/zones-events-query.schema';
 import { ZoneMyNotificationsSchema } from './dto/zone-notifications.schema';
 import type { ZoneMyNotificationsDto } from './dto/zone-notifications.schema';
+import { ZonePlacesService } from './zone-places.service';
+import { DismissPlaceSchema, ZonePlacesQuerySchema } from './dto/zone-places.schema';
+import type { DismissPlaceDto, ZonePlacesQuery } from './dto/zone-places.schema';
 
 interface AuthedRequest extends Request {
   user: { userId: string; familyId?: string | null };
@@ -36,7 +39,10 @@ interface AuthedRequest extends Request {
 @Controller('zones')
 @UseGuards(JwtAuthGuard)
 export class ZonesController {
-  constructor(@Inject(ZonesService) private readonly svc: ZonesService) {}
+  constructor(
+    @Inject(ZonesService) private readonly svc: ZonesService,
+    @Inject(ZonePlacesService) private readonly places: ZonePlacesService,
+  ) {}
 
   /** v0.64.0: семья — из JWT, как в children.controller. */
   private familyId(req: AuthedRequest): string {
@@ -71,6 +77,41 @@ export class ZonesController {
   ) {
     const familyId = this.familyId(req);
     return this.svc.listEvents(familyId, q);
+  }
+
+  /**
+   * v0.67.0: подсказки мест (дом, школа, частые места) по стоянкам детей
+   * за 30 дней. Статичный путь — до `:id`, иначе «suggestions» станет id.
+   */
+  @Get('suggestions')
+  @Throttle({ default: { ttl: 60_000, limit: 30 } })
+  async suggestions(
+    @Req() req: AuthedRequest,
+    @Query(new ZodValidationPipe(ZonePlacesQuerySchema)) q: ZonePlacesQuery,
+  ) {
+    return this.places.suggestions(this.familyId(req), q.tz);
+  }
+
+  /** v0.67.0: «больше не показывать» — общая на семью. */
+  @Post('suggestions/dismiss')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Throttle({ default: { ttl: 60_000, limit: 30 } })
+  async dismissSuggestion(
+    @Req() req: AuthedRequest,
+    @Body(new ZodValidationPipe(DismissPlaceSchema)) dto: DismissPlaceDto,
+  ): Promise<void> {
+    await this.places.dismiss(this.familyId(req), req.user.userId, dto);
+  }
+
+  /** v0.67.0: статистика визитов в зону за 30 дней по каждому её ребёнку. */
+  @Get(':id/stats')
+  @Throttle({ default: { ttl: 60_000, limit: 60 } })
+  async stats(
+    @Req() req: AuthedRequest,
+    @Param('id') id: string,
+    @Query(new ZodValidationPipe(ZonePlacesQuerySchema)) q: ZonePlacesQuery,
+  ) {
+    return this.places.zoneStats(this.familyId(req), id, q.tz);
   }
 
   @Get(':id')

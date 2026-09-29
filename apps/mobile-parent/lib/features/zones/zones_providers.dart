@@ -27,6 +27,23 @@ final familyLatestProvider =
 /// IANA-пояс телефона — для расписания и срока (уходит при каждом сохранении).
 final deviceTimeZoneProvider = FutureProvider<String?>((_) => DeviceChannel.timeZone());
 
+/// Подсказки мест (этап 4). Ошибку экран не показывает — секция просто
+/// скрывается (старый backend отвечает 404). Обновлять вместе с зонами:
+/// новая зона закрывает подсказку, удалённая — может вернуть.
+final zoneSuggestionsProvider =
+    FutureProvider.autoDispose<List<PlaceSuggestion>>((ref) async {
+  final tz = await ref.watch(deviceTimeZoneProvider.future);
+  return ref.watch(zonesRepositoryProvider).suggestions(tz: tz);
+});
+
+/// Статистика визитов в зону за 30 дней. После правки зоны —
+/// `ref.invalidate(zoneStatsProvider)`.
+final zoneStatsProvider =
+    FutureProvider.autoDispose.family<ZoneStats, String>((ref, zoneId) async {
+  final tz = await ref.watch(deviceTimeZoneProvider.future);
+  return ref.watch(zonesRepositoryProvider).stats(zoneId, tz: tz);
+});
+
 /// Фильтр ленты. Record — equatable по значению, годится ключом family.
 typedef ZoneEventsFilter = ({String? childId, String? zoneId});
 

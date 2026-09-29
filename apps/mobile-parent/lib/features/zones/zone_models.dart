@@ -435,3 +435,161 @@ class IpCenter {
         attribution: (json['attribution'] as String?) ?? 'IP Geolocation by DB-IP',
       );
 }
+
+int? _intOrNull(Object? v) => v is num ? v.toInt() : null;
+
+// ---------------------------------------------------------------------------
+// Геозоны v2, этап 4: подсказки мест и статистика визитов
+// ---------------------------------------------------------------------------
+
+/// Виды подсказок backend'а (`PLACE_KINDS`).
+const kPlaceKindHome = 'home';
+const kPlaceKindSchool = 'school';
+const kPlaceKindFrequent = 'frequent';
+
+/// Доказательство подсказки по одному ребёнку.
+@immutable
+class PlaceSuggestionChild {
+  const PlaceSuggestionChild({
+    required this.childId,
+    required this.days,
+    required this.daysWithData,
+    this.typicalFromMin,
+    this.typicalToMin,
+  });
+
+  final String childId;
+
+  /// Засчитанных дней: ночей (дом), будней (школа), дней (частое место).
+  final int days;
+
+  /// Дней с точками за период — знаменатель «N из M».
+  final int daysWithData;
+
+  /// Обычное время прихода и ухода (минута дня); у дома — null.
+  final int? typicalFromMin;
+  final int? typicalToMin;
+
+  factory PlaceSuggestionChild.fromJson(Map<String, dynamic> json) => PlaceSuggestionChild(
+        childId: (json['childId'] as String?) ?? '',
+        days: _int(json['days']),
+        daysWithData: _int(json['daysWithData']),
+        typicalFromMin: _intOrNull(json['typicalFromMin']),
+        typicalToMin: _intOrNull(json['typicalToMin']),
+      );
+}
+
+/// Элемент `GET /zones/suggestions` — место, где стоит завести зону.
+@immutable
+class PlaceSuggestion {
+  const PlaceSuggestion({
+    required this.id,
+    required this.kind,
+    required this.name,
+    required this.icon,
+    required this.color,
+    required this.centerLat,
+    required this.centerLon,
+    required this.radius,
+    this.childIds = const [],
+    this.children = const [],
+  });
+
+  /// Стабильный ключ: вид + округлённый центр.
+  final String id;
+
+  /// `home` | `school` | `frequent`; незнакомый вид показываем как частое место.
+  final String kind;
+
+  /// Предлагаемое название; у частого места пустое — называет родитель.
+  final String name;
+  final String icon;
+  final String color;
+  final double centerLat;
+  final double centerLon;
+  final int radius;
+  final List<String> childIds;
+  final List<PlaceSuggestionChild> children;
+
+  factory PlaceSuggestion.fromJson(Map<String, dynamic> json) => PlaceSuggestion(
+        id: (json['id'] as String?) ?? '',
+        kind: (json['kind'] as String?) ?? kPlaceKindFrequent,
+        name: (json['name'] as String?) ?? '',
+        icon: (json['icon'] as String?) ?? 'other',
+        color: (json['color'] as String?) ?? kZoneColorDefault,
+        centerLat: _double(json['centerLat']),
+        centerLon: _double(json['centerLon']),
+        radius: _int(json['radius'], kZoneRadiusDefault),
+        childIds: (json['childIds'] as List? ?? const []).whereType<String>().toList(),
+        children: _maps(json['children']).map(PlaceSuggestionChild.fromJson).toList(),
+      );
+}
+
+/// Статистика визитов одного ребёнка в зону (`GET /zones/:id/stats`).
+@immutable
+class ZoneChildStats {
+  const ZoneChildStats({
+    required this.childId,
+    required this.visits,
+    required this.totalSec,
+    required this.avgSec,
+    required this.daysCount,
+    this.lastVisitFrom,
+    this.lastVisitTo,
+    this.ongoing = false,
+    this.typicalArrivalMin,
+    this.typicalDepartureMin,
+  });
+
+  final String childId;
+  final int visits;
+  final int totalSec;
+  final int avgSec;
+  final int daysCount;
+
+  /// Границы последнего визита (локальное время телефона).
+  final DateTime? lastVisitFrom;
+  final DateTime? lastVisitTo;
+
+  /// Ребёнок в зоне прямо сейчас (последний визит не закончился).
+  final bool ongoing;
+
+  /// Минута дня в поясе зоны.
+  final int? typicalArrivalMin;
+  final int? typicalDepartureMin;
+
+  factory ZoneChildStats.fromJson(Map<String, dynamic> json) => ZoneChildStats(
+        childId: (json['childId'] as String?) ?? '',
+        visits: _int(json['visits']),
+        totalSec: _int(json['totalSec']),
+        avgSec: _int(json['avgSec']),
+        daysCount: _int(json['daysCount']),
+        lastVisitFrom: _date(json['lastVisitFrom']),
+        lastVisitTo: _date(json['lastVisitTo']),
+        ongoing: (json['ongoing'] as bool?) ?? false,
+        typicalArrivalMin: _intOrNull(json['typicalArrivalMin']),
+        typicalDepartureMin: _intOrNull(json['typicalDepartureMin']),
+      );
+}
+
+@immutable
+class ZoneStats {
+  const ZoneStats({
+    required this.zoneId,
+    required this.periodDays,
+    this.timezone,
+    this.children = const [],
+  });
+
+  final String zoneId;
+  final int periodDays;
+  final String? timezone;
+  final List<ZoneChildStats> children;
+
+  factory ZoneStats.fromJson(Map<String, dynamic> json) => ZoneStats(
+        zoneId: (json['zoneId'] as String?) ?? '',
+        periodDays: _int(json['periodDays'], 30),
+        timezone: json['timezone'] as String?,
+        children: _maps(json['children']).map(ZoneChildStats.fromJson).toList(),
+      );
+}

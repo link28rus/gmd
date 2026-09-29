@@ -53,14 +53,26 @@ class AppRouter {
                 GoRoute(
                   // /home/zones/new?lat=&lon=&zoom=&childId= — центр новой
                   // зоны (текущий вид карты или точка ребёнка).
+                  // v0.67.0: из подсказки места ещё
+                  // &name=&icon=&color=&radius=&childIds=a,b — предзаполнение.
                   path: 'new',
                   builder: (_, state) {
                     final q = state.uri.queryParameters;
+                    final childIds = (q['childIds'] ?? '')
+                        .split(',')
+                        .map((s) => s.trim())
+                        .where((s) => s.isNotEmpty)
+                        .toList();
                     return ZoneEditorScreen(
                       initialLat: double.tryParse(q['lat'] ?? ''),
                       initialLon: double.tryParse(q['lon'] ?? ''),
                       initialZoom: double.tryParse(q['zoom'] ?? ''),
                       initialChildId: q['childId'],
+                      initialName: q['name'],
+                      initialIcon: q['icon'],
+                      initialColor: q['color'],
+                      initialRadius: int.tryParse(q['radius'] ?? ''),
+                      initialChildIds: childIds.isEmpty ? null : childIds,
                     );
                   },
                 ),

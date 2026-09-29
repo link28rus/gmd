@@ -8,10 +8,21 @@ import {
   type CreateZoneInput,
   type UpdateZoneInput,
   type ZoneChildPrefs,
+  type PlaceSuggestion,
 } from '@/lib/api/zones';
 import { locationsApi, type FamilyLatestItem } from '@/lib/api/locations';
 
 const KEY = ['zones'] as const;
+const SUGGESTIONS_KEY = ['zone-suggestions'] as const;
+
+/** Пояс браузера — по нему backend считает ночь, будни и время визитов. */
+function browserTz(): string | null {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+  } catch {
+    return null;
+  }
+}
 
 export function useZones() {
   return useQuery({
@@ -28,6 +39,9 @@ function useInvalidating<T, V>(fn: (v: V) => Promise<T>) {
       void qc.invalidateQueries({ queryKey: KEY });
       // Удаление зоны уносит её события, правка — имя/цвет в ленте.
       void qc.invalidateQueries({ queryKey: ['zone-events'] });
+      // Новая зона гасит подсказку места, правка круга меняет статистику.
+      void qc.invalidateQueries({ queryKey: SUGGESTIONS_KEY });
+      void qc.invalidateQueries({ queryKey: ['zone-stats'] });
     },
   });
 }
@@ -106,6 +120,43 @@ export function useFamilyLatestLocations() {
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
     staleTime: 30_000,
+    retry: 1,
+  });
+}
+
+/**
+ * v0.67.0: подсказки мест (`GET /zones/suggestions`) — считаются по 30 дням
+ * точек, меняются медленно: без опроса, свежие на 10 минут.
+ */
+export function useZoneSuggestions() {
+  return useQuery({
+    queryKey: SUGGESTIONS_KEY,
+    queryFn: () => zonesApi.suggestions(browserTz()),
+    staleTime: 10 * 60_000,
+    refetchOnWindowFocus: false,
+    retry: 1,
+  });
+}
+
+/** «Больше не показывать» — подсказка сразу пропадает из кэша. */
+export function useDismissSuggestion() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (s: PlaceSuggestion) => zonesApi.dismissSuggestion(s),
+    onSuccess: (_r, s) => {
+      qc.setQueryData<PlaceSuggestion[]>(SUGGESTIONS_KEY, (old) =>
+        old?.filter((x) => x.id !== s.id),
+      );
+    },
+  });
+}
+
+/** v0.67.0: статистика визитов в зону за 30 дней — грузится при раскрытии карточки. */
+export function useZoneStats(zoneId: string) {
+  return useQuery({
+    queryKey: ['zone-stats', zoneId],
+    queryFn: () => zonesApi.stats(zoneId, browserTz()),
+    staleTime: 5 * 60_000,
     retry: 1,
   });
 }

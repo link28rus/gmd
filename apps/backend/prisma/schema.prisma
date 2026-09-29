@@ -153,6 +153,8 @@ model Family {
   children    Child[]
   invites     Invite[]
   zones       Zone[]
+  // v0.67.0: подсказки мест, которые родитель попросил больше не показывать.
+  placeDismissals ZonePlaceDismissal[]
 
   @@map("families")
 }
@@ -716,6 +718,23 @@ model ZoneArrivalCheck {
 
   @@unique([zoneId, childId, localDate])
   @@map("zone_arrival_checks")
+}
+
+// v0.67.0 (геозоны v2, этап 4): «больше не показывать» у подсказки места.
+// Общая на семью: подсказка любого вида ближе 200 м от точки не показывается.
+model ZonePlaceDismissal {
+  id        String   @id @default(cuid())
+  familyId  String
+  kind      String   @db.VarChar(16)
+  lat       Float
+  lon       Float
+  createdBy String
+  createdAt DateTime @default(now())
+
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@index([familyId])
+  @@map("zone_place_dismissals")
 }
 
 model ZoneState {

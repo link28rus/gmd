@@ -76,6 +76,37 @@ class ZonesRepository {
     return ZoneEventsPage.fromJson(res.data as Map<String, dynamic>);
   }
 
+  /// `GET /zones/suggestions?tz=` — подсказки мест (дом, школа, до 3 частых).
+  /// Места под существующими зонами и скрытые семьёй backend уже исключил.
+  Future<List<PlaceSuggestion>> suggestions({String? tz}) async {
+    final res = await _dio.get<dynamic>(
+      '/zones/suggestions',
+      queryParameters: <String, dynamic>{'tz': ?tz},
+    );
+    final data = res.data;
+    final list = data is List ? data : const [];
+    return list.whereType<Map<String, dynamic>>().map(PlaceSuggestion.fromJson).toList();
+  }
+
+  /// `POST /zones/suggestions/dismiss` → 204. «Больше не показывать» — на
+  /// всю семью.
+  Future<void> dismissSuggestion(PlaceSuggestion s) async {
+    await _dio.post<dynamic>(
+      '/zones/suggestions/dismiss',
+      data: {'kind': s.kind, 'centerLat': s.centerLat, 'centerLon': s.centerLon},
+    );
+  }
+
+  /// `GET /zones/:id/stats?tz=` — визиты за 30 дней по детям зоны.
+  /// 404 `zone_not_found`.
+  Future<ZoneStats> stats(String zoneId, {String? tz}) async {
+    final res = await _dio.get<dynamic>(
+      '/zones/${Uri.encodeComponent(zoneId)}/stats',
+      queryParameters: <String, dynamic>{'tz': ?tz},
+    );
+    return ZoneStats.fromJson(res.data as Map<String, dynamic>);
+  }
+
   /// `GET /family/locations/latest` — последняя хорошая точка каждого
   /// ребёнка; дети без точек в ответ не попадают.
   Future<List<FamilyLatestPoint>> familyLatest() async {
