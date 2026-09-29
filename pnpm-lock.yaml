@@ -96,7 +96,7 @@ importers:
         specifier: ^5.9.6
         version: 5.10.0
       maxmind:
-        specifier: '5'
+        specifier: ^5.0.7
         version: 5.0.7
       nodemailer:
         specifier: ^6.9.16
