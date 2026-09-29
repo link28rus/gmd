@@ -1,6 +1,6 @@
 ---
 name: gmd-docker-ops
-description: Use when working with Docker Compose services for GMD — inspecting logs, restarting/rebuilding a single service, checking container health, cleaning up volumes/images, execing into containers, or running prisma migrations. Covers both local dev stack (`infra/docker/docker-compose.dev.yml`) and production at gmd-prod (192.168.1.23, `/opt/gmd`). Trigger when the user asks about docker logs, compose, restart, healthcheck, или нужно зайти в контейнер.
+description: Use when working with Docker Compose services for GMD — inspecting logs, restarting/rebuilding a single service, checking container health, cleaning up volumes/images, execing into containers, or running prisma migrations. Covers both local dev stack (`infra/docker/docker-compose.dev.yml`) and production at gmd-prod (192.168.1.111, `/opt/gmd`). Trigger when the user asks about docker logs, compose, restart, healthcheck, или нужно зайти в контейнер.
 ---
 
 # Docker Ops — GMD
@@ -32,14 +32,13 @@ Single source of truth for every Docker action on GMD. Use instead of typing raw
 | ---------------------------------------------------------------------------- | ----------------- | -------------- | -------------------------------------------------- |
 | `postgres`                                                                   | `gmd-postgres`    | internal       | Production DB                                      |
 | `redis`                                                                      | `gmd-redis`       | internal       | Cache/rate-limit                                   |
-| `minio`                                                                      | `gmd-minio`       | internal       | Object storage                                     |
 | `backend`                                                                    | `gmd-backend`     | internal :3001 | NestJS API                                         |
 | `web`                                                                        | `gmd-web`         | internal :3000 | Next.js (App Router)                               |
 | `caddy`                                                                      | `gmd-caddy`       | **80/443**     | Reverse proxy + automatic HTTPS (gmd.link28rus.ru) |
 | `glitchtip-postgres`, `glitchtip-redis`, `glitchtip-web`, `glitchtip-worker` | `gmd-glitchtip-*` | internal       | Self-hosted error monitoring                       |
 | `uptime-kuma`                                                                | `gmd-uptime-kuma` | internal       | Self-hosted uptime monitoring                      |
 
-GlitchTip и Uptime-Kuma доступны через SSH-туннель: `ssh -N gmd-prod-tunnels` (см. `~/.ssh/config`).
+GlitchTip и Uptime-Kuma доступны через SSH-туннель: `ssh -N gmd-online-tunnels` (см. `~/.ssh/config`).
 
 ## Where to Run What
 
@@ -50,7 +49,7 @@ GlitchTip и Uptime-Kuma доступны через SSH-туннель: `ssh -N
 
 > **Local short-hands:** в `package.json` уже есть `pnpm stack:up`, `stack:down`, `stack:reset`, `stack:logs`, `stack:ps` — используй их когда нужен ВЕСЬ dev-стек. Для одного сервиса — длинная команда выше.
 
-> **Prod ssh-alias:** `gmd-prod` → `non-root user@192.168.1.23` (см. `~/.ssh/config`). НЕ использовать `root@192.168.1.23` напрямую — root заходит через ssh-key, но сервер под user-режимом.
+> **Prod ssh-alias:** `gmd-prod` = `gmd-online` → `root@192.168.1.111` по ключу `id_ed25519_servers` (см. `~/.ssh/config`). Ходить через алиас, не по IP: при следующем переезде сменится только `~/.ssh/config`.
 
 ## Common Tasks
 
@@ -110,7 +109,7 @@ pnpm stack:down
 pnpm stack:reset
 # Используй когда нужно начать с чистой схемы (потом prisma migrate dev)
 
-# Production — НИКОГДА `down -v`! Это удалит prod БД и MinIO!
+# Production — НИКОГДА `down -v`! Это удалит prod БД!
 ssh gmd-prod 'cd /opt/gmd/docker && docker compose --env-file /opt/gmd/.env.prod -f docker-compose.prod.yml down'
 # Up — через deploy.sh, не вручную
 ```
@@ -169,7 +168,7 @@ docker volume rm gmd-dev_postgres_data
 
 ## Critical Rules
 
-1. **НИКОГДА `docker compose down -v` на проде** — стирает `postgres_data`, `minio_data`, `glitchtip-postgres-data`. Без бэкапа — не восстановишь.
+1. **НИКОГДА `docker compose down -v` на проде** — стирает `postgres_data`, `glitchtip-postgres-data`. Без бэкапа — не восстановишь.
 2. **НИКОГДА `docker system prune --volumes` на проде** — то же самое.
 3. **`.env` всегда мапится через `--env-file`** — для prod это `/opt/gmd/.env.prod`, для local `infra/docker/.env.dev`. Без `--env-file` compose не подставит `${POSTGRES_PASSWORD}` и т.д., контейнер упадёт.
 4. **Compose-файл указывать явно** — `-f docker-compose.dev.yml` (или prod). Без `-f` compose ищет `compose.yaml` в текущем каталоге → не найдёт.
@@ -190,7 +189,7 @@ docker volume rm gmd-dev_postgres_data
 | `psql` локально без `-T` через docker exec                               | `docker compose exec -T postgres psql ...` (no TTY в скриптах)             |
 | Запустил `pnpm stack:up` на ноуте, который уже держит свой postgres:5432 | GMD dev-стек на 54320, но проверь .env.dev — порт может быть переопределён |
 | `flutter`-команды на mobile-\* трогают docker                            | Mobile приложения **не в docker** — Flutter работает напрямую на хосте     |
-| `ssh root@192.168.1.23` напрямую                                         | Используй ssh-alias `gmd-prod` (non-root user, см. `~/.ssh/config`)        |
+| `ssh root@192.168.1.111` напрямую                                        | Используй ssh-alias `gmd-prod` / `gmd-online` (см. `~/.ssh/config`)        |
 
 ## Known Bugs / Quirks
 
@@ -226,7 +225,7 @@ ssh gmd-prod 'cat /opt/gmd/docker/docker-compose.prod.yml' | diff - infra/docker
 4. Если OOM: `docker stats` во время crash
 5. Если port conflict (Windows): `netstat -ano | findstr :<port>` → kill PID
 6. Если volume-mount issue на Windows: проверь Docker Desktop → Settings → Resources → File sharing → `D:/` отмечен
-7. Backend crash в prod: GlitchTip через ssh-tunnel (`ssh -N gmd-prod-tunnels`) → http://localhost:8000/
+7. Backend crash в prod: GlitchTip через ssh-tunnel (`ssh -N gmd-online-tunnels`) → http://localhost:8000/
 
 ## Related
 

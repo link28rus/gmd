@@ -32,6 +32,11 @@ D:/Project/GMD/                                       # ВСЕГДА работ�
 
 ### 1. Все нетривиальные задачи — через `gmd-taskmaster`
 
+> **⏸ На паузе с 2026-09-27** (решение пользователя: AI-операции taskmaster сломаны, CLI разлогинен).
+> Пока пользователь явно не вернёт taskmaster — задачи не заводить и не вести, контекст и итоги
+> только через memory-compiler. Ниже — порядок на время возврата. `update_subtask`/`update_task`
+> и тогда не использовать: они AI-powered и падают (урок #22 CLAUDE.md) — правка `tasks.json` через Edit.
+
 Любая фича/баг/рефакторинг/деплой = задача в `.taskmaster/tasks/tasks.json`. **Не «свободный» код в обход системы.**
 
 ```text
@@ -43,7 +48,7 @@ mcp__gmd-taskmaster__get_task <id>        → детали
 mcp__gmd-taskmaster__set_task_status id=<id> status=in-progress
 
 # В процессе — логировать факты в задачу
-mcp__gmd-taskmaster__update_subtask id=<id> prompt="что сделано / что не зашло"
+# (update_subtask НЕ использовать — AI-powered, падает; правь details в tasks.json через Edit)
 
 # Новая задача (не в плане) — добавить, не «потерять»
 mcp__gmd-taskmaster__add_task prompt="..." priority=medium
@@ -86,7 +91,7 @@ pnpm version:check                                           # валидаци�
 
 ### 7. При релизе — публикация APK на прод обязательна
 
-Bump build number = собрать APK всех 3 ABI, выложить в `/opt/gmd/download/` на 192.168.1.23, удалить старые, проверить `https://gmd.link28rus.ru/download`. Без этого релиз mobile-child не считается завершённым.
+Bump build number = собрать APK всех 3 ABI, выложить в `/opt/gmd/download/` на gmd-prod (192.168.1.111), удалить старые, проверить `https://gmd.link28rus.ru/download`. Без этого релиз mobile-child не считается завершённым.
 
 ### 8. Verification = реально запустить, не «выглядит правильно»
 
@@ -182,43 +187,44 @@ pnpm version:check
 
 ## Production Server (gmd-prod)
 
-| Поле      | Значение                                                                           |
-| --------- | ---------------------------------------------------------------------------------- |
-| LAN       | `192.168.1.23` (`ens160`, gateway 192.168.1.1) — SSH из локалки                    |
-| WAN       | `95.104.240.111/27` (`ens192`, gateway 95.104.240.97, прямой публичный IP без NAT) |
-| Домен     | `gmd.link28rus.ru`                                                                 |
-| App path  | `/opt/gmd/`                                                                        |
-| SSH alias | `gmd-prod` (см. `~/.ssh/config`)                                                   |
-| Bridges   | docker `172.17.0.0/16`, `172.18.0.0/16` — не трогать                               |
+| Поле      | Значение                                                                  |
+| --------- | ------------------------------------------------------------------------- |
+| Хост      | VM 109 на Proxmox pve121, Ubuntu 24.04 (с 2026-09-27)                     |
+| LAN       | `192.168.1.111` (`eth0`, gateway 192.168.1.1) — SSH из локалки            |
+| WAN       | `95.104.240.111/27` (`eth1`, gateway 95.104.240.97, маршрут по умолчанию) |
+| Домен     | `gmd.link28rus.ru`                                                        |
+| App path  | `/opt/gmd/`                                                               |
+| SSH alias | `gmd-prod` = `gmd-online` → root@192.168.1.111 (см. `~/.ssh/config`)      |
+| Bridges   | docker `172.17.0.0/16`, `172.18.0.0/16` — не трогать                      |
 
 ```bash
 # Деплой текущего main на prod
 bash infra/deploy/deploy.sh
 
 # Проверки
-curl http://192.168.1.23/api/readyz                  # {status:ok,db:up,redis:up}
+ssh gmd-prod 'curl -sS https://gmd.link28rus.ru/api/readyz'   # {status:ok,db:up,redis:up}
 ssh gmd-prod 'docker ps --format "{{.Names}} {{.Status}}"'
 ssh gmd-prod 'systemctl list-timers | grep pg-'
 ssh gmd-prod 'ls /opt/gmd/backups/postgres/'
 
 # Мониторинг (через SSH-tunnel)
-ssh -N gmd-prod-tunnels   # GlitchTip + Uptime Kuma
+ssh -N gmd-online-tunnels   # GlitchTip + Uptime Kuma
 ```
 
-**Asymmetric routing fix** для входящего на `ens192` — через CONNMARK fwmark 0x2 + ip rule в netplan + iptables-persistent. Runbook в memory-compiler «Asymmetric routing fix на gmd-prod (multi-WAN)».
+**Asymmetric routing (CONNMARK-костыль старого dual-WAN сервера) на VM 109 не нужен** — маршрут по умолчанию через МТС (`eth1`). Старый runbook «Asymmetric routing fix на gmd-prod (multi-WAN)» в memory-compiler — исторический.
 
 ## Stack at a glance
 
-| Слой     | Технология                                                                          |
-| -------- | ----------------------------------------------------------------------------------- |
-| Mobile   | Flutter 3.x, Riverpod, Dio, Drift, yandex_mapkit, firebase_messaging + RuStore Push |
-| Web      | Next.js 15 (App Router), TypeScript, Tailwind, shadcn/ui, Zod                       |
-| Backend  | NestJS, PostgreSQL 16 + PostGIS + pg_cron, Redis, MinIO                             |
-| API      | REST + OpenAPI 3.1, codegen TS + Dart                                               |
-| Auth     | JWT (access 15m + refresh 30d) + long-lived device-token для детей                  |
-| Realtime | Short-polling + FCM/RuStore push (без WebSocket на MVP)                             |
-| Карты    | Яндекс.Карты                                                                        |
-| Infra    | Docker Compose, Caddy, GlitchTip, Uptime Kuma, Grafana+Loki+Prometheus              |
+| Слой     | Технология                                                                                |
+| -------- | ----------------------------------------------------------------------------------------- |
+| Mobile   | Flutter 3.x, Riverpod, Dio, Drift (child), flutter_map (parent), firebase_messaging       |
+| Web      | Next.js 15 (App Router), TypeScript, Tailwind, shadcn/ui, Zod                             |
+| Backend  | NestJS, PostgreSQL 16 + PostGIS + pg_cron, Redis (MinIO только в dev-стеке)               |
+| API      | REST + OpenAPI 3.1, codegen TS + Dart                                                     |
+| Auth     | JWT (access 15m + refresh 60d, sliding) + long-lived device-token для детей               |
+| Realtime | WebSocket ребёнка `/api/child/ws` + FCM (запасной) + short-polling; RuStore Push выключен |
+| Карты    | OpenStreetMap (mobile `flutter_map`, web `react-leaflet`)                                 |
+| Infra    | Docker Compose, Caddy, GlitchTip, Uptime Kuma                                             |
 
 ## Common Mistakes (lessons learned, не повторять)
 
@@ -226,7 +232,7 @@ ssh -N gmd-prod-tunnels   # GlitchTip + Uptime Kuma
 | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `flutter install` на устройство пользователя                | **СНОСИТ ДАННЫЕ** через скрытый `adb uninstall`. Только `flutter build apk` + `adb install -r`. Сначала проверить SHA-1 подписи (apksigner verify --print-certs vs dumpsys signatures) |
 | `set_task_status in-progress` сразу по `next_task`          | Сначала проверить реально ли задача pending — Explore-agent / Glob по описанным файлам. Старые задачи часто done но не помечены                                                        |
-| Начать кодить без `next_task` / `add_task` в gmd-taskmaster | Любая нетривиальная работа — задача в taskmaster ПЕРВЫМ действием                                                                                                                      |
+| Начать кодить без `next_task` / `add_task` в gmd-taskmaster | Когда taskmaster не на паузе — задача в нём ПЕРВЫМ действием (сейчас на паузе, см. правило 1)                                                                                          |
 | Работать в `.claude/worktrees/<name>/` cwd                  | Игнорировать worktree-cwd, абсолютные пути к `D:/Project/GMD/`                                                                                                                         |
 | `which flutter` → «нет» → docker-workaround                 | `Get-ChildItem` PowerShell'ом → `D:\flutter\bin\`                                                                                                                                      |
 | Bump версии в одном файле                                   | `npm version` root + `pnpm version:sync` + `pnpm version:check`                                                                                                                        |

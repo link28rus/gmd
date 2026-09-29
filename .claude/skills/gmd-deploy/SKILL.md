@@ -1,6 +1,6 @@
 ---
 name: gmd-deploy
-description: Use when releasing a new version of GMD — bumping versions, building Flutter APKs, deploying backend+web to gmd-prod (192.168.1.23), publishing APKs to /opt/gmd/download/, and verifying the auto-update endpoint. Covers the full release flow including the gotchas from CLAUDE.md lessons #12, #14, #16. Invoke when the user asks to release/deploy a version, publish an APK, run deploy.sh, or verify a release.
+description: Use when releasing a new version of GMD — bumping versions, building Flutter APKs, deploying backend+web to gmd-prod (192.168.1.111), publishing APKs to /opt/gmd/download/, and verifying the auto-update endpoint. Covers the full release flow including the gotchas from CLAUDE.md lessons #12, #14, #16. Invoke when the user asks to release/deploy a version, publish an APK, run deploy.sh, or verify a release.
 ---
 
 # GMD Release & Deploy
@@ -79,7 +79,7 @@ cd D:/Project/GMD
 bash infra/deploy/deploy.sh
 ```
 
-Что делает (74 строки): tar-pipe `infra/docker`, `infra/caddy`, `apps/{backend,web}`, `packages/`, root manifests на `gmd-prod` (192.168.1.23) → `docker compose build --pull` → `prisma migrate deploy` через одноразовый контейнер ДО старта backend → `docker compose up -d` → polling healthchecks (timeout 5 мин).
+Что делает (74 строки): tar-pipe `infra/docker`, `infra/caddy`, `apps/{backend,web}`, `packages/`, root manifests на `gmd-prod` (192.168.1.111) → `docker compose build --pull` → `prisma migrate deploy` через одноразовый контейнер ДО старта backend → `docker compose up -d` → polling healthchecks (timeout 5 мин).
 
 Verify сразу после:
 
