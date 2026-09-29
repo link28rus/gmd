@@ -317,9 +317,18 @@ describe('ChildDeviceService.claim', () => {
 });
 
 describe('ChildDeviceService.verifyToken', () => {
-  it('возвращает context для валидного token', async () => {
+  // verifyToken читает child с include family { name, deletedAt } — мок
+  // отдаёт строку как есть, поэтому семья кладётся прямо в строку child.
+  async function claimDevice(familyDeletedAt: Date | null = null) {
     const p = makePrismaMock();
-    p._children.push({ id: 'c1', familyId: 'f1', name: 'V', deletedAt: null, dateOfBirth: null });
+    p._children.push({
+      id: 'c1',
+      familyId: 'f1',
+      name: 'V',
+      deletedAt: null,
+      dateOfBirth: null,
+      family: { name: 'Семья V', deletedAt: familyDeletedAt },
+    });
     p._invites.push({
       id: 'i1',
       code: 'K4HJ9XPN',
@@ -331,28 +340,29 @@ describe('ChildDeviceService.verifyToken', () => {
     });
     const svc = makeSvc(p);
     const claimed = await svc.claim('K4HJ9XPN', {});
-    const ctx = await svc.verifyToken(claimed.deviceToken);
+    return { p, svc, token: claimed.deviceToken };
+  }
+
+  it('возвращает context для валидного token', async () => {
+    const { svc, token } = await claimDevice();
+    const ctx = await svc.verifyToken(token);
     expect(ctx).not.toBeNull();
     expect(ctx?.childId).toBe('c1');
     expect(ctx?.familyId).toBe('f1');
+    expect(ctx?.childName).toBe('V');
+    expect(ctx?.familyName).toBe('Семья V');
   });
 
   it('null для revoked token', async () => {
-    const p = makePrismaMock();
-    p._children.push({ id: 'c1', familyId: 'f1', name: 'V', deletedAt: null, dateOfBirth: null });
-    p._invites.push({
-      id: 'i1',
-      code: 'K4HJ9XPN',
-      familyId: 'f1',
-      childId: 'c1',
-      createdBy: 'u-parent',
-      expiresAt: new Date(Date.now() + 600_000),
-      consumedAt: null,
-    });
-    const svc = makeSvc(p);
-    const claimed = await svc.claim('K4HJ9XPN', {});
+    const { p, svc, token } = await claimDevice();
     p._devices[0].revokedAt = new Date();
-    const ctx = await svc.verifyToken(claimed.deviceToken);
+    const ctx = await svc.verifyToken(token);
+    expect(ctx).toBeNull();
+  });
+
+  it('null, если семья удалена', async () => {
+    const { svc, token } = await claimDevice(new Date());
+    const ctx = await svc.verifyToken(token);
     expect(ctx).toBeNull();
   });
 
