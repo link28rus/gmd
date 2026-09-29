@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { bootTestApp, truncateAll } from './helpers/test-app';
+import { bootTestApp, registerVerifiedUser, truncateAll } from './helpers/test-app';
 import type { TestAppHandle } from './helpers/test-app';
 
 describe('Child Device (e2e)', () => {
@@ -23,7 +23,8 @@ describe('Child Device (e2e)', () => {
     code: string;
   }> {
     const server = h.app.getHttpServer();
-    await request(server).post('/auth/request-otp').send({ email: 'parent@x.com' }).expect(202);
+    await registerVerifiedUser(h, 'parent@x.com');
+    await request(server).post('/auth/request-otp').send({ email: 'parent@x.com' }).expect(200);
     const otp = h.delivery.lastCodeFor('parent@x.com');
     if (!otp) throw new Error('no otp');
     const v = await request(server)
@@ -112,7 +113,8 @@ describe('Child Device (e2e)', () => {
   it('child 14+ без consent14Plus → 400 consent14plus_required', async () => {
     const server = h.app.getHttpServer();
     // Register parent
-    await request(server).post('/auth/request-otp').send({ email: 'parent14@x.com' }).expect(202);
+    await registerVerifiedUser(h, 'parent14@x.com');
+    await request(server).post('/auth/request-otp').send({ email: 'parent14@x.com' }).expect(200);
     const otp = h.delivery.lastCodeFor('parent14@x.com');
     if (!otp) throw new Error('no otp');
     const v = await request(server)
@@ -127,7 +129,7 @@ describe('Child Device (e2e)', () => {
     const create = await request(server)
       .post('/family/children')
       .set(auth)
-      .send({ name: 'Teen', dateOfBirth: dob.toISOString() })
+      .send({ name: 'Teen', dateOfBirth: dob.toISOString().slice(0, 10) })
       .expect(201);
 
     const inv = await request(server)
@@ -143,7 +145,8 @@ describe('Child Device (e2e)', () => {
   it('child 14+ с consent14Plus=true → 200 + ConsentRecord CHILD_14PLUS создан', async () => {
     const server = h.app.getHttpServer();
     // Register parent
-    await request(server).post('/auth/request-otp').send({ email: 'parent14ok@x.com' }).expect(202);
+    await registerVerifiedUser(h, 'parent14ok@x.com');
+    await request(server).post('/auth/request-otp').send({ email: 'parent14ok@x.com' }).expect(200);
     const otp = h.delivery.lastCodeFor('parent14ok@x.com');
     if (!otp) throw new Error('no otp');
     const v = await request(server)
@@ -158,7 +161,7 @@ describe('Child Device (e2e)', () => {
     const create = await request(server)
       .post('/family/children')
       .set(auth)
-      .send({ name: 'Teen', dateOfBirth: dob.toISOString() })
+      .send({ name: 'Teen', dateOfBirth: dob.toISOString().slice(0, 10) })
       .expect(201);
 
     const inv = await request(server)

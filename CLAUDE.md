@@ -413,6 +413,8 @@ pnpm typecheck
 pnpm --filter @gmd/backend dev
 pnpm --filter @gmd/backend prisma migrate dev --name <name>
 pnpm --filter @gmd/backend prisma studio
+# e2e backend: testcontainers (нужен Docker) + dev-Redis на 63790 (`pnpm stack:up`)
+cd apps/backend && npx jest --config test/jest-e2e.json --runInBand [test/<name>.e2e-spec.ts]
 
 # Mobile
 cd apps/mobile-parent && flutter run

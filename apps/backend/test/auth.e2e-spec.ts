@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { bootTestApp, truncateAll } from './helpers/test-app';
+import { bootTestApp, registerVerifiedUser, truncateAll } from './helpers/test-app';
 import type { TestAppHandle } from './helpers/test-app';
 
 describe('Auth (e2e)', () => {
@@ -27,7 +27,8 @@ describe('Auth (e2e)', () => {
     const email = 'new@user.com';
     const server = h.app.getHttpServer();
 
-    await request(server).post('/auth/request-otp').send({ email }).expect(202);
+    await registerVerifiedUser(h, email);
+    await request(server).post('/auth/request-otp').send({ email }).expect(200);
     const code = getCode(email);
     expect(code).toMatch(/^\d{6}$/);
 
@@ -35,7 +36,8 @@ describe('Auth (e2e)', () => {
     expect(v.body.accessToken).toBeTruthy();
     expect(v.body.refreshToken).toBeTruthy();
     expect(v.body.user.email).toBe(email);
-    expect(v.body.family.name).toBe('Моя семья');
+    // Семья создаётся при регистрации, имя по умолчанию — фамилия.
+    expect(v.body.family.name).toBe('Родитель');
 
     const me = await request(server)
       .get('/me')
@@ -59,7 +61,8 @@ describe('Auth (e2e)', () => {
   it('replay detection: повторная rotate старого refresh → revoke всей цепочки', async () => {
     const email = 'replay@x.com';
     const server = h.app.getHttpServer();
-    await request(server).post('/auth/request-otp').send({ email }).expect(202);
+    await registerVerifiedUser(h, email);
+    await request(server).post('/auth/request-otp').send({ email }).expect(200);
     const v = await request(server)
       .post('/auth/verify-otp')
       .send({ email, code: getCode(email) })
@@ -69,6 +72,13 @@ describe('Auth (e2e)', () => {
       .post('/auth/refresh')
       .send({ refreshToken: v.body.refreshToken })
       .expect(200);
+
+    // Повтор в пределах 10 с считается гонкой вкладок, а не replay, —
+    // сдвигаем ротацию старого токена в прошлое.
+    await h.prisma.refreshToken.updateMany({
+      where: { rotatedToId: { not: null } },
+      data: { revokedAt: new Date(Date.now() - 60_000) },
+    });
 
     // повторно старый refresh → 401
     await request(server)
@@ -83,10 +93,21 @@ describe('Auth (e2e)', () => {
       .expect(401);
   });
 
+  it('request-otp для незарегистрированной почты → 404 user_not_found', async () => {
+    const server = h.app.getHttpServer();
+    const r = await request(server)
+      .post('/auth/request-otp')
+      .send({ email: 'nobody@x.com' })
+      .expect(404);
+    expect(r.body.error.code).toBe('user_not_found');
+    expect(h.delivery.lastCodeFor('nobody@x.com')).toBeUndefined();
+  });
+
   it('invalid code → 400 invalid_code', async () => {
     const email = 'bad@x.com';
     const server = h.app.getHttpServer();
-    await request(server).post('/auth/request-otp').send({ email }).expect(202);
+    await registerVerifiedUser(h, email);
+    await request(server).post('/auth/request-otp').send({ email }).expect(200);
     const r = await request(server)
       .post('/auth/verify-otp')
       .send({ email, code: '000000' })
@@ -96,16 +117,19 @@ describe('Auth (e2e)', () => {
 
   it('rate limit request-otp: 4-й запрос в окне → 429', async () => {
     const server = h.app.getHttpServer();
-    await request(server).post('/auth/request-otp').send({ email: 'rl1@x.com' }).expect(202);
-    await request(server).post('/auth/request-otp').send({ email: 'rl2@x.com' }).expect(202);
-    await request(server).post('/auth/request-otp').send({ email: 'rl3@x.com' }).expect(202);
+    // Лимит считает запросы с IP независимо от исхода: незарегистрированные
+    // адреса дают 404, четвёртый запрос — уже 429.
+    await request(server).post('/auth/request-otp').send({ email: 'rl1@x.com' }).expect(404);
+    await request(server).post('/auth/request-otp').send({ email: 'rl2@x.com' }).expect(404);
+    await request(server).post('/auth/request-otp').send({ email: 'rl3@x.com' }).expect(404);
     await request(server).post('/auth/request-otp').send({ email: 'rl4@x.com' }).expect(429);
   });
 
   it('delete /me → refresh инвалидирован', async () => {
     const email = 'del@x.com';
     const server = h.app.getHttpServer();
-    await request(server).post('/auth/request-otp').send({ email }).expect(202);
+    await registerVerifiedUser(h, email);
+    await request(server).post('/auth/request-otp').send({ email }).expect(200);
     const v = await request(server)
       .post('/auth/verify-otp')
       .send({ email, code: getCode(email) })

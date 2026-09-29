@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { bootTestApp, truncateAll } from './helpers/test-app';
+import { bootTestApp, registerVerifiedUser, truncateAll } from './helpers/test-app';
 import type { TestAppHandle } from './helpers/test-app';
 
 const DEV_SECRET = 'test-dev-secret-32bytes-padding-x';
@@ -150,7 +150,8 @@ describe('Auth password (e2e)', () => {
     const email = 'changepwd@x.com';
 
     // Create user via OTP first to get a token
-    await request(server()).post('/auth/request-otp').send({ email }).expect(202);
+    await registerVerifiedUser(h, email);
+    await request(server()).post('/auth/request-otp').send({ email }).expect(200);
     const code = h.delivery.lastCodeFor(email);
     expect(code).toBeTruthy();
 

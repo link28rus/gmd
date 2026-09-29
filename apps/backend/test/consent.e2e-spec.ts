@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { bootTestApp, truncateAll } from './helpers/test-app';
+import { bootTestApp, registerVerifiedUser, truncateAll } from './helpers/test-app';
 import type { TestAppHandle } from './helpers/test-app';
 import { CONSENT_CONFIG } from '../src/consent/consent.module';
 
@@ -21,7 +21,8 @@ describe('Consent flow (e2e)', () => {
 
   async function registerAndLogin(email: string): Promise<string> {
     const server = h.app.getHttpServer();
-    await request(server).post('/auth/request-otp').send({ email }).expect(202);
+    await registerVerifiedUser(h, email);
+    await request(server).post('/auth/request-otp').send({ email }).expect(200);
     const otp = h.delivery.lastCodeFor(email);
     if (!otp) throw new Error('no otp');
     const v = await request(server).post('/auth/verify-otp').send({ email, code: otp }).expect(200);

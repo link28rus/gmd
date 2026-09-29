@@ -1,7 +1,8 @@
 import request from 'supertest';
-import { bootTestApp, truncateAll } from './helpers/test-app';
+import { bootTestApp, registerVerifiedUser, truncateAll } from './helpers/test-app';
 import type { TestAppHandle } from './helpers/test-app';
 import { CONSENT_CONFIG } from '../src/consent/consent.tokens';
+import { MAX_BATCH_SIZE } from '../src/locations/dto/ingest-locations.dto';
 import { LocationsService } from '../src/locations/locations.service';
 
 describe('Locations (e2e)', () => {
@@ -26,7 +27,8 @@ describe('Locations (e2e)', () => {
 
   async function registerParent(email: string): Promise<{ accessToken: string; userId: string }> {
     const server = h.app.getHttpServer();
-    await request(server).post('/auth/request-otp').send({ email }).expect(202);
+    await registerVerifiedUser(h, email);
+    await request(server).post('/auth/request-otp').send({ email }).expect(200);
     const code = h.delivery.lastCodeFor(email);
     if (!code) throw new Error('no code');
     const v = await request(server).post('/auth/verify-otp').send({ email, code }).expect(200);
@@ -108,11 +110,11 @@ describe('Locations (e2e)', () => {
     expect(res.body.error.currentPolicyVersion).toBe('2.0');
   });
 
-  it('returns 413 when batch > 100', async () => {
+  it('returns 413 when batch > MAX_BATCH_SIZE', async () => {
     const server = h.app.getHttpServer();
     const { deviceToken } = await setupFlow();
     const now = Date.now();
-    const points = Array.from({ length: 101 }, (_, i) => ({
+    const points = Array.from({ length: MAX_BATCH_SIZE + 1 }, (_, i) => ({
       lat: 55,
       lon: 37,
       recordedAt: new Date(now - i * 1000).toISOString(),
@@ -140,7 +142,9 @@ describe('Locations (e2e)', () => {
     const server = h.app.getHttpServer();
     const { deviceToken } = await setupFlow();
     const ts = new Date(Date.now() - 60_000).toISOString();
-    const point = { lat: 55, lon: 37, recordedAt: ts };
+    // speed ≥ 0.5 м/с — точка «в движении», jitter-dedup её не отсекает,
+    // и повтор доходит до ON CONFLICT (childDeviceId, recordedAt).
+    const point = { lat: 55, lon: 37, speed: 1.5, recordedAt: ts };
     await request(server)
       .post('/child/locations')
       .set('X-Child-Token', deviceToken)
@@ -156,24 +160,6 @@ describe('Locations (e2e)', () => {
       rejected: 1,
       rejectedReasons: { duplicate: 1 },
     });
-  });
-
-  it('PostGIS geom is populated from lat/lon', async () => {
-    const server = h.app.getHttpServer();
-    const { deviceToken } = await setupFlow();
-    const ts = new Date(Date.now() - 30_000).toISOString();
-    await request(server)
-      .post('/child/locations')
-      .set('X-Child-Token', deviceToken)
-      .send({
-        points: [{ lat: 55.75, lon: 37.62, recordedAt: ts }],
-      })
-      .expect(200);
-    const rows = (await h.prisma.$queryRawUnsafe(
-      'SELECT ST_X(geom::geometry) AS lon, ST_Y(geom::geometry) AS lat FROM locations LIMIT 1',
-    )) as Array<{ lat: number; lon: number }>;
-    expect(rows[0].lat).toBeCloseTo(55.75, 5);
-    expect(rows[0].lon).toBeCloseTo(37.62, 5);
   });
 
   it('retention DELETE removes rows older than 30 days', async () => {

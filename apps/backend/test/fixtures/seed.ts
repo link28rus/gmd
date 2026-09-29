@@ -2,6 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import type { PrismaService } from '../../src/prisma/prisma.service';
+import { registerVerifiedUser } from '../helpers/test-app';
 import type { TestAppHandle } from '../helpers/test-app';
 
 function sha256(v: string): string {
@@ -90,8 +91,9 @@ export async function signUpParent(
 }> {
   const server = h.app.getHttpServer();
   const uid = randomBytes(4).toString('hex');
-  const parentEmail = email ?? `parent-jwt-${uid}@seed.test`;
-  await request(server).post('/auth/request-otp').send({ email: parentEmail }).expect(202);
+  const parentEmail = (email ?? `parent-jwt-${uid}@seed.test`).toLowerCase();
+  await registerVerifiedUser(h, parentEmail);
+  await request(server).post('/auth/request-otp').send({ email: parentEmail }).expect(200);
   const code = h.delivery.lastCodeFor(parentEmail);
   if (!code) throw new Error(`no OTP for ${parentEmail}`);
   const v = await request(server)

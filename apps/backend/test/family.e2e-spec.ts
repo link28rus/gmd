@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { bootTestApp, truncateAll } from './helpers/test-app';
+import { bootTestApp, registerVerifiedUser, truncateAll } from './helpers/test-app';
 import type { TestAppHandle } from './helpers/test-app';
 
 describe('Family (e2e)', () => {
@@ -20,7 +20,8 @@ describe('Family (e2e)', () => {
   it('owner может переименовать свою семью', async () => {
     const email = 'owner@x.com';
     const server = h.app.getHttpServer();
-    await request(server).post('/auth/request-otp').send({ email }).expect(202);
+    await registerVerifiedUser(h, email);
+    await request(server).post('/auth/request-otp').send({ email }).expect(200);
     const v = await request(server)
       .post('/auth/verify-otp')
       .send({ email, code: h.delivery.lastCodeFor(email)! })

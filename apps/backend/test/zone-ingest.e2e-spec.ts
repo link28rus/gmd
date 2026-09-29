@@ -113,8 +113,10 @@ describe('Ingest → ZoneEvent (e2e)', () => {
     // Offset ~500m east: rough conversion ~0.0067 degrees at lat 48.48.
     const farLon = center.lon + 0.0067;
 
-    // Point 3 — outside, at t1+5s → starts pending exit (not yet 60s)
-    const t2 = new Date(t1.getTime() + 5_000);
+    // Point 3 — outside, at t1+60s → starts pending exit (not yet 60s).
+    // ~500 м за 60 с (~8 м/с) — правдоподобно; скачок за 5 с speed-gate
+    // пометил бы иглой (outlier), а по иглам геозоны не считаются.
+    const t2 = new Date(t1.getTime() + 60_000);
     await request(h.app.getHttpServer())
       .post('/child/locations')
       .set('X-Child-Token', deviceToken)

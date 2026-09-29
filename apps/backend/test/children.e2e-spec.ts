@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { bootTestApp, truncateAll } from './helpers/test-app';
+import { bootTestApp, registerVerifiedUser, truncateAll } from './helpers/test-app';
 import type { TestAppHandle } from './helpers/test-app';
 
 describe('Children + Invites (e2e)', () => {
@@ -21,7 +21,8 @@ describe('Children + Invites (e2e)', () => {
     email: string,
   ): Promise<{ accessToken: string; familyId: string; userId: string }> {
     const server = h.app.getHttpServer();
-    await request(server).post('/auth/request-otp').send({ email }).expect(202);
+    await registerVerifiedUser(h, email);
+    await request(server).post('/auth/request-otp').send({ email }).expect(200);
     const code = h.delivery.lastCodeFor(email);
     if (!code) throw new Error('no code');
     const v = await request(server).post('/auth/verify-otp').send({ email, code }).expect(200);
