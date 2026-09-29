@@ -245,6 +245,7 @@ function MapArea({ child }: { child: Child }): ReactElement {
         avatarKey={child.avatarKey}
         latest={latest}
         track={track}
+        stays={activeQ.data?.stays}
         onMapError={() => setMapFailed(true)}
       />
       {latest && (

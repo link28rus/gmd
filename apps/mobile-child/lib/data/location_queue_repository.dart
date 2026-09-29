@@ -17,6 +17,7 @@ class LocationQueueRepository {
     String? provider,
     String? networkType,
     String? mobileOperator,
+    bool? isMock,
     required DateTime recordedAt,
   }) async {
     return _db.into(_db.pendingLocations).insert(
@@ -32,6 +33,7 @@ class LocationQueueRepository {
             provider: Value(provider),
             networkType: Value(networkType),
             mobileOperator: Value(mobileOperator),
+            isMock: Value(isMock),
             recordedAt: recordedAt,
           ),
         );

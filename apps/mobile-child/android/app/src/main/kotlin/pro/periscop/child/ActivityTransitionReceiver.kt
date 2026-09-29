@@ -18,7 +18,7 @@ import com.google.android.gms.location.DetectedActivity
  *
  *  STILL_ENTER   → ACTION_ACTIVITY_STILL   (сервис уходит в still-профиль FLP)
  *  STILL_EXIT    → ACTION_ACTIVITY_MOVING  (обратно в active-профиль)
- *  IN_VEHICLE/ON_FOOT/ON_BICYCLE ENTER → ACTION_ACTIVITY_MOVING
+ *  IN_VEHICLE/ON_FOOT/WALKING/RUNNING/ON_BICYCLE ENTER → ACTION_ACTIVITY_MOVING
  *
  * Если permission ACTIVITY_RECOGNITION не дан, сервис никогда не зарегистрирует
  * подписку — этот ресивер просто не будет получать события. Fallback — accuracy-gate

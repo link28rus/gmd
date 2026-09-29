@@ -51,6 +51,7 @@ class LocationPoint {
     this.provider,
     this.networkType,
     this.mobileOperator,
+    this.isMock,
   });
   final double lat;
   final double lon;
@@ -63,6 +64,9 @@ class LocationPoint {
   final String? provider;
   final String? networkType;
   final String? mobileOperator;
+  /// Координаты подставлены фейковым GPS. На сервер уходит только `true`:
+  /// схема точки строгая, false/null шлём отсутствием ключа.
+  final bool? isMock;
   final DateTime recordedAt;
 
   // Сервер валидирует пачку целиком: NaN/Infinity (jsonEncode на них падает),
@@ -88,6 +92,7 @@ class LocationPoint {
       if (provider != null) 'provider': provider,
       if (networkType != null) 'networkType': networkType,
       if (mobileOperator != null) 'mobileOperator': mobileOperator,
+      if (isMock == true) 'isMock': true,
       'recordedAt': recordedAt.toUtc().toIso8601String(),
     };
   }

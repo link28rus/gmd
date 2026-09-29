@@ -102,6 +102,36 @@ describe('TrackPolyline', () => {
     expect(markers()).toHaveLength(3);
   });
 
+  it('стоянки от сервера важнее trips: маркер «П» в центре стоянки с временем', () => {
+    const trips = [
+      {
+        id: 't1',
+        startedAt: new Date(T0).toISOString(),
+        endedAt: new Date(T0 + 60_000).toISOString(),
+        isActive: false,
+        pointsCount: 2,
+        distanceM: 100,
+        startLat: 55.75,
+        startLon: 37.61,
+        endLat: 55.751,
+        endLon: 37.61,
+      },
+    ];
+    const stays = [
+      {
+        lat: 55.7521,
+        lon: 37.6101,
+        from: new Date(T0 + 2 * 60_000).toISOString(),
+        to: new Date(T0 + 47 * 60_000).toISOString(),
+      },
+    ];
+    render(<TrackPolyline items={items} stops={trips} stays={stays} />);
+    const stops = markers('gmd-stop');
+    expect(stops).toHaveLength(1);
+    expect(JSON.parse(stops[0].dataset.position ?? '[]')).toEqual([55.7521, 37.6101]);
+    expect(stops[0].getAttribute('title')).toMatch(/^Стоял .* · 45 мин$/);
+  });
+
   it('разрыв в данных — два сплошных сегмента + серый пунктир с подписью', () => {
     const track = [at(0, 0), at(1, 0.001), at(68, 0.02), at(69, 0.021)]; // 67 мин, ~2 км
     render(<TrackPolyline items={track} />);

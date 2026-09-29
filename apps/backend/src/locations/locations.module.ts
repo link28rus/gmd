@@ -7,6 +7,7 @@ import { ZonesModule } from '../zones/zones.module';
 import { AppSettingsModule } from '../app-settings/app-settings.module';
 import { LocationsService } from './locations.service';
 import { TripsService } from './trips.service';
+import { TrackBackfillService } from './track-backfill.service';
 import { LocationsController } from './locations.controller';
 import { LocationsReadController } from './locations-read.controller';
 import { FamilyAccessGuard } from './guards/family-access.guard';
@@ -21,7 +22,7 @@ import { FamilyAccessGuard } from './guards/family-access.guard';
     AppSettingsModule,
   ],
   controllers: [LocationsController, LocationsReadController],
-  providers: [LocationsService, TripsService, FamilyAccessGuard],
+  providers: [LocationsService, TripsService, TrackBackfillService, FamilyAccessGuard],
   exports: [TripsService],
 })
 export class LocationsModule {}

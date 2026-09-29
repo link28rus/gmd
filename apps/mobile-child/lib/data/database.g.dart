@@ -140,6 +140,18 @@ class $PendingLocationsTable extends PendingLocations
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _isMockMeta = const VerificationMeta('isMock');
+  @override
+  late final GeneratedColumn<bool> isMock = GeneratedColumn<bool>(
+    'is_mock',
+    aliasedName,
+    true,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_mock" IN (0, 1))',
+    ),
+  );
   static const VerificationMeta _recordedAtMeta = const VerificationMeta(
     'recordedAt',
   );
@@ -189,6 +201,7 @@ class $PendingLocationsTable extends PendingLocations
     provider,
     networkType,
     mobileOperator,
+    isMock,
     recordedAt,
     uploadAttempts,
     lastAttemptAt,
@@ -287,6 +300,12 @@ class $PendingLocationsTable extends PendingLocations
         ),
       );
     }
+    if (data.containsKey('is_mock')) {
+      context.handle(
+        _isMockMeta,
+        isMock.isAcceptableOrUnknown(data['is_mock']!, _isMockMeta),
+      );
+    }
     if (data.containsKey('recorded_at')) {
       context.handle(
         _recordedAtMeta,
@@ -370,6 +389,10 @@ class $PendingLocationsTable extends PendingLocations
         DriftSqlType.string,
         data['${effectivePrefix}mobile_operator'],
       ),
+      isMock: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_mock'],
+      ),
       recordedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}recorded_at'],
@@ -404,6 +427,7 @@ class PendingLocation extends DataClass implements Insertable<PendingLocation> {
   final String? provider;
   final String? networkType;
   final String? mobileOperator;
+  final bool? isMock;
   final DateTime recordedAt;
   final int uploadAttempts;
   final DateTime? lastAttemptAt;
@@ -420,6 +444,7 @@ class PendingLocation extends DataClass implements Insertable<PendingLocation> {
     this.provider,
     this.networkType,
     this.mobileOperator,
+    this.isMock,
     required this.recordedAt,
     required this.uploadAttempts,
     this.lastAttemptAt,
@@ -456,6 +481,9 @@ class PendingLocation extends DataClass implements Insertable<PendingLocation> {
     }
     if (!nullToAbsent || mobileOperator != null) {
       map['mobile_operator'] = Variable<String>(mobileOperator);
+    }
+    if (!nullToAbsent || isMock != null) {
+      map['is_mock'] = Variable<bool>(isMock);
     }
     map['recorded_at'] = Variable<DateTime>(recordedAt);
     map['upload_attempts'] = Variable<int>(uploadAttempts);
@@ -497,6 +525,9 @@ class PendingLocation extends DataClass implements Insertable<PendingLocation> {
       mobileOperator: mobileOperator == null && nullToAbsent
           ? const Value.absent()
           : Value(mobileOperator),
+      isMock: isMock == null && nullToAbsent
+          ? const Value.absent()
+          : Value(isMock),
       recordedAt: Value(recordedAt),
       uploadAttempts: Value(uploadAttempts),
       lastAttemptAt: lastAttemptAt == null && nullToAbsent
@@ -523,6 +554,7 @@ class PendingLocation extends DataClass implements Insertable<PendingLocation> {
       provider: serializer.fromJson<String?>(json['provider']),
       networkType: serializer.fromJson<String?>(json['networkType']),
       mobileOperator: serializer.fromJson<String?>(json['mobileOperator']),
+      isMock: serializer.fromJson<bool?>(json['isMock']),
       recordedAt: serializer.fromJson<DateTime>(json['recordedAt']),
       uploadAttempts: serializer.fromJson<int>(json['uploadAttempts']),
       lastAttemptAt: serializer.fromJson<DateTime?>(json['lastAttemptAt']),
@@ -544,6 +576,7 @@ class PendingLocation extends DataClass implements Insertable<PendingLocation> {
       'provider': serializer.toJson<String?>(provider),
       'networkType': serializer.toJson<String?>(networkType),
       'mobileOperator': serializer.toJson<String?>(mobileOperator),
+      'isMock': serializer.toJson<bool?>(isMock),
       'recordedAt': serializer.toJson<DateTime>(recordedAt),
       'uploadAttempts': serializer.toJson<int>(uploadAttempts),
       'lastAttemptAt': serializer.toJson<DateTime?>(lastAttemptAt),
@@ -563,6 +596,7 @@ class PendingLocation extends DataClass implements Insertable<PendingLocation> {
     Value<String?> provider = const Value.absent(),
     Value<String?> networkType = const Value.absent(),
     Value<String?> mobileOperator = const Value.absent(),
+    Value<bool?> isMock = const Value.absent(),
     DateTime? recordedAt,
     int? uploadAttempts,
     Value<DateTime?> lastAttemptAt = const Value.absent(),
@@ -581,6 +615,7 @@ class PendingLocation extends DataClass implements Insertable<PendingLocation> {
     mobileOperator: mobileOperator.present
         ? mobileOperator.value
         : this.mobileOperator,
+    isMock: isMock.present ? isMock.value : this.isMock,
     recordedAt: recordedAt ?? this.recordedAt,
     uploadAttempts: uploadAttempts ?? this.uploadAttempts,
     lastAttemptAt: lastAttemptAt.present
@@ -609,6 +644,7 @@ class PendingLocation extends DataClass implements Insertable<PendingLocation> {
       mobileOperator: data.mobileOperator.present
           ? data.mobileOperator.value
           : this.mobileOperator,
+      isMock: data.isMock.present ? data.isMock.value : this.isMock,
       recordedAt: data.recordedAt.present
           ? data.recordedAt.value
           : this.recordedAt,
@@ -636,6 +672,7 @@ class PendingLocation extends DataClass implements Insertable<PendingLocation> {
           ..write('provider: $provider, ')
           ..write('networkType: $networkType, ')
           ..write('mobileOperator: $mobileOperator, ')
+          ..write('isMock: $isMock, ')
           ..write('recordedAt: $recordedAt, ')
           ..write('uploadAttempts: $uploadAttempts, ')
           ..write('lastAttemptAt: $lastAttemptAt')
@@ -657,6 +694,7 @@ class PendingLocation extends DataClass implements Insertable<PendingLocation> {
     provider,
     networkType,
     mobileOperator,
+    isMock,
     recordedAt,
     uploadAttempts,
     lastAttemptAt,
@@ -677,6 +715,7 @@ class PendingLocation extends DataClass implements Insertable<PendingLocation> {
           other.provider == this.provider &&
           other.networkType == this.networkType &&
           other.mobileOperator == this.mobileOperator &&
+          other.isMock == this.isMock &&
           other.recordedAt == this.recordedAt &&
           other.uploadAttempts == this.uploadAttempts &&
           other.lastAttemptAt == this.lastAttemptAt);
@@ -695,6 +734,7 @@ class PendingLocationsCompanion extends UpdateCompanion<PendingLocation> {
   final Value<String?> provider;
   final Value<String?> networkType;
   final Value<String?> mobileOperator;
+  final Value<bool?> isMock;
   final Value<DateTime> recordedAt;
   final Value<int> uploadAttempts;
   final Value<DateTime?> lastAttemptAt;
@@ -711,6 +751,7 @@ class PendingLocationsCompanion extends UpdateCompanion<PendingLocation> {
     this.provider = const Value.absent(),
     this.networkType = const Value.absent(),
     this.mobileOperator = const Value.absent(),
+    this.isMock = const Value.absent(),
     this.recordedAt = const Value.absent(),
     this.uploadAttempts = const Value.absent(),
     this.lastAttemptAt = const Value.absent(),
@@ -728,6 +769,7 @@ class PendingLocationsCompanion extends UpdateCompanion<PendingLocation> {
     this.provider = const Value.absent(),
     this.networkType = const Value.absent(),
     this.mobileOperator = const Value.absent(),
+    this.isMock = const Value.absent(),
     required DateTime recordedAt,
     this.uploadAttempts = const Value.absent(),
     this.lastAttemptAt = const Value.absent(),
@@ -747,6 +789,7 @@ class PendingLocationsCompanion extends UpdateCompanion<PendingLocation> {
     Expression<String>? provider,
     Expression<String>? networkType,
     Expression<String>? mobileOperator,
+    Expression<bool>? isMock,
     Expression<DateTime>? recordedAt,
     Expression<int>? uploadAttempts,
     Expression<DateTime>? lastAttemptAt,
@@ -764,6 +807,7 @@ class PendingLocationsCompanion extends UpdateCompanion<PendingLocation> {
       if (provider != null) 'provider': provider,
       if (networkType != null) 'network_type': networkType,
       if (mobileOperator != null) 'mobile_operator': mobileOperator,
+      if (isMock != null) 'is_mock': isMock,
       if (recordedAt != null) 'recorded_at': recordedAt,
       if (uploadAttempts != null) 'upload_attempts': uploadAttempts,
       if (lastAttemptAt != null) 'last_attempt_at': lastAttemptAt,
@@ -783,6 +827,7 @@ class PendingLocationsCompanion extends UpdateCompanion<PendingLocation> {
     Value<String?>? provider,
     Value<String?>? networkType,
     Value<String?>? mobileOperator,
+    Value<bool?>? isMock,
     Value<DateTime>? recordedAt,
     Value<int>? uploadAttempts,
     Value<DateTime?>? lastAttemptAt,
@@ -800,6 +845,7 @@ class PendingLocationsCompanion extends UpdateCompanion<PendingLocation> {
       provider: provider ?? this.provider,
       networkType: networkType ?? this.networkType,
       mobileOperator: mobileOperator ?? this.mobileOperator,
+      isMock: isMock ?? this.isMock,
       recordedAt: recordedAt ?? this.recordedAt,
       uploadAttempts: uploadAttempts ?? this.uploadAttempts,
       lastAttemptAt: lastAttemptAt ?? this.lastAttemptAt,
@@ -845,6 +891,9 @@ class PendingLocationsCompanion extends UpdateCompanion<PendingLocation> {
     if (mobileOperator.present) {
       map['mobile_operator'] = Variable<String>(mobileOperator.value);
     }
+    if (isMock.present) {
+      map['is_mock'] = Variable<bool>(isMock.value);
+    }
     if (recordedAt.present) {
       map['recorded_at'] = Variable<DateTime>(recordedAt.value);
     }
@@ -872,6 +921,7 @@ class PendingLocationsCompanion extends UpdateCompanion<PendingLocation> {
           ..write('provider: $provider, ')
           ..write('networkType: $networkType, ')
           ..write('mobileOperator: $mobileOperator, ')
+          ..write('isMock: $isMock, ')
           ..write('recordedAt: $recordedAt, ')
           ..write('uploadAttempts: $uploadAttempts, ')
           ..write('lastAttemptAt: $lastAttemptAt')
@@ -1415,6 +1465,7 @@ typedef $$PendingLocationsTableCreateCompanionBuilder =
       Value<String?> provider,
       Value<String?> networkType,
       Value<String?> mobileOperator,
+      Value<bool?> isMock,
       required DateTime recordedAt,
       Value<int> uploadAttempts,
       Value<DateTime?> lastAttemptAt,
@@ -1433,6 +1484,7 @@ typedef $$PendingLocationsTableUpdateCompanionBuilder =
       Value<String?> provider,
       Value<String?> networkType,
       Value<String?> mobileOperator,
+      Value<bool?> isMock,
       Value<DateTime> recordedAt,
       Value<int> uploadAttempts,
       Value<DateTime?> lastAttemptAt,
@@ -1504,6 +1556,11 @@ class $$PendingLocationsTableFilterComposer
 
   ColumnFilters<String> get mobileOperator => $composableBuilder(
     column: $table.mobileOperator,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isMock => $composableBuilder(
+    column: $table.isMock,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -1592,6 +1649,11 @@ class $$PendingLocationsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get isMock => $composableBuilder(
+    column: $table.isMock,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get recordedAt => $composableBuilder(
     column: $table.recordedAt,
     builder: (column) => ColumnOrderings(column),
@@ -1661,6 +1723,9 @@ class $$PendingLocationsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<bool> get isMock =>
+      $composableBuilder(column: $table.isMock, builder: (column) => column);
+
   GeneratedColumn<DateTime> get recordedAt => $composableBuilder(
     column: $table.recordedAt,
     builder: (column) => column,
@@ -1726,6 +1791,7 @@ class $$PendingLocationsTableTableManager
                 Value<String?> provider = const Value.absent(),
                 Value<String?> networkType = const Value.absent(),
                 Value<String?> mobileOperator = const Value.absent(),
+                Value<bool?> isMock = const Value.absent(),
                 Value<DateTime> recordedAt = const Value.absent(),
                 Value<int> uploadAttempts = const Value.absent(),
                 Value<DateTime?> lastAttemptAt = const Value.absent(),
@@ -1742,6 +1808,7 @@ class $$PendingLocationsTableTableManager
                 provider: provider,
                 networkType: networkType,
                 mobileOperator: mobileOperator,
+                isMock: isMock,
                 recordedAt: recordedAt,
                 uploadAttempts: uploadAttempts,
                 lastAttemptAt: lastAttemptAt,
@@ -1760,6 +1827,7 @@ class $$PendingLocationsTableTableManager
                 Value<String?> provider = const Value.absent(),
                 Value<String?> networkType = const Value.absent(),
                 Value<String?> mobileOperator = const Value.absent(),
+                Value<bool?> isMock = const Value.absent(),
                 required DateTime recordedAt,
                 Value<int> uploadAttempts = const Value.absent(),
                 Value<DateTime?> lastAttemptAt = const Value.absent(),
@@ -1776,6 +1844,7 @@ class $$PendingLocationsTableTableManager
                 provider: provider,
                 networkType: networkType,
                 mobileOperator: mobileOperator,
+                isMock: isMock,
                 recordedAt: recordedAt,
                 uploadAttempts: uploadAttempts,
                 lastAttemptAt: lastAttemptAt,

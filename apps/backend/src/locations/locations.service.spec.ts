@@ -22,6 +22,7 @@ function makeService(
 ): LocationsService {
   const tx: any = {
     $executeRaw: jest.fn().mockResolvedValue(overrides.insertResult ?? 0),
+    location: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
   };
   const prisma: any = {
     child: {
@@ -55,9 +56,11 @@ function makeService(
       // Default: нет предыдущих точек у devices → jitter-dedup не срабатывает.
       // Тесты могут переопределить через (svc as any).prisma.location.findFirst.mockResolvedValue(...)
       findFirst: jest.fn().mockResolvedValue(null),
-      findMany: jest.fn(),
+      // v0.63.0: соседи для разметки качества (по умолчанию — нет).
+      findMany: jest.fn().mockResolvedValue([]),
     },
     $executeRaw: tx.$executeRaw,
+    tx,
     $transaction: jest.fn().mockImplementation((cb: (t: any) => Promise<unknown>) => cb(tx)),
   };
   const consent: any = {
@@ -326,6 +329,28 @@ describe('LocationsService.ingestBatch', () => {
   });
 
   // v0.59.0 — телефон досылает точки, накопленные без сети.
+  it('не считает дрожью близкую точку, если телефон сообщает движение (ходьба)', async () => {
+    const svc = makeService({ insertResult: 1 });
+    const now = Date.now();
+    (svc as any).prisma.location.findFirst.mockResolvedValue({
+      lat: 55.0,
+      lon: 37.0,
+      recordedAt: new Date(now - 10_000),
+    });
+    // +8 м за 7 с при скорости 1.3 м/с — пешеход, а не стоянка.
+    const res = await svc.ingestBatch(ctx, [
+      {
+        lat: 55.000072,
+        lon: 37.0,
+        accuracy: 6,
+        speed: 1.3,
+        recordedAt: new Date(now - 3_000).toISOString(),
+      },
+    ]);
+    expect(res.rejectedReasons.jitter ?? 0).toBe(0);
+    expect(res.accepted).toBe(1);
+  });
+
   describe('late points from the offline queue', () => {
     const latest = new Date('2026-09-28T01:00:00Z');
 
@@ -376,6 +401,76 @@ describe('LocationsService.ingestBatch', () => {
       ]);
       expect(res.accepted).toBe(1);
       expect(res.rejectedReasons.jitter).toBe(1);
+    });
+  });
+});
+
+describe('LocationsService.ingestBatch — пометка качества для маршрута (v0.63.0)', () => {
+  beforeEach(() => {
+    jest.useFakeTimers({ now: new Date('2026-09-28T01:05:00Z') });
+  });
+  afterEach(() => jest.useRealTimers());
+
+  // Флаги вставленных строк — последний параметр каждой строки VALUES.
+  function insertedFlags(svc: LocationsService): unknown[] {
+    const call = ((svc as any).prisma.tx.$executeRaw as jest.Mock).mock.calls[0][0];
+    const values: unknown[] = call.values;
+    const perRow = 17;
+    return values.filter((_, i) => i % perRow === perRow - 1);
+  }
+
+  it('помечает телепорт outlier и не пускает его в геозоны', async () => {
+    const svc = makeService({ insertResult: 3 });
+    const res = await svc.ingestBatch(ctx, [
+      { lat: 48.48, lon: 135.08, accuracy: 5, speed: 1, recordedAt: '2026-09-28T01:00:00Z' },
+      // +6.5 км за 15 с при скорости 24 м/с — физически невозможно.
+      { lat: 48.54, lon: 135.08, accuracy: 3, speed: 24, recordedAt: '2026-09-28T01:00:15Z' },
+      { lat: 48.4801, lon: 135.0801, accuracy: 5, speed: 1, recordedAt: '2026-09-28T01:00:30Z' },
+    ]);
+    expect(res.accepted).toBe(3);
+    expect(insertedFlags(svc)).toEqual([null, 'outlier', null]);
+    const zone = (svc as any).zoneDetection.processPoint as jest.Mock;
+    expect(zone).toHaveBeenCalledTimes(2);
+  });
+
+  it('грубую точку сохраняет с пометкой coarse, подделку — mock', async () => {
+    const svc = makeService({ insertResult: 2 });
+    await svc.ingestBatch(ctx, [
+      { lat: 48.48, lon: 135.08, accuracy: 90, recordedAt: '2026-09-28T01:00:00Z' },
+      { lat: 48.5, lon: 135.2, accuracy: 5, isMock: true, recordedAt: '2026-09-28T01:02:00Z' },
+    ]);
+    expect(insertedFlags(svc)).toEqual(['coarse', 'mock']);
+  });
+
+  it('иглу из прошлого батча помечает задним числом по следующей точке', async () => {
+    const svc = makeService({ insertResult: 1 });
+    (svc as any).prisma.location.findMany.mockResolvedValue([
+      {
+        id: 'a',
+        lat: 48.48,
+        lon: 135.08,
+        accuracy: 5,
+        speed: null,
+        recordedAt: new Date('2026-09-28T01:00:00Z'),
+        trackFlag: null,
+      },
+      {
+        id: 'b',
+        lat: 48.4845,
+        lon: 135.08,
+        accuracy: 5,
+        speed: null,
+        recordedAt: new Date('2026-09-28T01:00:40Z'),
+        trackFlag: null,
+      },
+    ]);
+    await svc.ingestBatch(ctx, [
+      { lat: 48.4801, lon: 135.08, accuracy: 5, recordedAt: '2026-09-28T01:01:20Z' },
+    ]);
+    expect(insertedFlags(svc)).toEqual([null]);
+    expect((svc as any).prisma.tx.location.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['b'] } },
+      data: { trackFlag: 'outlier' },
     });
   });
 });

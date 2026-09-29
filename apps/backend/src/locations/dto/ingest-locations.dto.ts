@@ -15,6 +15,9 @@ export const LocationPointSchema = z
     networkType: z.enum(['wifi', 'mobile', 'offline', 'unknown']).optional(),
     wifiSsid: z.string().max(64).optional(),
     mobileOperator: z.string().max(64).optional(),
+    // v0.63.0: координаты подставлены приложением-«фейковым GPS»
+    // (Location.isMock). Такая точка хранится, но в маршрут не попадает.
+    isMock: z.boolean().optional(),
   })
   .strict();
 

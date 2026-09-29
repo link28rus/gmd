@@ -13,6 +13,11 @@ export const SETTINGS_KEYS = {
   LOCATION_ACCURACY_FLOOR_M: 'location.accuracy_floor_m',
   LOCATION_JITTER_WINDOW_MS: 'location.jitter_window_ms',
   LOCATION_JITTER_MIN_DIST_M: 'location.jitter_min_dist_m',
+  // v0.63.0 — построение маршрута: какие точки идут в трек и поездки,
+  // когда стояние на месте сворачивается в маркер стоянки.
+  TRACK_ACCURACY_MAX_M: 'track.accuracy_max_m',
+  TRACK_MAX_SPEED_MPS: 'track.max_speed_mps',
+  TRACK_STOP_MINUTES: 'track.stop_minutes',
   SMTP_HOST: 'smtp.host',
   SMTP_PORT: 'smtp.port',
   SMTP_USER: 'smtp.user',
@@ -24,6 +29,13 @@ export const SETTINGS_KEYS = {
   AUDIO_MIN_DURATION_SEC: 'audio.min_duration_sec',
   AUDIO_HIDDEN_MODE_ALLOWED: 'audio.hidden_mode_allowed',
   AUDIO_CHILD_READY_TIMEOUT_SEC: 'audio.child_ready_timeout_sec',
+} as const;
+
+// v0.63.0 — значения по умолчанию для track.* (seed + fallback в сервисах).
+export const TRACK_DEFAULTS = {
+  accuracyMaxM: 50,
+  maxSpeedMps: 70,
+  stopMinutes: 3,
 } as const;
 
 export type SettingsKey = (typeof SETTINGS_KEYS)[keyof typeof SETTINGS_KEYS];
@@ -41,6 +53,9 @@ const KEY_BOUNDS: Record<string, { min: number; max: number }> = {
   [SETTINGS_KEYS.LOCATION_ACCURACY_FLOOR_M]: { min: 50, max: 500 },
   [SETTINGS_KEYS.LOCATION_JITTER_WINDOW_MS]: { min: 0, max: 300_000 },
   [SETTINGS_KEYS.LOCATION_JITTER_MIN_DIST_M]: { min: 0, max: 200 },
+  [SETTINGS_KEYS.TRACK_ACCURACY_MAX_M]: { min: 15, max: 200 },
+  [SETTINGS_KEYS.TRACK_MAX_SPEED_MPS]: { min: 20, max: 150 },
+  [SETTINGS_KEYS.TRACK_STOP_MINUTES]: { min: 1, max: 60 },
   [SETTINGS_KEYS.SMTP_PORT]: { min: 1, max: 65535 },
   [SETTINGS_KEYS.AUDIO_DEFAULT_DURATION_SEC]: { min: 30, max: 1800 },
   [SETTINGS_KEYS.AUDIO_MAX_DURATION_SEC]: { min: 60, max: 3600 },
@@ -78,6 +93,7 @@ export class AppSettingsService implements OnModuleInit {
   async onModuleInit(): Promise<void> {
     await this.seedSmtpFromEnvIfEmpty();
     await this.seedLocationFiltersIfEmpty();
+    await this.seedTrackIfEmpty();
     await this.seedAudioIfEmpty();
   }
 
@@ -142,6 +158,55 @@ export class AppSettingsService implements OnModuleInit {
       ),
     );
     this.logger.log(`Seeded ${rows.length} location.* settings with defaults`);
+  }
+
+  /**
+   * v0.63.0 — seed параметров построения маршрута. Идемпотентно.
+   */
+  private async seedTrackIfEmpty(): Promise<void> {
+    const existing = await this.prisma.appSetting.count({
+      where: { key: { startsWith: 'track.' } },
+    });
+    if (existing > 0) return;
+
+    const rows: Array<{ key: string; value: string; description: string }> = [
+      {
+        key: SETTINGS_KEYS.TRACK_ACCURACY_MAX_M,
+        value: String(TRACK_DEFAULTS.accuracyMaxM),
+        description:
+          'Максимальная погрешность точки (в метрах), при которой она рисуется в маршруте ' +
+          'и участвует в поездках. Точки хуже хранятся (по ним видно последнее ' +
+          'местоположение), но линию не портят. Грубые точки ±100 м от Wi-Fi/вышек дают ' +
+          '«клубки» на стоянке. Меньше — чище трек, но в помещении он может пропадать. ' +
+          'Диапазон: 15-200.',
+      },
+      {
+        key: SETTINGS_KEYS.TRACK_MAX_SPEED_MPS,
+        value: String(TRACK_DEFAULTS.maxSpeedMps),
+        description:
+          'Максимальная правдоподобная скорость (м/с) между двумя точками. Точка, до ' +
+          'которой пришлось бы «долететь» быстрее, считается телепортом и в маршрут не ' +
+          'попадает. Если телефон сообщил свою скорость, берётся более строгий порог по ' +
+          'ней. 70 м/с ≈ 250 км/ч — с запасом для поезда. Диапазон: 20-150.',
+      },
+      {
+        key: SETTINGS_KEYS.TRACK_STOP_MINUTES,
+        value: String(TRACK_DEFAULTS.stopMinutes),
+        description:
+          'Сколько минут ребёнок должен пробыть на одном месте (в радиусе ' +
+          'trip.idle_radius_m), чтобы на маршруте вместо «клубка» точек появился маркер ' +
+          'стоянки. Поездку делит только стоянка дольше trip.idle_minutes. Диапазон: 1-60.',
+      },
+    ];
+
+    await this.prisma.$transaction(
+      rows.map((r) =>
+        this.prisma.appSetting.create({
+          data: { ...r, isSecret: false, updatedBy: 'system:seed' },
+        }),
+      ),
+    );
+    this.logger.log(`Seeded ${rows.length} track.* settings with defaults`);
   }
 
   /**
@@ -299,7 +364,12 @@ export class AppSettingsService implements OnModuleInit {
    * админу.
    */
   async listForAdmin(): Promise<AppSettingAdminRow[]> {
-    const rows = await this.prisma.appSetting.findMany({ orderBy: { key: 'asc' } });
+    // system.* — служебные маркеры (например, версия переразметки треков),
+    // админу их показывать и давать править незачем.
+    const rows = await this.prisma.appSetting.findMany({
+      where: { NOT: { key: { startsWith: 'system.' } } },
+      orderBy: { key: 'asc' },
+    });
     return rows.map((r) => ({
       key: r.key,
       value: r.isSecret ? null : r.value,

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useState, type ReactElement } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Clock, MapPin } from 'lucide-react';
-import { locationsApi, type TripDto, type TripPointDto } from '@/lib/api/locations';
+import { locationsApi, type StayDto, type TripDto, type TripPointDto } from '@/lib/api/locations';
 import { ChildMap } from '@/components/locations/child-map';
 
 function fmtDate(iso: string): string {
@@ -118,6 +118,7 @@ export default function HistoryClient({ childId }: { childId: string }): ReactEl
         {selectedTrip ? (
           <TripMapPreview
             points={pointsQ.data?.points ?? []}
+            stays={pointsQ.data?.stays}
             loading={pointsQ.isPending}
             trip={selectedTrip}
           />
@@ -133,10 +134,12 @@ export default function HistoryClient({ childId }: { childId: string }): ReactEl
 
 function TripMapPreview({
   points,
+  stays,
   loading,
   trip,
 }: {
   points: TripPointDto[];
+  stays?: StayDto[];
   loading: boolean;
   trip: TripDto;
 }): ReactElement {
@@ -176,6 +179,7 @@ function TripMapPreview({
         mobileOperator: null,
         ageSec: 0,
       }}
+      stays={stays}
       track={points.map((p) => ({
         lat: p.lat,
         lon: p.lon,

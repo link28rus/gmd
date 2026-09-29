@@ -26,11 +26,10 @@ class ChildrenRepository {
 
   /// Точки активной (незакрытой) поездки. Если ребёнок стоит на месте >
   /// TRIP_IDLE_MINUTES — backend вернёт {trip: null, points: []}.
-  Future<List<ChildLocation>> activeTrack(String childId) async {
+  /// `stays` (стоянки ≥ 3 мин) — с v0.63.0, у старого сервера пусто.
+  Future<TrackData> activeTrack(String childId) async {
     final res = await _dio.get<dynamic>('/children/$childId/trips/active-track');
-    final data = res.data as Map<String, dynamic>;
-    final points = (data['points'] as List).cast<Map<String, dynamic>>();
-    return points.map(ChildLocation.fromJson).toList();
+    return TrackData.fromJson(res.data as Map<String, dynamic>);
   }
 
   /// Отправить ребёнку команду PLAY_SIGNAL — устройство должно громко
@@ -210,13 +209,13 @@ class ChildrenRepository {
 
   /// Точки маршрута конкретной поездки — для отрисовки polyline на карте.
   ///
-  /// `GET /children/:id/trips/:tripId/points` → `{ points: [{lat, lon, recordedAt}] }`.
+  /// `GET /children/:id/trips/:tripId/points` →
+  /// `{ points: [{lat, lon, recordedAt}], stays: [{lat, lon, from, to}] }`.
   /// В точках только координаты и время (без accuracy/battery — они будут null).
-  Future<List<ChildLocation>> tripPoints(String childId, String tripId) async {
+  /// `stays` — с v0.63.0, у старого сервера пусто.
+  Future<TrackData> tripPoints(String childId, String tripId) async {
     final res = await _dio.get<dynamic>('/children/$childId/trips/$tripId/points');
-    final data = res.data as Map<String, dynamic>;
-    final points = (data['points'] as List? ?? const []).cast<Map<String, dynamic>>();
-    return points.map(ChildLocation.fromJson).toList();
+    return TrackData.fromJson(res.data as Map<String, dynamic>);
   }
 
   /// История точек за период. По умолчанию backend отдаёт ~24 часа.

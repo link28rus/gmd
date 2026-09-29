@@ -2,7 +2,7 @@
 import { Fragment, useMemo, type ReactElement } from 'react';
 import { Marker, Polyline } from 'react-leaflet';
 import L from 'leaflet';
-import type { LocationDto, TripDto } from '@/lib/api/locations';
+import type { LocationDto, StayDto, TripDto } from '@/lib/api/locations';
 import { formatGapLabel, splitTrackByGaps, type TrackGap } from '@/lib/geo/track-gaps';
 
 interface Props {
@@ -13,6 +13,19 @@ interface Props {
    * точек. Без stops ведём себя как раньше (всё рисуем как polyline+точки).
    */
   stops?: TripDto[];
+  /**
+   * v0.63.0: стоянки, найденные сервером (ребёнок пробыл на месте несколько
+   * минут). Если переданы — маркеры «П» ставятся по ним, а не по концам
+   * поездок: точнее по месту и видно, сколько он там был.
+   */
+  stays?: StayDto[];
+}
+
+interface StopView {
+  key: string;
+  lat: number;
+  lon: number;
+  title: string;
 }
 
 // v0.31.0 — клиентская фильтрация GPS-шума. Работает поверх бэкендного
@@ -121,7 +134,7 @@ function gapMidpoint(gap: TrackGap<LocationDto>): [number, number] {
   return [mid.lat, mid.lng];
 }
 
-export function TrackPolyline({ items, stops }: Props): ReactElement | null {
+export function TrackPolyline({ items, stops, stays }: Props): ReactElement | null {
   // Шаг 1: accuracy-фильтр.
   const filtered = useMemo(
     () => items.filter((p) => p.accuracy == null || p.accuracy <= UI_ACCURACY_GATE_M),
@@ -159,10 +172,24 @@ export function TrackPolyline({ items, stops }: Props): ReactElement | null {
     [gaps],
   );
 
-  const stopMarkers = useMemo(() => {
-    if (!stops || stops.length === 0) return [] as TripDto[];
-    return stops.filter((t) => !t.isActive);
-  }, [stops]);
+  const stopMarkers = useMemo((): StopView[] => {
+    if (stays && stays.length > 0) {
+      return stays.map((s) => ({
+        key: `stay-${s.from}`,
+        lat: s.lat,
+        lon: s.lon,
+        title: `Стоял ${hhmm(s.from)}–${hhmm(s.to)} · ${durationRu(s.from, s.to)}`,
+      }));
+    }
+    return (stops ?? [])
+      .filter((t) => !t.isActive)
+      .map((t) => ({
+        key: `stop-${t.id}`,
+        lat: t.endLat,
+        lon: t.endLon,
+        title: `Был тут в ${hhmm(t.endedAt ?? t.startedAt)} · поездка ${durationRu(t.startedAt, t.endedAt)}`,
+      }));
+  }, [stops, stays]);
 
   if (filtered.length < 2 && stopMarkers.length === 0) return null;
 
@@ -199,18 +226,14 @@ export function TrackPolyline({ items, stops }: Props): ReactElement | null {
             />
           );
         })}
-      {stopMarkers.map((t) => {
-        const endedAt = t.endedAt ?? t.startedAt;
-        const title = `Был тут в ${hhmm(endedAt)} · поездка ${durationRu(t.startedAt, t.endedAt)}`;
-        return (
-          <Marker
-            key={`stop-${t.id}`}
-            position={[t.endLat, t.endLon]}
-            icon={stopIcon('П', title)}
-            title={title}
-          />
-        );
-      })}
+      {stopMarkers.map((s) => (
+        <Marker
+          key={s.key}
+          position={[s.lat, s.lon]}
+          icon={stopIcon('П', s.title)}
+          title={s.title}
+        />
+      ))}
       {first && (
         <Marker
           position={[first.lat, first.lon]}

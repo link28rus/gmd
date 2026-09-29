@@ -43,7 +43,7 @@ class _TripRouteScreenState extends ConsumerState<TripRouteScreen> {
   Widget build(BuildContext context) {
     final key = (childId: widget.childId, tripId: widget.tripId);
     final pointsAsync = ref.watch(tripPointsProvider(key));
-    final points = pointsAsync.value ?? const <ChildLocation>[];
+    final points = (pointsAsync.value ?? TrackData.empty).points;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_firstFitDone && _mapReady && mounted) _maybeFit(points);
@@ -69,8 +69,8 @@ class _TripRouteScreenState extends ConsumerState<TripRouteScreen> {
           error: err,
           onRetry: () => ref.invalidate(tripPointsProvider(key)),
         ),
-        data: (pts) {
-          if (pts.isEmpty) {
+        data: (track) {
+          if (track.points.isEmpty) {
             return const Center(
               child: Padding(
                 padding: EdgeInsets.all(32),
@@ -81,13 +81,13 @@ class _TripRouteScreenState extends ConsumerState<TripRouteScreen> {
               ),
             );
           }
-          return _buildMap(pts);
+          return _buildMap(track.points, track.stays);
         },
       ),
     );
   }
 
-  Widget _buildMap(List<ChildLocation> points) {
+  Widget _buildMap(List<ChildLocation> points, List<TrackStay> stays) {
     final first = points.first;
     final last = points.last;
 
@@ -122,8 +122,9 @@ class _TripRouteScreenState extends ConsumerState<TripRouteScreen> {
               keepBuffer: 4,
               panBuffer: 2,
             ),
-            // Сплошная линия по кускам + серый пунктир на разрывах.
-            ...buildTrackLayers(points),
+            // Сплошная линия по кускам + серый пунктир на разрывах
+            // + стоянки «П» (под маркерами начала и конца).
+            ...buildTrackLayers(points, stays: stays),
             MarkerLayer(
               markers: [
                 Marker(

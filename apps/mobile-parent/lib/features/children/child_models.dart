@@ -237,6 +237,57 @@ class Trip {
       );
 }
 
+/// Стоянка на треке: ребёнок пробыл на месте ≥ 3 мин. Сервер (v0.63.0+)
+/// сворачивает «клубок» точек стоянки в две вершины в её центре и отдаёт
+/// стоянку отдельно — для маркера «П» на карте.
+class TrackStay {
+  const TrackStay({
+    required this.lat,
+    required this.lon,
+    required this.from,
+    required this.to,
+  });
+
+  final double lat;
+  final double lon;
+  final DateTime from;
+  final DateTime to;
+
+  Duration get duration => to.difference(from);
+
+  factory TrackStay.fromJson(Map<String, dynamic> json) => TrackStay(
+        lat: (json['lat'] as num).toDouble(),
+        lon: (json['lon'] as num).toDouble(),
+        from: DateTime.parse(json['from'] as String).toLocal(),
+        to: DateTime.parse(json['to'] as String).toLocal(),
+      );
+}
+
+/// Трек для карты: точки линии + стоянки.
+///
+/// Ответы `GET /children/:id/trips/active-track` (`{trip, points, stays}`) и
+/// `GET /children/:id/trips/:tripId/points` (`{points, stays}`). Сервер до
+/// v0.63.0 поле `stays` не отдаёт — тогда список пустой.
+class TrackData {
+  const TrackData({required this.points, this.stays = const []});
+
+  static const empty = TrackData(points: []);
+
+  final List<ChildLocation> points;
+  final List<TrackStay> stays;
+
+  factory TrackData.fromJson(Map<String, dynamic> json) => TrackData(
+        points: (json['points'] as List? ?? const [])
+            .cast<Map<String, dynamic>>()
+            .map(ChildLocation.fromJson)
+            .toList(),
+        stays: (json['stays'] as List? ?? const [])
+            .cast<Map<String, dynamic>>()
+            .map(TrackStay.fromJson)
+            .toList(),
+      );
+}
+
 /// Ответ `POST /family/children/:childId/invites`.
 ///
 /// `qrUrl` — то, что кладётся в QR-код (формат `${landingBaseUrl}/claim/${code}`,

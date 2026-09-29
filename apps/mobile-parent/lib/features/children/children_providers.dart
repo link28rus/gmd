@@ -23,9 +23,10 @@ final childLatestLocationProvider =
   return repo.latestLocation(childId);
 });
 
-/// Активный трек (точки текущей поездки). Если ребёнок стоит — пустой массив.
+/// Активный трек (точки + стоянки текущей поездки). Если ребёнок стоит —
+/// пустые списки.
 final childActiveTrackProvider =
-    FutureProvider.autoDispose.family<List<ChildLocation>, String>((ref, childId) async {
+    FutureProvider.autoDispose.family<TrackData, String>((ref, childId) async {
   final repo = ref.watch(childrenRepositoryProvider);
   return repo.activeTrack(childId);
 });
@@ -42,9 +43,9 @@ final childTripsProvider =
 /// автоматически equatable по значению → корректная мемоизация family.
 typedef TripPointsKey = ({String childId, String tripId});
 
-/// Точки маршрута конкретной поездки (для polyline на карте).
+/// Точки и стоянки конкретной поездки (для polyline и маркеров на карте).
 final tripPointsProvider =
-    FutureProvider.autoDispose.family<List<ChildLocation>, TripPointsKey>((ref, key) async {
+    FutureProvider.autoDispose.family<TrackData, TripPointsKey>((ref, key) async {
   final repo = ref.watch(childrenRepositoryProvider);
   return repo.tripPoints(key.childId, key.tripId);
 });

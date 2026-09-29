@@ -236,4 +236,23 @@ void main() {
     expect(json.containsKey('speed'), isFalse);
     expect(json['bearing'], 0);
   });
+
+  test('isMock: true goes to JSON only when native payload says so', () async {
+    final points = <LocationPoint>[];
+    when(() => api.ingestLocations(any(), deviceToken: 'tok')).thenAnswer((inv) async {
+      points.addAll(inv.positionalArguments[0] as List<LocationPoint>);
+      return IngestResponse(acceptedIds: const [], rejectedIds: const []);
+    });
+    await ingestor.onLocation({...point(1), 'isMock': true});
+    await ingestor.onLocation({...point(2, secondsFromStart: 5), 'isMock': false});
+    await ingestor.onLocation(point(3, secondsFromStart: 10)); // старый нативный путь
+    await ingestor.flushQueue();
+
+    expect(points.map((p) => p.lat), [1, 2, 3]);
+    expect(points.map((p) => p.isMock), [true, false, null]);
+    final json = points.map((p) => p.toJson()).toList();
+    expect(json[0]['isMock'], isTrue);
+    expect(json[1].containsKey('isMock'), isFalse);
+    expect(json[2].containsKey('isMock'), isFalse);
+  });
 }

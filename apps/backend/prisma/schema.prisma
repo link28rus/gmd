@@ -416,6 +416,9 @@ model Location {
   mobileOperator   String?
   recordedAt       DateTime
   serverReceivedAt DateTime @default(now())
+  // v0.63.0: NULL — точка годится для маршрута; coarse | outlier | mock —
+  // хранится, но в трек и поездки не попадает (см. locations/track-quality.ts).
+  trackFlag        String?
 
   child       Child       @relation(fields: [childId], references: [id], onDelete: Cascade)
   childDevice ChildDevice @relation(fields: [childDeviceId], references: [id], onDelete: Cascade)

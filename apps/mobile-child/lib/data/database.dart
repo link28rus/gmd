@@ -16,6 +16,9 @@ class PendingLocations extends Table {
   TextColumn get provider => text().nullable()();
   TextColumn get networkType => text().nullable()();
   TextColumn get mobileOperator => text().nullable()();
+  // v0.63.0: координаты подставлены фейковым GPS (нативный Location.isMock /
+  // isFromMockProvider). null — нативный путь признак не передал.
+  BoolColumn get isMock => boolean().nullable()();
   DateTimeColumn get recordedAt => dateTime()();
   IntColumn get uploadAttempts => integer().withDefault(const Constant(0))();
   DateTimeColumn get lastAttemptAt => dateTime().nullable()();
@@ -41,7 +44,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -75,6 +78,11 @@ class AppDatabase extends _$AppDatabase {
             // счётчик — такие точки уйдут на сервер при первой связи (сервер
             // принимает до 7 суток назад, более старые отсеются по возрасту).
             await customStatement('UPDATE pending_locations SET upload_attempts = 0');
+          }
+          if (from < 6) {
+            // v0.63.0: признак фейкового GPS. Старые точки очереди остаются
+            // с null — на сервер уходят без ключа isMock.
+            await m.addColumn(pendingLocations, pendingLocations.isMock);
           }
         },
         beforeOpen: (details) async {

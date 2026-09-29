@@ -28,8 +28,16 @@ const SECTIONS: Section[] = [
   {
     id: 'routes',
     title: 'Сохранение маршрутов',
-    description: 'Сегментация поездок ребёнка на участки «остановка / движение».',
-    keys: ['trip.idle_minutes', 'trip.idle_radius_m'],
+    description:
+      'Сегментация поездок ребёнка на участки «остановка / движение» и очистка линии маршрута: ' +
+      'грубые точки и телепорты хранятся, но в маршрут не попадают.',
+    keys: [
+      'trip.idle_minutes',
+      'trip.idle_radius_m',
+      'track.stop_minutes',
+      'track.accuracy_max_m',
+      'track.max_speed_mps',
+    ],
     accent: 'sky',
   },
   {
@@ -61,6 +69,24 @@ const KEY_META: Record<
   'trip.idle_radius_m': {
     label: 'Радиус «остановки»',
     unit: 'м',
+    inputMode: 'numeric',
+    width: 'w-32',
+  },
+  'track.stop_minutes': {
+    label: 'Маркер стоянки после',
+    unit: 'мин',
+    inputMode: 'numeric',
+    width: 'w-32',
+  },
+  'track.accuracy_max_m': {
+    label: 'Точность для маршрута',
+    unit: 'м',
+    inputMode: 'numeric',
+    width: 'w-32',
+  },
+  'track.max_speed_mps': {
+    label: 'Макс. скорость',
+    unit: 'м/с',
     inputMode: 'numeric',
     width: 'w-32',
   },

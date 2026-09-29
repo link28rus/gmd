@@ -59,7 +59,7 @@ class LocationForegroundService : Service() {
         //
         //   ACCURACY_GATE_M        — жёсткий фильтр при обычных апдейтах.
         //                            Точки с worse accuracy не доходят до Dart.
-        //   ACCURACY_GATE_HEARTBEAT_M — более мягкий для heartbeat (раз в 2 мин).
+        //   ACCURACY_GATE_HEARTBEAT_M — более мягкий для heartbeat (раз в 90 с).
         //                               Приоритет «жив» > чистоты трека.
         //   DEDUP_MIN_DIST_M       — минимальное перемещение от прошлой точки.
         //   DEDUP_WINDOW_MS        — окно, в рамках которого работает dedup.
@@ -121,6 +121,18 @@ class LocationForegroundService : Service() {
         private const val SPEED_STILL_MS = 0.5f
         private const val STILL_DEBOUNCE_MS = 15 * 60_000L
 
+        // v0.63.0 — Activity Recognition шлёт «STILL ENTER» и на светофоре, и в
+        // пробке (журнал: велосипед/машина → STILL через 2 мин → 14 мин поездки
+        // грубыми точками без GPS). Поэтому STILL от AR применяем, только если
+        // движения по скорости/датчику не было столько времени.
+        private const val AR_STILL_GRACE_MS = 3 * 60_000L
+
+        // v0.63.0 — страховка на случай, когда AR движение не заметил: в STILL
+        // точка (даже грубая, от Wi-Fi/вышек — GPS для этого не нужен) дальше
+        // max(200 м, 2×accuracy) от места стоянки дважды подряд = ребёнок уехал.
+        private const val STILL_ESCAPE_MIN_M = 200f
+        private const val STILL_ESCAPE_CONFIRMATIONS = 2
+
         // v0.59.0 — офлайн-накопление. Без интернета в ACTIVE точки всё так же
         // снимаются каждые 5 с, но FLP копит их (в GPS-чипе, если он умеет
         // batching) и отдаёт пачкой раз в OFFLINE_BATCH_DELAY_MS: процессор и
@@ -181,6 +193,13 @@ class LocationForegroundService : Service() {
     // быстрее чем Activity Recognition transitions (которые лагают 30-90с).
     private var lastMovingTimeMs: Long = 0L
 
+    // v0.63.0 — место, где телефон перешёл в STILL (см. maybeEscapeStill), и
+    // счётчик точек подряд, ушедших от него дальше порога.
+    private var stillAnchorLat: Double? = null
+    private var stillAnchorLon: Double? = null
+    private var stillEscapeHits: Int = 0
+    private val applyArStill = Runnable { onArStill() }
+
     // v0.59.0 — есть ли интернет (INTERNET + VALIDATED) и копит ли текущая
     // подписка FLP точки пачками (setMaxUpdateDelayMillis).
     private var online: Boolean = true
@@ -240,14 +259,19 @@ class LocationForegroundService : Service() {
             }
             ACTION_ACTIVITY_STILL -> {
                 // Activity Recognition сигналит «ребёнок неподвижен» →
-                // переключаем FLP в still-профиль (interval=5мин, minDist=50м).
+                // переключаем FLP в still-профиль (interval=60с, minDist=30м),
+                // но не сразу после движения — см. onArStill.
                 // Сервис может быть ещё не started — promote в foreground
                 // безопасен и идемпотентен.
                 startForeground(NOTIF_ID, buildNotification())
-                switchProfile(Profile.STILL)
+                onArStill()
             }
             ACTION_ACTIVITY_MOVING -> {
                 startForeground(NOTIF_ID, buildNotification())
+                // Движение по AR — такой же сигнал, как скорость: отменяет
+                // отложенный STILL и перезапускает 15-мин debounce.
+                lastMovingTimeMs = System.currentTimeMillis()
+                mainHandler.removeCallbacks(applyArStill)
                 switchProfile(Profile.ACTIVE)
             }
             else -> start()
@@ -446,7 +470,7 @@ class LocationForegroundService : Service() {
             val ok = motionMonitor.start()
             log("start: motion sensor register=$ok (initial STILL)")
         }
-        // Heartbeat: шлём текущую точку раз в 2 минуты через AlarmManager.
+        // Heartbeat: шлём текущую точку раз в 90 с через AlarmManager.
         // Ставим даже если повторный start() — PendingIntent с одним requestCode
         // идемпотентен (replace-semantics), лишнего alarm'а не будет.
         scheduleHeartbeatAlarm()
@@ -656,6 +680,53 @@ class LocationForegroundService : Service() {
         }
     }
 
+    /**
+     * v0.63.0 — AR «STILL ENTER». Если по скорости/датчику ребёнок двигался
+     * меньше AR_STILL_GRACE_MS назад — это светофор или пробка: откладываем
+     * и перепроверяем, когда пауза наберётся. Новый сигнал движения
+     * (AR MOVING) отложенную проверку снимает.
+     */
+    private fun onArStill() {
+        mainHandler.removeCallbacks(applyArStill)
+        val sinceMoving = System.currentTimeMillis() - lastMovingTimeMs
+        if (lastMovingTimeMs == 0L || sinceMoving >= AR_STILL_GRACE_MS) {
+            switchProfile(Profile.STILL)
+            return
+        }
+        val wait = AR_STILL_GRACE_MS - sinceMoving
+        log("AR STILL deferred: moved ${sinceMoving / 1000}s ago, recheck in ${wait / 1000}s")
+        mainHandler.postDelayed(applyArStill, wait)
+    }
+
+    /**
+     * v0.63.0 — выход из STILL по смещению. Страхует AR, который в транспорте
+     * может молчать: в STILL приходят только дешёвые точки Wi-Fi/вышек, и по
+     * ним видно, что ребёнок уже далеко от места стоянки.
+     */
+    private fun maybeEscapeStill(loc: android.location.Location) {
+        if (profile != Profile.STILL) return
+        val aLat = stillAnchorLat
+        val aLon = stillAnchorLon
+        if (aLat == null || aLon == null) {
+            stillAnchorLat = loc.latitude
+            stillAnchorLon = loc.longitude
+            return
+        }
+        val acc = if (loc.hasAccuracy()) loc.accuracy else 50f
+        val dist = haversineMeters(aLat, aLon, loc.latitude, loc.longitude)
+        if (dist <= maxOf(STILL_ESCAPE_MIN_M, 2f * acc).toDouble()) {
+            stillEscapeHits = 0
+            return
+        }
+        stillEscapeHits++
+        log("STILL escape candidate #$stillEscapeHits: ${"%.0f".format(dist)}m from anchor, acc=$acc")
+        if (stillEscapeHits >= STILL_ESCAPE_CONFIRMATIONS) {
+            lastMovingTimeMs = System.currentTimeMillis()
+            switchProfile(Profile.ACTIVE)
+            requestFreshLocationOnce()
+        }
+    }
+
     private fun switchProfile(newProfile: Profile) {
         if (profile == newProfile) {
             log("switchProfile: already $newProfile, skip")
@@ -664,6 +735,12 @@ class LocationForegroundService : Service() {
         log("switchProfile: $profile → $newProfile")
         profile = newProfile
         persistProfile(newProfile)
+        // Якорь для maybeEscapeStill — последняя отправленная точка (обычно
+        // точная, из ACTIVE); если её нет, якорем станет первая точка в STILL.
+        stillAnchorLat = if (newProfile == Profile.STILL) lastSentLat else null
+        stillAnchorLon = if (newProfile == Profile.STILL) lastSentLon else null
+        stillEscapeHits = 0
+        if (newProfile == Profile.ACTIVE) mainHandler.removeCallbacks(applyArStill)
         // Снимаем текущий callback и подписываемся заново с новыми параметрами.
         resubscribe(newProfile)
         // v0.40.3 — motion sensor только в STILL для wake-on-motion. В ACTIVE
@@ -766,6 +843,11 @@ class LocationForegroundService : Service() {
                 DetectedActivity.STILL to ActivityTransition.ACTIVITY_TRANSITION_EXIT,
                 DetectedActivity.IN_VEHICLE to ActivityTransition.ACTIVITY_TRANSITION_ENTER,
                 DetectedActivity.ON_FOOT to ActivityTransition.ACTIVITY_TRANSITION_ENTER,
+                // v0.63.0: Transition API официально поддерживает WALKING/RUNNING,
+                // а не ON_FOOT — подписываемся и на них, иначе пешую прогулку
+                // замечаем только по смещению.
+                DetectedActivity.WALKING to ActivityTransition.ACTIVITY_TRANSITION_ENTER,
+                DetectedActivity.RUNNING to ActivityTransition.ACTIVITY_TRANSITION_ENTER,
                 DetectedActivity.ON_BICYCLE to ActivityTransition.ACTIVITY_TRANSITION_ENTER,
             ).map { (type, transition) ->
                 ActivityTransition.Builder()
@@ -834,6 +916,7 @@ class LocationForegroundService : Service() {
         // = "ребёнок в машине" → нам важно переключиться в HIGH_ACCURACY быстрее
         // чем мы пропустим reading. switchProfile сам no-op если профиль не меняется.
         maybeAutoSwitchProfile(loc)
+        maybeEscapeStill(loc)
 
         // v0.41.1 — точки без speed (FLP отдал координаты через Wi-Fi MLS / cell
         // positioning, не GPS) идут с ужесточённым gate. Heartbeat исключаем —
@@ -861,7 +944,11 @@ class LocationForegroundService : Service() {
         // v0.59.0: окно считаем по времени фиксации (loc.time), а не по часам
         // доставки — офлайн FLP отдаёт точки пачкой раз в 2 минуты, и у всех
         // точек пачки «сейчас» одинаковое.
-        if (!heartbeat) {
+        // v0.63.0: только если телефон не сообщает движение. Раньше фильтр
+        // работал и при ходьбе: пешеход проходит 30 м за ~20 с, и от прогулки
+        // оставалась точка на 30 м — трек срезал углы по диагонали.
+        val movingBySpeed = loc.hasSpeed() && loc.speed >= SPEED_STILL_MS
+        if (!heartbeat && !movingBySpeed) {
             val lastLat = lastSentLat
             val lastLon = lastSentLon
             val dt = loc.time - lastSentTimeMs
@@ -893,9 +980,20 @@ class LocationForegroundService : Service() {
             "networkType" to currentNetworkType(),
             "mobileOperator" to currentMobileOperator(),
             "recordedAt" to loc.time,
+            // v0.63.0: координаты от приложения-«фейкового GPS» — сервер хранит
+            // такую точку, но в маршрут и геозоны не пускает.
+            "isMock" to isMockLocation(loc),
         )
         channel.invokeMethod("onLocation", payload)
     }
+
+    private fun isMockLocation(loc: android.location.Location): Boolean =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            loc.isMock
+        } else {
+            @Suppress("DEPRECATION")
+            loc.isFromMockProvider
+        }
 
     // Снимок батареи через sticky broadcast ACTION_BATTERY_CHANGED. Более
     // надёжный способ на MIUI/Xiaomi — BatteryManager.isCharging иногда

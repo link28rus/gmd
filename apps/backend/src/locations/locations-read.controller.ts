@@ -14,6 +14,8 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ZodValidationPipe } from '../common/zod/zod-validation.pipe';
 import { ListLocationsQuerySchema } from './dto/list-locations.dto';
 import type { ListLocationsQuery } from './dto/list-locations.dto';
+import { TrackQuerySchema } from './dto/track-query.dto';
+import type { TrackQuery } from './dto/track-query.dto';
 import { FamilyAccessGuard } from './guards/family-access.guard';
 import { LocationsService } from './locations.service';
 import { TripsService } from './trips.service';
@@ -48,21 +50,23 @@ export class LocationsReadController {
     return this.svc.list(id, q);
   }
 
-  // Точки активной (незакрытой) поездки ребёнка. Если ребёнок сейчас
+  // Очищенный трек активной (незакрытой) поездки. Если ребёнок сейчас
   // стоит на месте > TRIP_IDLE_MINUTES — active trip нет, массив пуст.
-  // Онлайн-карта использует этот эндпоинт вместо /locations?from=-24h.
+  // v0.63.0: без плохих точек (trackFlag), стоянки свёрнуты + stays[].
   @Get('trips/active-track')
   @HttpCode(HttpStatus.OK)
   async activeTrack(@Param('id') id: string): Promise<unknown> {
-    const { trip, points } = await this.trips.getActiveTrack(id);
-    return {
-      trip,
-      points: points.map((p) => ({
-        lat: p.lat,
-        lon: p.lon,
-        recordedAt: p.recordedAt.toISOString(),
-      })),
-    };
+    return this.trips.getActiveTrack(id);
+  }
+
+  // v0.63.0: очищенный трек за период (карта дня в кабинете). Не больше 2 суток.
+  @Get('track')
+  @HttpCode(HttpStatus.OK)
+  async track(
+    @Param('id') id: string,
+    @Query(new ZodValidationPipe(TrackQuerySchema)) q: TrackQuery,
+  ): Promise<unknown> {
+    return this.trips.getTrack(id, new Date(q.from), new Date(q.to));
   }
 
   // Список поездок (history) за период. По умолчанию 30 дней.
@@ -79,17 +83,10 @@ export class LocationsReadController {
     return { trips };
   }
 
-  // Точки конкретной поездки — для рисования маршрута на странице истории.
+  // Очищенный трек конкретной поездки — для страницы истории.
   @Get('trips/:tripId/points')
   @HttpCode(HttpStatus.OK)
   async tripPoints(@Param('id') id: string, @Param('tripId') tripId: string): Promise<unknown> {
-    const points = await this.trips.getTripPoints(id, tripId);
-    return {
-      points: points.map((p) => ({
-        lat: p.lat,
-        lon: p.lon,
-        recordedAt: p.recordedAt.toISOString(),
-      })),
-    };
+    return this.trips.getTripTrack(id, tripId);
   }
 }

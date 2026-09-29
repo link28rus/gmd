@@ -30,6 +30,16 @@ export interface LocationDto {
 export interface LocationHistoryDto {
   items: LocationDto[];
   nextCursor: string | null;
+  /** v0.63.0: стоянки за период (трек уже очищен и свёрнут сервером). */
+  stays?: StayDto[];
+}
+
+/** v0.63.0: стоянка на маршруте — ребёнок пробыл на месте несколько минут. */
+export interface StayDto {
+  lat: number;
+  lon: number;
+  from: string;
+  to: string;
 }
 
 export interface TripDto {
@@ -54,6 +64,7 @@ export interface TripPointDto {
 export interface ActiveTrackDto {
   trip: TripDto | null;
   points: TripPointDto[];
+  stays?: StayDto[];
 }
 
 export const locationsApi = {
@@ -87,7 +98,7 @@ export const locationsApi = {
   },
 
   getTripPoints: (childId: string, tripId: string) =>
-    apiFetch<{ points: TripPointDto[] }>(
+    apiFetch<{ points: TripPointDto[]; stays?: StayDto[] }>(
       `/api/children/${encodeURIComponent(childId)}/trips/${encodeURIComponent(tripId)}/points`,
     ),
 };

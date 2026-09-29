@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { MapContainer, TileLayer, useMap, ZoomControl } from 'react-leaflet';
 import L from 'leaflet';
-import type { LatestLocationDto, LocationDto, TripDto } from '@/lib/api/locations';
+import type { LatestLocationDto, LocationDto, StayDto, TripDto } from '@/lib/api/locations';
 import { useTheme } from '@/components/theme/theme-provider';
 import { tileConfigFor } from '@/lib/maps/tile-config';
 import { useChildAvatarSrc } from '@/lib/hooks/use-child-avatar';
@@ -19,6 +19,8 @@ export interface ChildMapInnerProps {
   /** Сохранён в API ради обратной совместимости с обёрткой ChildMap. */
   onMapError: () => void;
   stops?: TripDto[];
+  /** v0.63.0: стоянки от сервера — приоритетнее stops. */
+  stays?: StayDto[];
 }
 
 const DEFAULT_CENTER: [number, number] = [55.7558, 37.6173]; // Москва
@@ -116,6 +118,7 @@ export function ChildMapInner({
   latest,
   track,
   stops,
+  stays,
 }: ChildMapInnerProps): ReactElement {
   const { theme } = useTheme();
   const avatarUrl = useChildAvatarSrc(childId, avatarKey);
@@ -163,7 +166,7 @@ export function ChildMapInner({
           avatarUrl={avatarUrl}
         />
       )}
-      <TrackPolyline items={track} stops={stops} />
+      <TrackPolyline items={track} stops={stops} stays={stays} />
     </MapContainer>
   );
 }

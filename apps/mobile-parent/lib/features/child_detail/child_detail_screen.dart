@@ -51,7 +51,8 @@ class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen> {
     );
 
     final latest = latestAsync.value;
-    final track = trackAsync.value ?? const <ChildLocation>[];
+    final trackData = trackAsync.value ?? TrackData.empty;
+    final track = trackData.points;
 
     // После того, как данные пришли — один раз центрируем карту. Ждём
     // пока сама карта будет готова (см. onMapReady) — иначе fitCamera
@@ -126,8 +127,9 @@ class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen> {
                             keepBuffer: 4,
                             panBuffer: 2,
                           ),
-                          // Сплошная линия по кускам + серый пунктир на разрывах.
-                          ...buildTrackLayers(track),
+                          // Сплошная линия по кускам + серый пунктир на разрывах
+                          // + стоянки «П». До маркера ребёнка — он рисуется поверх.
+                          ...buildTrackLayers(track, stays: trackData.stays),
                           if (latest != null)
                             MarkerLayer(
                               markers: [

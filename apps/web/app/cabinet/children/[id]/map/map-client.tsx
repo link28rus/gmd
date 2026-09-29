@@ -131,6 +131,7 @@ export default function MapClient({ childId }: Props): ReactElement {
               latest={latest}
               track={track}
               stops={tripsQ.data?.trips}
+              stays={historyQ.data?.stays}
               onMapError={() => setMapFailed(true)}
             />
             {latest && (

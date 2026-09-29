@@ -94,6 +94,7 @@ class LocationIngestor {
       provider: payload['provider'] as String?,
       networkType: payload['networkType'] as String?,
       mobileOperator: payload['mobileOperator'] as String?,
+      isMock: payload['isMock'] as bool?,
       recordedAt: DateTime.fromMillisecondsSinceEpoch(
         (payload['recordedAt'] as num).toInt(),
       ),
@@ -251,6 +252,7 @@ class LocationIngestor {
     provider: r.provider,
     networkType: r.networkType,
     mobileOperator: r.mobileOperator,
+    isMock: r.isMock,
     recordedAt: r.recordedAt,
   );
 

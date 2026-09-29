@@ -211,6 +211,12 @@ TTL 24 ч) или сам при сбое. Смотрит только админ
 - `provider` (varchar) — источник геолокации (e.g. `'gps'`, `'network'`)
 - `recordedAt` (timestamptz) — время записи на устройстве (client time)
 - `serverReceivedAt` (timestamptz, default now()) — время получения сервером
+- `trackFlag` (text, nullable, v0.63.0) — пригодность точки для маршрута: `NULL` — годится;
+  `coarse` — погрешность хуже `track.accuracy_max_m`; `outlier` — телепорт или «игла»;
+  `mock` — подделка GPS. Помеченные точки хранятся (по ним видно последнее местоположение),
+  но не попадают в трек, поездки и геозоны (`outlier`/`mock`). Размечаются при приёме
+  (`locations/track-quality.ts`), история переразмечается при старте backend, если сменилась
+  версия правил (`system.track_rules_version` в `app_settings`)
 
 **Уникальность:** `(childDeviceId, recordedAt)` — защита от дублей при retry-запросах.
 

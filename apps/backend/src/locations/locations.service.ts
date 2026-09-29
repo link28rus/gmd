@@ -14,7 +14,13 @@ import { ConsentService } from '../consent/consent.service';
 import { ZoneDetectionService } from '../zones/zone-detection.service';
 import { TripsService } from './trips.service';
 import { distanceMeters } from '../common/geo-distance';
-import { AppSettingsService, SETTINGS_KEYS } from '../app-settings/app-settings.service';
+import {
+  AppSettingsService,
+  SETTINGS_KEYS,
+  TRACK_DEFAULTS,
+} from '../app-settings/app-settings.service';
+import { classifyTrack } from './track-quality';
+import type { QualityPoint, TrackFlag } from './track-quality';
 import type { ChildAuthContext } from '../child-device/child-device.service';
 import type { LocationPoint } from './dto/ingest-locations.dto';
 import type { ListLocationsQuery } from './dto/list-locations.dto';
@@ -98,6 +104,21 @@ const DEFAULT_ACCURACY_FLOOR_M = 100;
 const DEFAULT_JITTER_DEDUP_WINDOW_MS = 60 * 1000;
 const DEFAULT_JITTER_DEDUP_MIN_DIST_M = 30;
 
+// Скорость, начиная с которой точка — движение, а не дрожь стоянки
+// (как SPEED_STILL_MS в LocationForegroundService приложения ребёнка).
+const MOVING_SPEED_MPS = 0.5;
+
+// v0.63.0: соседи из БД, с которыми размечаются новые точки (иглу видно
+// только по следующей точке, телепорт — по предыдущей).
+const QUALITY_CONTEXT_MS = 15 * 60 * 1000;
+const QUALITY_CONTEXT_MAX_ROWS = 600;
+
+function groupByFlag(m: Map<string, TrackFlag | null>): Map<TrackFlag | null, string[]> {
+  const out = new Map<TrackFlag | null, string[]>();
+  for (const [id, flag] of m) out.set(flag, [...(out.get(flag) ?? []), id]);
+  return out;
+}
+
 interface ConsentCacheEntry {
   expiresAt: number;
   ok: boolean;
@@ -150,7 +171,6 @@ export class LocationsService {
     const rejectedReasons: Record<string, number> = {};
     const now = Date.now();
     const validPoints: LocationPoint[] = [];
-    const validRows: Prisma.Sql[] = [];
 
     // v0.31.3 — пороги фильтрации читаются из AppSettings (управляются в
     // админке). Берём один раз на батч — значения кешируются в сервисе 60с,
@@ -211,7 +231,16 @@ export class LocationsService {
       // время, считаем дрожанием GPS при стоянке.
       // Только вперёд по времени: точка из старого хвоста очереди не должна
       // сравниваться с более новой уже сохранённой.
-      if (lastKnown !== null && ts >= lastKnown.ts && ts - lastKnown.ts < jitterWindowMs) {
+      // v0.63.0: только если телефон не сообщает движение (speed < 0.5 м/с
+      // или неизвестна) — иначе при ходьбе оставалась точка на 30 м и трек
+      // срезал углы. Дрожь стоянки теперь гасит сборка трека (стоянки).
+      const movingBySpeed = p.speed !== undefined && p.speed >= MOVING_SPEED_MPS;
+      if (
+        !movingBySpeed &&
+        lastKnown !== null &&
+        ts >= lastKnown.ts &&
+        ts - lastKnown.ts < jitterWindowMs
+      ) {
         const dist = distanceMeters(lastKnown.lat, lastKnown.lon, p.lat, p.lon);
         const threshold = Math.max(jitterMinDistM, (p.accuracy ?? 0) * 2);
         if (dist < threshold) {
@@ -225,7 +254,16 @@ export class LocationsService {
       lastKnown = { lat: p.lat, lon: p.lon, ts };
 
       validPoints.push(p);
-      validRows.push(Prisma.sql`(
+    }
+
+    // v0.63.0: пометка качества для маршрута. Плохие точки сохраняем (по ним
+    // видно последнее местоположение), но в трек и поездки они не попадают.
+    const flags =
+      validPoints.length > 0
+        ? await this.classifyIncoming(ctx.deviceId, validPoints)
+        : { incoming: [] as Array<TrackFlag | null>, changed: new Map<string, TrackFlag | null>() };
+    const validRows = validPoints.map(
+      (p, i) => Prisma.sql`(
         ${createId()},
         ${ctx.childId},
         ${ctx.deviceId},
@@ -241,16 +279,17 @@ export class LocationsService {
         ${p.networkType ?? null},
         ${p.wifiSsid ?? null},
         ${p.mobileOperator ?? null},
-        ${new Date(p.recordedAt)}
-      )`);
-    }
+        ${new Date(p.recordedAt)},
+        ${flags.incoming[i]}
+      )`,
+    );
 
     let accepted = 0;
     if (validRows.length > 0) {
       await this.prisma.$transaction(async (tx) => {
         const inserted = await tx.$executeRaw(Prisma.sql`
           INSERT INTO "locations" (
-            "id","childId","childDeviceId","lat","lon","accuracy","altitude","speed","bearing","batteryLevel","isCharging","provider","networkType","wifiSsid","mobileOperator","recordedAt"
+            "id","childId","childDeviceId","lat","lon","accuracy","altitude","speed","bearing","batteryLevel","isCharging","provider","networkType","wifiSsid","mobileOperator","recordedAt","trackFlag"
           ) VALUES ${Prisma.join(validRows)}
           ON CONFLICT ("childDeviceId","recordedAt") DO NOTHING
         `);
@@ -260,10 +299,18 @@ export class LocationsService {
           rejectedReasons.duplicate = (rejectedReasons.duplicate ?? 0) + duplicates;
         }
 
+        // Соседние точки, чья пометка изменилась с приходом новых (игла
+        // видна только по следующей точке).
+        for (const [flag, ids] of groupByFlag(flags.changed)) {
+          await tx.location.updateMany({ where: { id: { in: ids } }, data: { trackFlag: flag } });
+        }
+
         // Геозоны — по каждой валидной точке новее последней сохранённой, в
-        // хронологическом порядке (validPoints отсортированы).
-        for (const p of validPoints) {
+        // хронологическом порядке (validPoints отсортированы). Телепорты и
+        // подделку GPS пропускаем — иначе ложные «вышел/вошёл».
+        for (const [i, p] of validPoints.entries()) {
           if (new Date(p.recordedAt).getTime() <= zoneCutoffTs) continue;
+          if (flags.incoming[i] === 'outlier' || flags.incoming[i] === 'mock') continue;
           await this.zoneDetection.processPoint(tx, {
             familyId: child.familyId,
             childId: ctx.childId,
@@ -305,6 +352,82 @@ export class LocationsService {
     if (!row) return null;
     const ageSec = Math.floor((Date.now() - row.recordedAt.getTime()) / 1000);
     return { ...toDto(row), ageSec };
+  }
+
+  /**
+   * v0.63.0: разметка новых точек вместе с соседями из БД (±15 мин).
+   * Возвращает пометки новых точек и изменившиеся пометки соседей.
+   */
+  private async classifyIncoming(
+    deviceId: string,
+    points: LocationPoint[],
+  ): Promise<{ incoming: Array<TrackFlag | null>; changed: Map<string, TrackFlag | null> }> {
+    const [accuracyMaxM, maxSpeedMps] = await Promise.all([
+      this.settings.getNumber(SETTINGS_KEYS.TRACK_ACCURACY_MAX_M, TRACK_DEFAULTS.accuracyMaxM),
+      this.settings.getNumber(SETTINGS_KEYS.TRACK_MAX_SPEED_MPS, TRACK_DEFAULTS.maxSpeedMps),
+    ]);
+    const times = points.map((p) => new Date(p.recordedAt).getTime());
+    const minT = Math.min(...times);
+    const maxT = Math.max(...times);
+    const context = await this.prisma.location.findMany({
+      where: {
+        childDeviceId: deviceId,
+        recordedAt: {
+          gte: new Date(minT - QUALITY_CONTEXT_MS),
+          lte: new Date(maxT + QUALITY_CONTEXT_MS),
+        },
+      },
+      select: {
+        id: true,
+        lat: true,
+        lon: true,
+        accuracy: true,
+        speed: true,
+        recordedAt: true,
+        trackFlag: true,
+      },
+      orderBy: { recordedAt: 'asc' },
+      take: QUALITY_CONTEXT_MAX_ROWS,
+    });
+
+    type Entry = QualityPoint & { id?: string; incomingIdx?: number };
+    const known = new Set(context.map((r) => r.recordedAt.getTime()));
+    const seq: Entry[] = [
+      ...context.map(
+        (r): Entry => ({
+          id: r.id,
+          lat: r.lat,
+          lon: r.lon,
+          accuracy: r.accuracy,
+          speed: r.speed,
+          t: r.recordedAt.getTime(),
+          flag: (r.trackFlag as TrackFlag | null) ?? null,
+        }),
+      ),
+      ...points
+        .map(
+          (p, i): Entry => ({
+            incomingIdx: i,
+            lat: p.lat,
+            lon: p.lon,
+            accuracy: p.accuracy ?? null,
+            speed: p.speed ?? null,
+            t: times[i],
+            flag: p.isMock ? 'mock' : null,
+          }),
+        )
+        // Повтор уже сохранённой точки (ON CONFLICT её отбросит) — не дублируем.
+        .filter((e) => !known.has(e.t)),
+    ].sort((a, b) => a.t - b.t);
+
+    const result = classifyTrack(seq, { accuracyMaxM, maxSpeedMps }, { trustStoredPrefix: true });
+    const incoming: Array<TrackFlag | null> = points.map((p) => (p.isMock ? 'mock' : null));
+    const changed = new Map<string, TrackFlag | null>();
+    seq.forEach((e, k) => {
+      if (e.incomingIdx !== undefined) incoming[e.incomingIdx] = result[k];
+      else if (e.id && result[k] !== e.flag) changed.set(e.id, result[k]);
+    });
+    return { incoming, changed };
   }
 
   async list(
