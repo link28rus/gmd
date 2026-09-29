@@ -252,6 +252,10 @@ gh release create vX.Y.Z --title "vX.Y.Z" --notes-file <(awk "/^## v${VERSION//.
 
 ## Шаг 8: Verify на реальном устройстве (lesson #12 — никогда не `flutter install`!)
 
+> **⏸ С 2026-09-30 шаг на паузе по решению пользователя** (CLAUDE.md #41): телефон не запрашиваем,
+> APK публикуем после analyze + test + сверки подписи + проверки endpoint, в отчёте — «на устройстве
+> не проверено». Если пользователь сам дал устройство — делать как ниже.
+
 ```bash
 # Проверка подписи устройства vs нового APK
 adb shell dumpsys package com.gmd.parent | grep -A1 signatures
