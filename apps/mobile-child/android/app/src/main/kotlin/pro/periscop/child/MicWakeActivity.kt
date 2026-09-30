@@ -21,6 +21,7 @@ class MicWakeActivity : Activity() {
     companion object {
         const val EXTRA_FROM = "from"
         const val FROM_NOTIFICATION = "notification"
+        const val FROM_BOOT = "boot"
         private const val TAG = "sound"
     }
 

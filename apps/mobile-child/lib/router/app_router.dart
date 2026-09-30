@@ -10,6 +10,7 @@ import '../features/permissions/devadmin_step.dart';
 import '../features/permissions/location_step.dart';
 import '../features/permissions/microphone_step.dart';
 import '../features/permissions/notifications_step.dart';
+import '../features/permissions/overlay_step.dart';
 import '../features/permissions/updates_step.dart';
 import '../features/permissions/wizard_intro_screen.dart';
 import '../features/permissions/wizard_summary_screen.dart';
@@ -71,6 +72,12 @@ class AppRouter {
     GoRoute(
       path: '/permissions/microphone',
       builder: (_, _) => const MicrophoneStep(),
+    ),
+    // v0.68.0: «Поверх других приложений» — чтобы «Звук вокруг» поднимался сам
+    // после перезагрузки телефона (SYSTEM_ALERT_WINDOW → авто-запуск MicWakeActivity).
+    GoRoute(
+      path: '/permissions/overlay',
+      builder: (_, _) => const OverlayStep(),
     ),
     // v0.56.0: «Установка неизвестных приложений» для тихого самообновления.
     GoRoute(

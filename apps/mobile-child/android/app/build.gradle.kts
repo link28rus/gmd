@@ -49,6 +49,19 @@ android {
     defaultConfig {
         applicationId = "pro.periscop.child"
         minSdk = 26
+        // НЕ понижать ради «Звука вокруг» — проверено, не помогает.
+        // Подробности: docs/superpowers/specs/2026-09-30-sound-around-autostart.md
+        //
+        // Гипотеза была: гейт while-in-use (микрофон фоново запущенной службе)
+        // применяется только при targetSdk 34+, значит 33 вернёт автозапуск
+        // после перезагрузки. Эксперимент 2026-09-30 на эмуляторах Android 15
+        // (API 35) и Android 16 (API 36) её опроверг: при targetSdk 33
+        // startForeground(type=MICROPHONE) из BootReceiver проходит без
+        // SecurityException, НО система молча снимает право на микрофон —
+        // `caps=---NFU-` вместо `LCMNFUAT` и в журнале «Foreground service
+        // started from background can not have location/camera/microphone
+        // access». То есть 33 даёт ХУДШИЙ исход: служба «работает» и пишет
+        // тишину, родитель не видит даже честной ошибки MIC_BLOCKED.
         targetSdk = 34
         // Версия берётся из pubspec.yaml (поле `version: X.Y.Z+build`).
         // Flutter-плагин прокидывает её через `flutter.versionCode`

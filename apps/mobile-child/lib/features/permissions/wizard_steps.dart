@@ -75,6 +75,11 @@ const List<WizardStep> kWizardSteps = [
     importance: StepImportance.recommended,
   ),
   WizardStep(
+    route: '/permissions/overlay',
+    title: 'Звук вокруг после перезагрузки',
+    importance: StepImportance.mandatory,
+  ),
+  WizardStep(
     route: '/permissions/updates',
     title: 'Обновления приложения',
     importance: StepImportance.recommended,

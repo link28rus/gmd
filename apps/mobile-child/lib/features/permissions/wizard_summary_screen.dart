@@ -63,6 +63,7 @@ class _WizardSummaryScreenState extends State<WizardSummaryScreen>
     final locAlways = await Permission.locationAlways.status;
     final battery = await Permission.ignoreBatteryOptimizations.status;
     final mic = await Permission.microphone.status;
+    final overlay = await Permission.systemAlertWindow.status;
     final activity = await Permission.activityRecognition.status;
     final admin = await _admin.isActive();
     final updates = await AppUpdateChannel.canRequestInstall();
@@ -97,6 +98,12 @@ class _WizardSummaryScreenState extends State<WizardSummaryScreen>
         importance: StepImportance.recommended,
         route: '/permissions/microphone',
         granted: mic.isGranted,
+      ),
+      _SummaryItem(
+        title: 'Звук вокруг после перезагрузки',
+        importance: StepImportance.mandatory,
+        route: '/permissions/overlay',
+        granted: overlay.isGranted,
       ),
       _SummaryItem(
         title: 'Обновления приложения',

@@ -95,6 +95,39 @@ class BootReceiver : BroadcastReceiver() {
             "BootReceiver($action): prewarm dispatch, serviceState=${SoundAroundService.state} " +
                 "importance=${DiagSnapshot.processImportance()} sdk=${Build.VERSION.SDK_INT}",
         )
+        // ЭКСПЕРИМЕНТ 2026-09-30: если есть право «поверх других приложений»,
+        // оно даёт background-activity-launch capability — запускаем видимую
+        // MicWakeActivity автоматически, без тапа ребёнка. Видимая активность
+        // должна дать службе WIU-доступ к микрофону (проверяем на эмуляторе).
+        // v0.68.0 — автозапуск микрофона после перезагрузки БЕЗ участия ребёнка.
+        // Подтверждено на эмуляторе Android 15 (curCapability включает M).
+        //
+        // Android 14+ не даёт микрофон службе, запущенной из фона; исходный prewarm
+        // из BootReceiver стартует, но система молча снимает право (while-in-use).
+        // Единственный «видимый» путь к микрофону без участия ребёнка — на долю
+        // секунды показать активность: видимая активность = приложение на переднем
+        // плане = while-in-use выдаётся (этот путь уже подтверждён тапом по
+        // уведомлению в v0.62.0). Чтобы запустить активность из фонового
+        // BootReceiver, нужно право «поверх других приложений» (SYSTEM_ALERT_WINDOW):
+        // оно даёт background-activity-launch capability. Ребёнок выдаёт его один
+        // раз при настройке; дальше после каждой перезагрузки активность
+        // поднимается сама.
+        //
+        // Если права нет — молча откатываемся на prewarm ниже (микрофон включится
+        // после того, как ребёнок откроет приложение или коснётся уведомления).
+        // Подробности и статус проверки: docs/superpowers/specs/2026-09-30-sound-around-autostart.md
+        if (android.provider.Settings.canDrawOverlays(context)) {
+            try {
+                val wake = Intent(context, MicWakeActivity::class.java)
+                    .putExtra(MicWakeActivity.EXTRA_FROM, MicWakeActivity.FROM_BOOT)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(wake)
+                DiagLog.write(context, "sound", "BootReceiver($action): MicWakeActivity авто-запуск (право overlay есть)")
+            } catch (e: Throwable) {
+                DiagLog.write(context, "sound", "BootReceiver: MicWakeActivity авто-запуск FAILED: ${e.javaClass.simpleName}: ${e.message}")
+            }
+        }
+
         try {
             val prewarmIntent = Intent(context, SoundAroundService::class.java)
                 .putExtra(SoundAroundService.EXTRA_MODE, SoundAroundService.MODE_PREWARM)

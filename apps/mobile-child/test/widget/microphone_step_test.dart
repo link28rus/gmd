@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:periscop_child/features/permissions/microphone_step.dart';
+import 'package:periscop_child/features/permissions/wizard_steps.dart';
 
 void main() {
   testWidgets('MicrophoneStep renders title, description, and buttons',
@@ -15,8 +16,8 @@ void main() {
     expect(find.textContaining('Звук вокруг ребёнка'), findsOneWidget);
     expect(find.text('Разрешить'), findsOneWidget);
     expect(find.text('Пропустить'), findsOneWidget);
-    // Микрофон — recommended-шаг, позиция вычисляется из kWizardSteps.
-    expect(find.text('Шаг 5 из 7'), findsOneWidget);
+    // Микрофон — recommended-шаг, позиция (индекс 4 → шаг 5) из kWizardSteps.
+    expect(find.text('Шаг 5 из $kWizardTotalSteps'), findsOneWidget);
   });
 
   testWidgets('Skip calls onSkip (onNext equivalent)', (tester) async {
@@ -36,15 +37,15 @@ void main() {
     expect(find.text('Разрешить'), findsOneWidget);
   });
 
-  testWidgets('MicrophoneStep shows progress step 5 of 7', (tester) async {
+  testWidgets('MicrophoneStep shows progress step 5 of total', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
         home: MicrophoneStep(),
       ),
     );
 
-    // Позиция микрофона в kWizardSteps (индекс 4) → «Шаг 5 из 7».
-    expect(find.text('Шаг 5 из 7'), findsOneWidget);
+    // Позиция микрофона в kWizardSteps (индекс 4) → «Шаг 5 из N».
+    expect(find.text('Шаг 5 из $kWizardTotalSteps'), findsOneWidget);
   });
 
   testWidgets('MicrophoneStep description contains privacy notice',

@@ -23,6 +23,16 @@
          FOREGROUND_SERVICE_MICROPHONE обязателен с Android 14 (API 34). -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
+    <!-- v0.68.0: даёт background-activity-launch capability, чтобы после
+         перезагрузки автоматически, без участия ребёнка, поднять MicWakeActivity →
+         видимая активность → while-in-use доступ к микрофону для «Звука вокруг».
+         Подтверждено на эмуляторе Android 15 (curCapability включает M после
+         авто-запуска). Ребёнок выдаёт «поверх других приложений» один раз при
+         настройке; без разрешения — откат на уведомление с тапом (v0.62.0).
+         Осталось: онбординг-запрос разрешения + проверка на реальном MIUI/HyperOS.
+         Ранее разрешение было в приложении (блокировка приложений), убрано в v0.58.0.
+         docs/superpowers/specs/2026-09-30-sound-around-autostart.md -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
     <!-- Защита от свайпа из recents: onTaskRemoved ставит AlarmManager-alarm
          через 3 сек, RestartReceiver поднимает сервис обратно. USE_EXACT_ALARM

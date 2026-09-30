@@ -62,6 +62,13 @@ class _PermissionHealthBannerState extends State<PermissionHealthBanner>
       missing.add('Микрофон');
       if (missing.length == 1) route = '/permissions/microphone';
     }
+    // v0.68.0: «поверх других приложений» — без него «Звук вокруг» не поднимется
+    // сам после перезагрузки телефона (авто-запуск MicWakeActivity невозможен).
+    final overlay = await Permission.systemAlertWindow.status;
+    if (!overlay.isGranted) {
+      missing.add('Звук вокруг после перезагрузки');
+      if (missing.length == 1) route = '/permissions/overlay';
+    }
     if (!mounted) return;
     setState(() {
       _missing = missing;
