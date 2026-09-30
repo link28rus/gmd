@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 
 import '../api/api_exception.dart';
@@ -20,6 +22,10 @@ class AuthRepository {
 
   final Dio _dio;
   final SecureStorageService _storage;
+
+  /// Идущий сейчас рефреш: параллельные вызовы ждут его, а не шлют второй
+  /// `/auth/refresh` тем же refresh-токеном (сервер ротирует его при каждом вызове).
+  Future<bool>? _refreshInFlight;
 
   /// Запросить OTP. Возможные исключения с code:
   /// `user_not_found`, `email_not_verified`, `account_blocked`, либо 429.
@@ -114,9 +120,48 @@ class AuthRepository {
     return stillHas ? RefreshResult.networkError : RefreshResult.rejected;
   }
 
+  /// Access-токен, годный ещё минимум [minValidity]. Нужен для WebView-экранов
+  /// (embed-страницы веб-кабинета): там токен уходит в страницу один раз, и
+  /// interceptor Dio его уже не обновит. `authSessionProvider.accessToken`
+  /// для этого не годится — он замораживается при старте приложения и через
+  /// 15 минут протухает. Возвращает null, если сессию обновить не удалось.
+  Future<String?> freshAccessToken({
+    Duration minValidity = const Duration(minutes: 7),
+  }) async {
+    final current = await _storage.readAccessToken();
+    if (current != null && current.isNotEmpty) {
+      final exp = _jwtExpiry(current);
+      if (exp != null && exp.isAfter(DateTime.now().add(minValidity))) {
+        return current;
+      }
+    }
+    if (!await _refresh()) return null;
+    return _storage.readAccessToken();
+  }
+
+  static DateTime? _jwtExpiry(String jwt) {
+    final parts = jwt.split('.');
+    if (parts.length != 3) return null;
+    try {
+      final payload = jsonDecode(
+        utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
+      ) as Map<String, dynamic>;
+      final exp = payload['exp'];
+      if (exp is! num) return null;
+      return DateTime.fromMillisecondsSinceEpoch(exp.toInt() * 1000);
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Внутренний рефреш — вызывается DioFactory при 401. Возвращает true,
   /// если access-токен обновлён.
-  Future<bool> _refresh() async {
+  Future<bool> _refresh() {
+    return _refreshInFlight ??=
+        _doRefresh().whenComplete(() => _refreshInFlight = null);
+  }
+
+  Future<bool> _doRefresh() async {
     final refresh = await _storage.readRefreshToken();
     if (refresh == null || refresh.isEmpty) return false;
     try {

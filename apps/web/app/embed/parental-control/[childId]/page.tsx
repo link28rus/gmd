@@ -86,11 +86,13 @@ export default function ParentalControlEmbedPage({
 
 /**
  * Кнопка «Назад» в embed-режиме просит хост-приложение (Flutter WebView)
- * закрыть экран через JS-bridge GmdHost.postMessage. В обычном браузере
+ * закрыть экран через JS-bridge PeriscopHost.postMessage. В обычном браузере
  * (вне WebView) канала нет — fallback на history.back().
  */
 function handleClose(): void {
-  const host = (window as unknown as { GmdHost?: { postMessage?: (m: string) => void } }).GmdHost;
+  // PeriscopHost — имя канала в mobile-parent после ребрендинга; GmdHost — в старых сборках.
+  const w = window as unknown as Record<string, { postMessage?: (m: string) => void } | undefined>;
+  const host = w.PeriscopHost ?? w.GmdHost;
   if (host?.postMessage) {
     host.postMessage('close');
   } else if (window.history.length > 1) {

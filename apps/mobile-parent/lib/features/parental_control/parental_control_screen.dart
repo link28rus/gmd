@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 
+import '../../core/auth/auth_models.dart';
 import '../../core/config/env.dart';
 import '../../core/providers.dart';
 
@@ -48,14 +49,6 @@ class _ParentalControlScreenState extends ConsumerState<ParentalControlScreen> {
       _controller = WebViewController();
       return;
     }
-
-    final url = _buildEmbedUrl(
-      session.accessToken,
-      session.user.id,
-      session.user.email,
-      session.family.id,
-      session.family.name ?? '',
-    );
 
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
@@ -112,13 +105,30 @@ class _ParentalControlScreenState extends ConsumerState<ParentalControlScreen> {
             }
           },
         ),
-      )
-      ..loadRequest(Uri.parse(url));
+      );
 
     final platform = _controller.platform;
     if (platform is AndroidWebViewController) {
       platform.setMediaPlaybackRequiresUserGesture(false);
     }
+    _load(session);
+  }
+
+  /// Актуальный токен вместо замороженного в `authSessionProvider` (см. тот же
+  /// метод в `AudioListenScreen`).
+  Future<void> _load(AuthSession session) async {
+    final token = await ref.read(authRepositoryProvider).freshAccessToken();
+    if (!mounted) return;
+    if (token == null) {
+      setState(() {
+        _loadError = 'Не удалось обновить сессию. Проверьте интернет или войдите заново.';
+        _loading = false;
+      });
+      return;
+    }
+    final url = _buildEmbedUrl(token, session.user.id, session.user.email,
+        session.family.id, session.family.name ?? '');
+    await _controller.loadRequest(Uri.parse(url));
   }
 
   String _buildEmbedUrl(

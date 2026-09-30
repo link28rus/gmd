@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 
+import '../../core/auth/auth_models.dart';
 import '../../core/config/env.dart';
 import '../../core/providers.dart';
 
@@ -46,9 +47,6 @@ class _AudioListenScreenState extends ConsumerState<AudioListenScreen> {
       _controller = WebViewController();
       return;
     }
-
-    final url = _buildEmbedUrl(session.accessToken, session.user.id,
-        session.user.email, session.family.id, session.family.name ?? '');
 
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
@@ -109,8 +107,7 @@ class _AudioListenScreenState extends ConsumerState<AudioListenScreen> {
             }
           },
         ),
-      )
-      ..loadRequest(Uri.parse(url));
+      );
 
     // Android: разрешаем autoplay аудио без user gesture — иначе AudioContext
     // resume() в embed-странице ждёт первого тапа, и поток молчит.
@@ -118,6 +115,25 @@ class _AudioListenScreenState extends ConsumerState<AudioListenScreen> {
     if (platform is AndroidWebViewController) {
       platform.setMediaPlaybackRequiresUserGesture(false);
     }
+    _load(session);
+  }
+
+  /// Токен из `authSessionProvider` заморожен на момент старта приложения и
+  /// через 15 минут протухает — страница получала 401 и показывала «Ошибка
+  /// соединения». Берём актуальный, при необходимости обновив сессию.
+  Future<void> _load(AuthSession session) async {
+    final token = await ref.read(authRepositoryProvider).freshAccessToken();
+    if (!mounted) return;
+    if (token == null) {
+      setState(() {
+        _loadError = 'Не удалось обновить сессию. Проверьте интернет или войдите заново.';
+        _loading = false;
+      });
+      return;
+    }
+    final url = _buildEmbedUrl(token, session.user.id, session.user.email,
+        session.family.id, session.family.name ?? '');
+    await _controller.loadRequest(Uri.parse(url));
   }
 
   String _buildEmbedUrl(

@@ -21,7 +21,9 @@ import { useAuthStore } from '@/lib/auth-store';
  *
  * При mount парсим hash → кладём в `useAuthStore`, и audio-pane сразу делает
  * запросы через `apiFetch` (он берёт accessToken из store). Refresh через
- * cookie у WebView нет — но access-token живёт 15 мин, audio-сессия 5, ок.
+ * cookie у WebView нет — access-token живёт 15 мин, audio-сессия 5. Поэтому
+ * mobile-parent обязан передавать свежий токен (`AuthRepository.freshAccessToken`,
+ * v0.68.2): протухший давал 401 на `POST /audio/sessions` → «Ошибка соединения».
  */
 export default function AudioEmbedPage({
   params,
@@ -136,12 +138,14 @@ export default function AudioEmbedPage({
 /**
  * Когда AudioSessionPane вызывает onOpenChange(false) (кнопка «Закрыть» /
  * «Остановить»), просим хост-приложение (Flutter WebView) закрыть экран
- * через JS-bridge GmdHost.postMessage. В web-режиме (вне WebView) канала
+ * через JS-bridge PeriscopHost.postMessage. В web-режиме (вне WebView) канала
  * нет — fallback пытается просто history.back().
  */
 function handleClose(open: boolean): void {
   if (open) return;
-  const host = (window as unknown as { GmdHost?: { postMessage?: (m: string) => void } }).GmdHost;
+  // PeriscopHost — имя канала в mobile-parent после ребрендинга; GmdHost — в старых сборках.
+  const w = window as unknown as Record<string, { postMessage?: (m: string) => void } | undefined>;
+  const host = w.PeriscopHost ?? w.GmdHost;
   if (host?.postMessage) {
     host.postMessage('close');
   } else if (window.history.length > 1) {
