@@ -243,6 +243,7 @@ class LocationForegroundService : Service() {
                 // в 5 сек = ANR. Если сервис уже живой, повторный startForeground
                 // безопасен.
                 startForeground(NOTIF_ID, buildNotification())
+                if (!ensureStarted("heartbeat")) return START_NOT_STICKY
                 if (callback != null && subscribedBatched) {
                     // v0.59.0: без сети в движении FLP сам копит точки каждые
                     // 5 с — heartbeat лишь будил бы Dart-изолят, а realtime-
@@ -264,10 +265,12 @@ class LocationForegroundService : Service() {
                 // Сервис может быть ещё не started — promote в foreground
                 // безопасен и идемпотентен.
                 startForeground(NOTIF_ID, buildNotification())
+                if (!ensureStarted("AR STILL")) return START_NOT_STICKY
                 onArStill()
             }
             ACTION_ACTIVITY_MOVING -> {
                 startForeground(NOTIF_ID, buildNotification())
+                if (!ensureStarted("AR MOVING")) return START_NOT_STICKY
                 // Движение по AR — такой же сигнал, как скорость: отменяет
                 // отложенный STILL и перезапускает 15-мин debounce.
                 lastMovingTimeMs = System.currentTimeMillis()
@@ -277,6 +280,19 @@ class LocationForegroundService : Service() {
             else -> start()
         }
         return START_STICKY
+    }
+
+    // v0.68.1 — система убила процесс, а первым его поднял не ACTION_START, а
+    // heartbeat-будильник или сигнал Activity Recognition. Без этой проверки
+    // сервис жил без подписки FLP: раз в 90 с отдавал старый lastLocation, и
+    // маршрут пропадал до следующего открытия приложения (журнал 2026-09-30:
+    // 10 минут пути без точек). false — start() не смог стартовать (нет
+    // разрешения на геолокацию) и уже вызвал stopSelf.
+    private fun ensureStarted(reason: String): Boolean {
+        if (callback != null) return true
+        log("$reason: подписки FLP нет (новый процесс) — полный start()")
+        start()
+        return callback != null
     }
 
     // Отдельный метод для heartbeat-тика, вызывается только из AlarmManager
