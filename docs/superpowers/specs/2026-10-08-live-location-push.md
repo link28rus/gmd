@@ -15,6 +15,9 @@
    вызывает `PUT /children/:id/location/watch` → 204. Отметка живёт 90 с
    (`WATCH_TTL_SEC`): Redis sorted set `loc-watch:<childId>`, member = userId,
    score = момент истечения в мс.
+   Путь идёт через Next.js: Caddy отдаёт `/api/children/*` в web, там прокси
+   `apps/web/app/api/children/[id]/location/watch/route.ts`. Новый эндпоинт под
+   `/children/*` без такого прокси снаружи отвечает 404.
 2. `LocationsService.ingestBatch`: если вставилась хотя бы одна точка — после пересчёта
    поездок (иначе родитель перезапросит старый трек) вызывается
    `LocationWatchService.notifyNewPoints(childId, familyId)`.
