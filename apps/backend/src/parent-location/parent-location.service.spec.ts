@@ -4,7 +4,9 @@ import { NotFoundException } from '@nestjs/common';
 import {
   ParentLocationService,
   PARENT_ACCURACY_MAX_M,
+  SIGNAL_TTL_MS,
   displayName,
+  isSignalLive,
 } from './parent-location.service';
 
 const sha256 = (v: string): string => createHash('sha256').update(v).digest('hex');
@@ -17,6 +19,7 @@ function makeService(
     verifyDevice: any;
     latestRows: any[];
     updateCount: number;
+    signal: { signalId: string | null; signalRequestedAt: Date | null; signalAckedAt: Date | null };
   }> = {},
 ) {
   const share = o.share === undefined ? true : o.share;
@@ -35,11 +38,20 @@ function makeService(
     tx,
     $transaction: jest.fn().mockImplementation((cb: (t: any) => Promise<unknown>) => cb(tx)),
     $queryRaw: jest.fn().mockResolvedValue(o.latestRows ?? []),
+    $executeRaw: jest.fn().mockResolvedValue(o.insertResult ?? 0),
     parentLocationDevice: {
       findFirst: jest.fn().mockResolvedValue(o.verifyDevice ?? o.device ?? null),
-      update: jest.fn().mockResolvedValue({}),
+      update: jest
+        .fn()
+        .mockResolvedValue(
+          o.signal ?? { signalId: null, signalRequestedAt: null, signalAckedAt: null },
+        ),
     },
-    user: { findUnique: jest.fn() },
+    user: {
+      findUnique: jest.fn(),
+      updateMany: jest.fn().mockResolvedValue({ count: o.updateCount ?? 1 }),
+    },
+    parentLocation: { deleteMany: jest.fn().mockResolvedValue({ count: 3 }) },
   };
   return { svc: new ParentLocationService(prisma), prisma, tx };
 }
@@ -126,18 +138,21 @@ describe('ParentLocationService', () => {
   });
 
   describe('ingestPoints', () => {
+    const lastSeenOnly = {
+      where: { id: 'pd1' },
+      data: { lastSeenAt: expect.any(Date) },
+      select: { signalId: true, signalRequestedAt: true, signalAckedAt: true },
+    };
+
     it('пишет валидные точки и обновляет lastSeenAt', async () => {
-      const { svc, tx } = makeService({ insertResult: 2 });
+      const { svc, prisma } = makeService({ insertResult: 2 });
       const r = await svc.ingestPoints(ctx, [point(60_000), point(30_000, { isMock: true })]);
       expect(r).toEqual({ accepted: 2, rejected: 0, sharingDisabled: false });
-      expect(tx.$executeRaw).toHaveBeenCalledTimes(1);
-      const sql = tx.$executeRaw.mock.calls[0][0];
+      expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
+      const sql = prisma.$executeRaw.mock.calls[0][0];
       expect(sql.sql).toContain('ON CONFLICT ("deviceId","recordedAt") DO NOTHING');
       expect(sql.values).toContain(true); // isMock второй точки
-      expect(tx.parentLocationDevice.update).toHaveBeenCalledWith({
-        where: { id: 'pd1' },
-        data: { lastSeenAt: expect.any(Date) },
-      });
+      expect(prisma.parentLocationDevice.update).toHaveBeenCalledWith(lastSeenOnly);
     });
 
     it('дубликаты (ON CONFLICT) считаются rejected', async () => {
@@ -147,43 +162,87 @@ describe('ParentLocationService', () => {
     });
 
     it('отбрасывает точки вне окна и с accuracy > 500 м до INSERT', async () => {
-      const { svc, tx } = makeService({ insertResult: 0 });
+      const { svc, prisma } = makeService({ insertResult: 0 });
       const r = await svc.ingestPoints(ctx, [
         point(8 * 24 * 3600 * 1000),
         point(-3 * 60 * 1000),
         point(1000, { accuracy: PARENT_ACCURACY_MAX_M + 1 }),
       ]);
       expect(r).toEqual({ accepted: 0, rejected: 3, sharingDisabled: false });
-      expect(tx.$executeRaw).not.toHaveBeenCalled();
+      expect(prisma.$executeRaw).not.toHaveBeenCalled();
       // lastSeenAt обновляется даже если ни одна точка не прошла фильтры
-      expect(tx.parentLocationDevice.update).toHaveBeenCalled();
+      expect(prisma.parentLocationDevice.update).toHaveBeenCalled();
     });
 
-    it('флаг выключен — ничего не пишет, sharingDisabled', async () => {
-      const { svc, tx } = makeService({ share: false });
+    it('v0.73.0: флаг семьи не проверяется — точки пишутся всегда', async () => {
+      const { svc, prisma, tx } = makeService({ share: false, insertResult: 1 });
       const r = await svc.ingestPoints(ctx, [point(1000)]);
-      expect(r).toEqual({ accepted: 0, rejected: 1, sharingDisabled: true });
-      expect(tx.$executeRaw).not.toHaveBeenCalled();
-      expect(tx.$queryRaw.mock.calls[0][0].sql).toContain('FOR SHARE');
+      expect(r).toEqual({ accepted: 1, rejected: 0, sharingDisabled: false });
+      expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
+      expect(tx.$queryRaw).not.toHaveBeenCalled();
+    });
+
+    it('сохраняет имя модели и push-токен устройства', async () => {
+      const { svc, prisma } = makeService({ insertResult: 1 });
+      await svc.ingestPoints(ctx, [point(1000)], { name: 'Xiaomi 2201', pushToken: 'fcm-1' });
+      expect(prisma.parentLocationDevice.update).toHaveBeenCalledWith({
+        ...lastSeenOnly,
+        data: { lastSeenAt: expect.any(Date), deviceName: 'Xiaomi 2201', fcmToken: 'fcm-1' },
+      });
+    });
+
+    it('живой сигнал приходит в ответе', async () => {
+      const { svc } = makeService({
+        insertResult: 1,
+        signal: { signalId: 's1', signalRequestedAt: new Date(), signalAckedAt: null },
+      });
+      const r = await svc.ingestPoints(ctx, [point(1000)]);
+      expect(r.signal).toEqual({ id: 's1' });
+    });
+
+    it('подтверждённый или просроченный сигнал не приходит', async () => {
+      const acked = makeService({
+        signal: { signalId: 's1', signalRequestedAt: new Date(), signalAckedAt: new Date() },
+      });
+      expect((await acked.svc.ingestPoints(ctx, [point(1000)])).signal).toBeUndefined();
+      const old = makeService({
+        signal: {
+          signalId: 's1',
+          signalRequestedAt: new Date(Date.now() - SIGNAL_TTL_MS - 1000),
+          signalAckedAt: null,
+        },
+      });
+      expect((await old.svc.ingestPoints(ctx, [point(1000)])).signal).toBeUndefined();
     });
   });
 
+  it('isSignalLive: граница TTL', () => {
+    const now = Date.now();
+    const at = (ms: number) => ({
+      signalId: 's',
+      signalRequestedAt: new Date(now - ms),
+      signalAckedAt: null,
+    });
+    expect(isSignalLive(at(SIGNAL_TTL_MS - 1), now)).toBe(true);
+    expect(isSignalLive(at(SIGNAL_TTL_MS), now)).toBe(false);
+    expect(isSignalLive({ ...at(0), signalId: null }, now)).toBe(false);
+  });
+
   describe('setSharing', () => {
-    it('false — флаг и удаление точек в одной транзакции', async () => {
-      const { svc, tx, prisma } = makeService();
+    it('v0.73.0: false — только флаг, точки остаются', async () => {
+      const { svc, prisma } = makeService();
       expect(await svc.setSharing('u1', false)).toEqual({ enabled: false });
-      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
-      expect(tx.user.updateMany).toHaveBeenCalledWith({
+      expect(prisma.user.updateMany).toHaveBeenCalledWith({
         where: { id: 'u1', deletedAt: null },
         data: { shareLocationWithFamily: false },
       });
-      expect(tx.parentLocation.deleteMany).toHaveBeenCalledWith({ where: { userId: 'u1' } });
+      expect(prisma.parentLocation.deleteMany).not.toHaveBeenCalled();
     });
 
     it('true — точки не трогает', async () => {
-      const { svc, tx } = makeService();
+      const { svc, prisma } = makeService();
       expect(await svc.setSharing('u1', true)).toEqual({ enabled: true });
-      expect(tx.parentLocation.deleteMany).not.toHaveBeenCalled();
+      expect(prisma.parentLocation.deleteMany).not.toHaveBeenCalled();
     });
 
     it('404 для удалённого пользователя', async () => {

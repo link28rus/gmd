@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { useState, type ReactElement } from 'react';
-import { Download, Shield, ChevronDown, LogOut } from 'lucide-react';
+import { Download, Shield, ChevronDown, LogOut, Smartphone } from 'lucide-react';
 import { useAuthStore } from '@/lib/auth-store';
 import { avatarColor, avatarInitial } from '@/lib/color/avatar-color';
 import { ThemeSwitcher } from '@/components/theme/theme-switcher';
@@ -28,12 +28,12 @@ export function CabinetHeader(): ReactElement {
     router.push('/');
   }
 
-  const navLink = (href: string, label: string): ReactElement => {
+  const navLink = (href: string, label: string, extraClass = ''): ReactElement => {
     const active = pathname === href;
     return (
       <Link
         href={href}
-        className={`rounded-md px-3 py-1.5 text-sm transition ${
+        className={`${extraClass} rounded-md px-3 py-1.5 text-sm transition ${
           active
             ? 'bg-foreground text-background'
             : 'text-muted-foreground hover:bg-muted hover:text-foreground'
@@ -67,6 +67,13 @@ export function CabinetHeader(): ReactElement {
             {navLink('/cabinet', 'Главная')}
             {navLink('/cabinet/zones', 'Геозоны')}
             {navLink('/cabinet/family', 'Семья')}
+            {/* v0.73.0: на узких экранах четвёртый пункт не влезает — он в
+                profile-меню (см. ниже). */}
+            {navLink(
+              '/cabinet/find-phone',
+              'Найти телефон',
+              'hidden whitespace-nowrap sm:inline-block',
+            )}
           </nav>
         </div>
 
@@ -133,6 +140,15 @@ export function CabinetHeader(): ReactElement {
                 {/* На мобильном показываем «Скачать приложение» тут, плюс
                     переключатель темы (на sm: он уже есть в header'е). */}
                 <div className="sm:hidden">
+                  <Link
+                    href="/cabinet/find-phone"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+                    role="menuitem"
+                    onMouseDown={(e) => e.preventDefault()}
+                  >
+                    <Smartphone className="h-4 w-4" />
+                    Найти телефон
+                  </Link>
                   <Link
                     href="/cabinet/download"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"

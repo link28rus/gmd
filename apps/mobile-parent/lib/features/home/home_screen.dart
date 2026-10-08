@@ -20,7 +20,8 @@ import 'update_banner.dart';
 
 /// Главный экран. v0.70.0: сверху общая карта семьи (дети, родители, зоны —
 /// только просмотр, см. [HomeFamilyMap]), ниже список детей и карточка
-/// «Показывать вас семье», пока для фоновой передачи чего-то не хватает.
+/// «Местоположение этого телефона», пока для фоновой передачи чего-то не
+/// хватает (v0.73.0 — при любом положении «Показывать меня семье»).
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
@@ -123,7 +124,19 @@ class HomeScreen extends ConsumerWidget {
                   value: 'share',
                   checked: sharing.enabled == true,
                   enabled: sharing.enabled != null && !sharing.busy,
-                  child: const Text('Показывать меня семье'),
+                  // v0.73.0: пояснение — точки собираются при любом положении.
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('Показывать меня семье'),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Вам телефон всё равно виден в «Найти телефон»',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
                 ),
               // Самообновление есть только на Android (iOS — через App Store).
               if (Platform.isAndroid)
@@ -186,8 +199,9 @@ class HomeScreen extends ConsumerWidget {
   }
 }
 
-/// Тумблер «Показывать меня семье»: PUT /parent-location/sharing + старт или
-/// стоп службы. Выключение заодно удаляет точки родителя с сервера.
+/// Тумблер «Показывать меня семье»: PUT /parent-location/sharing — только
+/// видимость семье. v0.73.0: служба и сбор точек работают при любом
+/// положении (нужны «Найти телефон»), точки с сервера не удаляются.
 Future<void> _toggleSharing(BuildContext context, WidgetRef ref) async {
   final messenger = ScaffoldMessenger.of(context);
   final next = ref.read(parentLocationProvider).enabled != true;
@@ -198,7 +212,8 @@ Future<void> _toggleSharing(BuildContext context, WidgetRef ref) async {
       ..showSnackBar(SnackBar(
         content: Text(next
             ? 'Семья видит, где вы.'
-            : 'Семья больше не видит, где вы. Ваши точки удалены с сервера.'),
+            : 'Семья больше не видит, где вы. Местоположение по-прежнему '
+                'сохраняется для «Найти телефон».'),
       ));
   } catch (_) {
     messenger

@@ -8,8 +8,17 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../core/parent_location/parent_location_controller.dart';
 import '../../core/providers.dart';
 
-/// Карточка «Показывать вас семье» на главном экране (v0.70.0). Видна, пока
-/// флаг включён, а для фоновой передачи чего-то не хватает. Шаги по порядку:
+/// Пояснение к тумблеру «Показывать меня семье» (v0.73.0): карточка шагов и
+/// пункт меню главного экрана.
+const kShareLocationExplanation =
+    'Местоположение этого телефона сохраняется 30 дней и видно только вам — '
+    'в личном кабинете, раздел «Найти телефон». Семья видит вас на карте, '
+    'только если переключатель включён.';
+
+/// Карточка «Местоположение этого телефона» на главном экране (v0.70.0).
+/// v0.73.0: видна, пока для фоновой передачи чего-то не хватает, — при любом
+/// положении флага «Показывать меня семье»: точки нужны и для «Найти телефон»
+/// в личном кабинете. Шаги по порядку:
 /// геолокация → «Разрешать всегда» (настройки, перепроверка на возврате) →
 /// уведомления → без ограничений батареи. Тот же порядок и приёмы, что в
 /// мастере разрешений приложения ребёнка (location_step.dart, battery_step.dart).
@@ -106,7 +115,11 @@ class _ShareLocationCardState extends ConsumerState<ShareLocationCard> with Widg
       _say('Доступ к местоположению запрещён. Включите его в настройках и вернитесь.');
       await _openSettings();
     } else if (!status.isGranted && !status.isLimited) {
-      _say('Без доступа к местоположению семья не увидит, где вы.', warn: true);
+      _say(
+        'Без доступа к местоположению не будут работать «Найти телефон» и '
+        'карта семьи.',
+        warn: true,
+      );
     }
   }
 
@@ -155,7 +168,7 @@ class _ShareLocationCardState extends ConsumerState<ShareLocationCard> with Widg
   Widget build(BuildContext context) {
     if (!Platform.isAndroid) return const SizedBox.shrink();
     final s = ref.watch(parentLocationProvider);
-    if (s.enabled != true || !s.perms.checked) return const SizedBox.shrink();
+    if (!s.perms.checked) return const SizedBox.shrink();
     final step = _nextStep(s.perms);
     if (step == null) return const SizedBox.shrink();
 
@@ -164,7 +177,8 @@ class _ShareLocationCardState extends ConsumerState<ShareLocationCard> with Widg
     final (String title, String text, String action, Future<void> Function() run) = switch (step) {
       _Step.location => (
         'Доступ к местоположению',
-        'Чтобы семья видела вас на карте, разрешите доступ к местоположению.',
+        'Чтобы найти телефон, если он потеряется, и показывать вас семье, '
+            'разрешите доступ к местоположению.',
         'Разрешить',
         _requestLocation,
       ),
@@ -177,8 +191,8 @@ class _ShareLocationCardState extends ConsumerState<ShareLocationCard> with Widg
       ),
       _Step.notifications => (
         'Уведомления',
-        'Пока семья видит, где вы, в шторке висит уведомление «Семья видит, '
-            'где вы» — без него Android не даст работать в фоне.',
+        'Пока передача работает, в шторке висит уведомление «Перископ: '
+            'геолокация включена» — без него Android не даст работать в фоне.',
         'Разрешить',
         _requestNotifications,
       ),
@@ -208,7 +222,7 @@ class _ShareLocationCardState extends ConsumerState<ShareLocationCard> with Widg
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Показывать вас семье',
+                    'Местоположение этого телефона',
                     style: theme.textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.w600,
                       color: scheme.onSecondaryContainer,
@@ -220,6 +234,11 @@ class _ShareLocationCardState extends ConsumerState<ShareLocationCard> with Widg
                   style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSecondaryContainer),
                 ),
               ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              kShareLocationExplanation,
+              style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSecondaryContainer),
             ),
             const SizedBox(height: 8),
             Text(
@@ -239,10 +258,12 @@ class _ShareLocationCardState extends ConsumerState<ShareLocationCard> with Widg
               alignment: WrapAlignment.end,
               spacing: 4,
               children: [
-                TextButton(
-                  onPressed: s.busy ? null : _turnOff,
-                  child: const Text('Не показывать меня'),
-                ),
+                // Выключает только видимость семье, сбор точек остаётся.
+                if (s.enabled == true)
+                  TextButton(
+                    onPressed: s.busy ? null : _turnOff,
+                    child: const Text('Не показывать меня'),
+                  ),
                 if (step == _Step.battery)
                   TextButton(onPressed: _openSettings, child: const Text('Настройки приложения')),
                 FilledButton(onPressed: _requesting ? null : () => _run(run), child: Text(action)),

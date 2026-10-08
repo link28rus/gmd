@@ -29,6 +29,19 @@ class AppUpdatedReceiver : BroadcastReceiver() {
         ) {
             return
         }
+        // v0.73.0: передача идёт всегда («Найти телефон»). Тумблер «Показывать
+        // меня семье» до v0.73.0 гасил флаг, оставляя токен, — включаем, иначе
+        // служба ждала бы первого открытия приложения. Выход из аккаунта стирает
+        // токен целиком, его этим не воскресить.
+        try {
+            val creds = ParentLocationCreds.read(context)
+            if (!creds.enabled && !creds.token.isNullOrBlank() && !creds.baseUrl.isNullOrBlank()) {
+                ParentLocationCreds.setEnabled(context, true)
+                DiagLog.write(context, "ploc", "v0.73 migrate: enabled=true ($action)")
+            }
+        } catch (e: Throwable) {
+            DiagLog.write(context, "ploc", "v0.73 migrate failed: ${e.message}")
+        }
         try {
             ParentLocationService.ensureStarted(context, action.substringAfterLast('.'), fromBackground = true)
         } catch (e: Throwable) {

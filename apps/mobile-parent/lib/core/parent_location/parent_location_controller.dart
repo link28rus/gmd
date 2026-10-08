@@ -76,6 +76,12 @@ class ParentLocationState {
 /// Фоновая геолокация родителя (v0.70.0): флаг на сервере, токен устройства,
 /// разрешения и запуск нативной службы `ParentLocationService`.
 ///
+/// v0.73.0 («Найти телефон»): служба работает всегда, пока пользователь вошёл
+/// и выдано разрешение на геолокацию, — независимо от флага «Показывать меня
+/// семье». Флаг влияет только на видимость семье (решает сервер); выключение
+/// службу не останавливает. Останавливают её только выход из аккаунта
+/// ([onLogout]) и протухшая сессия ([stopLocal]).
+///
 /// Только Android; на других платформах все методы — no-op.
 class ParentLocationController extends StateNotifier<ParentLocationState> {
   ParentLocationController({
@@ -100,9 +106,10 @@ class ParentLocationController extends StateNotifier<ParentLocationState> {
 
   void _log(String msg) => unawaited(diagLog('ploc', msg));
 
-  /// При входе и старте приложения: узнать флаг, и если он включён и есть
-  /// разрешение на геолокацию — получить токен (если нет), передать нативу и
-  /// запустить службу. Параллельные вызовы склеиваются.
+  /// При входе и старте приложения: узнать флаг (для тумблера) и, если есть
+  /// разрешение на геолокацию, — получить токен (если нет), передать нативу и
+  /// запустить службу. Флаг на запуск не влияет (v0.73.0). Параллельные вызовы
+  /// склеиваются.
   Future<void> sync() {
     if (!_supported) return Future.value();
     return _syncInFlight ??= _doSync().whenComplete(() => _syncInFlight = null);
@@ -118,17 +125,10 @@ class ParentLocationController extends StateNotifier<ParentLocationState> {
         _log('sync: GET sharing failed: $e');
       }
       if (!mounted) return;
-      if (enabled == null) {
-        // Флаг неизвестен — службу не трогаем, как есть.
-        await _refreshNative();
-        return;
-      }
-      state = state.copyWith(enabled: enabled);
-      if (enabled) {
-        await _startIfReady();
-      } else {
-        await _stopNative();
-      }
+      // Флаг неизвестен (нет сети) — тумблер недоступен, но служба всё равно
+      // нужна: сохранённый токен устройства работает и без сети.
+      if (enabled != null) state = state.copyWith(enabled: enabled);
+      await _startIfReady();
     } catch (e) {
       _log('sync failed: $e');
     }
@@ -157,15 +157,19 @@ class ParentLocationController extends StateNotifier<ParentLocationState> {
     }
   }
 
-  /// После шага разрешений: перечитать статусы и, если можно, запустить службу.
+  /// После шага разрешений: перечитать статусы и, если можно, запустить службу
+  /// (при любом положении флага).
   Future<void> onPermissionsChanged() async {
     if (!_supported) return;
     await refreshPermissions();
-    if (state.enabled == true) await _startIfReady();
+    await _startIfReady();
   }
 
-  /// Тумблер «Показывать меня семье». Ошибку сети пробрасывает (экран
-  /// покажет SnackBar), локальное состояние при этом не меняется.
+  /// Тумблер «Показывать меня семье» — только флаг на сервере (видимость
+  /// семье). Службу не останавливает (v0.73.0); при включении заодно
+  /// перепроверяет разрешения и поднимает службу, если её ещё нет. Ошибку сети
+  /// пробрасывает (экран покажет SnackBar), локальное состояние при этом не
+  /// меняется.
   Future<void> setSharing(bool enabled) async {
     if (!_supported) return;
     state = state.copyWith(busy: true);
@@ -176,8 +180,6 @@ class ParentLocationController extends StateNotifier<ParentLocationState> {
       if (result) {
         await refreshPermissions();
         await _startIfReady();
-      } else {
-        await _stopNative();
       }
     } finally {
       if (mounted) state = state.copyWith(busy: false);
@@ -292,15 +294,6 @@ class ParentLocationController extends StateNotifier<ParentLocationState> {
       status = err is ApiException ? err.status : e.response?.statusCode;
     }
     return status != null && status >= 400 && status < 500;
-  }
-
-  Future<void> _stopNative() async {
-    try {
-      await ParentLocationChannel.stop();
-    } catch (e) {
-      _log('stop: native failed: $e');
-    }
-    await _refreshNative();
   }
 
   Future<void> _clearNative() async {

@@ -35,6 +35,11 @@
          геолокации (как у ребёнка) — он даёт исключение из запрета старта FGS
          из фона. Android 13+ выдаёт автоматически. -->
     <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
+    <!-- v0.73.0 «Найти телефон»: SignalSoundService (громкий сигнал по кнопке
+         в личном кабинете) — media-playback foreground service, как у ребёнка;
+         вибрация вместе со звуком. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
+    <uses-permission android:name="android.permission.VIBRATE"/>
 
     <application
         android:name="${applicationName}"
@@ -86,6 +91,13 @@
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="location"/>
+        <!-- v0.73.0: «Найти телефон» — громкий сигнал (FCM PLAY_SIGNAL или
+             signal.id в ответе на отправку точек). -->
+        <service
+            android:name=".SignalSoundService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback"/>
         <!-- v0.70.0: перезапуск службы после свайпа из «Недавних» (будильник
              из ParentLocationService.onTaskRemoved). -->
         <receiver

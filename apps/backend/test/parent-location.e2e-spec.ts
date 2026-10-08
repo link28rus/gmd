@@ -8,7 +8,7 @@ import { MAX_PARENT_BATCH_SIZE } from '../src/parent-location/dto/parent-locatio
 
 const sha256 = (v: string): string => createHash('sha256').update(v).digest('hex');
 
-describe('Parent location (e2e, v0.70.0)', () => {
+describe('Parent location (e2e, v0.70.0 + v0.73.0 find phone)', () => {
   let h: TestAppHandle;
 
   beforeAll(async () => {
@@ -141,7 +141,7 @@ describe('Parent location (e2e, v0.70.0)', () => {
     await postPoints(d3.token, [pt(1000)]).expect(401);
   });
 
-  it('флаг: GET/PUT, выключение удаляет точки, затем sharingDisabled', async () => {
+  it('флаг: GET/PUT; v0.73.0 — выключение не удаляет точки, приём продолжается', async () => {
     const { accessToken, userId } = await signUpParent(h);
     const d = await newDevice(accessToken);
     await postPoints(d.token, [pt(60_000), pt(30_000)]).expect(200);
@@ -161,22 +161,130 @@ describe('Parent location (e2e, v0.70.0)', () => {
       .send({ enabled: false })
       .expect(200);
     expect(off.body).toEqual({ enabled: false });
-    expect(await h.prisma.parentLocation.count({ where: { userId } })).toBe(0);
+    expect(await h.prisma.parentLocation.count({ where: { userId } })).toBe(2);
 
     const r = await postPoints(d.token, [pt(5000)]).expect(200);
-    expect(r.body).toEqual({ accepted: 0, rejected: 1, sharingDisabled: true });
-    expect(await h.prisma.parentLocation.count({ where: { userId } })).toBe(0);
+    expect(r.body).toEqual({ accepted: 1, rejected: 0, sharingDisabled: false });
+    expect(await h.prisma.parentLocation.count({ where: { userId } })).toBe(3);
 
     const g2 = await request(server()).get('/parent-location/sharing').set(auth).expect(200);
     expect(g2.body).toEqual({ enabled: false });
+  });
 
+  it('«Найти телефон»: список, маршрут, сигнал и подтверждение — только свои', async () => {
+    const mom = await signUpParent(h);
+    const dad = await addSecondParent(mom.familyId, 'papa2@seed.test', 'Папа');
+    const momAuth = { Authorization: `Bearer ${mom.accessToken}` };
+    const dadAuth = { Authorization: `Bearer ${dad.accessToken}` };
+
+    await request(server()).get('/parent-location/my-devices').expect(401);
+    const empty = await request(server()).get('/parent-location/my-devices').set(momAuth);
+    expect(empty.status).toBe(200);
+    expect(empty.body).toEqual({ items: [] });
+
+    const d = await newDevice(mom.accessToken, { platform: 'android', appVersion: '0.73.0+1' });
+    const dadDev = await newDevice(dad.accessToken);
+    // Выключенный флаг семьи не мешает «Найти телефон»
     await request(server())
       .put('/parent-location/sharing')
-      .set(auth)
-      .send({ enabled: true })
+      .set(momAuth)
+      .send({ enabled: false })
       .expect(200);
-    const r2 = await postPoints(d.token, [pt(5000)]).expect(200);
-    expect(r2.body).toEqual({ accepted: 1, rejected: 0, sharingDisabled: false });
+    await request(server())
+      .post('/parent-location/points')
+      .set('X-Parent-Location-Token', d.token)
+      .send({
+        points: [
+          pt(2 * 3600_000, { lat: 48.1, batteryLevel: 80 }),
+          pt(3600_000, { lat: 48.2, batteryLevel: 55, isCharging: true }),
+          pt(60_000, { lat: 1, isMock: true }),
+        ],
+        device: { name: 'Xiaomi 2201', pushToken: 'fcm-token-1' },
+      })
+      .expect(200);
+    await postPoints(dadDev.token, [pt(1000, { lat: 50 })]).expect(200);
+
+    const list = await request(server()).get('/parent-location/my-devices').set(momAuth);
+    expect(list.status).toBe(200);
+    expect(list.body.items).toHaveLength(1);
+    expect(list.body.items[0]).toMatchObject({
+      id: d.deviceId,
+      deviceName: 'Xiaomi 2201',
+      appVersion: '0.73.0+1',
+      canPush: true,
+      signal: null,
+      latest: { lat: 48.2, batteryLevel: 55, isCharging: true },
+    });
+
+    // Маршрут: окно не больше 2 суток, чужое устройство — 404
+    const from = new Date(Date.now() - 24 * 3600_000).toISOString();
+    const to = new Date(Date.now() + 60_000).toISOString();
+    const track = await request(server())
+      .get(`/parent-location/my-devices/${d.deviceId}/track`)
+      .query({ from, to })
+      .set(momAuth)
+      .expect(200);
+    expect(track.body.items.map((p: { lat: number }) => p.lat)).toEqual([48.1, 48.2]);
+    await request(server())
+      .get(`/parent-location/my-devices/${d.deviceId}/track`)
+      .query({ from: new Date(Date.now() - 3 * 24 * 3600_000).toISOString(), to })
+      .set(momAuth)
+      .expect(400);
+    await request(server())
+      .get(`/parent-location/my-devices/${d.deviceId}/track`)
+      .query({ from, to })
+      .set(dadAuth)
+      .expect(404);
+
+    // Сигнал: чужой — 404; свой — живой, повтор возвращает тот же id
+    await request(server())
+      .post(`/parent-location/my-devices/${d.deviceId}/signal`)
+      .set(dadAuth)
+      .expect(404);
+    const s1 = await request(server())
+      .post(`/parent-location/my-devices/${d.deviceId}/signal`)
+      .set(momAuth)
+      .expect(200);
+    expect(s1.body).toMatchObject({ signalId: expect.any(String), pushed: false });
+    const s2 = await request(server())
+      .post(`/parent-location/my-devices/${d.deviceId}/signal`)
+      .set(momAuth)
+      .expect(200);
+    expect(s2.body.signalId).toBe(s1.body.signalId);
+
+    // Запасной путь: сигнал в ответе на выгрузку точек
+    const up = await postPoints(d.token, [pt(500)]).expect(200);
+    expect(up.body.signal).toEqual({ id: s1.body.signalId });
+
+    const pending = await request(server()).get('/parent-location/my-devices').set(momAuth);
+    expect(pending.body.items[0].signal).toMatchObject({
+      id: s1.body.signalId,
+      status: 'pending',
+      ackedAt: null,
+    });
+
+    // Подтверждение чужим токеном ничего не меняет
+    await request(server())
+      .post('/parent-location/signal/ack')
+      .set('X-Parent-Location-Token', dadDev.token)
+      .send({ signalId: s1.body.signalId })
+      .expect(200);
+    await request(server())
+      .post('/parent-location/signal/ack')
+      .set('X-Parent-Location-Token', d.token)
+      .send({ signalId: s1.body.signalId })
+      .expect(200);
+    const ringing = await request(server()).get('/parent-location/my-devices').set(momAuth);
+    expect(ringing.body.items[0].signal).toMatchObject({ status: 'ringing' });
+    const after = await postPoints(d.token, [pt(400)]).expect(200);
+    expect(after.body.signal).toBeUndefined();
+
+    // Новый сигнал после подтверждения — новый id
+    const s3 = await request(server())
+      .post(`/parent-location/my-devices/${d.deviceId}/signal`)
+      .set(momAuth)
+      .expect(200);
+    expect(s3.body.signalId).not.toBe(s1.body.signalId);
   });
 
   it('latest: parents с isMe и именем, без выключивших, без mock, без чужой семьи', async () => {

@@ -18,8 +18,9 @@ class ParentLocationNativeStatus {
   final bool running;
   final bool hasToken;
 
-  /// Флаг «показывать меня семье» в нативных кредах (сторож и автозапуск
-  /// после перезагрузки смотрят на него).
+  /// Флаг «служба должна работать» в нативных кредах (сторож и автозапуск
+  /// после перезагрузки смотрят на него). С v0.73.0 не связан с «Показывать
+  /// меня семье»: true, пока пользователь вошёл.
   final bool enabled;
 
   /// Сервер ответил 401 на отправку точек — токен стёрт, нужен новый.
@@ -76,7 +77,8 @@ class ParentLocationChannel {
   /// токена или разрешения на геолокацию.
   static Future<bool> start() async => (await _channel.invokeMethod<bool>('start')) ?? false;
 
-  /// Выключить флаг, остановить службу и сторож. Токен остаётся.
+  /// Выключить флаг, остановить службу и сторож. Токен остаётся. С v0.73.0
+  /// только в составе выхода из аккаунта (см. `_clearNative` контроллера).
   static Future<void> stop() => _channel.invokeMethod<void>('stop');
 
   static Future<ParentLocationNativeStatus> status() async =>

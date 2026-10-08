@@ -20,8 +20,14 @@ import java.net.URL
  *    службы уходит сразу;
  *  - сеть / 5xx / 429 → повтор с backoff [BACKOFF_START_MS] → [BACKOFF_MAX_MS];
  *  - 401 → стереть токен, остановить службу (Dart перерегистрирует устройство);
- *  - `sharingDisabled: true` → выключить флаг, остановить службу;
  *  - прочие 4xx (400 валидация, 413) — пачку выкинуть: повтор не поможет.
+ *
+ * v0.73.0 («Найти телефон»): точки собираются всегда, флаг «Показывать меня
+ * семье» влияет только на видимость семье — ветка `sharingDisabled: true`
+ * (стоп службы) убрана, сервер больше так не отвечает. В каждый POST идёт
+ * `device: {name, pushToken?}` — имя для кабинета и FCM-токен, на который
+ * сервер шлёт PLAY_SIGNAL. В ответе `signal.id` (живой сигнал без ack) →
+ * [FindPhoneSignal.handle] — запасной путь, если FCM не дошёл.
  *
  * Все методы — на потоке [handler] (HandlerThread службы): буфер без гонок.
  */
@@ -139,7 +145,7 @@ class ParentLocationUploader(
         val code: Int
         val body: String
         try {
-            val res = post(creds.baseUrl!!, creds.token!!, JSONObject().put("points", batch).toString())
+            val res = post(creds.baseUrl!!, creds.token!!, requestBody(batch))
             code = res.first
             body = res.second
         } catch (e: IOException) {
@@ -165,14 +171,10 @@ class ParentLocationUploader(
                     "upload OK: sent=$n accepted=${json?.optInt("accepted", -1)} " +
                         "rejected=${json?.optInt("rejected", -1)}",
                 )
-                if (json?.optBoolean("sharingDisabled", false) == true) {
-                    log("upload: sharingDisabled — флаг выключен на сервере, стоп")
-                    ParentLocationCreds.setEnabled(ctx, false)
-                    clearBuffer(ctx)
-                    stopped = true
-                    onStop("sharingDisabled")
-                    return
-                }
+                // v0.73.0: живой сигнал «Найти телефон» — запасной путь к FCM.
+                json?.optJSONObject("signal")?.optString("id", "")
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { FindPhoneSignal.handle(ctx, it, "upload") }
                 schedule() // пока слали, могли прийти новые точки
             }
             code == 401 -> {
@@ -192,6 +194,21 @@ class ParentLocationUploader(
                 schedule()
             }
         }
+    }
+
+    /**
+     * `{points, device: {name, pushToken?}}`. FCM-токен — из кэша; если его ещё
+     * нет — уходит только имя, а токен запрашивается для следующей пачки.
+     */
+    private fun requestBody(batch: JSONArray): String {
+        val device = JSONObject().put("name", FindPhoneSignal.deviceName())
+        val pushToken = FindPhoneSignal.cachedFcmToken(ctx)
+        if (pushToken != null) {
+            device.put("pushToken", pushToken)
+        } else {
+            FindPhoneSignal.refreshFcmToken(ctx)
+        }
+        return JSONObject().put("points", batch).put("device", device).toString()
     }
 
     private fun post(baseUrl: String, token: String, json: String): Pair<Int, String> {

@@ -50,6 +50,12 @@ import java.util.TimeZone
  * на месте родитель через 10 минут посерел бы на карте семьи («нет данных»).
  * Фильтр смещения — наш, а не setMinUpdateDistanceMeters: тот глушит и
  * подтверждающие точки.
+ *
+ * v0.73.0 («Найти телефон»): служба работает всегда, пока родитель вошёл и
+ * выдал геолокацию, — флаг «Показывать меня семье» влияет только на видимость
+ * семье (решает сервер). Текст постоянного уведомления нейтральный: верен при
+ * любом положении флага. При старте службы обновляется кэш FCM-токена для
+ * `device.pushToken` ([FindPhoneSignal.refreshFcmToken]).
  */
 class ParentLocationService : Service() {
 
@@ -163,6 +169,7 @@ class ParentLocationService : Service() {
         log("onCreate")
         fused = LocationServices.getFusedLocationProviderClient(this)
         createChannel()
+        FindPhoneSignal.refreshFcmToken(this)
         val t = HandlerThread("ploc-upload").also { it.start() }
         ioThread = t
         val h = Handler(t.looper)
@@ -296,7 +303,7 @@ class ParentLocationService : Service() {
         Pair(null, null)
     }
 
-    /** Uploader решил остановиться (401 / sharingDisabled). */
+    /** Uploader решил остановиться (401). */
     private fun stopFromUploader(reason: String) {
         ParentLocationWatchdogWorker.cancel(this)
         stopEverything("uploader: $reason")
@@ -328,8 +335,12 @@ class ParentLocationService : Service() {
         val launch = packageManager.getLaunchIntentForPackage(packageName)
         val pi = PendingIntent.getActivity(this, 0, launch, PendingIntent.FLAG_IMMUTABLE)
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Перископ")
-            .setContentText("Семья видит, где вы")
+            .setContentTitle("Перископ: геолокация включена")
+            .setContentText("Нужна для «Найти телефон». Семья видит вас на карте, если это включено в меню.")
+            .setStyle(
+                NotificationCompat.BigTextStyle()
+                    .bigText("Нужна для «Найти телефон». Семья видит вас на карте, если это включено в меню."),
+            )
             .setSmallIcon(R.drawable.ic_stat_location)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
@@ -346,7 +357,7 @@ class ParentLocationService : Service() {
                     CHANNEL_ID,
                     "Перископ — моё местоположение",
                     NotificationManager.IMPORTANCE_LOW,
-                ).apply { description = "Пока включено «Показывать меня семье»" },
+                ).apply { description = "Геолокация этого телефона для «Найти телефон» и карты семьи" },
             )
         }
     }

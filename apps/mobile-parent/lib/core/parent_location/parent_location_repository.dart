@@ -43,8 +43,9 @@ class ParentLocationRepository {
     return _enabled(res.data);
   }
 
-  /// `PUT /parent-location/sharing` `{ enabled }` → `{ enabled }`. `false`
-  /// заодно удаляет с сервера все точки пользователя.
+  /// `PUT /parent-location/sharing` `{ enabled }` → `{ enabled }`. Только
+  /// видимость семье: с v0.73.0 точки при выключении не удаляются (нужны
+  /// «Найти телефон» в личном кабинете).
   Future<bool> setSharing(bool enabled) async {
     final res = await _dio.put<dynamic>('/parent-location/sharing', data: {'enabled': enabled});
     return _enabled(res.data, fallback: enabled);

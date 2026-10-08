@@ -38,8 +38,8 @@
 - `acceptedPrivacyPolicyVersion` (varchar) — версия политики, которую пользователь принял при регистрации
 - `passwordHash` (varchar) — argon2id-хэш пароля (null если юзер пока не установил пароль)
 - `shareLocationWithFamily` (bool, default `true`, v0.70.0) — показывать метку родителя на общей
-  карте семьи. `PUT /parent-location/sharing {enabled:false}` в одной транзакции сбрасывает флаг и
-  удаляет все `parent_locations` пользователя; приём точек при выключенном флаге ничего не пишет
+  карте семьи. С v0.73.0 — только видимость для семьи: точки собираются и при `false` (их видит
+  сам владелец в «Найти телефон»), `PUT /parent-location/sharing {enabled:false}` их не удаляет
 - `createdAt`, `updatedAt` (timestamptz)
 - `deletedAt` (timestamptz) — soft-delete маркер (null = активный пользователь)
 
@@ -276,6 +276,13 @@ refresh ротируется, повтор старого отзывает вс�
 - `tokenHash` (text, unique) — sha256 токена (`randomBytes(32)` base64url, сам токен не хранится);
   передаётся в заголовке `X-Parent-Location-Token`
 - `platform`, `appVersion` (text, nullable)
+- `deviceName`, `fcmToken` (text, nullable, v0.73.0) — модель телефона и FCM-токен; служба
+  присылает их полем `device` в `POST /parent-location/points`. По `fcmToken` уходит сигнал
+  «Найти телефон» (протухший токен сервер обнуляет)
+- `signalId`, `signalRequestedAt`, `signalAckedAt` (nullable, v0.73.0) — последний сигнал
+  «Найти телефон». Живой — не старше 5 минут и без `signalAckedAt`: такой сигнал отдаётся и в
+  ответе на выгрузку точек (запасной путь без push). Телефон подтверждает его
+  `POST /parent-location/signal/ack`
 - `createdAt`, `lastSeenAt` (обновляется приёмом точек), `revokedAt` (выход из аккаунта или
   `replaceDeviceId` при перевыпуске; отозванный токен → 401)
 
@@ -283,7 +290,9 @@ refresh ротируется, повтор старого отзывает вс�
 
 #### `parent_locations` (v0.70.0)
 
-Точки геолокации родителя для общей карты семьи (`GET /family/locations/latest` → `parents`).
+Точки геолокации родителя: общая карта семьи (`GET /family/locations/latest` → `parents`, только
+при `shareLocationWithFamily`) и «Найти телефон» v0.73.0 (`GET /parent-location/my-devices`,
+`…/my-devices/:id/track` — только свои устройства).
 
 - `id` (cuid), `userId` → users (CASCADE), `deviceId` → parent_location_devices (CASCADE)
 - `lat`, `lon` (float8), `accuracy`, `speed`, `bearing` (float8, nullable)
@@ -295,9 +304,8 @@ refresh ротируется, повтор старого отзывает вс�
 
 **Индекс:** `(userId, recordedAt DESC)` — последняя точка родителя (`DISTINCT ON`).
 
-**Приём:** окно −7 сут … +2 мин, точки с `accuracy > 500` м отбрасываются. Флаг
-`users.shareLocationWithFamily` читается `FOR SHARE` в той же транзакции, что и вставка, — точка
-не переживёт одновременное выключение флага.
+**Приём:** окно −7 сут … +2 мин, точки с `accuracy > 500` м отбрасываются. С v0.73.0 флаг
+`users.shareLocationWithFamily` при приёме не проверяется (до v0.73.0 — `FOR SHARE` и отказ).
 
 **Retention:** 30 дней, pg_cron `parent-locations-retention-daily` (03:00 UTC).
 

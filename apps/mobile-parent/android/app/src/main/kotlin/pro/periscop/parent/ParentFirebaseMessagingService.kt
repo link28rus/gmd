@@ -28,6 +28,9 @@ import com.google.firebase.messaging.RemoteMessage
  *   текст строит [GeofenceNotificationText].
  * - v0.69.0: `LOCATION_UPDATED` + `childId` — без уведомления, уходит в Dart
  *   через канал pro.periscop.parent/live (экран карты ребёнка обновляется).
+ * - v0.73.0: `PLAY_SIGNAL` + `signalId` — «Найти телефон»: без обычного
+ *   уведомления, громкий сигнал через [FindPhoneSignal.handle]. Новый токен
+ *   ([onNewToken]) кладётся и в кэш для `device.pushToken` отправки точек.
  *
  * Сервис строит нативный notification и кладёт его в один из каналов (default
  * events / sos с высокой важностью). Тап открывает MainActivity с extras
@@ -38,6 +41,7 @@ class ParentFirebaseMessagingService : FirebaseMessagingService() {
     companion object {
         private const val TAG = "PeriscopParentFcm"
         private const val TYPE_LOCATION_UPDATED = "LOCATION_UPDATED"
+        private const val TYPE_PLAY_SIGNAL = "PLAY_SIGNAL"
         private const val CHANNEL_EVENTS = "periscop_parent_events"
         // v0.46.0+4: версионированный channel id. Android не позволяет менять
         // звук/вибрацию уже созданного channel — каждый раз когда меняем sos_siren.wav
@@ -58,6 +62,18 @@ class ParentFirebaseMessagingService : FirebaseMessagingService() {
         // без уведомления. Приложение закрыто — просто ничего не делаем.
         if (type == TYPE_LOCATION_UPDATED) {
             data["childId"]?.takeIf { it.isNotBlank() }?.let { MainActivity.dispatchLocationUpdated(it) }
+            return
+        }
+
+        // v0.73.0: «Найти телефон» — high-priority data-message даёт право
+        // стартовать FGS из фона.
+        if (type == TYPE_PLAY_SIGNAL) {
+            val signalId = data["signalId"]
+            if (signalId.isNullOrBlank()) {
+                DiagLog.write(this, "signal", "PLAY_SIGNAL без signalId — пропуск")
+            } else {
+                FindPhoneSignal.handle(this, signalId, "fcm")
+            }
             return
         }
 
@@ -246,5 +262,7 @@ class ParentFirebaseMessagingService : FirebaseMessagingService() {
         Log.i(TAG, "onNewToken len=${token.length}")
         val prefs: SharedPreferences = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         prefs.edit().putString(PENDING_TOKEN_KEY, token).apply()
+        // v0.73.0: следующая пачка точек передаст его серверу (device.pushToken).
+        FindPhoneSignal.saveFcmToken(this, token)
     }
 }

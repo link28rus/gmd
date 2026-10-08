@@ -16,9 +16,32 @@ export const ParentLocationPointSchema = z
   })
   .strict();
 
+/**
+ * v0.73.0 «Найти телефон»: служба сообщает модель телефона и свой FCM-токен —
+ * по нему сервер шлёт сигнал именно этому устройству.
+ */
+export const ParentLocationDeviceInfoSchema = z
+  .object({
+    name: z.string().trim().min(1).max(100).optional(),
+    pushToken: z.string().trim().min(1).max(4096).optional(),
+  })
+  .strict();
+
 export const IngestParentLocationsSchema = z
   .object({
     points: z.array(ParentLocationPointSchema).min(1),
+    device: ParentLocationDeviceInfoSchema.optional(),
+  })
+  .strict();
+
+/** v0.73.0: подтверждение сигнала телефоном. */
+export const AckSignalSchema = z.object({ signalId: z.string().min(1).max(64) }).strict();
+
+/** v0.73.0: маршрут своего телефона за период (один день с запасом на часовой пояс). */
+export const MyTrackQuerySchema = z
+  .object({
+    from: z.string().datetime(),
+    to: z.string().datetime(),
   })
   .strict();
 
@@ -36,6 +59,9 @@ export type ParentLocationPoint = z.infer<typeof ParentLocationPointSchema>;
 export type IngestParentLocationsDto = z.infer<typeof IngestParentLocationsSchema>;
 export type CreateParentLocationDeviceDto = z.infer<typeof CreateParentLocationDeviceSchema>;
 export type SetSharingDto = z.infer<typeof SetSharingSchema>;
+export type ParentLocationDeviceInfo = z.infer<typeof ParentLocationDeviceInfoSchema>;
+export type AckSignalDto = z.infer<typeof AckSignalSchema>;
+export type MyTrackQueryDto = z.infer<typeof MyTrackQuerySchema>;
 
 /** Как у ребёнка: офлайн-очередь телефона выгружается пачкой. */
 export const MAX_PARENT_BATCH_SIZE = 500;

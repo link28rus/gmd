@@ -3,7 +3,11 @@ import { Prisma } from '@prisma/client';
 import { createId } from '@paralleldrive/cuid2';
 import { createHash, randomBytes } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
-import type { CreateParentLocationDeviceDto, ParentLocationPoint } from './dto/parent-location.dto';
+import type {
+  CreateParentLocationDeviceDto,
+  ParentLocationDeviceInfo,
+  ParentLocationPoint,
+} from './dto/parent-location.dto';
 
 /** Контекст запроса с X-Parent-Location-Token. */
 export interface ParentLocationAuthContext {
@@ -14,7 +18,29 @@ export interface ParentLocationAuthContext {
 export interface ParentIngestResult {
   accepted: number;
   rejected: number;
+  /**
+   * v0.73.0: всегда false — точки собираются и при выключенном «Показывать
+   * меня семье». Поле оставлено: служба v0.70–v0.72 по `true` останавливается.
+   */
   sharingDisabled: boolean;
+  /** v0.73.0: живой сигнал «Найти телефон» — запасной путь, если push не дошёл. */
+  signal?: { id: string };
+}
+
+/** v0.73.0: сколько живёт запрошенный сигнал без подтверждения телефоном. */
+export const SIGNAL_TTL_MS = 5 * 60 * 1000;
+
+/** Сигнал ждёт телефона: запрошен не раньше TTL и ещё не подтверждён. */
+export function isSignalLive(
+  d: { signalId: string | null; signalRequestedAt: Date | null; signalAckedAt: Date | null },
+  now: number,
+): boolean {
+  return (
+    d.signalId !== null &&
+    d.signalRequestedAt !== null &&
+    d.signalAckedAt === null &&
+    now - d.signalRequestedAt.getTime() < SIGNAL_TTL_MS
+  );
 }
 
 /** v0.70.0: элемент `parents` в GET /family/locations/latest. */
@@ -120,6 +146,7 @@ export class ParentLocationService {
   async ingestPoints(
     ctx: ParentLocationAuthContext,
     points: ParentLocationPoint[],
+    deviceInfo?: ParentLocationDeviceInfo,
   ): Promise<ParentIngestResult> {
     const now = Date.now();
     const valid = points.filter((p) => {
@@ -129,61 +156,55 @@ export class ParentLocationService {
       return true;
     });
 
-    const result = await this.prisma.$transaction(async (tx) => {
-      // FOR SHARE: выключение флага (PUT /sharing) ждёт конца этой
-      // транзакции, а эта — его коммита. Иначе точка, вставленная между
-      // «флаг прочитан» и «точки удалены», осталась бы на сервере.
-      const rows = await tx.$queryRaw<Array<{ share: boolean }>>(Prisma.sql`
-        SELECT "shareLocationWithFamily" AS share
-        FROM users
-        WHERE id = ${ctx.userId} AND "deletedAt" IS NULL
-        FOR SHARE
+    // v0.73.0: точки пишутся независимо от «Показывать меня семье» — флаг
+    // фильтрует только чтение семьёй (getLatestForFamily). Свои точки
+    // владелец видит в «Найти телефон».
+    let accepted = 0;
+    if (valid.length > 0) {
+      const values = valid.map(
+        (p) => Prisma.sql`(
+          ${createId()},
+          ${ctx.userId},
+          ${ctx.deviceId},
+          ${p.lat},
+          ${p.lon},
+          ${p.accuracy ?? null},
+          ${p.speed ?? null},
+          ${p.bearing ?? null},
+          ${p.batteryLevel ?? null},
+          ${p.isCharging ?? null},
+          ${p.provider ?? null},
+          ${p.isMock ?? false},
+          ${new Date(p.recordedAt)}
+        )`,
+      );
+      const inserted = await this.prisma.$executeRaw(Prisma.sql`
+        INSERT INTO "parent_locations" (
+          "id","userId","deviceId","lat","lon","accuracy","speed","bearing","batteryLevel","isCharging","provider","isMock","recordedAt"
+        ) VALUES ${Prisma.join(values)}
+        ON CONFLICT ("deviceId","recordedAt") DO NOTHING
       `);
-      if (rows.length === 0 || !rows[0].share) {
-        return { accepted: 0, sharingDisabled: true };
-      }
-
-      let accepted = 0;
-      if (valid.length > 0) {
-        const values = valid.map(
-          (p) => Prisma.sql`(
-            ${createId()},
-            ${ctx.userId},
-            ${ctx.deviceId},
-            ${p.lat},
-            ${p.lon},
-            ${p.accuracy ?? null},
-            ${p.speed ?? null},
-            ${p.bearing ?? null},
-            ${p.batteryLevel ?? null},
-            ${p.isCharging ?? null},
-            ${p.provider ?? null},
-            ${p.isMock ?? false},
-            ${new Date(p.recordedAt)}
-          )`,
-        );
-        const inserted = await tx.$executeRaw(Prisma.sql`
-          INSERT INTO "parent_locations" (
-            "id","userId","deviceId","lat","lon","accuracy","speed","bearing","batteryLevel","isCharging","provider","isMock","recordedAt"
-          ) VALUES ${Prisma.join(values)}
-          ON CONFLICT ("deviceId","recordedAt") DO NOTHING
-        `);
-        accepted = Number(inserted);
-      }
-      await tx.parentLocationDevice.update({
-        where: { id: ctx.deviceId },
-        data: { lastSeenAt: new Date() },
-      });
-      return { accepted, sharingDisabled: false };
+      accepted = Number(inserted);
+    }
+    const device = await this.prisma.parentLocationDevice.update({
+      where: { id: ctx.deviceId },
+      data: {
+        lastSeenAt: new Date(),
+        ...(deviceInfo?.name !== undefined ? { deviceName: deviceInfo.name } : {}),
+        ...(deviceInfo?.pushToken !== undefined ? { fcmToken: deviceInfo.pushToken } : {}),
+      },
+      select: { signalId: true, signalRequestedAt: true, signalAckedAt: true },
     });
 
+    const signal = isSignalLive(device, Date.now()) ? { id: device.signalId! } : undefined;
     this.logger.log(
-      `parent ingest user=${ctx.userId} device=${ctx.deviceId} in=${points.length} accepted=${result.accepted} sharingDisabled=${result.sharingDisabled}`,
+      `parent ingest user=${ctx.userId} device=${ctx.deviceId} in=${points.length} accepted=${accepted}${signal ? ` signal=${signal.id}` : ''}`,
     );
     return {
-      accepted: result.accepted,
-      rejected: points.length - result.accepted,
-      sharingDisabled: result.sharingDisabled,
+      accepted,
+      rejected: points.length - accepted,
+      sharingDisabled: false,
+      ...(signal ? { signal } : {}),
     };
   }
 
@@ -198,20 +219,18 @@ export class ParentLocationService {
     return { enabled: user.shareLocationWithFamily };
   }
 
-  /** `false` — флаг и удаление всех точек пользователя одной транзакцией. */
+  /**
+   * Видимость для семьи. v0.73.0: точки при выключении не удаляются — их
+   * видит только сам владелец («Найти телефон»), семье метка не отдаётся.
+   */
   async setSharing(userId: string, enabled: boolean): Promise<{ enabled: boolean }> {
-    await this.prisma.$transaction(async (tx) => {
-      const updated = await tx.user.updateMany({
-        where: { id: userId, deletedAt: null },
-        data: { shareLocationWithFamily: enabled },
-      });
-      if (updated.count === 0) {
-        throw new NotFoundException({ code: 'user_not_found', message: 'User not found' });
-      }
-      if (!enabled) {
-        await tx.parentLocation.deleteMany({ where: { userId } });
-      }
+    const updated = await this.prisma.user.updateMany({
+      where: { id: userId, deletedAt: null },
+      data: { shareLocationWithFamily: enabled },
     });
+    if (updated.count === 0) {
+      throw new NotFoundException({ code: 'user_not_found', message: 'User not found' });
+    }
     return { enabled };
   }
 
