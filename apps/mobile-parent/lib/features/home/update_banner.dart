@@ -187,7 +187,10 @@ class _Card extends StatelessWidget {
                   children: [
                     Text(
                       title,
-                      style: const TextStyle(
+                      // Фон карточки всегда светлый — цвет задаём явно,
+                      // иначе в тёмной теме заголовок берёт светлый onSurface.
+                      style: TextStyle(
+                        color: Colors.grey.shade900,
                         fontWeight: FontWeight.w600,
                         fontSize: 14,
                       ),
