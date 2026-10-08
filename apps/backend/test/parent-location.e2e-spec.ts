@@ -95,7 +95,7 @@ describe('Parent location (e2e, v0.70.0 + v0.73.0 find phone)', () => {
     const r2 = await postPoints(d.token, [
       ...first,
       pt(10_000, { accuracy: 600 }),
-      pt(8 * 24 * 3600 * 1000),
+      pt(31 * 24 * 3600 * 1000),
     ]).expect(200);
     expect(r2.body).toEqual({ accepted: 0, rejected: 4, sharingDisabled: false });
 
@@ -139,6 +139,18 @@ describe('Parent location (e2e, v0.70.0 + v0.73.0 find phone)', () => {
     const d3 = await newDevice(mom.accessToken);
     await h.prisma.user.update({ where: { id: mom.userId }, data: { deletedAt: new Date() } });
     await postPoints(d3.token, [pt(1000)]).expect(401);
+  });
+
+  it('v0.73.1: офлайн-буфер — точки до 30 дней давности принимаются', async () => {
+    const { accessToken, userId } = await signUpParent(h);
+    const d = await newDevice(accessToken);
+    const r = await postPoints(d.token, [
+      pt(29 * 24 * 3600 * 1000),
+      pt(8 * 24 * 3600 * 1000),
+      pt(31 * 24 * 3600 * 1000),
+    ]).expect(200);
+    expect(r.body).toEqual({ accepted: 2, rejected: 1, sharingDisabled: false });
+    expect(await h.prisma.parentLocation.count({ where: { userId } })).toBe(2);
   });
 
   it('флаг: GET/PUT; v0.73.0 — выключение не удаляет точки, приём продолжается', async () => {

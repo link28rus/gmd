@@ -4,6 +4,7 @@ import { NotFoundException } from '@nestjs/common';
 import {
   ParentLocationService,
   PARENT_ACCURACY_MAX_M,
+  PARENT_OUT_OF_WINDOW_PAST_MS,
   SIGNAL_TTL_MS,
   displayName,
   isSignalLive,
@@ -164,7 +165,7 @@ describe('ParentLocationService', () => {
     it('отбрасывает точки вне окна и с accuracy > 500 м до INSERT', async () => {
       const { svc, prisma } = makeService({ insertResult: 0 });
       const r = await svc.ingestPoints(ctx, [
-        point(8 * 24 * 3600 * 1000),
+        point(PARENT_OUT_OF_WINDOW_PAST_MS + 60_000),
         point(-3 * 60 * 1000),
         point(1000, { accuracy: PARENT_ACCURACY_MAX_M + 1 }),
       ]);
@@ -172,6 +173,13 @@ describe('ParentLocationService', () => {
       expect(prisma.$executeRaw).not.toHaveBeenCalled();
       // lastSeenAt обновляется даже если ни одна точка не прошла фильтры
       expect(prisma.parentLocationDevice.update).toHaveBeenCalled();
+    });
+
+    it('v0.73.1: точка недельной давности (офлайн-буфер) принимается', async () => {
+      const { svc, prisma } = makeService({ insertResult: 1 });
+      const r = await svc.ingestPoints(ctx, [point(20 * 24 * 3600 * 1000)]);
+      expect(r.accepted).toBe(1);
+      expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
     });
 
     it('v0.73.0: флаг семьи не проверяется — точки пишутся всегда', async () => {

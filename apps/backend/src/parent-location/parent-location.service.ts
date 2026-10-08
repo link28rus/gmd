@@ -55,8 +55,10 @@ export interface FamilyParentPoint {
   isMe: boolean;
 }
 
-// Окно времени — как у точек детей (locations.service.ts).
-const OUT_OF_WINDOW_PAST_MS = 7 * 24 * 60 * 60 * 1000;
+// Окно времени. v0.73.1: в прошлое — 30 дней (= retention), а не 7, как у
+// детей: украденный телефон может неделями копить точки без сети, а
+// «Найти телефон» должен получить их все, как только связь появится.
+export const PARENT_OUT_OF_WINDOW_PAST_MS = 30 * 24 * 60 * 60 * 1000;
 const OUT_OF_WINDOW_FUTURE_MS = 2 * 60 * 1000;
 /** Точки грубее — бесполезны для метки на карте. Служба сама режет > 100 м. */
 export const PARENT_ACCURACY_MAX_M = 500;
@@ -151,7 +153,8 @@ export class ParentLocationService {
     const now = Date.now();
     const valid = points.filter((p) => {
       const ts = new Date(p.recordedAt).getTime();
-      if (ts < now - OUT_OF_WINDOW_PAST_MS || ts > now + OUT_OF_WINDOW_FUTURE_MS) return false;
+      if (ts < now - PARENT_OUT_OF_WINDOW_PAST_MS || ts > now + OUT_OF_WINDOW_FUTURE_MS)
+        return false;
       if (p.accuracy !== undefined && p.accuracy > PARENT_ACCURACY_MAX_M) return false;
       return true;
     });

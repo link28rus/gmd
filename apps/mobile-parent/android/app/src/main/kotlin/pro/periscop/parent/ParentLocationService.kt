@@ -9,6 +9,9 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
@@ -56,6 +59,13 @@ import java.util.TimeZone
  * семье (решает сервер). Текст постоянного уведомления нейтральный: верен при
  * любом положении флага. При старте службы обновляется кэш FCM-токена для
  * `device.pushToken` ([FindPhoneSignal.refreshFcmToken]).
+ *
+ * v0.73.1 (защита от кражи): NetworkCallback следит за интернетом. Нет
+ * проверенного интернета (сим вынута, мобильные данные выключены, режим полёта)
+ * — запрос переключается на PRIORITY_HIGH_ACCURACY: без сети «баланс» опирается
+ * на Wi-Fi и вышки и почти не даёт точек, а GPS работает и офлайн. Точки копятся
+ * в [ParentLocationBuffer]. Интернет вернулся — обратно BALANCED и
+ * [ParentLocationUploader.onNetworkAvailable] сразу отдаёт накопленное.
  */
 class ParentLocationService : Service() {
 
@@ -74,6 +84,8 @@ class ParentLocationService : Service() {
         /** Выдана только «приблизительная» геолокация: точнее она не бывает. */
         private const val MAX_ACCURACY_COARSE_M = 500f
         private const val RESTART_DELAY_MS = 3_000L
+        /** Сети прыгают (Wi-Fi → мобильная): состояние перепроверяем с задержкой. */
+        private const val NET_SETTLE_MS = 3_000L
 
         /** Служба подписана на точки в этом процессе. */
         @Volatile
@@ -161,6 +173,11 @@ class ParentLocationService : Service() {
     private var uploader: ParentLocationUploader? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private var lastSent: Location? = null
+    /** Есть проверенный интернет; null — ещё не знаем (до первой проверки). */
+    private var online: Boolean? = null
+    private var currentPriority = Priority.PRIORITY_BALANCED_POWER_ACCURACY
+    private var netCallback: ConnectivityManager.NetworkCallback? = null
+    private val netCheck = Runnable { reevaluateNetwork() }
 
     private fun log(msg: String) = log(this, msg)
 
@@ -219,12 +236,90 @@ class ParentLocationService : Service() {
             log("start: уже подписаны — пропуск")
             return
         }
+        online = isOnline()
+        currentPriority = priorityFor(online == true)
         subscribe()
+        registerNetworkCallback()
         ioHandler?.post { uploader?.flushPending() }
     }
 
+    private fun priorityFor(isOnline: Boolean) =
+        if (isOnline) Priority.PRIORITY_BALANCED_POWER_ACCURACY else Priority.PRIORITY_HIGH_ACCURACY
+
+    /** Есть интернет, проверенный системой (а не просто «подключено к Wi-Fi»). */
+    private fun isOnline(): Boolean = try {
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val caps = cm.activeNetwork?.let { cm.getNetworkCapabilities(it) }
+        caps != null &&
+            caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+            caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+    } catch (_: Throwable) {
+        true // не знаем — ведём себя как раньше
+    }
+
+    private fun registerNetworkCallback() {
+        if (netCallback != null || Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return
+        val cb = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) = scheduleNetCheck()
+            override fun onLost(network: Network) = scheduleNetCheck()
+            override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) =
+                scheduleNetCheck()
+        }
+        try {
+            val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            cm.registerDefaultNetworkCallback(cb)
+            netCallback = cb
+        } catch (e: Throwable) {
+            log("network callback FAILED: ${e.javaClass.simpleName}: ${e.message}")
+        }
+    }
+
+    private fun unregisterNetworkCallback() {
+        mainHandler.removeCallbacks(netCheck)
+        val cb = netCallback ?: return
+        netCallback = null
+        try {
+            (getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager)
+                .unregisterNetworkCallback(cb)
+        } catch (_: Throwable) {
+        }
+    }
+
+    private fun scheduleNetCheck() {
+        mainHandler.removeCallbacks(netCheck)
+        mainHandler.postDelayed(netCheck, NET_SETTLE_MS)
+    }
+
+    /** Main thread: сменить режим геолокации и при появлении сети — отдать буфер. */
+    private fun reevaluateNetwork() {
+        if (callback == null) return
+        val now = isOnline()
+        val was = online
+        if (now == was) return
+        online = now
+        log("network: ${if (now) "интернет есть" else "интернета нет"} (было ${was ?: "?"})")
+        val wanted = priorityFor(now)
+        if (wanted != currentPriority) {
+            currentPriority = wanted
+            resubscribe()
+        }
+        if (now) ioHandler?.post { uploader?.onNetworkAvailable() }
+    }
+
+    /** Та же подписка с другим приоритетом (lastSent сохраняем). */
+    private fun resubscribe() {
+        callback?.let {
+            try {
+                fused.removeLocationUpdates(it)
+            } catch (_: Throwable) {
+            }
+        }
+        callback = null
+        subscribe()
+    }
+
     private fun subscribe() {
-        val request = LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, INTERVAL_MS)
+        val request = LocationRequest.Builder(currentPriority, INTERVAL_MS)
             .setMinUpdateIntervalMillis(MIN_INTERVAL_MS)
             .build()
         val cb = object : LocationCallback() {
@@ -236,7 +331,8 @@ class ParentLocationService : Service() {
         try {
             fused.requestLocationUpdates(request, cb, Looper.getMainLooper())
             running = true
-            log("requestLocationUpdates OK interval=${INTERVAL_MS}ms minDist=${MIN_DISTANCE_M}m")
+            val mode = if (currentPriority == Priority.PRIORITY_HIGH_ACCURACY) "GPS (офлайн)" else "balanced"
+            log("requestLocationUpdates OK $mode interval=${INTERVAL_MS}ms minDist=${MIN_DISTANCE_M}m")
         } catch (e: SecurityException) {
             log("requestLocationUpdates SecurityException: ${e.message}")
             callback = null
@@ -320,6 +416,8 @@ class ParentLocationService : Service() {
     }
 
     private fun unsubscribe() {
+        unregisterNetworkCallback()
+        online = null
         callback?.let {
             try {
                 fused.removeLocationUpdates(it)
