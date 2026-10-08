@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_exception.dart';
 import '../../core/providers.dart';
+import '../consent/consent_providers.dart';
 
 /// Вход. Два режима — OTP-код из письма и пароль (как в web /login).
 class LoginScreen extends ConsumerStatefulWidget {
@@ -86,7 +87,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       unawaited(ref.read(parentRuStorePushRegistrarProvider).register());
       // v0.70.0: фоновая геолокация родителя (флаг, токен устройства, служба).
       unawaited(ref.read(parentLocationProvider.notifier).sync());
-      if (mounted) context.go('/home');
+      // v0.72.0: политика не принята → экран согласия.
+      final route = await routeAfterSignIn(ref);
+      if (mounted) context.go(route);
     } on ApiException catch (e) {
       _handleAuthError(e);
     } catch (_) {
@@ -112,7 +115,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       unawaited(ref.read(parentRuStorePushRegistrarProvider).register());
       // v0.70.0: фоновая геолокация родителя (флаг, токен устройства, служба).
       unawaited(ref.read(parentLocationProvider.notifier).sync());
-      if (mounted) context.go('/home');
+      // v0.72.0: политика не принята → экран согласия.
+      final route = await routeAfterSignIn(ref);
+      if (mounted) context.go(route);
     } on ApiException catch (e) {
       _handleAuthError(e);
     } catch (_) {

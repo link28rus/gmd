@@ -78,6 +78,32 @@ class FamilyRepository {
     }
   }
 
+  /// v0.72.0: `POST /family/members` `{email, lastName, firstName, middleName?, password}` →
+  /// 201 `{member}` — владелец сам заводит аккаунт участнику (email сразу
+  /// подтверждён, политику участник примет при первом входе). Ошибки:
+  /// 409 `email_taken`, 403 `forbidden`, 400 — поля. Текст: [createMemberErrorMessage].
+  Future<FamilyMember> createMember({
+    required String email,
+    required String lastName,
+    required String firstName,
+    String? middleName,
+    required String password,
+  }) async {
+    final middle = middleName?.trim() ?? '';
+    final res = await _dio.post<dynamic>(
+      '/family/members',
+      data: {
+        'email': email.trim(),
+        'lastName': lastName.trim(),
+        'firstName': firstName.trim(),
+        if (middle.isNotEmpty) 'middleName': middle,
+        'password': password,
+      },
+    );
+    final data = res.data as Map<String, dynamic>;
+    return FamilyMember.fromJson(data['member'] as Map<String, dynamic>);
+  }
+
   /// `DELETE /family/members/:userId` → 204 (только владелец).
   Future<void> removeMember(String userId) async {
     await _dio.delete<dynamic>('/family/members/${Uri.encodeComponent(userId)}');

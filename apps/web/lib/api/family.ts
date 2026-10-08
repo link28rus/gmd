@@ -94,6 +94,31 @@ export const acceptMemberInvite = (code: string): Promise<AcceptInviteResponse> 
     body: JSON.stringify({ code: normalizeInviteCode(code) }),
   });
 
+/** v0.72.0: владелец заводит аккаунт участника сам (email + пароль, без подтверждения почты). */
+export interface CreateMemberInput {
+  email: string;
+  lastName: string;
+  firstName: string;
+  middleName?: string;
+  password: string;
+}
+
+export const createMember = async (input: CreateMemberInput): Promise<FamilyMember> => {
+  const middleName = input.middleName?.trim();
+  return (
+    await apiFetch<{ member: FamilyMember }>('/api/family/members', {
+      method: 'POST',
+      body: JSON.stringify({
+        email: input.email.trim(),
+        lastName: input.lastName.trim(),
+        firstName: input.firstName.trim(),
+        ...(middleName ? { middleName } : {}),
+        password: input.password,
+      }),
+    })
+  ).member;
+};
+
 export const removeMember = (userId: string): Promise<void> =>
   apiFetch<void>(`/api/family/members/${encodeURIComponent(userId)}`, { method: 'DELETE' });
 
@@ -125,6 +150,7 @@ export const familyApi = {
   revokeMemberInvite,
   previewMemberInvite,
   acceptMemberInvite,
+  createMember,
   removeMember,
   leaveFamily,
   transferOwnership,
@@ -174,6 +200,8 @@ export function familyErrorMessage(e: unknown): string {
       return 'Приглашение не найдено, истекло или уже использовано.';
     case 'already_member':
       return 'Вы уже состоите в этой семье.';
+    case 'email_taken':
+      return EMAIL_TAKEN_MESSAGE;
     case 'current_family_not_empty':
       return e.details.reason === 'has_members'
         ? 'В вашей текущей семье есть другие взрослые — сначала выйдите из неё (владельцу — передать права).'
@@ -195,4 +223,40 @@ export function familyErrorMessage(e: unknown): string {
   if (e.status >= 500) return 'Сервер временно недоступен — попробуйте позже.';
   // Сообщения backend'а бывают на английском — показываем общий текст.
   return 'Не удалось выполнить действие — попробуйте ещё раз.';
+}
+
+export const EMAIL_TAKEN_MESSAGE =
+  'Этот email уже зарегистрирован в Перископе — отправьте человеку приглашение';
+
+const MEMBER_FIELD_LABELS: Record<string, string> = {
+  email: 'Email',
+  lastName: 'Фамилия',
+  firstName: 'Имя',
+  middleName: 'Отчество',
+  password: 'Пароль',
+};
+
+/**
+ * Текст ошибки формы «Создать аккаунт». 400 от ZodValidationPipe несёт
+ * `details: [{ path: ['email'], … }]` — называем поля, а не «название семьи».
+ */
+export function createMemberErrorMessage(e: unknown): string {
+  if (e instanceof ApiError && (e.code === 'bad_request' || e.code === 'validation_failed')) {
+    const raw = e.details.details;
+    const fields = Array.isArray(raw)
+      ? raw
+          .map((d) => {
+            const path = (d as { path?: unknown } | null)?.path;
+            return Array.isArray(path) && typeof path[0] === 'string'
+              ? MEMBER_FIELD_LABELS[path[0]]
+              : undefined;
+          })
+          .filter((f): f is string => Boolean(f))
+      : [];
+    const unique = [...new Set(fields)];
+    return unique.length > 0
+      ? `Проверьте поля: ${unique.join(', ')}.`
+      : 'Проверьте введённые данные.';
+  }
+  return familyErrorMessage(e);
 }

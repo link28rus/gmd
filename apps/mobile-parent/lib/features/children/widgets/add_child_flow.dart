@@ -7,6 +7,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../../core/api/api_exception.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../consent/consent_providers.dart';
 import '../child_models.dart';
 import '../children_providers.dart';
 
@@ -221,6 +222,8 @@ class _CreateChildSheetState extends ConsumerState<_CreateChildSheet> {
         ),
       );
       setState(() => _saving = false);
+      // v0.72.0: роутер откроет экран принятия политики.
+      markConsentRequired(ref, e);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -238,7 +241,7 @@ class _CreateChildSheetState extends ConsumerState<_CreateChildSheet> {
       case 'child_limit_reached':
         return 'Достигнут лимит детей в семье.';
       case 'consent_required':
-        return 'Сначала примите согласие на использование сервиса.';
+        return 'Нужно принять политику конфиденциальности.';
       default:
         return e.message ?? 'Не удалось создать (код ${e.status}).';
     }
@@ -336,6 +339,8 @@ class _InviteQrSheetState extends ConsumerState<_InviteQrSheet> {
         _generating = false;
         _error = _inviteErrorText(e);
       });
+      // v0.72.0: роутер откроет экран принятия политики.
+      markConsentRequired(ref, e);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -353,7 +358,7 @@ class _InviteQrSheetState extends ConsumerState<_InviteQrSheet> {
       case 'child_not_found':
         return 'Ребёнок не найден — возможно был удалён.';
       case 'consent_required':
-        return 'Сначала примите согласие на использование сервиса.';
+        return 'Нужно принять политику конфиденциальности.';
       default:
         return e.message ?? 'Не удалось создать код (${e.status}).';
     }

@@ -22,6 +22,23 @@ import { FamilyMembersService } from './family-members.service';
 /** v0.71.0: docs/superpowers/specs/2026-10-08-family-members.md */
 
 const AcceptSchema = z.object({ code: z.string().min(1).max(32) }).strict();
+// v0.72.0: поля и правила — как у регистрации (auth/dto/register.dto.ts).
+const nameField = z
+  .string()
+  .trim()
+  .min(1)
+  .max(80)
+  .refine((s) => !/[<>"\\]/.test(s), { message: 'Invalid characters in name' });
+const CreateMemberSchema = z
+  .object({
+    email: z.string().trim().toLowerCase().email().max(320),
+    // ФИО как при регистрации: фамилия и имя обязательны, отчество — по желанию.
+    lastName: nameField,
+    firstName: nameField,
+    middleName: nameField.optional().or(z.literal('').transform(() => undefined)),
+    password: z.string().min(8).max(128),
+  })
+  .strict();
 const TransferSchema = z.object({ userId: z.string().min(1).max(64) }).strict();
 
 interface AuthedRequest extends Request {
@@ -36,6 +53,16 @@ export class FamilyMembersController {
   @Get('members')
   async members(@Req() req: AuthedRequest) {
     return this.svc.listMembers(req.user.userId);
+  }
+
+  @Post('members')
+  @UseGuards(ConsentRequiredGuard)
+  @Throttle({ default: { ttl: 600_000, limit: 10 } })
+  async createMember(
+    @Req() req: AuthedRequest,
+    @Body(new ZodValidationPipe(CreateMemberSchema)) dto: z.infer<typeof CreateMemberSchema>,
+  ) {
+    return { member: await this.svc.createMember(req.user.userId, dto) };
   }
 
   @Delete('members/:userId')

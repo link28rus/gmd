@@ -1,7 +1,7 @@
 name: periscop_parent
 description: "Перископ Родителя — родительский контроль и геолокация ребёнка"
 publish_to: 'none'
-version: 0.71.0+42
+version: 0.72.0+43
 
 environment:
   sdk: ^3.11.5
@@ -77,6 +77,9 @@ dependencies:
 
   # v0.71: системное «Поделиться» для приглашения взрослого в семью.
   share_plus: ^12.0.2
+
+  # v0.72: экран принятия политики — ссылки на /privacy и /terms во внешнем браузере.
+  url_launcher: ^6.3.3
 
 dev_dependencies:
   flutter_test:

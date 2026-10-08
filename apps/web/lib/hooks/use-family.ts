@@ -43,3 +43,8 @@ export function useRenameFamily() {
     familyApi.renameFamily(id, name),
   );
 }
+
+/** v0.72.0: владелец создаёт аккаунт участника; список участников перезапрашивается. */
+export function useCreateMember() {
+  return useFamilyMutation(familyApi.createMember);
+}

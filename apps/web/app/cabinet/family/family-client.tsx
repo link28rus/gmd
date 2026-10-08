@@ -20,6 +20,7 @@ import { FAMILY_KEY, useFamilyMembers, useRemoveMember } from '@/lib/hooks/use-f
 import { FamilyNameCard } from './components/family-name-card';
 import { MembersCard } from './components/members-card';
 import { InviteCard } from './components/invite-card';
+import { AddMemberCard } from './components/add-member-card';
 import { JoinCodeCard } from './components/join-code-card';
 import { ConfirmDialog } from './components/confirm-dialog';
 
@@ -167,7 +168,20 @@ function FamilyContent(): ReactElement {
         onRemove={setRemoveTarget}
       />
 
-      {isOwner && <InviteCard />}
+      {isOwner && (
+        <div className="space-y-3 pt-2">
+          <div className="px-1">
+            <h2 className="text-base font-semibold text-foreground">Добавить взрослого</h2>
+            <p className="text-sm text-muted-foreground">
+              Второй родитель, бабушка или няня получат полный доступ: дети, карта, геозоны, «Звук
+              вокруг», SOS и уведомления. Два способа: пригласить по ссылке — человек сам входит или
+              регистрируется, или создать аккаунт — вы задаёте email и пароль.
+            </p>
+          </div>
+          <InviteCard />
+          <AddMemberCard />
+        </div>
+      )}
 
       {!isOwner && (
         <section className="rounded-lg border border-border bg-card p-5 shadow-sm">

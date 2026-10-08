@@ -7,6 +7,8 @@ import '../features/audio/audio_listen_screen.dart';
 import '../features/auth/login_screen.dart';
 import '../features/auth/register_screen.dart';
 import '../features/child_detail/child_detail_screen.dart';
+import '../features/consent/consent_providers.dart';
+import '../features/consent/consent_screen.dart';
 import '../features/debug/debug_screen.dart';
 import '../features/family/family_screen.dart';
 import '../features/family/join_family_screen.dart';
@@ -33,12 +35,18 @@ class AppRouter {
         if (loc == '/debug') return null; // /debug доступен всегда — нужен для диагностики login-проблем
         final isAuthRoute = loc == '/login' || loc == '/register';
         if (session == null && !isAuthRoute) return '/login';
+        // v0.72.0: политика не принята — держим на экране согласия.
+        final needConsent =
+            session != null && ref.read(consentPendingUserProvider) == session.user.id;
+        if (needConsent && loc != '/consent') return '/consent';
+        if (!needConsent && loc == '/consent') return session == null ? '/login' : '/home';
         return null;
       },
       routes: [
         GoRoute(path: '/splash', builder: (_, _) => const SplashScreen()),
         GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
         GoRoute(path: '/register', builder: (_, _) => const RegisterScreen()),
+        GoRoute(path: '/consent', builder: (_, _) => const ConsentScreen()),
         // Скрытый диагностический экран — открывается долгим нажатием на
         // лейбле версии в AppBar /home. Доступен из любого состояния auth,
         // включая когда session == null (для диагностики проблем входа).
@@ -163,5 +171,6 @@ class AppRouter {
 class _AuthRefreshNotifier extends ChangeNotifier {
   _AuthRefreshNotifier(WidgetRef ref) {
     ref.listen<Object?>(authSessionProvider, (_, _) => notifyListeners());
+    ref.listen<String?>(consentPendingUserProvider, (_, _) => notifyListeners());
   }
 }

@@ -3,9 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/providers.dart';
+import '../consent/consent_providers.dart';
 import '../zones/zones_providers.dart';
 import 'family_models.dart';
 import 'family_providers.dart';
+import 'widgets/create_member_sheets.dart';
 import 'widgets/family_dialogs.dart';
 
 /// v0.71.0: экран «Семья» — название, участники, приглашения взрослых,
@@ -37,6 +39,8 @@ class _FamilyScreenState extends ConsumerState<FamilyScreen> {
       return true;
     } catch (e) {
       _snack(familyErrorMessage(e));
+      // v0.72.0: роутер откроет экран принятия политики.
+      markConsentRequired(ref, e);
       return false;
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -72,6 +76,18 @@ class _FamilyScreenState extends ConsumerState<FamilyScreen> {
     });
     if (!ok || invite == null || !mounted) return;
     await showMemberInviteSheet(context, invite!);
+  }
+
+  /// v0.72.0: владелец заводит аккаунт сам (email + пароль), без приглашения.
+  Future<void> _createMember() async {
+    if (_busy) return;
+    final account = await showCreateMemberSheet(
+      context,
+      onSubmit: ref.read(familyRepositoryProvider).createMember,
+    );
+    if (account == null || !mounted) return;
+    ref.invalidate(familyMembersProvider);
+    await showCreatedMemberSheet(context, account);
   }
 
   Future<void> _revoke(MemberInvite invite) async {
@@ -209,6 +225,7 @@ class _FamilyScreenState extends ConsumerState<FamilyScreen> {
             busy: _busy,
             onRename: () => _rename(data.family),
             onInvite: _invite,
+            onCreateMember: _createMember,
             onRevoke: _revoke,
             onRemove: _remove,
             onTransfer: (m) => _transfer(data.family, m),
@@ -227,6 +244,7 @@ class _FamilyBody extends ConsumerWidget {
     required this.busy,
     required this.onRename,
     required this.onInvite,
+    required this.onCreateMember,
     required this.onRevoke,
     required this.onRemove,
     required this.onTransfer,
@@ -238,6 +256,7 @@ class _FamilyBody extends ConsumerWidget {
   final bool busy;
   final VoidCallback onRename;
   final VoidCallback onInvite;
+  final VoidCallback onCreateMember;
   final ValueChanged<MemberInvite> onRevoke;
   final ValueChanged<FamilyMember> onRemove;
   final ValueChanged<FamilyMember> onTransfer;
@@ -315,16 +334,33 @@ class _FamilyBody extends ConsumerWidget {
           ),
         ),
 
-        // --- Приглашения (владелец) ---
+        // --- Добавить взрослого и приглашения (владелец) ---
+        // v0.72.0: два способа — по ссылке (человек регистрируется сам) и
+        // «Создать аккаунт» (email и пароль задаёт владелец).
         if (owner) ...[
           const SizedBox(height: 24),
-          _SectionTitle('Приглашения'),
+          _SectionTitle('Добавить взрослого'),
           FilledButton.icon(
             onPressed: busy ? null : onInvite,
             icon: const Icon(Icons.person_add_alt_1),
-            label: const Text('Пригласить взрослого'),
+            label: const Text('Пригласить по ссылке'),
           ),
-          const SizedBox(height: 8),
+          _Hint(
+            'Человек сам зарегистрируется (или войдёт в свой аккаунт) и примет '
+            'приглашение. Подходит, если у него уже есть Перископ.',
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: busy ? null : onCreateMember,
+            icon: const Icon(Icons.manage_accounts_outlined),
+            label: const Text('Создать аккаунт'),
+          ),
+          _Hint(
+            'Вы задаёте email и пароль и сами передаёте их человеку — регистрироваться '
+            'ему не нужно.',
+          ),
+          const SizedBox(height: 24),
+          _SectionTitle('Приглашения'),
           _InvitesList(onRevoke: onRevoke, busy: busy),
         ],
 
@@ -357,6 +393,24 @@ class _FamilyBody extends ConsumerWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+class _Hint extends StatelessWidget {
+  const _Hint(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 6, 4, 0),
+      child: Text(
+        text,
+        style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+      ),
     );
   }
 }

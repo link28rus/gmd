@@ -7,6 +7,7 @@ import '../../../core/features.dart';
 import '../../children/child_models.dart';
 import '../../children/children_providers.dart';
 import '../../children/widgets/child_avatar_sheet.dart';
+import '../../consent/consent_providers.dart';
 import 'child_status_card.dart';
 
 /// Собственно содержимое DraggableScrollableSheet — порт `_BottomPanel`.
@@ -357,6 +358,8 @@ class _ChildActionSheetState extends ConsumerState<ChildActionSheet> {
     } on ApiException catch (e) {
       if (!mounted) return;
       _showSnack(_signalErrorText(e), error: true);
+      // v0.72.0: роутер откроет экран принятия политики.
+      markConsentRequired(ref, e);
     } catch (e) {
       if (!mounted) return;
       _showSnack('Не удалось отправить сигнал: $e', error: true);
@@ -373,7 +376,7 @@ class _ChildActionSheetState extends ConsumerState<ChildActionSheet> {
       case 'child_not_found':
         return 'Ребёнок не найден.';
       case 'consent_required':
-        return 'Сначала примите согласие на использование сервиса.';
+        return 'Нужно принять политику конфиденциальности.';
       default:
         return e.message ?? 'Не удалось отправить сигнал (код ${e.status}).';
     }

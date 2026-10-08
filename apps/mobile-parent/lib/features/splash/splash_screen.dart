@@ -9,8 +9,10 @@ import '../../core/auth/auth_repository.dart';
 import '../../core/diag/diag_channel.dart';
 import '../../core/providers.dart';
 import '../../core/push/push_deeplink.dart';
+import '../consent/consent_providers.dart';
 
-/// Заставка: восстанавливает сессию из secure storage и решает /home vs /login.
+/// Заставка: восстанавливает сессию из secure storage и решает /home vs /login
+/// (или /consent, если сервер требует принять политику — v0.72.0).
 ///
 /// Flow:
 /// 1. Если в storage нет refresh-токена → /login.
@@ -91,7 +93,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     unawaited(ref.read(parentRuStorePushRegistrarProvider).register());
     // v0.70.0: фоновая геолокация родителя — флаг с сервера, токен, служба.
     unawaited(ref.read(parentLocationProvider.notifier).sync());
-    return '/home';
+    // v0.72.0: политика не принята → экран согласия (сбой сети не блокирует вход).
+    return routeAfterSignIn(ref);
   }
 
   void _go(String path) {

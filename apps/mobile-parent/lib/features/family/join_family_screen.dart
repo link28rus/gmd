@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../consent/consent_providers.dart';
 import '../zones/zone_format.dart' show apiExceptionOf;
 import 'family_models.dart';
 import 'family_providers.dart';
@@ -54,6 +55,8 @@ class _JoinFamilyScreenState extends ConsumerState<JoinFamilyScreen> {
       );
       // Состояние могло измениться (приглашение использовано, появились дети).
       ref.invalidate(invitePreviewProvider(_code));
+      // v0.72.0: роутер откроет экран принятия политики.
+      if (mounted) markConsentRequired(ref, e);
     } finally {
       if (mounted) setState(() => _busy = false);
     }

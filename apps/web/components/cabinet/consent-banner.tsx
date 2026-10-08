@@ -59,10 +59,11 @@ export function ConsentBanner({ requiresConsent }: ConsentBannerProps): React.Re
     <div className="border-b border-amber-300 bg-amber-50 px-4 py-3">
       <div className="mx-auto flex max-w-4xl flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-amber-900">
-          <span className="mr-1 font-semibold">Политика конфиденциальности обновлена.</span>
+          {/* v0.72.0: нейтрально — видят и при обновлении политики, и участники, которых завёл владелец. */}
+          <span className="mr-1 font-semibold">Нужно ваше согласие.</span>
           Чтобы продолжить пользоваться Перископом, прочитайте{' '}
           <Link href="/privacy" className="underline hover:no-underline">
-            новую версию
+            Политику конфиденциальности
           </Link>{' '}
           и подтвердите согласие.
         </p>

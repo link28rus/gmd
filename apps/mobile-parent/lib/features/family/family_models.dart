@@ -1,6 +1,9 @@
+import 'dart:math';
+
 import 'package:intl/intl.dart';
 
 import '../../core/api/api_exception.dart';
+import '../../core/config/env.dart';
 import '../zones/zone_format.dart' show apiExceptionOf, pluralRu;
 
 /// v0.71.0: участники семьи (docs/superpowers/specs/2026-10-08-family-members.md).
@@ -281,7 +284,7 @@ String familyErrorMessage(Object e) {
     case 'not_found':
       return 'Не найдено — возможно, данные уже изменились. Обновите экран.';
     case 'consent_required':
-      return 'Нужно принять обновлённые условия — откройте веб-кабинет.';
+      return 'Нужно принять политику конфиденциальности.';
     case 'validation_failed':
     case 'bad_request':
       return 'Проверьте введённые данные.';
@@ -295,4 +298,106 @@ String _withMessage(ApiException api) {
   final msg = api.message?.trim();
   if (msg != null && msg.isNotEmpty && RegExp('[А-Яа-яЁё]').hasMatch(msg)) return msg;
   return 'Не удалось выполнить (ошибка ${api.status}).';
+}
+
+// ─── v0.72.0: владелец создаёт аккаунт участнику ────────────────────────
+
+/// Алфавит генератора пароля: без похожих символов 0/O/o, 1/l/I.
+const memberPasswordLowercase = 'abcdefghijkmnpqrstuvwxyz';
+const memberPasswordUppercase = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+const memberPasswordDigits = '23456789';
+const memberPasswordAlphabet =
+    memberPasswordLowercase + memberPasswordUppercase + memberPasswordDigits;
+
+/// Длина сгенерированного пароля.
+const memberPasswordLength = 12;
+
+/// Минимум и максимум пароля — как у регистрации на сервере.
+const memberPasswordMin = 8;
+const memberPasswordMax = 128;
+
+/// Случайный пароль из [memberPasswordAlphabet] (по умолчанию
+/// `Random.secure()`), в нём есть строчная, заглавная буква и цифра.
+String generateMemberPassword({Random? random, int length = memberPasswordLength}) {
+  final rnd = random ?? Random.secure();
+  while (true) {
+    final chars = List.generate(
+      length,
+      (_) => memberPasswordAlphabet[rnd.nextInt(memberPasswordAlphabet.length)],
+    );
+    final pwd = chars.join();
+    final hasAll =
+        chars.any(memberPasswordLowercase.contains) &&
+        chars.any(memberPasswordUppercase.contains) &&
+        chars.any(memberPasswordDigits.contains);
+    if (hasAll || length < 3) return pwd;
+  }
+}
+
+/// Имя/фамилия — как на сервере: без `<>"\`.
+final _badNameChars = RegExp(r'[<>"\\]');
+
+/// Ошибка поля имени (null — ок). [required] — для имени, фамилия необязательна.
+/// [emptyMessage] — текст для пустого обязательного поля (null — поле необязательное).
+String? validateMemberName(
+  String? raw, {
+  required bool required,
+  String emptyMessage = 'Введите имя',
+}) {
+  final v = (raw ?? '').trim();
+  if (v.isEmpty) return required ? emptyMessage : null;
+  if (v.length > 80) return 'Не длиннее 80 символов';
+  if (_badNameChars.hasMatch(v)) return 'Без символов < > " \\';
+  return null;
+}
+
+final _emailRe = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
+
+String? validateMemberEmail(String? raw) {
+  final v = (raw ?? '').trim();
+  if (v.isEmpty) return 'Введите email';
+  if (v.length > 320 || !_emailRe.hasMatch(v)) return 'Проверьте email';
+  return null;
+}
+
+String? validateMemberPassword(String? raw) {
+  final v = raw ?? '';
+  if (v.length < memberPasswordMin) return 'Не короче $memberPasswordMin символов';
+  if (v.length > memberPasswordMax) return 'Не длиннее $memberPasswordMax символов';
+  return null;
+}
+
+/// Аккаунт, созданный владельцем, + пароль (показываем один раз).
+class CreatedMemberAccount {
+  const CreatedMemberAccount({required this.member, required this.email, required this.password});
+
+  final FamilyMember member;
+  final String email;
+  final String password;
+
+  /// Текст для «Поделиться» / «Копировать».
+  String get shareText => memberCredentialsText(email: email, password: password);
+}
+
+/// Данные для входа участнику. [origin] — веб-адрес сервиса (по умолчанию
+/// [webOrigin] из env).
+String memberCredentialsText({
+  required String email,
+  required String password,
+  String origin = webOrigin,
+}) =>
+    'Вход в Перископ: $origin/login или приложение родителя — email: $email, '
+    'пароль: $password. Политику конфиденциальности примете при первом входе.';
+
+/// Текст ошибки `POST /family/members`.
+String createMemberErrorMessage(Object e) {
+  final api = apiExceptionOf(e);
+  if (api != null) {
+    if (api.code == 'email_taken') {
+      return 'Этот email уже зарегистрирован в Перископе — отправьте человеку приглашение.';
+    }
+    if (api.code == 'forbidden') return 'Создавать аккаунты может только владелец семьи.';
+    if (api.status == 400) return 'Проверьте поля.';
+  }
+  return familyErrorMessage(e);
 }

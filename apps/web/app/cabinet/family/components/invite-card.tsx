@@ -66,11 +66,11 @@ export function InviteCard(): ReactElement {
 
   return (
     <section className="rounded-lg border border-border bg-card p-5 shadow-sm">
-      <h2 className="mb-1 text-lg font-semibold text-foreground">Пригласить взрослого</h2>
+      <h2 className="mb-1 text-lg font-semibold text-foreground">Пригласить по ссылке</h2>
       <p className="mb-4 text-sm text-muted-foreground">
-        Второй родитель, бабушка или няня получат полный доступ: дети, карта, геозоны, «Звук
-        вокруг», SOS и уведомления. Отправьте ссылку или код в мессенджере — письмо сервер не
-        отправляет. Приглашение одноразовое и действует {MEMBER_INVITE_TTL_DAYS} дней.
+        Человек сам входит или регистрируется со своим email и паролем и нажимает «Присоединиться».
+        Отправьте ссылку или код в мессенджере — письмо сервер не отправляет. Приглашение
+        одноразовое и действует {MEMBER_INVITE_TTL_DAYS} дней.
       </p>
 
       {fresh ? (

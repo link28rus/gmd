@@ -318,6 +318,83 @@ describe('Участники семьи (e2e, v0.71.0)', () => {
     expect(remaining).toBe(1);
   });
 
+  it('v0.72.0: владелец заводит участника по email и паролю — вход сразу, политику принимает сам', async () => {
+    const owner = await registerVerifiedUser(h, 'owner@x.com');
+    const r = await request(server())
+      .post('/family/members')
+      .set(bearer(owner.accessToken))
+      .send({
+        email: ' Granny@X.com ',
+        lastName: 'Петрова',
+        firstName: 'Галина',
+        middleName: 'Ивановна',
+        password: 'granny-pass-1',
+      })
+      .expect(201);
+    expect(r.body.member).toMatchObject({
+      email: 'granny@x.com',
+      displayName: 'Петрова Галина Ивановна',
+      role: 'parent',
+      isMe: false,
+    });
+
+    // Вход паролем без подтверждения email.
+    const login = await request(server())
+      .post('/auth/login-password')
+      .send({ email: 'granny@x.com', password: 'granny-pass-1' })
+      .expect(200);
+    expect(login.body.family.id).toBe(owner.familyId);
+    expect(jwtClaims(login.body.accessToken)).toMatchObject({ role: 'parent' });
+    const auth = bearer(login.body.accessToken);
+
+    // Данные семьи видны, но политику участник ещё не принимал.
+    await request(server()).get('/family/children').set(auth).expect(200);
+    const me = await request(server()).get('/me').set(auth).expect(200);
+    expect(me.body.requiresConsent).toBe(true);
+    const blocked = await request(server())
+      .post('/family/children')
+      .set(auth)
+      .send({ name: 'Ваня' })
+      .expect(403);
+    expect(blocked.body.error.code).toBe('consent_required');
+
+    await request(server())
+      .post('/me/consent')
+      .set(auth)
+      .send({ documents: ['PRIVACY_POLICY', 'TERMS_OF_USE'] })
+      .expect(204);
+    await request(server()).post('/family/children').set(auth).send({ name: 'Ваня' }).expect(201);
+
+    // Повтор email (в т.ч. чужой зарегистрированный) → 409, участник — 403.
+    const dup = await request(server())
+      .post('/family/members')
+      .set(bearer(owner.accessToken))
+      .send({
+        email: 'owner@x.com',
+        lastName: 'Иванов',
+        firstName: 'Кто-то',
+        password: 'whatever-1',
+      })
+      .expect(409);
+    expect(dup.body.error.code).toBe('email_taken');
+    await request(server())
+      .post('/family/members')
+      .set(auth)
+      .send({ email: 'new@x.com', lastName: 'Новиков', firstName: 'Новый', password: 'whatever-1' })
+      .expect(403);
+    await request(server())
+      .post('/family/members')
+      .set(bearer(owner.accessToken))
+      .send({ email: 'short@x.com', lastName: 'Коротков', firstName: 'Коротко', password: '123' })
+      .expect(400);
+    // Без фамилии — 400.
+    await request(server())
+      .post('/family/members')
+      .set(bearer(owner.accessToken))
+      .send({ email: 'nolast@x.com', firstName: 'Безфамильный', password: 'whatever-1' })
+      .expect(400);
+  });
+
   it('DELETE /me владельца: права переходят второму взрослому', async () => {
     const { owner, second } = await familyOfTwo();
     await request(server())

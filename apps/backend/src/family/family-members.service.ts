@@ -10,6 +10,7 @@ import { Prisma } from '@prisma/client';
 import type { MembershipRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { StaleTokenService } from '../auth/stale-token.service';
+import { PasswordService } from '../auth/password.service';
 import { generateInviteCode, normalizeInviteCode } from '../invites/lib/code-generator';
 import { displayName } from '../parent-location/parent-location.service';
 import { createSoloFamily, dropMembership, softDeleteFamily } from './family-lifecycle';
@@ -70,6 +71,7 @@ export class FamilyMembersService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(StaleTokenService) private readonly stale: StaleTokenService,
+    @Inject(PasswordService) private readonly password: PasswordService,
   ) {}
 
   /** Текущее членство пользователя (инвариант — одно; берём самое раннее). */
@@ -334,6 +336,65 @@ export class FamilyMembersService {
   }
 
   // ---------- участники ----------
+
+  /**
+   * v0.72.0: владелец заводит взрослого сам — email + пароль, без письма и
+   * подтверждения. Email уже есть в системе (в любом состоянии) → 409
+   * `email_taken`: чужой аккаунт так не забрать, ему — приглашение.
+   * Политику участник принимает сам при первом входе
+   * (acceptedPrivacyPolicyVersion = null → баннер в кабинете / экран в приложении).
+   */
+  async createMember(
+    actorId: string,
+    dto: {
+      email: string;
+      lastName: string;
+      firstName: string;
+      middleName?: string;
+      password: string;
+    },
+  ): Promise<FamilyMemberDto> {
+    const email = dto.email.trim().toLowerCase();
+    const passwordHash = await this.password.hash(dto.password);
+    // Как в auth.service register: «Фамилия Имя Отчество».
+    const fullName = [dto.lastName, dto.firstName, dto.middleName]
+      .filter((s) => s && s.trim())
+      .join(' ');
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const me = await this.requireOwnerLocked(tx, actorId);
+        const user = await tx.user.create({
+          data: {
+            email,
+            lastName: dto.lastName,
+            firstName: dto.firstName,
+            middleName: dto.middleName ?? null,
+            name: fullName,
+            passwordHash,
+            emailVerifiedAt: new Date(),
+            memberships: { create: { familyId: me.familyId, role: 'parent' } },
+          },
+          include: { memberships: true },
+        });
+        return {
+          userId: user.id,
+          displayName: displayName(user),
+          email: user.email,
+          role: 'parent' as const,
+          joinedAt: user.memberships[0]!.createdAt.toISOString(),
+          isMe: false,
+        };
+      });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        throw new ConflictException({
+          code: 'email_taken',
+          message: 'Этот email уже зарегистрирован — отправьте человеку приглашение',
+        });
+      }
+      throw e;
+    }
+  }
 
   async removeMember(actorId: string, targetUserId: string): Promise<void> {
     if (actorId === targetUserId) {

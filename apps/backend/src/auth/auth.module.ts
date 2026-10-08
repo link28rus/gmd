@@ -80,6 +80,13 @@ function asNum(v: string | undefined, def: number): number {
     EmailVerificationService,
     PasswordResetService,
   ],
-  exports: [JwtService, JwtAuthGuard, StaleTokenService, AuthService, PasswordResetService],
+  exports: [
+    JwtService,
+    JwtAuthGuard,
+    StaleTokenService,
+    AuthService,
+    PasswordResetService,
+    PasswordService,
+  ],
 })
 export class AuthModule {}
