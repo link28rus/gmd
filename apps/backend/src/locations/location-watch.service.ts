@@ -45,6 +45,21 @@ export class LocationWatchService {
       .exec();
   }
 
+  /**
+   * v0.70.0: отметка «смотрю» сразу на нескольких детей (общая карта семьи
+   * на главном экране родителя) — одним MULTI.
+   */
+  async watchMany(childIds: string[], userId: string): Promise<void> {
+    if (childIds.length === 0) return;
+    const expiresAt = Date.now() + WATCH_TTL_SEC * 1000;
+    const multi = this.redis.getClient().multi();
+    for (const childId of childIds) {
+      const key = watchKey(childId);
+      multi.zadd(key, expiresAt, userId).expire(key, WATCH_TTL_SEC * 2);
+    }
+    await multi.exec();
+  }
+
   async watchers(childId: string): Promise<string[]> {
     const key = watchKey(childId);
     const client = this.redis.getClient();

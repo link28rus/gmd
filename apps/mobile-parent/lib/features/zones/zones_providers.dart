@@ -18,9 +18,8 @@ final zonesListProvider = FutureProvider<List<Zone>>((ref) async {
   return ref.watch(zonesRepositoryProvider).list();
 });
 
-/// Последние точки всех детей семьи одним запросом.
-final familyLatestProvider =
-    FutureProvider.autoDispose<List<FamilyLatestPoint>>((ref) async {
+/// Последние точки всех детей (и родителей, v0.70.0) семьи одним запросом.
+final familyLatestProvider = FutureProvider.autoDispose<FamilyLatest>((ref) async {
   return ref.watch(zonesRepositoryProvider).familyLatest();
 });
 

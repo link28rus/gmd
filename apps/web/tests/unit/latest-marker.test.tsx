@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { LatestMarker } from '@/components/locations/latest-marker';
 
 // react-leaflet — ESM и без <MapContainer> не рендерится; мокаем слои
@@ -16,10 +16,11 @@ jest.mock('react-leaflet', () => {
         'data-center': JSON.stringify(center),
         'data-radius': String(radius),
       }),
-    Marker: ({ position, icon }: any) =>
+    Marker: ({ position, icon, eventHandlers }: any) =>
       React.createElement('div', {
         'data-testid': 'marker',
         'data-position': JSON.stringify(position),
+        onClick: eventHandlers?.click,
         dangerouslySetInnerHTML: { __html: icon?.options?.html ?? '' },
       }),
   };
@@ -91,5 +92,31 @@ describe('LatestMarker', () => {
     const img = screen.getByTestId('marker').querySelector('img');
     expect(img?.getAttribute('src')).toBe('x" onerror="alert(1)');
     expect(img?.hasAttribute('onerror')).toBe(false);
+  });
+
+  it('свежая точка (≤ 10 мин) — не серая', () => {
+    render(<LatestMarker lat={55.75} lon={37.61} accuracy={null} childName="Иван" ageSec={600} />);
+    expect(screen.getByTestId('marker').querySelector('[data-stale="0"]')).not.toBeNull();
+  });
+
+  it('точка старше 10 минут — серая метка', () => {
+    render(<LatestMarker lat={55.75} lon={37.61} accuracy={null} childName="Иван" ageSec={601} />);
+    expect(screen.getByTestId('marker').querySelector('[data-stale="1"]')).not.toBeNull();
+  });
+
+  it('onClick — клик по маркеру', () => {
+    const onClick = jest.fn();
+    render(
+      <LatestMarker
+        lat={55.75}
+        lon={37.61}
+        accuracy={null}
+        childName="Иван"
+        ageSec={5}
+        onClick={onClick}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('marker'));
+    expect(onClick).toHaveBeenCalledTimes(1);
   });
 });

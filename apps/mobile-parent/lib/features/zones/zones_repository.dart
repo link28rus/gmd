@@ -108,12 +108,17 @@ class ZonesRepository {
   }
 
   /// `GET /family/locations/latest` — последняя хорошая точка каждого
-  /// ребёнка; дети без точек в ответ не попадают.
-  Future<List<FamilyLatestPoint>> familyLatest() async {
+  /// ребёнка (дети без точек в ответ не попадают) и, с v0.70.0, родителей,
+  /// которые показывают себя семье.
+  Future<FamilyLatest> familyLatest() async {
     final res = await _dio.get<dynamic>('/family/locations/latest');
-    final data = res.data;
-    final list = data is Map<String, dynamic> ? data['items'] as List? ?? const [] : const [];
-    return list.whereType<Map<String, dynamic>>().map(FamilyLatestPoint.fromJson).toList();
+    return FamilyLatest.fromJson(res.data);
+  }
+
+  /// `PUT /family/locations/watch` → 204. Отметка «смотрю карту» сразу на
+  /// всех детей семьи (v0.70.0): о новых точках придёт тихий push.
+  Future<void> watchFamilyLocations() async {
+    await _dio.put<dynamic>('/family/locations/watch');
   }
 
   /// `GET /geo/ip-center` — город по IP. 204 (приватный IP, нет в базе, база

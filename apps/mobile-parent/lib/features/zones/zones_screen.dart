@@ -1,17 +1,13 @@
-import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 
-import '../../core/diag/diag_channel.dart';
-import '../../core/providers.dart';
 import '../children/child_models.dart';
 import '../children/children_providers.dart';
-import 'widgets/where_am_i.dart';
+import '../map/family_map.dart';
 import 'widgets/zone_places.dart';
 import 'widgets/zone_widgets.dart';
 import 'zone_format.dart';
@@ -28,140 +24,17 @@ class ZonesScreen extends ConsumerStatefulWidget {
   ConsumerState<ZonesScreen> createState() => _ZonesScreenState();
 }
 
-/// Стартовый вид карты — результат цепочки центра.
-class _InitialView {
-  const _InitialView({required this.center, required this.zoom, this.fit, this.ipAttribution});
-  final LatLng center;
-  final double zoom;
-  final CameraFit? fit;
-
-  /// Центр взят по IP — подпись DB-IP (CC BY 4.0).
-  final String? ipAttribution;
-}
-
 class _ZonesScreenState extends ConsumerState<ZonesScreen> {
-  final MapController _map = MapController();
-  // Пересоздание TileLayer после onMapReady — workaround flutter_map 7.0.2:
-  // первый mount не запрашивает тайлы до user-event (см. child_detail_screen).
-  int _tileGen = 0;
-  bool _mapReady = false;
-
-  _InitialView? _view;
-  bool _resolving = false;
+  final FamilyMapController _map = FamilyMapController();
   String? _selectedId;
-  LatLng? _me;
-  MapCamera? _lastCamera;
-  Timer? _saveTimer;
-  String? _userId;
-
-  @override
-  void initState() {
-    super.initState();
-    _userId = ref.read(authSessionProvider)?.user.id;
-  }
-
-  @override
-  void dispose() {
-    _saveTimer?.cancel();
-    final cam = _lastCamera;
-    if (cam != null) {
-      unawaited(writeSavedMapView(
-        _userId,
-        SavedMapView(cam.center.latitude, cam.center.longitude, cam.zoom),
-      ));
-    }
-    super.dispose();
-  }
-
-  // ─── Центр карты: зоны и дети → последний вид → IP → Москва ──────────────
-  Future<void> _resolveView(List<Zone> zones, List<FamilyLatestPoint> points) async {
-    final pts = framePoints(zones, points.map((p) => LatLng(p.lat, p.lon)));
-    _InitialView view;
-    if (pts.length >= 2) {
-      view = _InitialView(
-        center: pts.first,
-        zoom: 14,
-        fit: CameraFit.coordinates(
-          coordinates: pts,
-          padding: const EdgeInsets.all(48),
-          maxZoom: 16,
-        ),
-      );
-    } else if (pts.length == 1) {
-      view = _InitialView(center: pts.first, zoom: 15);
-    } else {
-      SavedMapView? saved;
-      try {
-        saved = await readSavedMapView(_userId);
-      } catch (e) {
-        unawaited(diagLog('zones', 'saved map view failed: $e'));
-      }
-      if (!mounted) return;
-      if (saved != null) {
-        view = _InitialView(center: saved.center, zoom: saved.zoom);
-      } else {
-        IpCenter? ip;
-        try {
-          ip = await ref.read(zonesRepositoryProvider).ipCenter();
-        } catch (e) {
-          unawaited(diagLog('zones', 'ip-center failed: $e'));
-        }
-        view = ip != null
-            ? _InitialView(
-                center: LatLng(ip.lat, ip.lon),
-                zoom: kIpCenterZoom,
-                ipAttribution: ip.attribution,
-              )
-            : const _InitialView(center: kMoscow, zoom: kMoscowZoom);
-      }
-    }
-    if (mounted) setState(() => _view = view);
-  }
-
-  void _onPositionChanged(MapCamera camera, bool hasGesture) {
-    _lastCamera = camera;
-    if (!hasGesture) return;
-    _saveTimer?.cancel();
-    _saveTimer = Timer(const Duration(milliseconds: 800), () {
-      unawaited(writeSavedMapView(
-        _userId,
-        SavedMapView(camera.center.latitude, camera.center.longitude, camera.zoom),
-      ));
-    });
-  }
-
-  void _fitAll(List<Zone> zones, List<FamilyLatestPoint> points) {
-    if (!_mapReady) return;
-    final pts = framePoints(zones, [
-      ...points.map((p) => LatLng(p.lat, p.lon)),
-      ?_me,
-    ]);
-    if (pts.length >= 2) {
-      _map.fitCamera(CameraFit.coordinates(
-        coordinates: pts,
-        padding: const EdgeInsets.all(48),
-        maxZoom: 16,
-      ));
-    } else if (pts.length == 1) {
-      _map.move(pts.first, 15);
-    }
-  }
 
   void _focusZone(Zone z) {
-    if (!_mapReady) return;
     _map.move(LatLng(z.centerLat, z.centerLon), zoomForRadius(z.radius, z.centerLat));
   }
 
-  Future<void> _whereAmI() async {
-    final me = await locateMe(context);
-    if (me == null || !mounted) return;
-    setState(() => _me = me);
-    if (_mapReady) _map.move(me, math.max(_lastCamera?.zoom ?? 15, 15));
-  }
-
   void _createZone({LatLng? at, String? childId}) {
-    final center = at ?? _lastCamera?.center ?? _view?.center ?? kMoscow;
-    final zoom = at != null ? 16.0 : (_lastCamera?.zoom ?? 15);
+    final center = at ?? _map.camera?.center ?? _map.initialCenter ?? kMoscow;
+    final zoom = at != null ? 16.0 : (_map.camera?.zoom ?? 15);
     final q = <String, String>{
       'lat': center.latitude.toStringAsFixed(6),
       'lon': center.longitude.toStringAsFixed(6),
@@ -243,7 +116,7 @@ class _ZonesScreenState extends ConsumerState<ZonesScreen> {
     final kids = ref.watch(childrenListProvider).valueOrNull ?? const <Child>[];
 
     final zones = zonesAsync.valueOrNull ?? const <Zone>[];
-    final points = latestAsync.valueOrNull ?? const <FamilyLatestPoint>[];
+    final points = latestAsync.valueOrNull?.items ?? const <FamilyLatestPoint>[];
     final kidById = {for (final k in kids) k.id: k};
     final kidNames = {for (final k in kids) k.id: k.name};
     final canCreate = zonesAsync.hasValue && zones.length < kMaxZones;
@@ -251,10 +124,6 @@ class _ZonesScreenState extends ConsumerState<ZonesScreen> {
     // Цепочка центра стартует, когда и зоны, и точки ответили (или упали).
     final zonesDone = zonesAsync.hasValue || zonesAsync.hasError;
     final latestDone = latestAsync.hasValue || latestAsync.hasError;
-    if (_view == null && !_resolving && zonesDone && latestDone) {
-      _resolving = true;
-      unawaited(_resolveView(zones, points));
-    }
 
     final mapHeight = math.max(220.0, MediaQuery.of(context).size.height * 0.4);
 
@@ -285,9 +154,18 @@ class _ZonesScreenState extends ConsumerState<ZonesScreen> {
         children: [
           SizedBox(
             height: mapHeight,
-            child: _view == null
-                ? const Center(child: CircularProgressIndicator())
-                : _buildMap(zones, points, kidById, canCreate),
+            child: FamilyMap(
+              controller: _map,
+              zones: zones,
+              points: points,
+              kidById: kidById,
+              dataReady: zonesDone && latestDone,
+              selectedZoneId: _selectedId,
+              onZoneTap: (z) => setState(() => _selectedId = z.id),
+              onKidTap: (kid, p) => _onKidTap(kid, p, canCreate),
+              heroTagPrefix: 'zones',
+              fitAllTooltip: 'Показать все зоны и детей',
+            ),
           ),
           Expanded(
             child: RefreshIndicator(
@@ -303,9 +181,7 @@ class _ZonesScreenState extends ConsumerState<ZonesScreen> {
                       latestLoading: latestAsync.isLoading && !latestAsync.hasValue,
                       latestError: latestAsync.hasError,
                       canCreate: canCreate,
-                      onFocus: (p) {
-                        if (_mapReady) _map.move(LatLng(p.lat, p.lon), 16);
-                      },
+                      onFocus: (p) => _map.move(LatLng(p.lat, p.lon), 16),
                       onCreateAt: (kid, p) =>
                           _createZone(at: LatLng(p.lat, p.lon), childId: kid.id),
                     ),
@@ -322,123 +198,6 @@ class _ZonesScreenState extends ConsumerState<ZonesScreen> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildMap(
-    List<Zone> zones,
-    List<FamilyLatestPoint> points,
-    Map<String, Child> kidById,
-    bool canCreate,
-  ) {
-    final view = _view!;
-    final scheme = Theme.of(context).colorScheme;
-    return Stack(
-      // StackFit.expand ОБЯЗАТЕЛЕН: иначе FlutterMap может стартовать с size=0
-      // и не запросить тайлы (карта серая).
-      fit: StackFit.expand,
-      children: [
-        FlutterMap(
-          mapController: _map,
-          options: MapOptions(
-            initialCenter: view.center,
-            initialZoom: view.zoom,
-            initialCameraFit: view.fit,
-            minZoom: 3,
-            maxZoom: 18,
-            interactionOptions: const InteractionOptions(
-              flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
-            ),
-            onPositionChanged: _onPositionChanged,
-            onMapReady: () {
-              if (!mounted) return;
-              setState(() {
-                _mapReady = true;
-                _tileGen++;
-              });
-            },
-          ),
-          children: [
-            TileLayer(
-              key: ValueKey('tile_$_tileGen'),
-              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-              userAgentPackageName: 'pro.periscop.parent',
-              maxNativeZoom: 19,
-              keepBuffer: 4,
-              panBuffer: 2,
-            ),
-            CircleLayer(circles: zoneCircles(zones, selectedId: _selectedId)),
-            MarkerLayer(
-              markers: zoneCenterMarkers(
-                zones,
-                onTap: (z) => setState(() => _selectedId = z.id),
-              ),
-            ),
-            MarkerLayer(
-              markers: [
-                for (final p in points)
-                  if (kidById[p.childId] != null)
-                    Marker(
-                      point: LatLng(p.lat, p.lon),
-                      width: KidMapMarker.width,
-                      height: KidMapMarker.height,
-                      alignment: Alignment.topCenter,
-                      child: KidMapMarker(
-                        child: kidById[p.childId]!,
-                        onTap: () => _onKidTap(kidById[p.childId]!, p, canCreate),
-                      ),
-                    ),
-                if (_me != null)
-                  Marker(point: _me!, width: 18, height: 18, child: const MyLocationDot()),
-              ],
-            ),
-            RichAttributionWidget(
-              attributions: [
-                const TextSourceAttribution('OpenStreetMap contributors'),
-                if (view.ipAttribution != null)
-                  TextSourceAttribution(view.ipAttribution!, prependCopyright: false),
-              ],
-            ),
-          ],
-        ),
-        Positioned(
-          right: 12,
-          top: 12,
-          child: Column(
-            children: [
-              FloatingActionButton.small(
-                heroTag: 'zones_where_am_i',
-                tooltip: 'Где я',
-                onPressed: _whereAmI,
-                child: const Icon(Icons.my_location),
-              ),
-              const SizedBox(height: 8),
-              FloatingActionButton.small(
-                heroTag: 'zones_fit_all',
-                tooltip: 'Показать все зоны и детей',
-                onPressed: () => _fitAll(zones, points),
-                child: const Icon(Icons.zoom_out_map),
-              ),
-            ],
-          ),
-        ),
-        if (view.ipAttribution != null)
-          Positioned(
-            left: 8,
-            bottom: 8,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: scheme.surface.withValues(alpha: 0.85),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                'Центр по IP · ${view.ipAttribution}',
-                style: TextStyle(fontSize: 10, color: scheme.onSurfaceVariant),
-              ),
-            ),
-          ),
-      ],
     );
   }
 

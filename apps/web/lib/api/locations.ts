@@ -77,9 +77,28 @@ export interface FamilyLatestItem {
   ageSec: number;
 }
 
+/** v0.70.0: последняя точка родителя семьи (общая карта). */
+export interface FamilyLatestParent {
+  userId: string;
+  name: string;
+  lat: number;
+  lon: number;
+  accuracy: number | null;
+  recordedAt: string;
+  ageSec: number;
+  /** Это текущий пользователь — подпись «Вы». */
+  isMe: boolean;
+}
+
+export interface FamilyLatestResponse {
+  items: FamilyLatestItem[];
+  /** v0.70.0; у старого backend ключа нет — трактуем как пустой массив. */
+  parents?: FamilyLatestParent[];
+}
+
 export const locationsApi = {
-  /** Последние точки всех детей семьи одним запросом; дети без точек не попадают. */
-  getFamilyLatest: () => apiFetch<{ items: FamilyLatestItem[] }>('/api/family/locations/latest'),
+  /** Последние точки всех детей (и родителей, v0.70.0) семьи одним запросом; без точек не попадают. */
+  getFamilyLatest: () => apiFetch<FamilyLatestResponse>('/api/family/locations/latest'),
 
   getLatest: (childId: string) =>
     apiFetch<LatestLocationDto | null>(

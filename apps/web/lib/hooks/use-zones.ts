@@ -10,7 +10,12 @@ import {
   type ZoneChildPrefs,
   type PlaceSuggestion,
 } from '@/lib/api/zones';
-import { locationsApi, type FamilyLatestItem } from '@/lib/api/locations';
+import {
+  locationsApi,
+  type FamilyLatestItem,
+  type FamilyLatestParent,
+  type FamilyLatestResponse,
+} from '@/lib/api/locations';
 
 const KEY = ['zones'] as const;
 const SUGGESTIONS_KEY = ['zone-suggestions'] as const;
@@ -105,7 +110,25 @@ export function useSetMyNotifications() {
 }
 
 // Вне компонента — стабильная ссылка, select не пересчитывается на каждом рендере.
-const selectItems = (d: { items: FamilyLatestItem[] } | null): FamilyLatestItem[] => d?.items ?? [];
+const selectItems = (d: FamilyLatestResponse | null): FamilyLatestItem[] => d?.items ?? [];
+
+export interface FamilyMapLocations {
+  items: FamilyLatestItem[];
+  parents: FamilyLatestParent[];
+}
+
+const EMPTY_FAMILY_MAP: FamilyMapLocations = { items: [], parents: [] };
+
+// Старый backend не присылает `parents` — пустой массив. Защищаемся и от мусора.
+const selectFamilyMap = (d: FamilyLatestResponse | null): FamilyMapLocations => {
+  if (!d) return EMPTY_FAMILY_MAP;
+  return {
+    items: Array.isArray(d.items) ? d.items : [],
+    parents: Array.isArray(d.parents) ? d.parents : [],
+  };
+};
+
+const FAMILY_LATEST_KEY = ['family-latest-locations'] as const;
 
 /**
  * Последние точки всех детей семьи (`GET /family/locations/latest`).
@@ -113,13 +136,31 @@ const selectItems = (d: { items: FamilyLatestItem[] } | null): FamilyLatestItem[
  */
 export function useFamilyLatestLocations() {
   return useQuery({
-    queryKey: ['family-latest-locations'],
+    queryKey: FAMILY_LATEST_KEY,
     queryFn: locationsApi.getFamilyLatest,
     select: selectItems,
     refetchInterval: () => (typeof document !== 'undefined' && document.hidden ? false : 60_000),
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
     staleTime: 30_000,
+    retry: 1,
+  });
+}
+
+/**
+ * v0.70.0: общая карта семьи (кабинет, «Все») — дети и родители из того же
+ * `GET /family/locations/latest` (общий кэш с картой зон). Опрос раз в 30 с,
+ * на скрытой вкладке — пауза.
+ */
+export function useFamilyMapLocations() {
+  return useQuery({
+    queryKey: FAMILY_LATEST_KEY,
+    queryFn: locationsApi.getFamilyLatest,
+    select: selectFamilyMap,
+    refetchInterval: () => (typeof document !== 'undefined' && document.hidden ? false : 30_000),
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
+    staleTime: 15_000,
     retry: 1,
   });
 }

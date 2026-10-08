@@ -6,6 +6,7 @@ import android.os.Handler
 import android.os.Looper
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.util.TimeZone
 
@@ -21,6 +22,10 @@ private const val PUSH_METHOD_CHANNEL = "pro.periscop.parent/push"
 // v0.69.0: тихие push для открытого UI (LOCATION_UPDATED) — отдельно от
 // переходов по тапу, чтобы не путать с навигацией.
 private const val LIVE_METHOD_CHANNEL = "pro.periscop.parent/live"
+
+// v0.70.0: фоновая геолокация родителя (ParentLocationService): креды,
+// запуск/остановка, статус.
+private const val LOCATION_METHOD_CHANNEL = "pro.periscop.parent/location"
 
 class MainActivity : FlutterActivity() {
     companion object {
@@ -134,8 +139,74 @@ class MainActivity : FlutterActivity() {
                 }
             }
         liveChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, LIVE_METHOD_CHANNEL)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, LOCATION_METHOD_CHANNEL)
+            .setMethodCallHandler { call, result -> handleLocationCall(call, result) }
         // v0.56.0: самообновление с собственного сервера (AppUpdater.kt).
         AppUpdater.registerChannel(this, flutterEngine.dartExecutor.binaryMessenger)
+    }
+
+    private fun handleLocationCall(call: MethodCall, result: MethodChannel.Result) {
+        val ctx = applicationContext
+        try {
+            when (call.method) {
+                "saveCreds" -> {
+                    val baseUrl = call.argument<String>("baseUrl")
+                    val token = call.argument<String>("token")
+                    val deviceId = call.argument<String>("deviceId")
+                    if (baseUrl.isNullOrBlank() || token.isNullOrBlank() || deviceId.isNullOrBlank()) {
+                        result.error("bad_args", "baseUrl/token/deviceId обязательны", null)
+                        return
+                    }
+                    ParentLocationCreds.save(
+                        ctx, baseUrl, token, deviceId, call.argument<Boolean>("enabled") ?: true,
+                    )
+                    result.success(null)
+                }
+                "clearCreds" -> {
+                    ParentLocationService.stop(ctx)
+                    ParentLocationWatchdogWorker.cancel(ctx)
+                    ParentLocationCreds.clear(ctx)
+                    ParentLocationUploader.clearBuffer(ctx)
+                    DiagLog.write(ctx, "ploc", "clearCreds")
+                    result.success(null)
+                }
+                "start" -> {
+                    ParentLocationCreds.setEnabled(ctx, true)
+                    // UI на экране — разрешение «при использовании» достаточно.
+                    val ok = ParentLocationService.ensureStarted(ctx, "ui", fromBackground = false)
+                    if (ok) ParentLocationWatchdogWorker.schedule(ctx)
+                    result.success(ok)
+                }
+                "stop" -> {
+                    ParentLocationCreds.setEnabled(ctx, false)
+                    ParentLocationWatchdogWorker.cancel(ctx)
+                    // Сервер при выключении удаляет точки родителя — неотправленные
+                    // не должны уйти при следующем включении со старым временем.
+                    ParentLocationUploader.clearBuffer(ctx)
+                    ParentLocationService.stop(ctx)
+                    DiagLog.write(ctx, "ploc", "stop (from UI)")
+                    result.success(null)
+                }
+                "status" -> {
+                    val creds = ParentLocationCreds.read(ctx)
+                    result.success(
+                        mapOf(
+                            "running" to ParentLocationService.running,
+                            "hasToken" to !creds.token.isNullOrBlank(),
+                            "enabled" to creds.enabled,
+                            "authFailed" to ParentLocationCreds.authFailed(ctx),
+                            "buffered" to ParentLocationUploader.bufferedCount(ctx),
+                            "lastUploadAtMs" to ParentLocationCreds.lastUploadMs(ctx),
+                            "lastError" to ParentLocationCreds.lastError(ctx),
+                        ),
+                    )
+                }
+                else -> result.notImplemented()
+            }
+        } catch (e: Throwable) {
+            DiagLog.write(ctx, "ploc", "channel ${call.method} failed: ${e.javaClass.simpleName}: ${e.message}")
+            result.error("failed", e.message, null)
+        }
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {

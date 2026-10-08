@@ -382,6 +382,15 @@ export class LocationsService {
     return { ...toDto(row), ageSec };
   }
 
+  /** v0.70.0: id неудалённых детей семьи (отметка «смотрю» на общей карте). */
+  async activeChildIds(familyId: string): Promise<string[]> {
+    const rows = await this.prisma.child.findMany({
+      where: { familyId, deletedAt: null },
+      select: { id: true },
+    });
+    return rows.map((r) => r.id);
+  }
+
   /**
    * v0.64.0: последняя хорошая точка (без outlier и mock) каждого ребёнка
    * семьи одним запросом — для карты геозон и начального состояния зон.

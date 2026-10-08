@@ -118,6 +118,20 @@ describe('LocationWatchService', () => {
     expect(fcm.sendHybridToToken).toHaveBeenCalledTimes(2);
   });
 
+  it('v0.70.0: watchMany отмечает всех детей семьи разом', async () => {
+    const { svc, fcm, client } = makeService([dev('a', 'mom')]);
+    await svc.watchMany(['c1', 'c2'], 'mom');
+
+    expect(await svc.watchers('c1')).toEqual(['mom']);
+    expect(await svc.watchers('c2')).toEqual(['mom']);
+    await svc.notifyNewPoints('c2', 'f1');
+    expect(fcm.sendHybridToToken).toHaveBeenCalledTimes(1);
+
+    client.zadd.mockClear();
+    await svc.watchMany([], 'mom');
+    expect(client.zadd).not.toHaveBeenCalled();
+  });
+
   it('пропускает устройства без push-токена и не бросает при сбое', async () => {
     const { svc, fcm, parentDevices } = makeService([dev('a', 'mom', null)]);
     await svc.watch('c1', 'mom');

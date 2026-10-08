@@ -15,16 +15,26 @@
          (lesson #36) — перед возвратом в RuStore убрать или вынести во flavor. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
     <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION"/>
-    <!-- v0.66.0: кнопка «Где я» на карте геозон (geolocator). Только грубая
-         точность и только по нажатию — родителю нужен свой район, а не метры.
-         FINE не объявляем: geolocator запрашивает то, что есть в манифесте. -->
+    <!-- v0.66.0: кнопка «Где я» на карте геозон (geolocator) — одна точка по
+         нажатию, грубая точность (LocationAccuracy.low).
+         v0.70.0: фоновая передача местоположения родителя семье
+         (ParentLocationService, тумблер «Показывать меня семье»): FINE + COARSE,
+         BACKGROUND («Разрешать всегда» — для автозапуска после перезагрузки,
+         обновления и из сторожа), FGS type=location, автозапуск после
+         перезагрузки, «без ограничений батареи». POST_NOTIFICATIONS объявлен
+         выше — постоянное уведомление «Семья видит, где вы».
+         Спека: docs/superpowers/specs/2026-10-08-family-map-parent-location.md -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
-    <!-- geolocator_android приносит foreground-сервис слежения за местоположением
-         и разрешение для него. Нам нужен один запрос точки по нажатию — убираем,
-         чтобы у приложения родителя не было фонового доступа к геолокации. -->
-    <uses-permission
-        android:name="android.permission.FOREGROUND_SERVICE_LOCATION"
-        tools:node="remove"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
+    <!-- v0.70.0: onTaskRemoved ставит точный будильник на перезапуск службы
+         геолокации (как у ребёнка) — он даёт исключение из запрета старта FGS
+         из фона. Android 13+ выдаёт автоматически. -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
 
     <application
         android:name="${applicationName}"
@@ -63,22 +73,41 @@
             </intent-filter>
         </service>
 
-        <!-- См. комментарий к FOREGROUND_SERVICE_LOCATION выше. -->
+        <!-- geolocator_android приносит свой foreground-сервис слежения — нам он не
+             нужен («Где я» — одна точка по нажатию; фоновую передачу делает
+             ParentLocationService), убираем. -->
         <service
             android:name="com.baseflow.geolocator.GeolocatorLocationService"
             tools:node="remove"/>
+
+        <!-- v0.70.0: фоновая передача местоположения родителя семье. -->
+        <service
+            android:name=".ParentLocationService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="location"/>
+        <!-- v0.70.0: перезапуск службы после свайпа из «Недавних» (будильник
+             из ParentLocationService.onTaskRemoved). -->
+        <receiver
+            android:name=".ParentLocationRestartReceiver"
+            android:enabled="true"
+            android:exported="false"/>
 
         <!-- v0.56.0: результат PackageInstaller-сессии самообновления. -->
         <receiver
             android:name=".AppUpdateStatusReceiver"
             android:exported="false"/>
         <!-- v0.56.0: новая версия встала — почистить кэш APK, позвать обратно
-             уведомлением, если обновляли по кнопке. -->
+             уведомлением, если обновляли по кнопке.
+             v0.70.0: после обновления и перезагрузки — поднять ParentLocationService. -->
         <receiver
             android:name=".AppUpdatedReceiver"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
             </intent-filter>
         </receiver>
 

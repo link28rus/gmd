@@ -37,6 +37,9 @@
 - `locale` (varchar) — локаль интерфейса (по умолчанию `'ru'`)
 - `acceptedPrivacyPolicyVersion` (varchar) — версия политики, которую пользователь принял при регистрации
 - `passwordHash` (varchar) — argon2id-хэш пароля (null если юзер пока не установил пароль)
+- `shareLocationWithFamily` (bool, default `true`, v0.70.0) — показывать метку родителя на общей
+  карте семьи. `PUT /parent-location/sharing {enabled:false}` в одной транзакции сбрасывает флаг и
+  удаляет все `parent_locations` пользователя; приём точек при выключенном флаге ничего не пишет
 - `createdAt`, `updatedAt` (timestamptz)
 - `deletedAt` (timestamptz) — soft-delete маркер (null = активный пользователь)
 
@@ -241,6 +244,42 @@ TTL 24 ч) или сам при сбое. Смотрит только админ
 
 **Индекс:** `(childId, serverCreatedAt DESC)` — быстрый поиск недавних SOS.
 
+#### `parent_location_devices` (v0.70.0)
+
+Устройство родителя, передающее свою геолокацию (нативная служба mobile-parent). У службы свой
+долгоживущий токен (как device-token ребёнка): JWT родителя она использовать не может —
+refresh ротируется, повтор старого отзывает все сессии.
+
+- `id` (cuid) — первичный ключ, отдаётся клиенту как `deviceId`
+- `userId` — foreign key → users (CASCADE)
+- `tokenHash` (text, unique) — sha256 токена (`randomBytes(32)` base64url, сам токен не хранится);
+  передаётся в заголовке `X-Parent-Location-Token`
+- `platform`, `appVersion` (text, nullable)
+- `createdAt`, `lastSeenAt` (обновляется приёмом точек), `revokedAt` (выход из аккаунта или
+  `replaceDeviceId` при перевыпуске; отозванный токен → 401)
+
+**Индекс:** `(userId)`.
+
+#### `parent_locations` (v0.70.0)
+
+Точки геолокации родителя для общей карты семьи (`GET /family/locations/latest` → `parents`).
+
+- `id` (cuid), `userId` → users (CASCADE), `deviceId` → parent_location_devices (CASCADE)
+- `lat`, `lon` (float8), `accuracy`, `speed`, `bearing` (float8, nullable)
+- `batteryLevel` (int), `isCharging` (bool), `provider` (text) — nullable
+- `isMock` (bool, default `false`) — подделка GPS; хранится, но на карту не идёт
+- `recordedAt` (время на устройстве), `serverReceivedAt` (default now())
+
+**Уникальность:** `(deviceId, recordedAt)` — `INSERT … ON CONFLICT DO NOTHING` гасит повторы.
+
+**Индекс:** `(userId, recordedAt DESC)` — последняя точка родителя (`DISTINCT ON`).
+
+**Приём:** окно −7 сут … +2 мин, точки с `accuracy > 500` м отбрасываются. Флаг
+`users.shareLocationWithFamily` читается `FOR SHARE` в той же транзакции, что и вставка, — точка
+не переживёт одновременное выключение флага.
+
+**Retention:** 30 дней, pg_cron `parent-locations-retention-daily` (03:00 UTC).
+
 ---
 
 ## Геозоны (Phase 4)
@@ -411,6 +450,8 @@ M2M таблица связи зон и детей.
 2. **`zone_events_retention`** — удаляет из `zone_events` старше 30 дней (03:05 UTC ежедневно).
 3. **`users_hard_delete`** — удаляет пользователей с `deletedAt < now() - interval '30 days'` (03:10 UTC ежедневно).
 4. **`zones_hard_delete`** — удаляет зоны с `deletedAt < now() - interval '30 days'` (03:15 UTC ежедневно).
+5. **`parent-locations-retention-daily`** (v0.70.0) — удаляет из `parent_locations` старше 30 дней
+   (03:00 UTC ежедневно).
 
 Вне pg_cron: `diag_log_uploads` чистится приложением при каждой загрузке журнала (14 дней, не больше
 30 на устройство).
@@ -439,16 +480,17 @@ pnpm --filter @periscop/backend prisma migrate deploy
 
 ### Индексы по приоритету
 
-| Приоритет | Таблица         | Индекс                               | Причина                           |
-| --------- | --------------- | ------------------------------------ | --------------------------------- |
-| P0        | locations       | `(childId, recordedAt DESC)`         | основной запрос истории локаций   |
-| P0        | zones           | GIST на `center_geo`                 | геометрия зон (ST_Distance)       |
-| P0        | zone_events     | `(childId, recordedAt DESC)`         | лента событий ребёнка             |
-| P1        | children        | `(familyId, deletedAt)`              | список детей семьи                |
-| P1        | users           | `(email)`                            | поиск по email при входе          |
-| P1        | zones           | `(familyId, deletedAt)`              | список зон семьи                  |
-| P2        | consent_records | `(userId, documentType, acceptedAt)` | проверка согласия перед мутациями |
-| P2        | refresh_tokens  | `(userId, revokedAt)`                | поиск активных токенов            |
+| Приоритет | Таблица          | Индекс                               | Причина                           |
+| --------- | ---------------- | ------------------------------------ | --------------------------------- |
+| P0        | locations        | `(childId, recordedAt DESC)`         | основной запрос истории локаций   |
+| P1        | parent_locations | `(userId, recordedAt DESC)`          | последняя точка родителя на карте |
+| P0        | zones            | GIST на `center_geo`                 | геометрия зон (ST_Distance)       |
+| P0        | zone_events      | `(childId, recordedAt DESC)`         | лента событий ребёнка             |
+| P1        | children         | `(familyId, deletedAt)`              | список детей семьи                |
+| P1        | users            | `(email)`                            | поиск по email при входе          |
+| P1        | zones            | `(familyId, deletedAt)`              | список зон семьи                  |
+| P2        | consent_records  | `(userId, documentType, acceptedAt)` | проверка согласия перед мутациями |
+| P2        | refresh_tokens   | `(userId, revokedAt)`                | поиск активных токенов            |
 
 ### Anti-enumeration
 

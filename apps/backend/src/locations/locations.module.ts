@@ -7,6 +7,7 @@ import { ZonesModule } from '../zones/zones.module';
 import { AppSettingsModule } from '../app-settings/app-settings.module';
 import { FcmModule } from '../fcm/fcm.module';
 import { ParentDevicesModule } from '../parent-devices/parent-devices.module';
+import { ParentLocationModule } from '../parent-location/parent-location.module';
 import { LocationsService } from './locations.service';
 import { LocationWatchService } from './location-watch.service';
 import { TripsService } from './trips.service';
@@ -26,6 +27,7 @@ import { FamilyAccessGuard } from './guards/family-access.guard';
     AppSettingsModule,
     FcmModule,
     ParentDevicesModule,
+    ParentLocationModule,
   ],
   controllers: [LocationsController, LocationsReadController, FamilyLocationsController],
   providers: [

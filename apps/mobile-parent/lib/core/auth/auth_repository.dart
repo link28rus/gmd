@@ -15,13 +15,19 @@ class AuthRepository {
     required Dio dio,
     required SecureStorageService storage,
     required DioFactory dioFactory,
+    Future<void> Function()? beforeLogout,
   })  : _dio = dio,
-        _storage = storage {
+        _storage = storage,
+        _beforeLogout = beforeLogout {
     dioFactory.bindRefresh(_refresh);
   }
 
   final Dio _dio;
   final SecureStorageService _storage;
+
+  /// v0.70.0: вызывается в начале [logout], пока токены ещё в storage
+  /// (остановка геолокации родителя + DELETE её устройства).
+  final Future<void> Function()? _beforeLogout;
 
   /// Идущий сейчас рефреш: параллельные вызовы ждут его, а не шлют второй
   /// `/auth/refresh` тем же refresh-токеном (сервер ротирует его при каждом вызове).
@@ -88,6 +94,14 @@ class AuthRepository {
   }
 
   Future<void> logout() async {
+    final hook = _beforeLogout;
+    if (hook != null) {
+      try {
+        await hook().timeout(const Duration(seconds: 10));
+      } catch (_) {
+        // best-effort: выход не должен зависеть от сети
+      }
+    }
     final refresh = await _storage.readRefreshToken();
     if (refresh != null && refresh.isNotEmpty) {
       try {

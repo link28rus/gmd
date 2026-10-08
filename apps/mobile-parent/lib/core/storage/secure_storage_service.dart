@@ -49,6 +49,43 @@ class SecureStorageService {
     return jsonDecode(raw) as Map<String, dynamic>;
   }
 
+  // v0.70.0: устройство геолокации родителя (POST /parent-location/devices).
+  // Не входит в clearAll: при выходе устройство удаляет
+  // ParentLocationController.onLogout (нужен ещё живой JWT для DELETE), а
+  // после протухшей сессии запись нужна, чтобы тот же пользователь при
+  // следующем входе продолжил с тем же устройством.
+  static const _kPlocDeviceId = 'parent_location_device_id';
+  static const _kPlocToken = 'parent_location_token';
+  static const _kPlocUserId = 'parent_location_user_id';
+
+  Future<void> saveParentLocationDevice({
+    required String userId,
+    required String deviceId,
+    required String token,
+  }) async {
+    final prefs = await _prefs;
+    await prefs.setString(_kPlocUserId, userId);
+    await prefs.setString(_kPlocDeviceId, deviceId);
+    await prefs.setString(_kPlocToken, token);
+  }
+
+  Future<({String userId, String deviceId, String token})?> readParentLocationDevice() async {
+    final prefs = await _prefs;
+    final userId = prefs.getString(_kPlocUserId);
+    final deviceId = prefs.getString(_kPlocDeviceId);
+    final token = prefs.getString(_kPlocToken);
+    if (userId == null || deviceId == null || token == null) return null;
+    if (userId.isEmpty || deviceId.isEmpty || token.isEmpty) return null;
+    return (userId: userId, deviceId: deviceId, token: token);
+  }
+
+  Future<void> clearParentLocationDevice() async {
+    final prefs = await _prefs;
+    await prefs.remove(_kPlocUserId);
+    await prefs.remove(_kPlocDeviceId);
+    await prefs.remove(_kPlocToken);
+  }
+
   Future<void> clearAll() async {
     final prefs = await _prefs;
     await prefs.remove(_kAccessToken);

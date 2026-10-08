@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,10 +13,14 @@ import '../children/child_models.dart';
 import '../children/children_providers.dart';
 import '../children/widgets/add_child_flow.dart';
 import '../children/widgets/child_avatar.dart';
+import '../zones/zones_providers.dart';
+import 'home_family_map.dart';
+import 'share_location_card.dart';
 import 'update_banner.dart';
 
-/// Главный экран. Phase A: список детей + быстрые действия (placeholders).
-/// Карта, геозоны, история, звук, app-control — последующие фазы.
+/// Главный экран. v0.70.0: сверху общая карта семьи (дети, родители, зоны —
+/// только просмотр, см. [HomeFamilyMap]), ниже список детей и карточка
+/// «Показывать вас семье», пока для фоновой передачи чего-то не хватает.
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
@@ -23,6 +28,19 @@ class HomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final childrenAsync = ref.watch(childrenListProvider);
     final session = ref.watch(authSessionProvider);
+    final sharing = ref.watch(parentLocationProvider);
+    final mapHeight = math.max(220.0, MediaQuery.of(context).size.height * 0.45);
+
+    Future<void> refreshAll() async {
+      ref.invalidate(childrenListProvider);
+      ref.invalidate(familyLatestProvider);
+      ref.invalidate(zonesListProvider);
+      try {
+        await ref.read(childrenListProvider.future);
+      } catch (_) {
+        // ошибку покажет сам список
+      }
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -55,6 +73,9 @@ class HomeScreen extends ConsumerWidget {
                 case 'updates':
                   await checkForUpdates(context, ref);
                   break;
+                case 'share':
+                  await _toggleSharing(context, ref);
+                  break;
                 case 'logout':
                   await ref.read(authRepositoryProvider).logout();
                   ref.read(authSessionProvider.notifier).state = null;
@@ -82,6 +103,14 @@ class HomeScreen extends ConsumerWidget {
                   ],
                 ),
               ),
+              // v0.70.0: фоновая геолокация родителя — только Android.
+              if (Platform.isAndroid)
+                CheckedPopupMenuItem<String>(
+                  value: 'share',
+                  checked: sharing.enabled == true,
+                  enabled: sharing.enabled != null && !sharing.busy,
+                  child: const Text('Показывать меня семье'),
+                ),
               // Самообновление есть только на Android (iOS — через App Store).
               if (Platform.isAndroid)
                 const PopupMenuItem<String>(
@@ -104,14 +133,25 @@ class HomeScreen extends ConsumerWidget {
           // v0.56.0 самообновление: виден только при загрузке, готовом
           // обновлении, ожидании подтверждения или сбое загрузки/установки.
           const UpdateBanner(),
+          // v0.70.0: общая карта семьи; refresh списка обновляет и её.
+          SizedBox(height: mapHeight, child: const HomeFamilyMap()),
           Expanded(
             child: RefreshIndicator(
-              onRefresh: () async => ref.invalidate(childrenListProvider),
+              onRefresh: refreshAll,
               child: childrenAsync.when(
-                loading: () => const Center(child: CircularProgressIndicator()),
+                loading: () => ListView(
+                  children: const [
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
+                      child: ShareLocationCard(),
+                    ),
+                    SizedBox(height: 32),
+                    Center(child: CircularProgressIndicator()),
+                  ],
+                ),
                 error: (e, _) => _ErrorView(
                   error: e,
-                  onRetry: () => ref.invalidate(childrenListProvider),
+                  onRetry: refreshAll,
                 ),
                 data: (children) => children.isEmpty
                     ? _EmptyState(
@@ -129,6 +169,29 @@ class HomeScreen extends ConsumerWidget {
         onPressed: () => startAddChildFlow(context, ref),
       ),
     );
+  }
+}
+
+/// Тумблер «Показывать меня семье»: PUT /parent-location/sharing + старт или
+/// стоп службы. Выключение заодно удаляет точки родителя с сервера.
+Future<void> _toggleSharing(BuildContext context, WidgetRef ref) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final next = ref.read(parentLocationProvider).enabled != true;
+  try {
+    await ref.read(parentLocationProvider.notifier).setSharing(next);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Text(next
+            ? 'Семья видит, где вы.'
+            : 'Семья больше не видит, где вы. Ваши точки удалены с сервера.'),
+      ));
+  } catch (_) {
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(const SnackBar(
+        content: Text('Не удалось переключить — проверьте интернет.'),
+      ));
   }
 }
 
@@ -184,6 +247,7 @@ class _EmptyState extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
+        const ShareLocationCard(),
         const SizedBox(height: 48),
         Center(
           child: Container(
@@ -239,6 +303,7 @@ class _ErrorView extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
+        const ShareLocationCard(),
         const SizedBox(height: 48),
         Icon(Icons.cloud_off_outlined, size: 64, color: scheme.onSurfaceVariant),
         const SizedBox(height: 16),
@@ -272,11 +337,14 @@ class _ChildrenList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Первый элемент — карточка «Показывать вас семье» (пустая, когда всё
+    // выдано); у неё свой нижний отступ.
     return ListView.separated(
       padding: const EdgeInsets.all(16),
-      itemCount: children.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 12),
-      itemBuilder: (_, i) => _ChildCard(child: children[i]),
+      itemCount: children.length + 1,
+      separatorBuilder: (_, i) => SizedBox(height: i == 0 ? 0 : 12),
+      itemBuilder: (_, i) =>
+          i == 0 ? const ShareLocationCard() : _ChildCard(child: children[i - 1]),
     );
   }
 }

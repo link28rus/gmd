@@ -84,6 +84,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       unawaited(ref.read(parentFcmRegistrarProvider).register());
       // v0.51 (lesson #24): параллельно RuStore Push token.
       unawaited(ref.read(parentRuStorePushRegistrarProvider).register());
+      // v0.70.0: фоновая геолокация родителя (флаг, токен устройства, служба).
+      unawaited(ref.read(parentLocationProvider.notifier).sync());
       if (mounted) context.go('/home');
     } on ApiException catch (e) {
       _handleAuthError(e);
@@ -108,6 +110,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       ref.read(authSessionProvider.notifier).state = session;
       unawaited(ref.read(parentFcmRegistrarProvider).register());
       unawaited(ref.read(parentRuStorePushRegistrarProvider).register());
+      // v0.70.0: фоновая геолокация родителя (флаг, токен устройства, служба).
+      unawaited(ref.read(parentLocationProvider.notifier).sync());
       if (mounted) context.go('/home');
     } on ApiException catch (e) {
       _handleAuthError(e);

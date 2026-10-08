@@ -46,6 +46,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     final pushFuture = PushDeepLinkChannel.takeInitial();
     await Future<void>.delayed(_minSplash);
     final route = await routeFuture;
+    // v0.70.0: сессии нет (протухла / не было) — служба геолокации родителя
+    // не должна работать без вошедшего пользователя.
+    if (route == '/login') unawaited(ref.read(parentLocationProvider.notifier).stopLocal());
     final push = await pushFuture;
     final target = route == '/home' ? (push?.route ?? route) : route;
     if (push != null) unawaited(diagLog('push', 'initial ${push.type} -> $target'));
@@ -86,6 +89,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     unawaited(ref.read(parentFcmRegistrarProvider).register());
     // v0.51 (lesson #24): параллельно RuStore Push token.
     unawaited(ref.read(parentRuStorePushRegistrarProvider).register());
+    // v0.70.0: фоновая геолокация родителя — флаг с сервера, токен, служба.
+    unawaited(ref.read(parentLocationProvider.notifier).sync());
     return '/home';
   }
 

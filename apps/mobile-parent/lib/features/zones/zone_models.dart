@@ -413,6 +413,64 @@ class FamilyLatestPoint {
       );
 }
 
+/// Элемент `parents` ответа `GET /family/locations/latest` (v0.70.0) —
+/// последняя точка родителя семьи, который показывает себя семье.
+@immutable
+class FamilyLatestParent {
+  const FamilyLatestParent({
+    required this.userId,
+    required this.name,
+    required this.lat,
+    required this.lon,
+    required this.ageSec,
+    this.accuracy,
+    this.recordedAt,
+    this.isMe = false,
+  });
+
+  final String userId;
+  final String name;
+  final double lat;
+  final double lon;
+  final double? accuracy;
+  final DateTime? recordedAt;
+  final int ageSec;
+
+  /// Точка текущего пользователя — на карте подпись «Вы».
+  final bool isMe;
+
+  factory FamilyLatestParent.fromJson(Map<String, dynamic> json) => FamilyLatestParent(
+        userId: (json['userId'] as String?) ?? '',
+        name: (json['name'] as String?) ?? '',
+        lat: _double(json['lat']),
+        lon: _double(json['lon']),
+        accuracy: (json['accuracy'] as num?)?.toDouble(),
+        recordedAt: _date(json['recordedAt']),
+        ageSec: _int(json['ageSec']),
+        isMe: (json['isMe'] as bool?) ?? false,
+      );
+}
+
+/// Ответ `GET /family/locations/latest`: точки детей (`items`) и родителей
+/// (`parents`, с v0.70.0; у старого сервера ключа нет — пусто).
+@immutable
+class FamilyLatest {
+  const FamilyLatest({this.items = const [], this.parents = const []});
+
+  final List<FamilyLatestPoint> items;
+  final List<FamilyLatestParent> parents;
+
+  static const empty = FamilyLatest();
+
+  factory FamilyLatest.fromJson(Object? data) {
+    if (data is! Map<String, dynamic>) return empty;
+    return FamilyLatest(
+      items: _maps(data['items']).map(FamilyLatestPoint.fromJson).toList(),
+      parents: _maps(data['parents']).map(FamilyLatestParent.fromJson).toList(),
+    );
+  }
+}
+
 /// `GET /geo/ip-center` — город по IP (DB-IP City Lite, CC BY 4.0).
 @immutable
 class IpCenter {

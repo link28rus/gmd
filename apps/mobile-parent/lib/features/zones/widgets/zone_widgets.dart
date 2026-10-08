@@ -86,73 +86,126 @@ List<Marker> zoneCenterMarkers(Iterable<Zone> zones, {void Function(Zone)? onTap
         ),
     ];
 
-/// Маркер ребёнка на карте зон: аватар + имя.
+/// Точка старше этого (сек) — метка серая: «давно не было связи».
+const kStalePointSec = 600;
+
+/// Цвет рамки метки, когда точка устарела.
+const kStaleMarkerBorder = Color(0xFF9E9E9E);
+
+/// Подпись метки на карте: имя и, если известна, давность точки.
+class MapMarkerLabel extends StatelessWidget {
+  const MapMarkerLabel({
+    super.key,
+    required this.title,
+    this.ageSec,
+    this.maxWidth = KidMapMarker.width,
+  });
+
+  final String title;
+  final int? ageSec;
+  final double maxWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    final age = ageSec;
+    final stale = age != null && age > kStalePointSec;
+    return Container(
+      constraints: BoxConstraints(maxWidth: maxWidth),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 3),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 11,
+              height: 1.2,
+              fontWeight: FontWeight.w600,
+              color: stale ? Colors.black54 : Colors.black87,
+            ),
+          ),
+          if (age != null)
+            Text(
+              formatAgeShort(age),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 10,
+                height: 1.2,
+                color: stale ? const Color(0xFF757575) : Colors.black54,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Маркер ребёнка на карте: аватар + имя (+ давность точки, если передана
+/// [ageSec]). Точка старше [kStalePointSec] — серая рамка. Круг точности
+/// рисуется отдельным слоем (см. `accuracyCircle` в features/map/family_map.dart).
 class KidMapMarker extends StatelessWidget {
-  const KidMapMarker({super.key, required this.child, this.onTap});
+  const KidMapMarker({super.key, required this.child, this.ageSec, this.onTap});
 
   final Child child;
+  final int? ageSec;
   final VoidCallback? onTap;
 
   static const width = 96.0;
-  static const height = 62.0;
+  static const height = 76.0;
 
   @override
   Widget build(BuildContext context) {
     final letter = child.name.trim().isEmpty
         ? '?'
         : child.name.trim().characters.first.toUpperCase();
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            constraints: const BoxConstraints(maxWidth: width),
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
-              boxShadow: [
-                BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 3),
-              ],
-            ),
-            child: Text(
-              child.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: Colors.black87,
+    final age = ageSec;
+    final stale = age != null && age > kStalePointSec;
+    return MediaQuery.withClampedTextScaling(
+      maxScaleFactor: 1.1,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            MapMarkerLabel(title: child.name, ageSec: age),
+            const SizedBox(height: 2),
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: stale ? kStaleMarkerBorder : const Color(0xFF2E7D32),
+                shape: BoxShape.circle,
+                border: Border.all(color: stale ? kStaleMarkerBorder : Colors.white, width: 3),
               ),
-            ),
-          ),
-          const SizedBox(height: 2),
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: const Color(0xFF2E7D32),
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 3),
-            ),
-            alignment: Alignment.center,
-            child: ChildAvatar(
-              name: child.name,
-              childId: child.id,
-              avatarKey: child.avatarKey,
-              size: 30,
-              fallback: (_) => Text(
-                letter,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
+              alignment: Alignment.center,
+              child: ChildAvatar(
+                name: child.name,
+                childId: child.id,
+                avatarKey: child.avatarKey,
+                size: 30,
+                fallback: (_) => Text(
+                  letter,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

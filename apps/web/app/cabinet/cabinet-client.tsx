@@ -11,6 +11,7 @@ import { refreshAccessToken } from '@/lib/auth/refresh-singleflight';
 import { useLatestLocation } from '@/lib/hooks/use-latest-location';
 import { useActiveTrack } from '@/lib/hooks/use-active-track';
 import { ChildrenSidebar } from '@/components/cabinet/children-sidebar';
+import { FamilyMapView } from '@/components/cabinet/family-map-view';
 import { ChildActions } from '@/components/cabinet/child-actions';
 import { ChildNotAttachedView } from '@/components/cabinet/child-not-attached-view';
 import { ChildMap } from '@/components/locations/child-map';
@@ -20,6 +21,9 @@ import { MapErrorFallback } from '@/components/locations/map-error-fallback';
 import { ApiError } from '@/lib/api/client';
 import type { Child } from '@/lib/api/children';
 import type { LocationDto } from '@/lib/api/locations';
+
+/** `?childId=all` — общая карта семьи (дети, родители, зоны). */
+const ALL_CHILDREN = 'all';
 
 export default function CabinetClient(): ReactElement {
   const router = useRouter();
@@ -98,11 +102,12 @@ function CabinetHome({ initialChildId }: { initialChildId: string | null }): Rea
     };
   }, []);
 
-  // Если ничего не выбрано — выбираем первого ребёнка автоматически.
+  // Ничего не выбрано: детей несколько — общая карта «Все», один — он сам.
   useEffect(() => {
     if (selectedId) return;
-    const first = childrenQ.data?.children[0]?.id;
-    if (first) setSelectedId(first);
+    const list = childrenQ.data?.children;
+    if (!list || list.length === 0) return;
+    setSelectedId(list.length > 1 ? ALL_CHILDREN : list[0].id);
   }, [childrenQ.data, selectedId]);
 
   function selectChild(id: string): void {
@@ -113,7 +118,8 @@ function CabinetHome({ initialChildId }: { initialChildId: string | null }): Rea
   }
 
   const kids = childrenQ.data?.children ?? [];
-  const selected = kids.find((c) => c.id === selectedId) ?? null;
+  const allMode = selectedId === ALL_CHILDREN && kids.length > 0;
+  const selected = allMode ? null : (kids.find((c) => c.id === selectedId) ?? null);
 
   if (childrenQ.isPending) {
     return (
@@ -129,6 +135,8 @@ function CabinetHome({ initialChildId }: { initialChildId: string | null }): Rea
         children={kids}
         selectedId={selectedId}
         onSelect={selectChild}
+        allSelected={allMode}
+        onSelectAll={() => selectChild(ALL_CHILDREN)}
         mobileOpen={mobileSidebarOpen}
         onCloseMobile={() => setMobileSidebarOpen(false)}
       />
@@ -142,7 +150,7 @@ function CabinetHome({ initialChildId }: { initialChildId: string | null }): Rea
           className="absolute left-3 top-3 z-10 flex h-11 w-11 items-center justify-center rounded-full border border-border bg-card shadow-md hover:bg-muted md:hidden"
         >
           <Menu className="h-5 w-5 text-foreground" />
-          {selected && (
+          {(selected || allMode) && (
             <span
               className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-white"
               style={{ backgroundColor: 'currentColor' }}
@@ -150,7 +158,9 @@ function CabinetHome({ initialChildId }: { initialChildId: string | null }): Rea
             />
           )}
         </button>
-        {selected ? (
+        {allMode ? (
+          <FamilyMapView kids={kids} onSelectChild={selectChild} />
+        ) : selected ? (
           hasActiveDevice(selected) ? (
             <MapArea child={selected} />
           ) : (

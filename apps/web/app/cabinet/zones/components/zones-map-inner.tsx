@@ -1,7 +1,7 @@
 // apps/web/app/cabinet/zones/components/zones-map-inner.tsx
 'use client';
 
-import { useEffect, useRef, useState, type ReactElement } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
 import {
   Circle,
   CircleMarker,
@@ -17,13 +17,14 @@ import L from 'leaflet';
 import { LocateFixed } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Zone } from '@/lib/api/zones';
-import type { FamilyLatestItem } from '@/lib/api/locations';
+import type { FamilyLatestItem, FamilyLatestParent } from '@/lib/api/locations';
 import { geoApi } from '@/lib/api/geocode';
 import { useTheme } from '@/components/theme/theme-provider';
 import { tileConfigFor } from '@/lib/maps/tile-config';
 import { useChildAvatarSrc } from '@/lib/hooks/use-child-avatar';
 import { formatAgeShort } from '@/lib/date/age-format';
 import { LatestMarker } from '@/components/locations/latest-marker';
+import { ParentMarker } from '@/components/locations/parent-marker';
 import { mapViewStorageKey, readSavedMapView, writeSavedMapView } from './zone-format';
 
 export interface MapKid {
@@ -59,7 +60,18 @@ export interface ZonesMapInnerProps {
   onCreateAtChild?: (childId: string, lat: number, lon: number) => void;
   /** Запрос «показать точку» извне (клик по ребёнку в списке); seq меняется на каждый запрос. */
   focus?: { lat: number; lon: number; seq: number } | null;
+  /** v0.70.0: метки родителей семьи (общая карта «Все»); по умолчанию — нет. */
+  parents?: FamilyLatestParent[];
+  /** v0.70.0: клик по метке ребёнка — вместо попапа (общая карта: переход к ребёнку). */
+  onKidClick?: (childId: string) => void;
 }
+
+interface MapPoint {
+  lat: number;
+  lon: number;
+}
+
+const NO_PARENTS: FamilyLatestParent[] = [];
 
 const MOSCOW: [number, number] = [55.7558, 37.6173];
 const MOSCOW_ZOOM = 10;
@@ -78,8 +90,8 @@ function zoneBounds(z: Zone): L.LatLngBounds {
   return L.latLng(z.centerLat, z.centerLon).toBounds(z.radius * 2);
 }
 
-/** Границы кругов зон + точек детей; null — нечего показывать. */
-function contentBounds(zones: Zone[], points: FamilyLatestItem[]): L.LatLngBounds | null {
+/** Границы кругов зон + точек детей (и родителей); null — нечего показывать. */
+function contentBounds(zones: Zone[], points: MapPoint[]): L.LatLngBounds | null {
   let b: L.LatLngBounds | null = null;
   for (const z of zones) {
     const zb = zoneBounds(z);
@@ -108,7 +120,7 @@ function InitialViewController({
 }: {
   ready: boolean;
   zones: Zone[];
-  points: FamilyLatestItem[];
+  points: MapPoint[];
   storageKey: string | null;
   onViewChange?: (v: MapViewState) => void;
 }): null {
@@ -360,17 +372,37 @@ function LocateMeControl(): ReactElement {
   );
 }
 
-/** Маркер ребёнка с попапом «Создать зону здесь». */
+/**
+ * Маркер ребёнка с попапом «Создать зону здесь». С `onClick` (общая карта
+ * семьи) попапа нет — клик сразу ведёт к ребёнку.
+ */
 function KidMarker({
   kid,
   point,
   onCreateAt,
+  onClick,
 }: {
   kid: MapKid;
   point: FamilyLatestItem;
   onCreateAt?: (childId: string, lat: number, lon: number) => void;
+  onClick?: (childId: string) => void;
 }): ReactElement {
   const avatarUrl = useChildAvatarSrc(kid.id, kid.avatarKey);
+  const kidId = kid.id;
+  const handleClick = useCallback(() => onClick?.(kidId), [onClick, kidId]);
+  if (onClick) {
+    return (
+      <LatestMarker
+        lat={point.lat}
+        lon={point.lon}
+        accuracy={point.accuracy}
+        childName={kid.name}
+        ageSec={point.ageSec}
+        avatarUrl={avatarUrl}
+        onClick={handleClick}
+      />
+    );
+  }
   return (
     <LatestMarker
       lat={point.lat}
@@ -438,6 +470,8 @@ export function ZonesMapInner({
   onViewChange,
   onCreateAtChild,
   focus,
+  parents = NO_PARENTS,
+  onKidClick,
 }: ZonesMapInnerProps): ReactElement {
   const { theme } = useTheme();
   const tile = tileConfigFor(theme);
@@ -447,6 +481,7 @@ export function ZonesMapInner({
 
   const kidsById = new Map(kids.map((k) => [k.id, k]));
   const kidPoints = latest.filter((p) => kidsById.has(p.childId));
+  const viewPoints: MapPoint[] = parents.length > 0 ? [...kidPoints, ...parents] : kidPoints;
 
   return (
     <MapContainer
@@ -467,7 +502,7 @@ export function ZonesMapInner({
       <InitialViewController
         ready={latestReady}
         zones={zones}
-        points={kidPoints}
+        points={viewPoints}
         storageKey={storageKey}
         onViewChange={onViewChange}
       />
@@ -500,10 +535,30 @@ export function ZonesMapInner({
           );
         })}
 
+      {parents.map((p) => (
+        <ParentMarker
+          key={`parent-${p.userId}`}
+          lat={p.lat}
+          lon={p.lon}
+          accuracy={p.accuracy}
+          name={p.name}
+          ageSec={p.ageSec}
+          isMe={p.isMe}
+        />
+      ))}
+
       {kidPoints.map((p) => {
         const kid = kidsById.get(p.childId);
         if (!kid) return null;
-        return <KidMarker key={p.childId} kid={kid} point={p} onCreateAt={onCreateAtChild} />;
+        return (
+          <KidMarker
+            key={p.childId}
+            kid={kid}
+            point={p}
+            onCreateAt={onCreateAtChild}
+            onClick={onKidClick}
+          />
+        );
       })}
     </MapContainer>
   );

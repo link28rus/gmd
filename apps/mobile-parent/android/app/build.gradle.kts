@@ -96,6 +96,9 @@ dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     // v0.56.0: AppUpdateWorker — фоновая проверка обновлений (как у mobile-child).
     implementation("androidx.work:work-runtime-ktx:2.9.1")
+    // v0.70.0: Fused Location для фоновой передачи местоположения родителя
+    // (ParentLocationService), как у mobile-child.
+    implementation("com.google.android.gms:play-services-location:21.3.0")
     // v0.59.0: JUnit для GeofenceNotificationText (pure JVM, без Android SDK).
     // Запуск: `gradlew :app:testDebugUnitTest`.
     testImplementation("junit:junit:4.13.2")

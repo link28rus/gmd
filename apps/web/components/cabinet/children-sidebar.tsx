@@ -1,6 +1,6 @@
 'use client';
 
-import { UserPlus, X } from 'lucide-react';
+import { UserPlus, Users, X } from 'lucide-react';
 import type { ReactElement } from 'react';
 import type { Child } from '@/lib/api/children';
 import { ChildAvatar } from '@/components/avatar/child-avatar';
@@ -10,6 +10,10 @@ interface Props {
   children: Child[];
   selectedId: string | null;
   onSelect: (id: string) => void;
+  /** v0.70.0: выбран пункт «Все» (общая карта семьи). */
+  allSelected?: boolean;
+  /** v0.70.0: пункт «Все» над списком детей; без обработчика пункта нет. */
+  onSelectAll?: () => void;
   /**
    * Управление drawer-режимом для узких экранов. Когда `mobileOpen=true`,
    * сайдбар рендерится как overlay поверх карты с backdrop. На десктопе
@@ -23,6 +27,8 @@ export function ChildrenSidebar({
   children,
   selectedId,
   onSelect,
+  allSelected = false,
+  onSelectAll,
   mobileOpen = false,
   onCloseMobile,
 }: Props): ReactElement {
@@ -42,6 +48,30 @@ export function ChildrenSidebar({
         )}
       </div>
       <div className="flex-1 overflow-y-auto p-2">
+        {onSelectAll && children.length > 0 && (
+          <button
+            type="button"
+            onClick={() => {
+              onSelectAll();
+              onCloseMobile?.();
+            }}
+            aria-current={allSelected ? 'page' : undefined}
+            className={`mb-1 flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left transition ${
+              allSelected ? 'bg-accent/30 ring-1 ring-accent' : 'hover:bg-muted'
+            }`}
+          >
+            <span
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-foreground"
+              aria-hidden="true"
+            >
+              <Users className="h-5 w-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-medium text-foreground">Все</div>
+              <div className="truncate text-xs text-muted-foreground">Карта семьи</div>
+            </div>
+          </button>
+        )}
         {children.map((c) => (
           <button
             key={c.id}
@@ -50,8 +80,11 @@ export function ChildrenSidebar({
               onSelect(c.id);
               onCloseMobile?.();
             }}
+            aria-current={!allSelected && selectedId === c.id ? 'page' : undefined}
             className={`mb-1 flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left transition ${
-              selectedId === c.id ? 'bg-accent/30 ring-1 ring-accent' : 'hover:bg-muted'
+              !allSelected && selectedId === c.id
+                ? 'bg-accent/30 ring-1 ring-accent'
+                : 'hover:bg-muted'
             }`}
           >
             <ChildAvatar name={c.name} avatarKey={c.avatarKey} childId={c.id} size={36} />

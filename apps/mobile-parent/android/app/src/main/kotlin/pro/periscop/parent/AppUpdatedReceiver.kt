@@ -6,16 +6,33 @@ import android.content.Intent
 
 /**
  * v0.56.0 — MY_PACKAGE_REPLACED: новая версия встала (см. [AppUpdater.onPackageReplaced]).
- * В mobile-child то же делает BootReceiver, который заодно поднимает
- * foreground-сервис геолокации; у родителя фоновых сервисов нет.
+ *
+ * v0.70.0 — заодно автозапуск фоновой геолокации родителя
+ * ([ParentLocationService]): после установки обновления (процесс убит вместе со
+ * службой, UI никто не открывает) и после перезагрузки (BOOT_COMPLETED /
+ * QUICKBOOT_POWERON). Служба стартует, только если есть токен, флаг включён и
+ * выдано «Разрешать всегда» — см. [ParentLocationService.ensureStarted].
+ * Как BootReceiver у mobile-child.
  */
 class AppUpdatedReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
+        val action = intent.action ?: return
+        if (action == Intent.ACTION_MY_PACKAGE_REPLACED) {
+            try {
+                AppUpdater.onPackageReplaced(context)
+            } catch (e: Throwable) {
+                DiagLog.write(context, "updates", "onPackageReplaced failed: ${e.message}")
+            }
+        } else if (action != Intent.ACTION_BOOT_COMPLETED &&
+            action != "android.intent.action.QUICKBOOT_POWERON" &&
+            action != "com.htc.intent.action.QUICKBOOT_POWERON"
+        ) {
+            return
+        }
         try {
-            AppUpdater.onPackageReplaced(context)
+            ParentLocationService.ensureStarted(context, action.substringAfterLast('.'), fromBackground = true)
         } catch (e: Throwable) {
-            DiagLog.write(context, "updates", "onPackageReplaced failed: ${e.message}")
+            DiagLog.write(context, "ploc", "autostart($action) failed: ${e.message}")
         }
     }
 }
