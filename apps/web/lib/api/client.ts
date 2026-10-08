@@ -9,6 +9,8 @@ export class ApiError extends Error {
     public readonly status: number,
     public readonly code: string,
     message: string,
+    /** Дополнительные поля тела ошибки (кроме code/message), напр. `reason` у 409. */
+    public readonly details: Record<string, unknown> = {},
   ) {
     super(message);
     this.name = 'ApiError';
@@ -62,11 +64,15 @@ function parseJson(text: string): unknown {
 }
 
 function toApiError(res: Response, body: unknown): ApiError {
-  const errPayload = (body as { error?: { code?: string; message?: string } } | null)?.error ?? {};
+  const errPayload =
+    (body as { error?: { code?: string; message?: string } & Record<string, unknown> } | null)
+      ?.error ?? {};
+  const { code, message, ...details } = errPayload;
   return new ApiError(
     res.status,
-    errPayload.code ?? 'unknown',
-    errPayload.message ?? res.statusText,
+    typeof code === 'string' ? code : 'unknown',
+    typeof message === 'string' ? message : res.statusText,
+    details,
   );
 }
 

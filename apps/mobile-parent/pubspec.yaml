@@ -1,7 +1,7 @@
 name: periscop_parent
 description: "Перископ Родителя — родительский контроль и геолокация ребёнка"
 publish_to: 'none'
-version: 0.70.2+41
+version: 0.71.0+42
 
 environment:
   sdk: ^3.11.5
@@ -74,6 +74,9 @@ dependencies:
   # точность (ACCESS_COARSE_LOCATION). Фоновый сервис плагина вычищен из
   # манифеста (tools:node="remove").
   geolocator: ^14.0.2
+
+  # v0.71: системное «Поделиться» для приглашения взрослого в семью.
+  share_plus: ^12.0.2
 
 dev_dependencies:
   flutter_test:

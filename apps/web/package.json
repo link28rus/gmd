@@ -1,6 +1,6 @@
 {
   "name": "@periscop/web",
-  "version": "0.70.2",
+  "version": "0.71.0",
   "private": true,
   "description": "Перископ web — лендинг и кабинет родителя",
   "scripts": {

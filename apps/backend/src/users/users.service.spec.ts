@@ -32,8 +32,10 @@ function makePrismaMock(): MockPrisma {
     family: { findUnique: jest.fn(() => Promise.resolve(null)) },
     refreshToken: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
     child: { findMany: jest.fn(() => Promise.resolve([])) },
-    $transaction: jest.fn((ops: any[]) =>
-      Promise.all(ops.map((p) => (typeof p === 'function' ? p(api) : p))),
+    $transaction: jest.fn((ops: any) =>
+      typeof ops === 'function'
+        ? ops(api)
+        : Promise.all(ops.map((p: any) => (typeof p === 'function' ? p(api) : p))),
     ),
   };
   return api;
@@ -185,5 +187,9 @@ describe('UsersService', () => {
 
     expect(p._users[0].deletedAt).not.toBeNull();
     expect(p.refreshToken.updateMany).toHaveBeenCalled();
+    // v0.71.0: членства перебираются (detachUserFromFamilies).
+    expect(p.membership.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: 'u-1' } }),
+    );
   });
 });

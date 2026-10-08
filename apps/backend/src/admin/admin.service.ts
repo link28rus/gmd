@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { detachUserFromFamilies } from '../family/family-lifecycle';
 import { PasswordResetService } from '../auth/password-reset.service';
 
 export type AdminUserAction =
@@ -301,9 +302,6 @@ export class AdminService {
     }
     const target = await this.prisma.user.findUnique({
       where: { id: targetUserId },
-      include: {
-        memberships: { orderBy: { createdAt: 'asc' } },
-      },
     });
     if (!target || target.deletedAt) {
       throw new NotFoundException({ code: 'not_found', message: 'User not found' });
@@ -311,38 +309,7 @@ export class AdminService {
 
     const now = new Date();
     await this.prisma.$transaction(async (tx) => {
-      for (const m of (target as any).memberships) {
-        const siblings = await tx.membership.findMany({
-          where: { familyId: m.familyId, userId: { not: target.id } },
-          orderBy: { createdAt: 'asc' },
-        });
-        if (m.role === 'owner' && siblings.length > 0) {
-          // Передаём ownership первому по времени parent'у, membership
-          // удалённого юзера удаляем. Семью оставляем.
-          const heir = siblings[0];
-          await tx.membership.update({ where: { id: heir.id }, data: { role: 'owner' } });
-          await tx.membership.delete({ where: { id: m.id } });
-        } else if (m.role === 'owner') {
-          // В семье не осталось других родителей — soft-delete всей семьи.
-          await tx.family.update({ where: { id: m.familyId }, data: { deletedAt: now } });
-          await tx.child.updateMany({
-            where: { familyId: m.familyId, deletedAt: null },
-            data: { deletedAt: now },
-          });
-          await tx.childDevice.updateMany({
-            where: { child: { familyId: m.familyId }, revokedAt: null },
-            data: { revokedAt: now },
-          });
-          await tx.invite.updateMany({
-            where: { familyId: m.familyId, consumedAt: null, expiresAt: { gt: now } },
-            data: { expiresAt: now },
-          });
-          await tx.membership.delete({ where: { id: m.id } });
-        } else {
-          // Просто parent в чужой семье — удаляем только membership.
-          await tx.membership.delete({ where: { id: m.id } });
-        }
-      }
+      await detachUserFromFamilies(tx, target.id, now);
 
       await tx.refreshToken.updateMany({
         where: { userId: target.id, revokedAt: null },

@@ -66,6 +66,7 @@ export function CabinetHeader(): ReactElement {
           <nav className="flex items-center gap-1">
             {navLink('/cabinet', 'Главная')}
             {navLink('/cabinet/zones', 'Геозоны')}
+            {navLink('/cabinet/family', 'Семья')}
           </nav>
         </div>
 

@@ -3,6 +3,7 @@ import { JwtAuthGuard } from './jwt-auth.guard';
 import { UnauthorizedException } from '@nestjs/common';
 import type { ExecutionContext } from '@nestjs/common';
 import type { JwtService } from '../jwt.service';
+import type { StaleTokenService } from '../stale-token.service';
 
 function ctx(auth?: string): ExecutionContext {
   const req: any = { headers: auth ? { authorization: auth } : {} };
@@ -49,5 +50,25 @@ describe('JwtAuthGuard', () => {
       familyId: 'f1',
       role: 'owner',
     });
+  });
+  it('v0.71.0: 401 token_stale, если членство сменилось после выпуска токена', async () => {
+    (mockJwt.verifyAccessToken as jest.Mock).mockResolvedValue({
+      sub: 'u1',
+      email: 'test@example.com',
+      familyId: 'f1',
+      role: 'parent',
+      issuedAtMs: 1000,
+    });
+    const stale = {
+      isStale: jest.fn().mockResolvedValueOnce(true),
+    } as unknown as StaleTokenService;
+    const guard = new JwtAuthGuard(mockJwt, stale);
+    await expect(guard.canActivate(ctx('Bearer xyz'))).rejects.toMatchObject({
+      response: { code: 'token_stale' },
+    });
+    expect(stale.isStale).toHaveBeenCalledWith('u1', 1000);
+
+    (stale.isStale as jest.Mock).mockResolvedValueOnce(false);
+    expect(await guard.canActivate(ctx('Bearer xyz'))).toBe(true);
   });
 });

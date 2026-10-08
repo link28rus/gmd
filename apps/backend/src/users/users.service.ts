@@ -1,8 +1,10 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ADMIN_CONFIG } from '../admin/admin.tokens';
 import type { AdminConfig } from '../admin/admin.tokens';
 import { ConsentService } from '../consent/consent.service';
+import { StaleTokenService } from '../auth/stale-token.service';
+import { detachUserFromFamilies } from '../family/family-lifecycle';
 
 @Injectable()
 export class UsersService {
@@ -10,6 +12,7 @@ export class UsersService {
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(ADMIN_CONFIG) private readonly adminCfg: AdminConfig,
     @Inject(ConsentService) private readonly consent: ConsentService,
+    @Optional() @Inject(StaleTokenService) private readonly stale?: StaleTokenService,
   ) {}
 
   async getMe(
@@ -103,13 +106,22 @@ export class UsersService {
     return { id: user.id, email: user.email, name: user.name, locale: user.locale };
   }
 
+  /**
+   * DELETE /me. v0.71.0: человек уходит и из семьи — владелец с другими
+   * взрослыми передаёт права самому раннему, один в семье — семья в soft-delete
+   * (раньше членство оставалось, и удалённый продолжал получать push семьи).
+   */
   async softDelete(userId: string): Promise<void> {
-    await this.prisma.$transaction([
-      this.prisma.user.update({ where: { id: userId }, data: { deletedAt: new Date() } }),
-      this.prisma.refreshToken.updateMany({
+    const now = new Date();
+    const heirs = await this.prisma.$transaction(async (tx) => {
+      const h = await detachUserFromFamilies(tx, userId, now);
+      await tx.user.update({ where: { id: userId }, data: { deletedAt: now } });
+      await tx.refreshToken.updateMany({
         where: { userId, revokedAt: null },
-        data: { revokedAt: new Date() },
-      }),
-    ]);
+        data: { revokedAt: now },
+      });
+      return h;
+    });
+    await this.stale?.markStale([userId, ...heirs]);
   }
 }

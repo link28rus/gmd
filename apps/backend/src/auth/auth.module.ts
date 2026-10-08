@@ -8,6 +8,7 @@ import { SmtpOtpProvider } from './providers/smtp-otp.provider';
 import { OTP_DELIVERY } from './providers/otp-delivery.provider';
 import { PrismaModule } from '../prisma/prisma.module';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { StaleTokenService } from './stale-token.service';
 import { PasswordService, PASSWORD_CONFIG } from './password.service';
 import { RedisModule } from '../redis/redis.module';
 import { MailerModule } from '../mailer/mailer.module';
@@ -74,10 +75,11 @@ function asNum(v: string | undefined, def: number): number {
     RefreshTokenService,
     AuthService,
     JwtAuthGuard,
+    StaleTokenService,
     PasswordService,
     EmailVerificationService,
     PasswordResetService,
   ],
-  exports: [JwtService, JwtAuthGuard, AuthService, PasswordResetService],
+  exports: [JwtService, JwtAuthGuard, StaleTokenService, AuthService, PasswordResetService],
 })
 export class AuthModule {}

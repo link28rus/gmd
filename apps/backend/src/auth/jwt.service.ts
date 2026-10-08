@@ -15,6 +15,12 @@ export interface JwtPayload {
   email: string;
   familyId: string;
   role: 'owner' | 'parent';
+  /**
+   * Время выпуска, мс. Только при verify; v0.71.0 — для StaleTokenService.
+   * Своя claim `iatMs`: стандартный `iat` посекундный, а токен после refresh
+   * часто выпускается в ту же секунду, что и смена членства.
+   */
+  issuedAtMs?: number;
 }
 
 export const JWT_CONFIG = Symbol('JWT_CONFIG');
@@ -34,7 +40,12 @@ export class JwtService implements OnModuleInit {
   }
 
   async signAccessToken(payload: JwtPayload): Promise<string> {
-    return new SignJWT({ email: payload.email, familyId: payload.familyId, role: payload.role })
+    return new SignJWT({
+      email: payload.email,
+      familyId: payload.familyId,
+      role: payload.role,
+      iatMs: Date.now(),
+    })
       .setProtectedHeader({ alg: 'RS256' })
       .setSubject(payload.sub)
       .setIssuedAt()
@@ -52,6 +63,12 @@ export class JwtService implements OnModuleInit {
       email: String(payload.email ?? ''),
       familyId: String(payload.familyId),
       role: payload.role as 'owner' | 'parent',
+      issuedAtMs:
+        typeof payload.iatMs === 'number'
+          ? payload.iatMs
+          : typeof payload.iat === 'number'
+            ? payload.iat * 1000
+            : undefined,
     };
   }
 }

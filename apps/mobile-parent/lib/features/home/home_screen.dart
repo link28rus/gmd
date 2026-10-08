@@ -67,6 +67,9 @@ class HomeScreen extends ConsumerWidget {
             icon: const Icon(Icons.more_vert),
             onSelected: (value) async {
               switch (value) {
+                case 'family':
+                  await context.push('/home/family');
+                  break;
                 case 'theme':
                   await _showThemeDialog(context, ref);
                   break;
@@ -93,6 +96,17 @@ class HomeScreen extends ConsumerWidget {
                 ),
               ),
               const PopupMenuDivider(),
+              // v0.71.0: участники семьи, приглашение взрослых.
+              const PopupMenuItem<String>(
+                value: 'family',
+                child: Row(
+                  children: [
+                    Icon(Icons.family_restroom_outlined, size: 20),
+                    SizedBox(width: 12),
+                    Text('Семья'),
+                  ],
+                ),
+              ),
               const PopupMenuItem<String>(
                 value: 'theme',
                 child: Row(

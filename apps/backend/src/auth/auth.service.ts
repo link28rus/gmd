@@ -101,7 +101,7 @@ export class AuthService implements OnModuleInit {
 
     const existing = await this.prisma.user.findUnique({
       where: { email: normalized },
-      include: { memberships: { include: { family: true } } },
+      include: { memberships: { include: { family: true }, orderBy: { createdAt: 'asc' } } },
     });
     if (!existing || existing.deletedAt) {
       return { ok: false, reason: 'invalid_code' };
@@ -117,7 +117,7 @@ export class AuthService implements OnModuleInit {
 
     return this.issueTokens(
       { id: existing.id, email: existing.email, name: existing.name },
-      { id: membership.family.id, name: membership.family.name },
+      { id: membership.family.id, name: membership.family.name, role: membership.role },
       meta,
     );
   }
@@ -155,7 +155,7 @@ export class AuthService implements OnModuleInit {
 
     const user = await this.prisma.user.findUnique({
       where: { email: normalizedEmail },
-      include: { memberships: { include: { family: true } } },
+      include: { memberships: { include: { family: true }, orderBy: { createdAt: 'asc' } } },
     });
 
     const hashToVerify = user?.passwordHash ?? DUMMY_HASH!;
@@ -196,7 +196,7 @@ export class AuthService implements OnModuleInit {
 
     return this.issueTokens(
       { id: user.id, email: user.email, name: user.name },
-      { id: membership.family.id, name: membership.family.name },
+      { id: membership.family.id, name: membership.family.name, role: membership.role },
       meta,
     );
   }
@@ -296,7 +296,7 @@ export class AuthService implements OnModuleInit {
 
     const user = await this.prisma.user.findUnique({
       where: { id: r.userId },
-      include: { memberships: { include: { family: true } } },
+      include: { memberships: { include: { family: true }, orderBy: { createdAt: 'asc' } } },
     });
     if (!user || user.deletedAt) return { ok: false, reason: 'invalid_token' };
 
@@ -312,7 +312,7 @@ export class AuthService implements OnModuleInit {
 
     return this.issueTokens(
       { id: user.id, email: user.email, name: user.name },
-      { id: membership.family.id, name: membership.family.name },
+      { id: membership.family.id, name: membership.family.name, role: membership.role },
       meta,
     );
   }
@@ -335,14 +335,14 @@ export class AuthService implements OnModuleInit {
 
   private async issueTokens(
     user: { id: string; email: string; name: string | null },
-    family: { id: string; name: string },
+    family: { id: string; name: string; role: 'owner' | 'parent' },
     meta: TokenMeta,
   ): Promise<LoginResult> {
     const accessToken = await this.jwt.signAccessToken({
       sub: user.id,
       email: user.email,
       familyId: family.id,
-      role: 'owner',
+      role: family.role,
     });
     const { token: refreshToken } = await this.refresh.create(user.id, meta);
     return {

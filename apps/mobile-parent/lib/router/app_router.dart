@@ -8,6 +8,8 @@ import '../features/auth/login_screen.dart';
 import '../features/auth/register_screen.dart';
 import '../features/child_detail/child_detail_screen.dart';
 import '../features/debug/debug_screen.dart';
+import '../features/family/family_screen.dart';
+import '../features/family/join_family_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/parental_control/parental_control_screen.dart';
 import '../features/splash/splash_screen.dart';
@@ -45,6 +47,19 @@ class AppRouter {
           path: '/home',
           builder: (_, _) => const HomeScreen(),
           routes: [
+            // v0.71.0: участники семьи (спека 2026-10-08-family-members.md).
+            GoRoute(
+              path: 'family',
+              builder: (_, _) => const FamilyScreen(),
+              routes: [
+                GoRoute(
+                  // /home/family/join/:code — превью приглашения по коду.
+                  path: 'join/:code',
+                  builder: (_, state) =>
+                      JoinFamilyScreen(code: state.pathParameters['code']!),
+                ),
+              ],
+            ),
             // v0.66.0: геозоны (спека геозон v2, раздел 3.1).
             GoRoute(
               path: 'zones',

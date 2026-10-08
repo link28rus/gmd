@@ -68,6 +68,9 @@ model User {
   deletedAt                    DateTime?
 
   memberships              Membership[]
+  // v0.71.0: приглашения взрослых в семью (docs/superpowers/specs/2026-10-08-family-members.md).
+  familyInvitesCreated     FamilyInvite[] @relation("FamilyInviteCreatedBy")
+  familyInvitesAccepted    FamilyInvite[] @relation("FamilyInviteAcceptedBy")
   refreshTokens            RefreshToken[]
   otpCodes                 OtpCode[]
   consents                 ConsentRecord[]
@@ -203,6 +206,8 @@ model Family {
   memberships Membership[]
   children    Child[]
   invites     Invite[]
+  // v0.71.0: приглашения взрослых (FamilyInvite), не путать с детскими Invite.
+  memberInvites FamilyInvite[]
   zones       Zone[]
   // v0.67.0: подсказки мест, которые родитель попросил больше не показывать.
   placeDismissals ZonePlaceDismissal[]
@@ -228,6 +233,27 @@ model Membership {
   @@unique([userId, familyId])
   @@index([familyId])
   @@map("memberships")
+}
+
+// v0.71.0: приглашение взрослого в семью по ссылке `{WEB_BASE_URL}/join/<code>`.
+// Одноразовое, 7 дней. Активно: acceptedAt IS NULL AND revokedAt IS NULL AND expiresAt > now().
+model FamilyInvite {
+  id           String    @id @default(cuid())
+  familyId     String
+  code         String    @unique
+  createdById  String
+  expiresAt    DateTime
+  acceptedAt   DateTime?
+  acceptedById String?
+  revokedAt    DateTime?
+  createdAt    DateTime  @default(now())
+
+  family     Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  createdBy  User   @relation("FamilyInviteCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  acceptedBy User?  @relation("FamilyInviteAcceptedBy", fields: [acceptedById], references: [id], onDelete: SetNull)
+
+  @@index([familyId, acceptedAt, revokedAt])
+  @@map("family_invites")
 }
 
 model OtpCode {
