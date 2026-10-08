@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -30,13 +31,94 @@ class ChildDetailScreen extends ConsumerStatefulWidget {
   ConsumerState<ChildDetailScreen> createState() => _ChildDetailScreenState();
 }
 
-class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen> {
+class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen>
+    with WidgetsBindingObserver {
+  /// Как часто подтягивать свежую точку, пока экран открыт и приложение
+  /// на переднем плане. Push о новых точках родителю не приходит.
+  static const _pollInterval = Duration(seconds: 30);
+
   final MapController _map = MapController();
   bool _firstFitDone = false;
   bool _mapReady = false;
   // Версия для пересоздания TileLayer после onMapReady — workaround
   // для flutter_map 7.0.2: первый mount не триггерит fetch tiles до user-event.
   int _tileGen = 0;
+
+  Timer? _poll;
+  bool _refreshing = false;
+  // Плашка «Загружаем точку…» — только на ручное обновление, фоновый
+  // опрос раз в 30 с не должен мигать ею.
+  bool _manualRefreshing = false;
+  // Камера едет за ребёнком при новых точках, пока родитель сам не
+  // сдвинул карту. Снова включается кнопками «К ребёнку» и «Обновить».
+  bool _follow = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _startPolling();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _poll?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refresh(manual: false);
+      _startPolling();
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      _poll?.cancel();
+      _poll = null;
+    }
+  }
+
+  void _startPolling() {
+    _poll?.cancel();
+    _poll = Timer.periodic(_pollInterval, (_) => _refresh(manual: false));
+  }
+
+  /// Перезапрашивает точку и трек. Ручное обновление ждёт свежие данные
+  /// и центрирует на ребёнке; фоновое — двигает камеру, только если
+  /// включено слежение.
+  Future<void> _refresh({required bool manual}) async {
+    // Фоновый опрос не наслаивается; нажатие «Обновить» проходит всегда,
+    // иначе совпадение с опросом съело бы центрирование.
+    if (_refreshing && !manual) return;
+    _refreshing = true;
+    if (manual) {
+      setState(() {
+        _manualRefreshing = true;
+        _follow = true;
+      });
+      ref.invalidate(zonesListProvider);
+    }
+    try {
+      final latestF =
+          ref.refresh(childLatestLocationProvider(widget.childId).future);
+      final trackF = ref.refresh(childActiveTrackProvider(widget.childId).future);
+      final latest = await latestF;
+      // Ошибку трека покажет пустая линия, точку ребёнка она не отменяет.
+      await trackF.then((_) {}, onError: (_) {});
+      if (!mounted) return;
+      if (manual) {
+        _focusOnChild(latest);
+      } else if (_follow && latest != null && !_isComfortablyVisible(latest)) {
+        _focusOnChild(latest, keepZoom: true);
+      }
+    } catch (_) {
+      // Ошибку покажет карточка поверх карты через AsyncValue.
+    } finally {
+      _refreshing = false;
+      if (mounted && manual) setState(() => _manualRefreshing = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -75,12 +157,7 @@ class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen> {
           IconButton(
             tooltip: 'Обновить',
             icon: const Icon(Icons.refresh),
-            onPressed: () {
-              ref.invalidate(childLatestLocationProvider(widget.childId));
-              ref.invalidate(childActiveTrackProvider(widget.childId));
-              ref.invalidate(zonesListProvider);
-              setState(() => _firstFitDone = false);
-            },
+            onPressed: () => _refresh(manual: true),
           ),
         ],
       ),
@@ -120,6 +197,11 @@ class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen> {
                               _tileGen++; // форсим пересоздание TileLayer
                             });
                             _maybeFit(latest, track);
+                          },
+                          // Родитель сам сдвинул или приблизил карту —
+                          // перестаём возвращать камеру к ребёнку.
+                          onPositionChanged: (_, hasGesture) {
+                            if (hasGesture) _follow = false;
                           },
                         ),
                         children: [
@@ -162,7 +244,7 @@ class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen> {
                           ),
                         ],
                       ),
-                      if (latestAsync.isLoading)
+                      if (_manualRefreshing)
                         const Positioned(
                           top: 12,
                           left: 12,
@@ -215,7 +297,10 @@ class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen> {
             child: FloatingActionButton.small(
               heroTag: 'follow_${widget.childId}',
               tooltip: 'К ребёнку',
-              onPressed: () => _focusOnChild(latest),
+              onPressed: () {
+                _follow = true;
+                _focusOnChild(latest);
+              },
               child: const Icon(Icons.my_location),
             ),
           ),
@@ -243,9 +328,24 @@ class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen> {
     );
   }
 
-  void _focusOnChild(ChildLocation? latest) {
-    if (latest == null) return;
-    _map.move(LatLng(latest.lat, latest.lon), 16);
+  void _focusOnChild(ChildLocation? latest, {bool keepZoom = false}) {
+    if (latest == null || !_mapReady) return;
+    final zoom = keepZoom ? _map.camera.zoom : 16.0;
+    _map.move(LatLng(latest.lat, latest.lon), zoom);
+  }
+
+  /// Точка ребёнка видна не у самого края и не под нижней панелью
+  /// (свёрнутая панель занимает ~18% высоты). Тогда фоновое обновление
+  /// камеру не трогает — не сбивает обзор трека и масштаб.
+  bool _isComfortablyVisible(ChildLocation latest) {
+    if (!_mapReady) return true;
+    final camera = _map.camera;
+    final p = camera.latLngToScreenPoint(LatLng(latest.lat, latest.lon));
+    final size = camera.nonRotatedSize;
+    return p.x >= size.x * 0.12 &&
+        p.x <= size.x * 0.88 &&
+        p.y >= size.y * 0.12 &&
+        p.y <= size.y * 0.72;
   }
 
   void _maybeFit(ChildLocation? latest, List<ChildLocation> track) {
