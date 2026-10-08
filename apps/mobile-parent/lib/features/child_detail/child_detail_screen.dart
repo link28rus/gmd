@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/push/live_location_push.dart';
 import '../children/child_models.dart';
@@ -57,22 +58,47 @@ class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen>
   // Камера едет за ребёнком при новых точках, пока родитель сам не
   // сдвинул карту. Снова включается кнопками «К ребёнку» и «Обновить».
   bool _follow = true;
+  // v0.70.2: показ геозон на карте ребёнка — по умолчанию включён, выбор
+  // родителя один на все карты детей (как в веб-кабинете).
+  static const _showZonesKey = 'child_map_show_zones';
+  bool _showZones = true;
 
   @override
   void initState() {
     super.initState();
+    _loadShowZones();
     WidgetsBinding.instance.addObserver(this);
     _startPolling();
     _markWatching();
     _pushSub = LiveLocationPush.childUpdates
         .where((id) => id == widget.childId)
         .listen((_) {
-      // В фоне экран не обновляем: при возврате сработает resumed.
-      final state = WidgetsBinding.instance.lifecycleState;
-      if (state == null || state == AppLifecycleState.resumed) {
-        _refresh(manual: false);
-      }
-    });
+          // В фоне экран не обновляем: при возврате сработает resumed.
+          final state = WidgetsBinding.instance.lifecycleState;
+          if (state == null || state == AppLifecycleState.resumed) {
+            _refresh(manual: false);
+          }
+        });
+  }
+
+  Future<void> _loadShowZones() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final v = prefs.getBool(_showZonesKey);
+      if (v != null && mounted) setState(() => _showZones = v);
+    } catch (_) {
+      // не критично — остаёмся на умолчании
+    }
+  }
+
+  void _toggleZones() {
+    final v = !_showZones;
+    setState(() => _showZones = v);
+    unawaited(
+      SharedPreferences.getInstance()
+          .then((p) => p.setBool(_showZonesKey, v))
+          .catchError((_) => false),
+    );
   }
 
   @override
@@ -130,9 +156,12 @@ class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen>
       ref.invalidate(zonesListProvider);
     }
     try {
-      final latestF =
-          ref.refresh(childLatestLocationProvider(widget.childId).future);
-      final trackF = ref.refresh(childActiveTrackProvider(widget.childId).future);
+      final latestF = ref.refresh(
+        childLatestLocationProvider(widget.childId).future,
+      );
+      final trackF = ref.refresh(
+        childActiveTrackProvider(widget.childId).future,
+      );
       final latest = await latestF;
       // Ошибку трека покажет пустая линия, точку ребёнка она не отменяет.
       await trackF.then((_) {}, onError: (_) {});
@@ -217,12 +246,16 @@ class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen>
                         options: MapOptions(
                           initialCenter: latest != null
                               ? LatLng(latest.lat, latest.lon)
-                              : const LatLng(55.7558, 37.6173), // Москва, дефолт
+                              : const LatLng(
+                                  55.7558,
+                                  37.6173,
+                                ), // Москва, дефолт
                           initialZoom: latest != null ? 15 : 10,
                           minZoom: 3,
                           maxZoom: 18,
                           interactionOptions: const InteractionOptions(
-                            flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+                            flags:
+                                InteractiveFlag.all & ~InteractiveFlag.rotate,
                           ),
                           onMapReady: () {
                             if (!mounted) return;
@@ -251,7 +284,7 @@ class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen>
                             keepBuffer: 4,
                             panBuffer: 2,
                           ),
-                          if (childZones.isNotEmpty) ...[
+                          if (_showZones && childZones.isNotEmpty) ...[
                             CircleLayer(circles: zoneCircles(childZones)),
                             MarkerLayer(markers: zoneCenterMarkers(childZones)),
                           ],
@@ -273,7 +306,9 @@ class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen>
                           const RichAttributionWidget(
                             // Атрибуция OSM обязательна по лицензии ODbL.
                             attributions: [
-                              TextSourceAttribution('OpenStreetMap contributors'),
+                              TextSourceAttribution(
+                                'OpenStreetMap contributors',
+                              ),
                             ],
                           ),
                         ],
@@ -284,14 +319,19 @@ class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen>
                           left: 12,
                           child: Card(
                             child: Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   SizedBox(
                                     width: 14,
                                     height: 14,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
                                   ),
                                   SizedBox(width: 8),
                                   Text('Загружаем точку…'),
@@ -312,8 +352,9 @@ class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen>
                               child: Text(
                                 'Не удалось загрузить локацию: ${latestAsync.error}',
                                 style: TextStyle(
-                                  color:
-                                      Theme.of(context).colorScheme.onErrorContainer,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onErrorContainer,
                                 ),
                               ),
                             ),
@@ -322,6 +363,24 @@ class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen>
                     ],
                   ),
           ),
+          // ─── FAB «геозоны» — над «к ребёнку» ───────────────────────
+          if (childZones.isNotEmpty)
+            Positioned(
+              right: 16,
+              bottom: MediaQuery.of(context).size.height * 0.18 + 12 + 52,
+              child: FloatingActionButton.small(
+                heroTag: 'zones_${widget.childId}',
+                tooltip: _showZones ? 'Скрыть геозоны' : 'Показать геозоны',
+                backgroundColor: _showZones
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).colorScheme.surfaceContainerHigh,
+                foregroundColor: _showZones
+                    ? Theme.of(context).colorScheme.onPrimary
+                    : Theme.of(context).colorScheme.onSurface,
+                onPressed: _toggleZones,
+                child: Icon(_showZones ? Icons.layers : Icons.layers_clear),
+              ),
+            ),
           // ─── FAB «к ребёнку» — над картой, но над sheet'ом ─────────
           // Позиционируем выше collapsed sheet'а, чтобы кнопка не
           // пряталась под ним.
@@ -456,10 +515,7 @@ class _ChildMarker extends StatelessWidget {
           ),
         ),
         // Маленький треугольник-указатель, чтобы было понятно, какая точно точка.
-        CustomPaint(
-          size: const Size(12, 8),
-          painter: _ArrowPainter(),
-        ),
+        CustomPaint(size: const Size(12, 8), painter: _ArrowPainter()),
       ],
     );
   }
