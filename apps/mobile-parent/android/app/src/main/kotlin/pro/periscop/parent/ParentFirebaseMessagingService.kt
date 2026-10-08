@@ -26,6 +26,8 @@ import com.google.firebase.messaging.RemoteMessage
  *   `deadline` «08:30» у GEOFENCE_MISSED / GEOFENCE_NO_DATA)
  * - `delayed` = "1" у GEOFENCE_ENTER/EXIT (v0.59.0), если событие старше 3 мин —
  *   текст строит [GeofenceNotificationText].
+ * - v0.69.0: `LOCATION_UPDATED` + `childId` — без уведомления, уходит в Dart
+ *   через канал pro.periscop.parent/live (экран карты ребёнка обновляется).
  *
  * Сервис строит нативный notification и кладёт его в один из каналов (default
  * events / sos с высокой важностью). Тап открывает MainActivity с extras
@@ -35,6 +37,7 @@ import com.google.firebase.messaging.RemoteMessage
 class ParentFirebaseMessagingService : FirebaseMessagingService() {
     companion object {
         private const val TAG = "PeriscopParentFcm"
+        private const val TYPE_LOCATION_UPDATED = "LOCATION_UPDATED"
         private const val CHANNEL_EVENTS = "periscop_parent_events"
         // v0.46.0+4: версионированный channel id. Android не позволяет менять
         // звук/вибрацию уже созданного channel — каждый раз когда меняем sos_siren.wav
@@ -50,6 +53,13 @@ class ParentFirebaseMessagingService : FirebaseMessagingService() {
         val data = message.data
         val type = data["type"] ?: return
         Log.i(TAG, "received type=$type from=${message.from}")
+
+        // v0.69.0: тихая подсказка открытому экрану ребёнка «есть новая точка» —
+        // без уведомления. Приложение закрыто — просто ничего не делаем.
+        if (type == TYPE_LOCATION_UPDATED) {
+            data["childId"]?.takeIf { it.isNotBlank() }?.let { MainActivity.dispatchLocationUpdated(it) }
+            return
+        }
 
         ensureChannels()
 

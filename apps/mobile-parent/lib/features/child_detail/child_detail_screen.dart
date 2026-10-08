@@ -6,6 +6,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../core/push/live_location_push.dart';
 import '../children/child_models.dart';
 import '../children/children_providers.dart';
 import '../children/widgets/child_avatar.dart';
@@ -34,7 +35,8 @@ class ChildDetailScreen extends ConsumerStatefulWidget {
 class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen>
     with WidgetsBindingObserver {
   /// Как часто подтягивать свежую точку, пока экран открыт и приложение
-  /// на переднем плане. Push о новых точках родителю не приходит.
+  /// на переднем плане. v0.69.0: основной путь — тихий push о новой точке,
+  /// опрос остаётся запасным и заодно продлевает отметку «смотрю» (90 с).
   static const _pollInterval = Duration(seconds: 30);
 
   final MapController _map = MapController();
@@ -45,7 +47,10 @@ class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen>
   int _tileGen = 0;
 
   Timer? _poll;
+  StreamSubscription<String>? _pushSub;
   bool _refreshing = false;
+  // Push пришёл, пока шёл запрос, — тот мог уйти до новой точки, повторяем.
+  bool _refreshAgain = false;
   // Плашка «Загружаем точку…» — только на ручное обновление, фоновый
   // опрос раз в 30 с не должен мигать ею.
   bool _manualRefreshing = false;
@@ -58,12 +63,23 @@ class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _startPolling();
+    _markWatching();
+    _pushSub = LiveLocationPush.childUpdates
+        .where((id) => id == widget.childId)
+        .listen((_) {
+      // В фоне экран не обновляем: при возврате сработает resumed.
+      final state = WidgetsBinding.instance.lifecycleState;
+      if (state == null || state == AppLifecycleState.resumed) {
+        _refresh(manual: false);
+      }
+    });
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _poll?.cancel();
+    _pushSub?.cancel();
     super.dispose();
   }
 
@@ -84,14 +100,28 @@ class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen>
     _poll = Timer.periodic(_pollInterval, (_) => _refresh(manual: false));
   }
 
+  /// Сообщает серверу «смотрю карту ребёнка» — тогда о новых точках придёт
+  /// тихий push. Ошибку (нет сети, старый сервер без эндпоинта) глотаем:
+  /// экран всё равно обновляется опросом.
+  void _markWatching() {
+    ref
+        .read(childrenRepositoryProvider)
+        .watchLocation(widget.childId)
+        .catchError((Object _) {});
+  }
+
   /// Перезапрашивает точку и трек. Ручное обновление ждёт свежие данные
   /// и центрирует на ребёнке; фоновое — двигает камеру, только если
   /// включено слежение.
   Future<void> _refresh({required bool manual}) async {
     // Фоновый опрос не наслаивается; нажатие «Обновить» проходит всегда,
     // иначе совпадение с опросом съело бы центрирование.
-    if (_refreshing && !manual) return;
+    if (_refreshing && !manual) {
+      _refreshAgain = true;
+      return;
+    }
     _refreshing = true;
+    _markWatching();
     if (manual) {
       setState(() {
         _manualRefreshing = true;
@@ -117,6 +147,10 @@ class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen>
     } finally {
       _refreshing = false;
       if (mounted && manual) setState(() => _manualRefreshing = false);
+      if (_refreshAgain && mounted) {
+        _refreshAgain = false;
+        _refresh(manual: false);
+      }
     }
   }
 

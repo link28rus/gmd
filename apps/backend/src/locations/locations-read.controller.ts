@@ -5,11 +5,13 @@ import {
   HttpStatus,
   Inject,
   Param,
+  Put,
   Query,
+  Req,
   Res,
   UseGuards,
 } from '@nestjs/common';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ZodValidationPipe } from '../common/zod/zod-validation.pipe';
 import { ListLocationsQuerySchema } from './dto/list-locations.dto';
@@ -18,6 +20,7 @@ import { TrackQuerySchema } from './dto/track-query.dto';
 import type { TrackQuery } from './dto/track-query.dto';
 import { FamilyAccessGuard } from './guards/family-access.guard';
 import { LocationsService } from './locations.service';
+import { LocationWatchService } from './location-watch.service';
 import { TripsService } from './trips.service';
 
 @Controller('children/:id')
@@ -26,7 +29,20 @@ export class LocationsReadController {
   constructor(
     @Inject(LocationsService) private readonly svc: LocationsService,
     @Inject(TripsService) private readonly trips: TripsService,
+    @Inject(LocationWatchService) private readonly watch: LocationWatchService,
   ) {}
+
+  // v0.69.0: «родитель смотрит карту ребёнка» на 90 с. Пока отметка жива,
+  // новые точки ребёнка приходят этому родителю тихим push LOCATION_UPDATED.
+  // Экран продлевает отметку каждым обновлением (раз в 30 с).
+  @Put('location/watch')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async watchLocation(
+    @Param('id') id: string,
+    @Req() req: Request & { user: { userId: string } },
+  ): Promise<void> {
+    await this.watch.watch(id, req.user.userId);
+  }
 
   @Get('location/latest')
   async latest(

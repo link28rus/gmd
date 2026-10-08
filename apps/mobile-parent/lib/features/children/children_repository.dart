@@ -24,6 +24,13 @@ class ChildrenRepository {
     return ChildLocation.fromJson(res.data as Map<String, dynamic>);
   }
 
+  /// v0.69.0: «смотрю карту ребёнка» на 90 с — пока отметка жива, сервер
+  /// шлёт тихий push LOCATION_UPDATED о каждой новой точке. Экран продлевает
+  /// отметку каждым обновлением.
+  Future<void> watchLocation(String childId) async {
+    await _dio.put<dynamic>('/children/$childId/location/watch');
+  }
+
   /// Точки активной (незакрытой) поездки. Если ребёнок стоит на месте >
   /// TRIP_IDLE_MINUTES — backend вернёт {trip: null, points: []}.
   /// `stays` (стоянки ≥ 3 мин) — с v0.63.0, у старого сервера пусто.

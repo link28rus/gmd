@@ -2,6 +2,8 @@ package pro.periscop.parent
 
 import android.content.Intent
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -16,12 +18,31 @@ private const val DEVICE_METHOD_CHANNEL = "pro.periscop.parent/device"
 // (один раз), onPush — из onNewIntent, когда приложение уже открыто.
 private const val PUSH_METHOD_CHANNEL = "pro.periscop.parent/push"
 
+// v0.69.0: тихие push для открытого UI (LOCATION_UPDATED) — отдельно от
+// переходов по тапу, чтобы не путать с навигацией.
+private const val LIVE_METHOD_CHANNEL = "pro.periscop.parent/live"
+
 class MainActivity : FlutterActivity() {
     companion object {
         // Extras уведомления — их кладёт ParentFirebaseMessagingService.
         const val EXTRA_FCM_TYPE = "fcm_type"
         const val EXTRA_CHILD_ID = "deeplink_child_id"
         const val EXTRA_ZONE_ID = "zone_id"
+
+        /** Канал живого движка Flutter; null, когда UI не запущен. */
+        @Volatile
+        private var liveChannel: MethodChannel? = null
+
+        /**
+         * Из FirebaseMessagingService (фоновый поток): передать в Dart, что у
+         * ребёнка новая точка. Движка нет — событие не нужно, экран закрыт.
+         */
+        fun dispatchLocationUpdated(childId: String) {
+            if (liveChannel == null) return
+            Handler(Looper.getMainLooper()).post {
+                liveChannel?.invokeMethod("locationUpdated", mapOf("childId" to childId))
+            }
+        }
 
         /** Extras уведомления → map для Dart; null, если интент не из уведомления. */
         fun pushExtras(intent: Intent?): Map<String, String>? {
@@ -112,6 +133,7 @@ class MainActivity : FlutterActivity() {
                     }
                 }
             }
+        liveChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, LIVE_METHOD_CHANNEL)
         // v0.56.0: самообновление с собственного сервера (AppUpdater.kt).
         AppUpdater.registerChannel(this, flutterEngine.dartExecutor.binaryMessenger)
     }
@@ -119,6 +141,7 @@ class MainActivity : FlutterActivity() {
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
         pushChannel?.setMethodCallHandler(null)
         pushChannel = null
+        liveChannel = null
         super.cleanUpFlutterEngine(flutterEngine)
     }
 }

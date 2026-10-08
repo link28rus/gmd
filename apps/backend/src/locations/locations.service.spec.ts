@@ -85,8 +85,12 @@ function makeService(
       .fn()
       .mockImplementation((_key: string, fallback: number) => Promise.resolve(fallback)),
   };
-  return new LocationsService(prisma, consent, zoneDetection, trips, settings);
+  // v0.69.0 — push «новая точка» смотрящим родителям.
+  const watch: any = { notifyNewPoints: jest.fn().mockResolvedValue(undefined) };
+  return new LocationsService(prisma, consent, zoneDetection, trips, settings, watch);
 }
+
+const flush = (): Promise<void> => new Promise((r) => setImmediate(r));
 
 describe('LocationsService.ingestBatch', () => {
   it('accepts all points when valid', async () => {
@@ -105,6 +109,42 @@ describe('LocationsService.ingestBatch', () => {
       },
     ]);
     expect(res).toEqual({ accepted: 2, rejected: 0, rejectedReasons: {} });
+  });
+
+  it('после пересчёта поездок шлёт push смотрящим родителям', async () => {
+    const svc = makeService({ insertResult: 1 });
+    const order: string[] = [];
+    (svc as any).trips.recomputeForChild.mockImplementation(async () => {
+      order.push('recompute');
+    });
+    (svc as any).watch.notifyNewPoints.mockImplementation(async () => {
+      order.push('push');
+    });
+    await svc.ingestBatch(ctx, [
+      { lat: 55, lon: 37, recordedAt: new Date(Date.now() - 5_000).toISOString() },
+    ]);
+    await flush();
+    expect(order).toEqual(['recompute', 'push']);
+    expect((svc as any).watch.notifyNewPoints).toHaveBeenCalledWith('c1', 'f1');
+  });
+
+  it('шлёт push, даже если пересчёт поездок упал', async () => {
+    const svc = makeService({ insertResult: 1 });
+    (svc as any).trips.recomputeForChild.mockRejectedValue(new Error('boom'));
+    await svc.ingestBatch(ctx, [
+      { lat: 55, lon: 37, recordedAt: new Date(Date.now() - 5_000).toISOString() },
+    ]);
+    await flush();
+    expect((svc as any).watch.notifyNewPoints).toHaveBeenCalledTimes(1);
+  });
+
+  it('не шлёт push, если ни одна точка не вставилась (дубли)', async () => {
+    const svc = makeService({ insertResult: 0 });
+    await svc.ingestBatch(ctx, [
+      { lat: 55, lon: 37, recordedAt: new Date(Date.now() - 5_000).toISOString() },
+    ]);
+    await flush();
+    expect((svc as any).watch.notifyNewPoints).not.toHaveBeenCalled();
   });
 
   it('rejects points older than 7 days with out_of_window', async () => {

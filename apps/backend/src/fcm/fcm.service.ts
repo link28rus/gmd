@@ -173,6 +173,12 @@ export class FcmService implements OnModuleInit {
      * приложение свёрнуто, — для типов, которые текущий APK ещё не рисует.
      */
     notification?: { title: string; body: string; channelId?: string };
+    /** v0.69.0: по умолчанию high (будит из Doze); normal — для подсказок открытому экрану. */
+    priority?: 'high' | 'normal';
+    /** v0.69.0: время жизни в очереди FCM, по умолчанию 300 с. */
+    ttlSec?: number;
+    /** v0.69.0: недоставленные сообщения с одним ключом схлопываются в последнее. */
+    collapseKey?: string;
   }): Promise<boolean> {
     if (!this.app) return false;
     const { fcmToken, data, onInvalidToken, label, notification } = args;
@@ -184,8 +190,9 @@ export class FcmService implements OnModuleInit {
           ? { notification: { title: notification.title, body: notification.body } }
           : {}),
         android: {
-          priority: 'high',
-          ttl: 300_000,
+          priority: args.priority ?? 'high',
+          ttl: (args.ttlSec ?? 300) * 1000,
+          ...(args.collapseKey ? { collapseKey: args.collapseKey } : {}),
           ...(notification?.channelId
             ? { notification: { channelId: notification.channelId } }
             : {}),
@@ -338,6 +345,9 @@ export class FcmService implements OnModuleInit {
     ttlSec?: number;
     /** v0.65.0: видимое уведомление для FCM (см. sendToToken). */
     notification?: { title: string; body: string; channelId?: string };
+    /** v0.69.0: только FCM, см. sendToToken. */
+    priority?: 'high' | 'normal';
+    collapseKey?: string;
   }): Promise<boolean> {
     const ttlSec = args.ttlSec ?? 300;
     const label = args.label ?? 'parent';
@@ -359,6 +369,9 @@ export class FcmService implements OnModuleInit {
         onInvalidToken: args.onInvalidFcmToken,
         label,
         notification: args.notification,
+        priority: args.priority,
+        ttlSec: args.ttlSec,
+        collapseKey: args.collapseKey,
       });
     }
     return false;

@@ -13,6 +13,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ConsentService } from '../consent/consent.service';
 import { ZoneDetectionService } from '../zones/zone-detection.service';
 import type { ZoneEventNotice } from '../zones/zone-detection.service';
+import { LocationWatchService } from './location-watch.service';
 import { TripsService } from './trips.service';
 import { distanceMeters } from '../common/geo-distance';
 import {
@@ -148,6 +149,7 @@ export class LocationsService {
     @Inject(ZoneDetectionService) private readonly zoneDetection: ZoneDetectionService,
     @Inject(TripsService) private readonly trips: TripsService,
     @Inject(AppSettingsService) private readonly settings: AppSettingsService,
+    @Inject(LocationWatchService) private readonly watch: LocationWatchService,
   ) {}
 
   async ingestBatch(ctx: ChildAuthContext, points: LocationPoint[]): Promise<IngestResult> {
@@ -355,11 +357,16 @@ export class LocationsService {
       // Пересчёт поездок после вставки новых точек. fire-and-forget, чтобы не
       // задерживать ingest-ответ телефону. Ошибки логируем, но не бросаем —
       // онлайн-карта упадёт на fallback (старые trips).
-      void this.trips.recomputeForChild(ctx.childId).catch((err: unknown) => {
-        this.logger.warn(
-          `trips recompute failed child=${ctx.childId}: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      });
+      // v0.69.0: push «есть новая точка» смотрящим родителям — после
+      // пересчёта, иначе экран родителя перезапросит ещё старый трек.
+      void this.trips
+        .recomputeForChild(ctx.childId)
+        .catch((err: unknown) => {
+          this.logger.warn(
+            `trips recompute failed child=${ctx.childId}: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        })
+        .then(() => this.watch.notifyNewPoints(ctx.childId, child.familyId));
     }
 
     return { accepted, rejected, rejectedReasons };
