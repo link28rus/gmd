@@ -279,6 +279,9 @@ refresh ротируется, повтор старого отзывает вс�
 - `deviceName`, `fcmToken` (text, nullable, v0.73.0) — модель телефона и FCM-токен; служба
   присылает их полем `device` в `POST /parent-location/points`. По `fcmToken` уходит сигнал
   «Найти телефон» (протухший токен сервер обнуляет)
+- `customName` (text, nullable, v0.74.0) — имя телефона, заданное в кабинете
+  (`PATCH /parent-location/my-devices/:id`, до 40 символов). Служба его не трогает; в выдаче
+  показывается вместо `deviceName`
 - `signalId`, `signalRequestedAt`, `signalAckedAt` (nullable, v0.73.0) — последний сигнал
   «Найти телефон». Живой — не старше 5 минут и без `signalAckedAt`: такой сигнал отдаётся и в
   ответе на выгрузку точек (запасной путь без push). Телефон подтверждает его

@@ -183,7 +183,7 @@ describe('Parent location (e2e, v0.70.0 + v0.73.0 find phone)', () => {
     expect(g2.body).toEqual({ enabled: false });
   });
 
-  it('«Найти телефон»: список, маршрут, сигнал и подтверждение — только свои', async () => {
+  it('«Найти телефон»: список, маршрут, сигнал и подтверждение; участник — только свои', async () => {
     const mom = await signUpParent(h);
     const dad = await addSecondParent(mom.familyId, 'papa2@seed.test', 'Папа');
     const momAuth = { Authorization: `Bearer ${mom.accessToken}` };
@@ -218,10 +218,13 @@ describe('Parent location (e2e, v0.70.0 + v0.73.0 find phone)', () => {
 
     const list = await request(server()).get('/parent-location/my-devices').set(momAuth);
     expect(list.status).toBe(200);
-    expect(list.body.items).toHaveLength(1);
+    // Мама — владелец: свой телефон первым, телефон папы следом
+    expect(list.body.items.map((i: { id: string }) => i.id)).toEqual([d.deviceId, dadDev.deviceId]);
     expect(list.body.items[0]).toMatchObject({
       id: d.deviceId,
       deviceName: 'Xiaomi 2201',
+      customName: null,
+      isMine: true,
       appVersion: '0.73.0+1',
       canPush: true,
       signal: null,
@@ -297,6 +300,113 @@ describe('Parent location (e2e, v0.70.0 + v0.73.0 find phone)', () => {
       .set(momAuth)
       .expect(200);
     expect(s3.body.signalId).not.toBe(s1.body.signalId);
+  });
+
+  it('v0.74.0: владелец видит телефоны взрослых семьи, зовёт и переименовывает', async () => {
+    const mom = await signUpParent(h);
+    const dad = await addSecondParent(mom.familyId, 'papa3@seed.test', 'Папа');
+    const stranger = await signUpParent(h, 'stranger@seed.test');
+    const momAuth = { Authorization: `Bearer ${mom.accessToken}` };
+    const dadAuth = { Authorization: `Bearer ${dad.accessToken}` };
+    const strangerAuth = { Authorization: `Bearer ${stranger.accessToken}` };
+
+    const momDev = await newDevice(mom.accessToken);
+    const dadDev = await newDevice(dad.accessToken, { platform: 'android' });
+    const strangerDev = await newDevice(stranger.accessToken);
+    // Папа скрылся с карты семьи — для владельца в «Найти телефон» это не важно
+    await request(server())
+      .put('/parent-location/sharing')
+      .set(dadAuth)
+      .send({ enabled: false })
+      .expect(200);
+    await request(server())
+      .post('/parent-location/points')
+      .set('X-Parent-Location-Token', dadDev.token)
+      .send({
+        points: [pt(3600_000, { lat: 49.1, batteryLevel: 40 })],
+        device: { name: 'Redmi Note', pushToken: 'fcm-dad' },
+      })
+      .expect(200);
+    await postPoints(strangerDev.token, [pt(1000)]).expect(200);
+
+    const momList = await request(server()).get('/parent-location/my-devices').set(momAuth);
+    expect(momList.body.items.map((i: { id: string }) => i.id)).toEqual([
+      momDev.deviceId,
+      dadDev.deviceId,
+    ]);
+    expect(momList.body.items[1]).toMatchObject({
+      isMine: false,
+      ownerName: 'Папа',
+      deviceName: 'Redmi Note',
+      canPush: true,
+      latest: { lat: 49.1, batteryLevel: 40 },
+    });
+    const dadList = await request(server()).get('/parent-location/my-devices').set(dadAuth);
+    expect(dadList.body.items.map((i: { id: string }) => i.id)).toEqual([dadDev.deviceId]);
+
+    // Маршрут и сигнал на телефон папы — владельцу можно, чужому владельцу — 404
+    const from = new Date(Date.now() - 24 * 3600_000).toISOString();
+    const to = new Date(Date.now() + 60_000).toISOString();
+    const track = await request(server())
+      .get(`/parent-location/my-devices/${dadDev.deviceId}/track`)
+      .query({ from, to })
+      .set(momAuth)
+      .expect(200);
+    expect(track.body.items.map((p: { lat: number }) => p.lat)).toEqual([49.1]);
+    await request(server())
+      .get(`/parent-location/my-devices/${dadDev.deviceId}/track`)
+      .query({ from, to })
+      .set(strangerAuth)
+      .expect(404);
+    await request(server())
+      .post(`/parent-location/my-devices/${dadDev.deviceId}/signal`)
+      .set(momAuth)
+      .expect(200);
+    await request(server())
+      .post(`/parent-location/my-devices/${dadDev.deviceId}/signal`)
+      .set(strangerAuth)
+      .expect(404);
+
+    // Переименование: владелец — любой, участник — свой, чужой — 404
+    const rename = (auth: Record<string, string>, id: string, name: unknown) =>
+      request(server()).patch(`/parent-location/my-devices/${id}`).set(auth).send({ name });
+    await rename(momAuth, dadDev.deviceId, '  Телефон папы ').expect(200, {
+      id: dadDev.deviceId,
+      customName: 'Телефон папы',
+    });
+    await rename(dadAuth, momDev.deviceId, 'Чужой').expect(404);
+    await rename(strangerAuth, dadDev.deviceId, 'Чужой').expect(404);
+    await rename(dadAuth, dadDev.deviceId, 'x'.repeat(41)).expect(400);
+    await request(server())
+      .patch(`/parent-location/my-devices/${dadDev.deviceId}`)
+      .send({ name: 'x' })
+      .expect(401);
+    // Служба шлёт модель снова — заданное имя не перетирается
+    await request(server())
+      .post('/parent-location/points')
+      .set('X-Parent-Location-Token', dadDev.token)
+      .send({ points: [pt(500)], device: { name: 'Redmi Note', pushToken: 'fcm-dad' } })
+      .expect(200);
+    const renamed = await request(server()).get('/parent-location/my-devices').set(dadAuth);
+    expect(renamed.body.items[0]).toMatchObject({
+      customName: 'Телефон папы',
+      deviceName: 'Redmi Note',
+      isMine: true,
+    });
+    // Пустое имя — снова модель
+    await rename(dadAuth, dadDev.deviceId, '   ').expect(200, {
+      id: dadDev.deviceId,
+      customName: null,
+    });
+
+    // Папа ушёл из семьи — владелец его телефон больше не видит
+    await h.prisma.membership.deleteMany({ where: { userId: dad.userId, familyId: mom.familyId } });
+    const after = await request(server()).get('/parent-location/my-devices').set(momAuth);
+    expect(after.body.items.map((i: { id: string }) => i.id)).toEqual([momDev.deviceId]);
+    await request(server())
+      .post(`/parent-location/my-devices/${dadDev.deviceId}/signal`)
+      .set(momAuth)
+      .expect(404);
   });
 
   it('latest: parents с isMe и именем, без выключивших, без mock, без чужой семьи', async () => {

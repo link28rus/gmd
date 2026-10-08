@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 import { createId } from '@paralleldrive/cuid2';
 import { PrismaService } from '../prisma/prisma.service';
 import { FcmService } from '../fcm/fcm.service';
-import { isSignalLive, SIGNAL_TTL_MS } from './parent-location.service';
+import { displayName, isSignalLive, SIGNAL_TTL_MS } from './parent-location.service';
 import type { ParentLocationAuthContext } from './parent-location.service';
 
 /** Сколько звонит телефон (SignalSoundService.SIGNAL_DURATION_MS в mobile-parent). */
@@ -19,7 +19,14 @@ export type SignalStatus = 'pending' | 'ringing' | 'done' | 'expired';
 
 export interface MyPhoneDto {
   id: string;
+  /** Модель телефона — её присылает служба геолокации. */
   deviceName: string | null;
+  /** v0.74.0: имя, заданное в кабинете; показывать вместо модели. */
+  customName: string | null;
+  /** v0.74.0: телефон вошёл под аккаунтом запросившего. */
+  isMine: boolean;
+  /** v0.74.0: чей телефон — имя взрослого (владелец семьи видит телефоны всех). */
+  ownerName: string;
   platform: string | null;
   appVersion: string | null;
   createdAt: string;
@@ -71,10 +78,11 @@ function signalStatus(
 /**
  * v0.73.0 «Найти телефон» (docs/superpowers/specs/2026-10-09-find-parent-phone.md).
  *
- * Только свои устройства: каждый взрослый видит и вызывает звонок лишь на
- * телефонах, вошедших под его аккаунтом. Устройство — `ParentLocationDevice`
- * (у него есть точки и батарея); push идёт на FCM-токен, который присылает
- * нативная служба этого же телефона.
+ * Взрослый видит, вызывает звонок и переименовывает свои телефоны; v0.74.0 —
+ * владелец семьи то же самое делает с телефонами всех взрослых своей семьи,
+ * независимо от «Показывать меня семье».
+ * Устройство — `ParentLocationDevice` (у него есть точки и батарея); push идёт
+ * на FCM-токен, который присылает нативная служба этого же телефона.
  */
 @Injectable()
 export class FindPhoneService {
@@ -86,11 +94,17 @@ export class FindPhoneService {
   ) {}
 
   async listMyPhones(userId: string): Promise<MyPhoneDto[]> {
-    const devices = await this.prisma.parentLocationDevice.findMany({
-      where: { userId, revokedAt: null, user: { deletedAt: null } },
+    const found = await this.prisma.parentLocationDevice.findMany({
+      where: await this.accessibleDevicesWhere(userId),
+      include: { user: { select: { name: true, firstName: true, email: true } } },
       orderBy: [{ lastSeenAt: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }],
     });
-    if (devices.length === 0) return [];
+    if (found.length === 0) return [];
+    // Свои сверху, внутри групп — порядок запроса (свежие первыми).
+    const devices = [
+      ...found.filter((d) => d.userId === userId),
+      ...found.filter((d) => d.userId !== userId),
+    ];
 
     const latestRows = await this.prisma.$queryRaw<
       Array<{
@@ -107,8 +121,7 @@ export class FindPhoneService {
              pl."deviceId", pl.lat, pl.lon, pl.accuracy, pl."recordedAt",
              pl."batteryLevel", pl."isCharging"
       FROM parent_locations pl
-      WHERE pl."userId" = ${userId}
-        AND pl."deviceId" IN (${Prisma.join(devices.map((d) => d.id))})
+      WHERE pl."deviceId" IN (${Prisma.join(devices.map((d) => d.id))})
         AND pl."isMock" = false
       ORDER BY pl."deviceId", pl."recordedAt" DESC
     `);
@@ -120,6 +133,9 @@ export class FindPhoneService {
       return {
         id: d.id,
         deviceName: d.deviceName,
+        customName: d.customName,
+        isMine: d.userId === userId,
+        ownerName: displayName(d.user),
         platform: d.platform,
         appVersion: d.appVersion,
         createdAt: d.createdAt.toISOString(),
@@ -166,11 +182,11 @@ export class FindPhoneService {
         message: 'Range must be positive and at most 2 days',
       });
     }
-    await this.findOwnDevice(userId, deviceId);
+    const device = await this.findAccessibleDevice(userId, deviceId);
     const floor = new Date(Date.now() - MAX_TRACK_AGE_MS);
     const rows = await this.prisma.parentLocation.findMany({
       where: {
-        userId,
+        userId: device.userId,
         deviceId,
         isMock: false,
         recordedAt: { gte: from > floor ? from : floor, lt: to },
@@ -191,11 +207,11 @@ export class FindPhoneService {
   }
 
   /**
-   * Позвонить на свой телефон. Живой сигнал переиспользуется (двойной клик не
+   * Позвонить на телефон. Живой сигнал переиспользуется (двойной клик не
    * плодит команды), но push уходит заново — первый мог не доехать.
    */
   async requestSignal(userId: string, deviceId: string): Promise<SignalResult> {
-    const device = await this.findOwnDevice(userId, deviceId);
+    const device = await this.findAccessibleDevice(userId, deviceId);
     const now = new Date();
     let signalId: string;
     let requestedAt: Date;
@@ -233,9 +249,24 @@ export class FindPhoneService {
       }
     }
     this.logger.log(
-      `find-phone signal=${signalId} user=${userId} device=${device.id} pushed=${pushed}`,
+      `find-phone signal=${signalId} by=${userId} owner=${device.userId} device=${device.id} pushed=${pushed}`,
     );
     return { signalId, requestedAt: requestedAt.toISOString(), pushed };
+  }
+
+  /** v0.74.0: своё имя телефона; null — снова показывать модель. */
+  async renameDevice(
+    userId: string,
+    deviceId: string,
+    name: string | null,
+  ): Promise<{ id: string; customName: string | null }> {
+    const device = await this.findAccessibleDevice(userId, deviceId);
+    await this.prisma.parentLocationDevice.update({
+      where: { id: device.id },
+      data: { customName: name },
+    });
+    this.logger.log(`find-phone rename by=${userId} owner=${device.userId} device=${device.id}`);
+    return { id: device.id, customName: name };
   }
 
   /** Телефон начал звонить. Чужой/старый signalId — no-op. */
@@ -250,9 +281,32 @@ export class FindPhoneService {
     return { ok: true };
   }
 
-  private async findOwnDevice(userId: string, deviceId: string) {
+  /**
+   * Чьи телефоны доступны: свои + (v0.74.0) всех взрослых семей, где
+   * `userId` — владелец. Ушедший из семьи участник выпадает сам: членства нет.
+   */
+  private async accessibleDevicesWhere(
+    userId: string,
+  ): Promise<Prisma.ParentLocationDeviceWhereInput> {
+    const owned = await this.prisma.membership.findMany({
+      where: { userId, role: 'owner', family: { deletedAt: null } },
+      select: { familyId: true },
+    });
+    let userIds = [userId];
+    if (owned.length > 0) {
+      const members = await this.prisma.membership.findMany({
+        where: { familyId: { in: owned.map((m) => m.familyId) } },
+        select: { userId: true },
+      });
+      userIds = [...new Set([userId, ...members.map((m) => m.userId)])];
+    }
+    return { userId: { in: userIds }, revokedAt: null, user: { deletedAt: null } };
+  }
+
+  /** Чужое и недоступное — одинаково 404, чтобы не подтверждать существование. */
+  private async findAccessibleDevice(userId: string, deviceId: string) {
     const device = await this.prisma.parentLocationDevice.findFirst({
-      where: { id: deviceId, userId, revokedAt: null, user: { deletedAt: null } },
+      where: { id: deviceId, ...(await this.accessibleDevicesWhere(userId)) },
     });
     if (!device) {
       throw new NotFoundException({ code: 'device_not_found', message: 'Device not found' });

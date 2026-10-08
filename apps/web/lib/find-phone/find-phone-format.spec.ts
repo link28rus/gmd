@@ -8,6 +8,7 @@ import {
   drawableTrack,
   isSignalActive,
   phoneLabel,
+  phoneOwnerLabel,
   platformLabel,
   pollIntervalMs,
   signalStatusText,
@@ -19,11 +20,22 @@ function sig(status: PhoneSignal['status'], ackedAt: string | null = null): Phon
 
 describe('phoneLabel', () => {
   it('имя устройства', () => {
-    expect(phoneLabel({ deviceName: 'Pixel 8' })).toBe('Pixel 8');
+    expect(phoneLabel({ deviceName: 'Pixel 8', customName: null })).toBe('Pixel 8');
+  });
+  it('своё имя важнее модели', () => {
+    expect(phoneLabel({ deviceName: 'Pixel 8', customName: ' Рабочий ' })).toBe('Рабочий');
+    expect(phoneLabel({ deviceName: 'Pixel 8', customName: '  ' })).toBe('Pixel 8');
   });
   it('пустое или null имя → «Телефон»', () => {
-    expect(phoneLabel({ deviceName: null })).toBe('Телефон');
-    expect(phoneLabel({ deviceName: '   ' })).toBe('Телефон');
+    expect(phoneLabel({ deviceName: null, customName: null })).toBe('Телефон');
+    expect(phoneLabel({ deviceName: '   ', customName: null })).toBe('Телефон');
+  });
+});
+
+describe('phoneOwnerLabel', () => {
+  it('свой → «Вы», чужой → имя взрослого', () => {
+    expect(phoneOwnerLabel({ isMine: true, ownerName: 'Мама' })).toBe('Вы');
+    expect(phoneOwnerLabel({ isMine: false, ownerName: 'Папа' })).toBe('Папа');
   });
 });
 

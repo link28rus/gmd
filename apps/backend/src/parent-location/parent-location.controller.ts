@@ -8,6 +8,7 @@ import {
   HttpStatus,
   Inject,
   Param,
+  Patch,
   Post,
   Put,
   Query,
@@ -24,6 +25,7 @@ import {
   IngestParentLocationsSchema,
   MAX_PARENT_BATCH_SIZE,
   MyTrackQuerySchema,
+  RenameDeviceSchema,
   SetSharingSchema,
 } from './dto/parent-location.dto';
 import type {
@@ -31,6 +33,7 @@ import type {
   CreateParentLocationDeviceDto,
   IngestParentLocationsDto,
   MyTrackQueryDto,
+  RenameDeviceDto,
   SetSharingDto,
 } from './dto/parent-location.dto';
 import { FindPhoneService } from './find-phone.service';
@@ -116,7 +119,7 @@ export class ParentLocationController {
     return this.findPhone.ackSignal(req.parentLocation, body.signalId);
   }
 
-  // ── v0.73.0 «Найти телефон»: только свои устройства ──
+  // ── v0.73.0 «Найти телефон»: свои телефоны; v0.74.0 — владелец семьи видит все ──
 
   @Get('my-devices')
   @UseGuards(JwtAuthGuard)
@@ -144,6 +147,17 @@ export class ParentLocationController {
     @Param('deviceId') deviceId: string,
   ): Promise<SignalResult> {
     return this.findPhone.requestSignal(req.user.userId, deviceId);
+  }
+
+  @Patch('my-devices/:deviceId')
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { ttl: 60_000, limit: 20 } })
+  async renameDevice(
+    @Req() req: AuthedRequest,
+    @Param('deviceId') deviceId: string,
+    @Body(new ZodValidationPipe(RenameDeviceSchema)) body: RenameDeviceDto,
+  ): Promise<{ id: string; customName: string | null }> {
+    return this.findPhone.renameDevice(req.user.userId, deviceId, body.name);
   }
 
   @Get('sharing')

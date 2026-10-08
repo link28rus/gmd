@@ -15,10 +15,21 @@ export const SLOW_POLL_MS = 30_000;
  */
 export const TRACK_ACCURACY_GATE_M = 50;
 
-export function phoneLabel(phone: Pick<MyPhone, 'deviceName'>): string {
+/** Заданное в кабинете имя, иначе модель, иначе «Телефон». */
+export function phoneLabel(phone: Pick<MyPhone, 'deviceName' | 'customName'>): string {
+  const custom = phone.customName?.trim();
+  if (custom) return custom;
   const name = phone.deviceName?.trim();
   return name ? name : 'Телефон';
 }
+
+/** Чей телефон: «Вы» или имя взрослого семьи. */
+export function phoneOwnerLabel(phone: Pick<MyPhone, 'isMine' | 'ownerName'>): string {
+  return phone.isMine ? 'Вы' : phone.ownerName;
+}
+
+/** Максимальная длина своего имени телефона (RenameDeviceSchema в backend). */
+export const PHONE_NAME_MAX = 40;
 
 export function platformLabel(platform: string | null): string | null {
   if (!platform) return null;

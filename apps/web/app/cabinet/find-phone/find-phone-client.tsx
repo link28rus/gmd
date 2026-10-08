@@ -2,7 +2,8 @@
 // v0.73.0 «Найти телефон»: родитель потерял свой телефон, открывает кабинет —
 // видит телефон на карте, маршрут за выбранный день (30 дней), заряд, время
 // последней связи и может заставить телефон звонить 60 секунд даже в
-// беззвучном режиме. Показываются только телефоны текущего пользователя.
+// беззвучном режиме. Свои телефоны; v0.74.0 — владелец семьи видит телефоны
+// всех взрослых семьи. Телефон можно переименовать (владелец — любой).
 'use client';
 
 import Link from 'next/link';
@@ -10,7 +11,7 @@ import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Battery, BatteryCharging, BellRing, Smartphone } from 'lucide-react';
+import { Battery, BatteryCharging, BellRing, Check, Pencil, Smartphone, X } from 'lucide-react';
 import { useAuthStore } from '@/lib/auth-store';
 import { refreshAccessToken } from '@/lib/auth/refresh-singleflight';
 import { ApiError } from '@/lib/api/client';
@@ -26,7 +27,9 @@ import {
   dayRangeIso,
   drawableTrack,
   isSignalActive,
+  PHONE_NAME_MAX,
   phoneLabel,
+  phoneOwnerLabel,
   platformLabel,
   pollIntervalMs,
   signalStatusText,
@@ -36,6 +39,7 @@ import { isToday, todayIso } from '@/lib/date/day-bounds';
 import { DateSelector } from '@/components/locations/date-selector';
 import { PhoneMap } from '@/components/find-phone/phone-map';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 const DEVICES_KEY = ['find-phone', 'devices'] as const;
 const EMPTY_TRACK: PhoneTrackPoint[] = [];
@@ -55,6 +59,15 @@ function signalErrorMessage(e: unknown): string {
     if (e.status === 404) return 'Телефон не найден — обновите страницу';
   }
   return e instanceof Error && e.message ? e.message : 'Не удалось отправить сигнал';
+}
+
+function renameErrorMessage(e: unknown): string {
+  if (e instanceof ApiError) {
+    if (e.status === 429) return 'Слишком часто, подождите минуту';
+    if (e.status === 404) return 'Телефон не найден — обновите страницу';
+    if (e.status === 400) return `Имя — не длиннее ${PHONE_NAME_MAX} символов`;
+  }
+  return 'Не удалось сохранить имя';
 }
 
 export default function FindPhoneClient(): ReactElement {
@@ -174,7 +187,9 @@ export default function FindPhoneClient(): ReactElement {
         <div className="border-b border-border px-4 py-3">
           <h1 className="text-base font-semibold text-foreground">Найти телефон</h1>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Ваши телефоны с приложением «Перископ Родителя»
+            {items.some((d) => !d.isMine)
+              ? 'Телефоны взрослых семьи с приложением «Перископ Родителя»'
+              : 'Ваши телефоны с приложением «Перископ Родителя»'}
           </p>
         </div>
 
@@ -192,7 +207,7 @@ export default function FindPhoneClient(): ReactElement {
           </ul>
         )}
 
-        <PhonePanel phone={selected} />
+        <PhonePanel key={selected.id} phone={selected} />
       </aside>
 
       <section className="flex h-[65vh] min-h-[360px] flex-col md:h-auto md:flex-1">
@@ -255,6 +270,7 @@ function DeviceCard({
         <div className="truncate text-sm font-medium text-foreground">{phoneLabel(phone)}</div>
         <div className="truncate text-xs text-muted-foreground">
           {[
+            phoneOwnerLabel(phone),
             platform,
             phone.lastSeenAt
               ? `на связи ${formatAgeShort(ageSecSince(phone.lastSeenAt))}`
@@ -312,16 +328,112 @@ function PhonePanel({ phone }: { phone: MyPhone }): ReactElement {
     onError: (e) => toast.error(signalErrorMessage(e)),
   });
 
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const renameM = useMutation({
+    mutationFn: (name: string | null) => findPhoneApi.rename(phone.id, name),
+    onSuccess: (res) => {
+      qc.setQueryData<MyPhonesResponse>(DEVICES_KEY, (prev) =>
+        prev
+          ? {
+              items: prev.items.map((d) =>
+                d.id === res.id ? { ...d, customName: res.customName } : d,
+              ),
+            }
+          : prev,
+      );
+      void qc.invalidateQueries({ queryKey: DEVICES_KEY });
+      setEditing(false);
+      toast.success('Имя сохранено');
+    },
+    onError: (e) => toast.error(renameErrorMessage(e)),
+  });
+  const startEdit = () => {
+    setDraft(phone.customName ?? phone.deviceName ?? '');
+    setEditing(true);
+  };
+  const saveName = () => {
+    const name = draft.trim();
+    // Пустое имя или ровно модель — своё имя не нужно, показываем модель.
+    renameM.mutate(name && name !== phone.deviceName?.trim() ? name : null);
+  };
+  // Модель под своим именем — чтобы было понятно, какой это аппарат.
+  const model =
+    phone.customName?.trim() && phone.deviceName?.trim() ? phone.deviceName.trim() : null;
+
   return (
     <div className="space-y-4 p-4">
       <div className="flex items-start gap-3">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-700 text-white">
           <Smartphone className="h-5 w-5" />
         </div>
-        <div className="min-w-0">
-          <div className="truncate text-base font-semibold text-foreground">
-            {phoneLabel(phone)}
-          </div>
+        <div className="min-w-0 flex-1">
+          {editing ? (
+            <form
+              className="flex items-center gap-1"
+              onSubmit={(e) => {
+                e.preventDefault();
+                saveName();
+              }}
+            >
+              <Input
+                autoFocus
+                value={draft}
+                maxLength={PHONE_NAME_MAX}
+                placeholder={phone.deviceName ?? 'Телефон'}
+                aria-label="Имя телефона"
+                disabled={renameM.isPending}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') setEditing(false);
+                }}
+                className="h-8"
+              />
+              <Button
+                type="submit"
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8 shrink-0"
+                disabled={renameM.isPending}
+                aria-label="Сохранить имя"
+              >
+                <Check className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8 shrink-0"
+                disabled={renameM.isPending}
+                onClick={() => setEditing(false)}
+                aria-label="Отменить"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </form>
+          ) : (
+            <div className="flex items-center gap-1">
+              <div className="truncate text-base font-semibold text-foreground">
+                {phoneLabel(phone)}
+              </div>
+              <button
+                type="button"
+                onClick={startEdit}
+                className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                aria-label="Переименовать телефон"
+                title="Переименовать"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+          {(model || !phone.isMine) && (
+            <div className="mt-0.5 truncate text-xs text-muted-foreground">
+              {[!phone.isMine ? `Телефон: ${phone.ownerName}` : null, model]
+                .filter(Boolean)
+                .join(' · ')}
+            </div>
+          )}
           {battery && (
             <div className="mt-0.5 flex items-center gap-1.5 text-sm text-muted-foreground">
               {latest?.isCharging ? (

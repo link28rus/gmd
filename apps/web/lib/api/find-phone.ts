@@ -1,6 +1,7 @@
 // apps/web/lib/api/find-phone.ts
 // v0.73.0 «Найти телефон»: свои телефоны родителя (приложение «Перископ Родителя»),
-// их маршрут и удалённый звонок. Только телефоны ТЕКУЩЕГО пользователя.
+// их маршрут и удалённый звонок. Свои телефоны; v0.74.0 — владелец семьи
+// видит, зовёт и переименовывает телефоны всех взрослых семьи.
 import { apiFetch } from './client';
 import type { LocationDto } from './locations';
 
@@ -33,7 +34,14 @@ export interface PhoneLatest {
 
 export interface MyPhone {
   id: string;
+  /** Модель телефона (присылает приложение). */
   deviceName: string | null;
+  /** Имя, заданное в кабинете; показывается вместо модели. */
+  customName: string | null;
+  /** Телефон вошёл под моим аккаунтом. */
+  isMine: boolean;
+  /** Чей телефон — имя взрослого. */
+  ownerName: string;
   platform: string | null;
   appVersion: string | null;
   createdAt: string;
@@ -59,7 +67,7 @@ export interface PhoneSignalResult {
 }
 
 export const findPhoneApi = {
-  /** Свои телефоны, свежие сверху (по lastSeenAt). */
+  /** Свои телефоны сверху, затем телефоны семьи (для владельца); внутри — свежие первыми. */
   getMyDevices: () => apiFetch<MyPhonesResponse>('/api/parent-location/my-devices'),
 
   /** Маршрут за [from, to) — не больше 2 суток; точки старше ~30 дней удалены. */
@@ -75,5 +83,12 @@ export const findPhoneApi = {
     apiFetch<PhoneSignalResult>(
       `/api/parent-location/my-devices/${encodeURIComponent(deviceId)}/signal`,
       { method: 'POST' },
+    ),
+
+  /** Своё имя телефона (до 40 символов); null или пустое — снова модель. */
+  rename: (deviceId: string, name: string | null) =>
+    apiFetch<{ id: string; customName: string | null }>(
+      `/api/parent-location/my-devices/${encodeURIComponent(deviceId)}`,
+      { method: 'PATCH', body: JSON.stringify({ name }) },
     ),
 };

@@ -134,6 +134,9 @@ model ParentLocationDevice {
   // v0.73.0 «Найти телефон»: модель телефона и FCM-токен присылает служба
   // в POST /parent-location/points (поле `device`).
   deviceName String?
+  // v0.74.0: имя, которое задал человек в кабинете. Служба его не трогает,
+  // в выдаче оно важнее модели (deviceName).
+  customName String?
   fcmToken   String?
   // v0.73.0: последний запрошенный сигнал. Живой — не старше 5 минут и без
   // signalAckedAt; телефон получает его push'ем PLAY_SIGNAL или в ответе на

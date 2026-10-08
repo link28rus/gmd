@@ -45,6 +45,12 @@ export const MyTrackQuerySchema = z
   })
   .strict();
 
+/** v0.74.0: своё имя телефона; пустая строка или null — снова показывать модель. */
+export const RenameDeviceSchema = z
+  .object({ name: z.string().trim().max(40).nullable() })
+  .strict()
+  .transform((v) => ({ name: v.name ? v.name : null }));
+
 export const CreateParentLocationDeviceSchema = z
   .object({
     platform: z.string().trim().min(1).max(32).optional(),
@@ -62,6 +68,7 @@ export type SetSharingDto = z.infer<typeof SetSharingSchema>;
 export type ParentLocationDeviceInfo = z.infer<typeof ParentLocationDeviceInfoSchema>;
 export type AckSignalDto = z.infer<typeof AckSignalSchema>;
 export type MyTrackQueryDto = z.infer<typeof MyTrackQuerySchema>;
+export type RenameDeviceDto = z.output<typeof RenameDeviceSchema>;
 
 /** Как у ребёнка: офлайн-очередь телефона выгружается пачкой. */
 export const MAX_PARENT_BATCH_SIZE = 500;
