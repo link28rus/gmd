@@ -3,11 +3,13 @@ import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { MapContainer, TileLayer, useMap, ZoomControl } from 'react-leaflet';
 import L from 'leaflet';
 import type { LatestLocationDto, LocationDto, StayDto, TripDto } from '@/lib/api/locations';
+import type { Zone } from '@/lib/api/zones';
 import { useTheme } from '@/components/theme/theme-provider';
 import { tileConfigFor } from '@/lib/maps/tile-config';
 import { useChildAvatarSrc } from '@/lib/hooks/use-child-avatar';
 import { LatestMarker } from './latest-marker';
 import { TrackPolyline } from './track-polyline';
+import { ChildZonesLayer, useShowChildZones, ZonesToggleControl } from './child-zones-layer';
 
 export interface ChildMapInnerProps {
   childId: string;
@@ -21,6 +23,8 @@ export interface ChildMapInnerProps {
   stops?: TripDto[];
   /** v0.63.0: стоянки от сервера — приоритетнее stops. */
   stays?: StayDto[];
+  /** v0.70.1: геозоны ребёнка (для всех детей + назначенные ему). */
+  zones?: Zone[];
 }
 
 const DEFAULT_CENTER: [number, number] = [55.7558, 37.6173]; // Москва
@@ -119,10 +123,12 @@ export function ChildMapInner({
   track,
   stops,
   stays,
+  zones = [],
 }: ChildMapInnerProps): ReactElement {
   const { theme } = useTheme();
   const avatarUrl = useChildAvatarSrc(childId, avatarKey);
   const tile = tileConfigFor(theme);
+  const [showZones, setShowZones] = useShowChildZones();
 
   // Чиним default Leaflet marker icons, которые иначе ищут assets по
   // неправильному пути в Webpack-сборке. Используем CDN unpkg как fallback.
@@ -156,6 +162,14 @@ export function ChildMapInner({
       <ZoomControl position="topright" />
       <GoToChildControl latest={latest} />
       <FollowChild childId={childId} latest={latest} />
+      {zones.length > 0 && (
+        <ZonesToggleControl
+          show={showZones}
+          onToggle={() => setShowZones(!showZones)}
+          marginTop={latest ? 120 : 80}
+        />
+      )}
+      {showZones && <ChildZonesLayer zones={zones} />}
       {latest && (
         <LatestMarker
           lat={latest.lat}

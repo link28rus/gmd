@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type ReactElement } from 'react';
+import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { Menu } from 'lucide-react';
@@ -15,6 +15,8 @@ import { FamilyMapView } from '@/components/cabinet/family-map-view';
 import { ChildActions } from '@/components/cabinet/child-actions';
 import { ChildNotAttachedView } from '@/components/cabinet/child-not-attached-view';
 import { ChildMap } from '@/components/locations/child-map';
+import { zonesForChild } from '@/components/locations/child-zones-layer';
+import { useZones } from '@/lib/hooks/use-zones';
 import { ChildStatusCard } from '@/components/locations/child-status-card';
 import { ChildAvatarDialog } from '@/components/children/child-avatar-dialog';
 import { MapErrorFallback } from '@/components/locations/map-error-fallback';
@@ -195,6 +197,11 @@ function MapArea({ child }: { child: Child }): ReactElement {
   const [avatarOpen, setAvatarOpen] = useState(false);
   const latestQ = useLatestLocation(child.id);
   const activeQ = useActiveTrack(child.id);
+  const zonesQ = useZones();
+  const childZones = useMemo(
+    () => zonesForChild(zonesQ.data ?? [], child.id),
+    [zonesQ.data, child.id],
+  );
 
   useEffect(() => {
     const err = latestQ.error ?? activeQ.error;
@@ -256,6 +263,7 @@ function MapArea({ child }: { child: Child }): ReactElement {
         latest={latest}
         track={track}
         stays={activeQ.data?.stays}
+        zones={childZones}
         onMapError={() => setMapFailed(true)}
       />
       {latest && (
