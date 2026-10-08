@@ -395,6 +395,70 @@ describe('Участники семьи (e2e, v0.71.0)', () => {
       .expect(400);
   });
 
+  it('v0.72.1: удалённый или неподтверждённый email занимается заново', async () => {
+    const owner = await registerVerifiedUser(h, 'owner@x.com');
+    const create = (email: string) =>
+      request(server())
+        .post('/family/members')
+        .set(bearer(owner.accessToken))
+        .send({ email, lastName: 'Новая', firstName: 'Нина', password: 'nina-pass-12' });
+
+    // 1) Удалил аккаунт сам (DELETE /me): строка осталась с deletedAt.
+    const gone = await registerVerifiedUser(h, 'gone@x.com');
+    await request(server()).delete('/me').set(bearer(gone.accessToken)).expect(204);
+    const r1 = await create('gone@x.com').expect(201);
+    expect(r1.body.member.userId).toBe(gone.userId); // запись переиспользована
+    const u1 = await h.prisma.user.findUniqueOrThrow({ where: { id: gone.userId } });
+    expect(u1).toMatchObject({
+      deletedAt: null,
+      firstName: 'Нина',
+      acceptedPrivacyPolicyVersion: null,
+      role: 'parent',
+    });
+    expect(u1.emailVerifiedAt).not.toBeNull();
+    const ms1 = await h.prisma.membership.findMany({ where: { userId: gone.userId } });
+    expect(ms1).toEqual([expect.objectContaining({ familyId: owner.familyId, role: 'parent' })]);
+    // Старая сессия не воскресла, новый пароль работает.
+    await request(server())
+      .post('/auth/refresh')
+      .send({ refreshToken: gone.refreshToken })
+      .expect(401);
+    await request(server())
+      .post('/auth/login-password')
+      .send({ email: 'gone@x.com', password: 'nina-pass-12' })
+      .expect(200);
+
+    // 2) Начал регистрацию и не подтвердил: его пустая семья растворяется.
+    await request(server())
+      .post('/auth/register')
+      .send({
+        email: 'pending@x.com',
+        password: 'pending-pass-1',
+        passwordConfirm: 'pending-pass-1',
+        firstName: 'Ждун',
+        lastName: 'Ждунов',
+      })
+      .expect(202);
+    const pending = await h.prisma.user.findUniqueOrThrow({
+      where: { email: 'pending@x.com' },
+      include: { memberships: true },
+    });
+    const pendingFamily = pending.memberships[0]!.familyId;
+    const r2 = await create('pending@x.com').expect(201);
+    expect(r2.body.member.userId).toBe(pending.id);
+    const ms2 = await h.prisma.membership.findMany({ where: { userId: pending.id } });
+    expect(ms2).toEqual([expect.objectContaining({ familyId: owner.familyId })]);
+    const oldFam = await h.prisma.family.findUniqueOrThrow({ where: { id: pendingFamily } });
+    expect(oldFam.deletedAt).not.toBeNull();
+    // Ссылка подтверждения из старого письма больше не действует.
+    expect(await h.prisma.emailVerificationToken.count({ where: { userId: pending.id } })).toBe(0);
+
+    // 3) Живой подтверждённый — по-прежнему 409.
+    await registerVerifiedUser(h, 'alive@x.com');
+    const r3 = await create('alive@x.com').expect(409);
+    expect(r3.body.error.code).toBe('email_taken');
+  });
+
   it('DELETE /me владельца: права переходят второму взрослому', async () => {
     const { owner, second } = await familyOfTwo();
     await request(server())

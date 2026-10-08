@@ -13,7 +13,12 @@ import { StaleTokenService } from '../auth/stale-token.service';
 import { PasswordService } from '../auth/password.service';
 import { generateInviteCode, normalizeInviteCode } from '../invites/lib/code-generator';
 import { displayName } from '../parent-location/parent-location.service';
-import { createSoloFamily, dropMembership, softDeleteFamily } from './family-lifecycle';
+import {
+  createSoloFamily,
+  detachUserFromFamilies,
+  dropMembership,
+  softDeleteFamily,
+} from './family-lifecycle';
 
 /**
  * v0.71.0: участники семьи — приглашение взрослого, удаление, выход, передача
@@ -339,8 +344,12 @@ export class FamilyMembersService {
 
   /**
    * v0.72.0: владелец заводит взрослого сам — email + пароль, без письма и
-   * подтверждения. Email уже есть в системе (в любом состоянии) → 409
+   * подтверждения. Живой подтверждённый аккаунт с этим email → 409
    * `email_taken`: чужой аккаунт так не забрать, ему — приглашение.
+   * v0.72.1: удалённый (deletedAt) или так и не подтверждённый аккаунт
+   * занимается заново, как в auth.service register — запись переиспользуется
+   * (на неё ссылаются зоны/аудио с onDelete: Restrict, физически не удалить),
+   * всё прежнее отвязывается: семьи, сессии, устройства, точки, токены.
    * Политику участник принимает сам при первом входе
    * (acceptedPrivacyPolicyVersion = null → баннер в кабинете / экран в приложении).
    */
@@ -360,22 +369,53 @@ export class FamilyMembersService {
     const fullName = [dto.lastName, dto.firstName, dto.middleName]
       .filter((s) => s && s.trim())
       .join(' ');
+    let reclaimedId: string | null = null;
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      const member = await this.prisma.$transaction(async (tx) => {
         const me = await this.requireOwnerLocked(tx, actorId);
-        const user = await tx.user.create({
-          data: {
-            email,
-            lastName: dto.lastName,
-            firstName: dto.firstName,
-            middleName: dto.middleName ?? null,
-            name: fullName,
-            passwordHash,
-            emailVerifiedAt: new Date(),
-            memberships: { create: { familyId: me.familyId, role: 'parent' } },
-          },
-          include: { memberships: true },
-        });
+        const profile = {
+          lastName: dto.lastName,
+          firstName: dto.firstName,
+          middleName: dto.middleName ?? null,
+          name: fullName,
+          passwordHash,
+          emailVerifiedAt: new Date(),
+        };
+        const existing = await tx.user.findUnique({ where: { email } });
+        if (existing && !existing.deletedAt && existing.emailVerifiedAt) {
+          throw new ConflictException({
+            code: 'email_taken',
+            message: 'Этот email уже зарегистрирован — отправьте человеку приглашение',
+          });
+        }
+        if (existing) await this.wipeReclaimedUser(tx, existing.id);
+        const user = existing
+          ? await tx.user.update({
+              where: { id: existing.id },
+              data: {
+                ...profile,
+                role: 'parent',
+                deletedAt: null,
+                blockedAt: null,
+                blockedReason: null,
+                blockedById: null,
+                lastSeenAt: null,
+                locale: 'ru',
+                acceptedPrivacyPolicyVersion: null,
+                shareLocationWithFamily: true,
+                memberships: { create: { familyId: me.familyId, role: 'parent' } },
+              },
+              include: { memberships: true },
+            })
+          : await tx.user.create({
+              data: {
+                email,
+                ...profile,
+                memberships: { create: { familyId: me.familyId, role: 'parent' } },
+              },
+              include: { memberships: true },
+            });
+        reclaimedId = existing?.id ?? null;
         return {
           userId: user.id,
           displayName: displayName(user),
@@ -385,7 +425,11 @@ export class FamilyMembersService {
           isMe: false,
         };
       });
+      // Старые access-токены прежнего владельца записи больше не действуют.
+      if (reclaimedId) await this.stale.markStale([reclaimedId]);
+      return member;
     } catch (e) {
+      // Гонка: тот же email создали параллельно.
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
         throw new ConflictException({
           code: 'email_taken',
@@ -394,6 +438,33 @@ export class FamilyMembersService {
       }
       throw e;
     }
+  }
+
+  /**
+   * Перед повторным занятием email: отвязать всё, что осталось от прежнего
+   * владельца записи. Неподтверждённый — растворить его пустую семью
+   * (detachUserFromFamilies), удалённый — членств уже нет. История согласий
+   * остаётся (аудит), согласие с политикой новый человек даст сам.
+   */
+  private async wipeReclaimedUser(tx: Tx, userId: string): Promise<void> {
+    const now = new Date();
+    await detachUserFromFamilies(tx, userId, now);
+    await tx.refreshToken.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: now },
+    });
+    await tx.parentDevice.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: now },
+    });
+    await tx.parentLocationDevice.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: now },
+    });
+    await tx.parentLocation.deleteMany({ where: { userId } });
+    await tx.emailVerificationToken.deleteMany({ where: { userId } });
+    await tx.passwordResetToken.deleteMany({ where: { userId } });
+    await tx.otpCode.deleteMany({ where: { userId } });
   }
 
   async removeMember(actorId: string, targetUserId: string): Promise<void> {
