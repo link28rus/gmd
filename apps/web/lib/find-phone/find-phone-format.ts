@@ -23,11 +23,6 @@ export function phoneLabel(phone: Pick<MyPhone, 'deviceName' | 'customName'>): s
   return name ? name : 'Телефон';
 }
 
-/** Чей телефон: «Вы» или имя взрослого семьи. */
-export function phoneOwnerLabel(phone: Pick<MyPhone, 'isMine' | 'ownerName'>): string {
-  return phone.isMine ? 'Вы' : phone.ownerName;
-}
-
 /** Максимальная длина своего имени телефона (RenameDeviceSchema в backend). */
 export const PHONE_NAME_MAX = 40;
 

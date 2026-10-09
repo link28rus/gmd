@@ -3,7 +3,8 @@
 // видит телефон на карте, маршрут за выбранный день (30 дней), заряд, время
 // последней связи и может заставить телефон звонить 60 секунд даже в
 // беззвучном режиме. Свои телефоны; v0.74.0 — владелец семьи видит телефоны
-// всех взрослых семьи. Телефон можно переименовать (владелец — любой).
+// всех взрослых семьи. Карточка телефона: имя (своё или модель), ФИО взрослого,
+// заряд; переименование — карандашом прямо в карточке (владелец — любой).
 'use client';
 
 import Link from 'next/link';
@@ -29,8 +30,6 @@ import {
   isSignalActive,
   PHONE_NAME_MAX,
   phoneLabel,
-  phoneOwnerLabel,
-  platformLabel,
   pollIntervalMs,
   signalStatusText,
 } from '@/lib/find-phone/find-phone-format';
@@ -193,19 +192,17 @@ export default function FindPhoneClient(): ReactElement {
           </p>
         </div>
 
-        {items.length > 1 && (
-          <ul className="flex flex-col gap-2 border-b border-border p-3">
-            {items.map((d) => (
-              <li key={d.id}>
-                <DeviceCard
-                  phone={d}
-                  active={d.id === selected.id}
-                  onSelect={() => setSelectedId(d.id)}
-                />
-              </li>
-            ))}
-          </ul>
-        )}
+        <ul className="flex flex-col gap-2 border-b border-border p-3">
+          {items.map((d) => (
+            <li key={d.id}>
+              <DeviceCard
+                phone={d}
+                active={d.id === selected.id}
+                onSelect={() => setSelectedId(d.id)}
+              />
+            </li>
+          ))}
+        </ul>
 
         <PhonePanel key={selected.id} phone={selected} />
       </aside>
@@ -255,42 +252,143 @@ function DeviceCard({
   active: boolean;
   onSelect: () => void;
 }): ReactElement {
-  const platform = platformLabel(phone.platform);
+  const qc = useQueryClient();
+  const latest = phone.latest;
+  const battery = latest ? batteryText(latest.batteryLevel, latest.isCharging) : null;
+  const model = phone.deviceName?.trim() || null;
+
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const renameM = useMutation({
+    mutationFn: (name: string | null) => findPhoneApi.rename(phone.id, name),
+    onSuccess: (res) => {
+      qc.setQueryData<MyPhonesResponse>(DEVICES_KEY, (prev) =>
+        prev
+          ? {
+              items: prev.items.map((d) =>
+                d.id === res.id ? { ...d, customName: res.customName } : d,
+              ),
+            }
+          : prev,
+      );
+      void qc.invalidateQueries({ queryKey: DEVICES_KEY });
+      setEditing(false);
+      toast.success('Имя сохранено');
+    },
+    onError: (e) => toast.error(renameErrorMessage(e)),
+  });
+  const startEdit = () => {
+    onSelect();
+    setDraft(phone.customName ?? model ?? '');
+    setEditing(true);
+  };
+  const saveName = () => {
+    const name = draft.trim();
+    // Пустое имя или ровно модель — своё имя не нужно, показываем модель.
+    renameM.mutate(name && name !== model ? name : null);
+  };
+
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      aria-pressed={active}
-      className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition ${
+    <div
+      className={`relative rounded-lg border transition ${
         active ? 'border-emerald-600 bg-accent/30' : 'border-border bg-card hover:bg-muted'
       }`}
     >
-      <Smartphone className="h-5 w-5 shrink-0 text-muted-foreground" />
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-medium text-foreground">{phoneLabel(phone)}</div>
-        <div className="truncate text-xs text-muted-foreground">
-          {[
-            phoneOwnerLabel(phone),
-            platform,
-            phone.lastSeenAt
-              ? `на связи ${formatAgeShort(ageSecSince(phone.lastSeenAt))}`
-              : 'ещё не выходил на связь',
-          ]
-            .filter(Boolean)
-            .join(' · ')}
-        </div>
-      </div>
-      {isSignalActive(phone.signal) && (
-        <BellRing className="h-4 w-4 shrink-0 text-red-600" aria-label="Сигнал активен" />
+      {editing ? (
+        <form
+          className="flex items-center gap-1 p-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            saveName();
+          }}
+        >
+          <Input
+            autoFocus
+            value={draft}
+            maxLength={PHONE_NAME_MAX}
+            placeholder={model ?? 'Телефон'}
+            aria-label="Имя телефона"
+            disabled={renameM.isPending}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setEditing(false);
+            }}
+            className="h-8"
+          />
+          <Button
+            type="submit"
+            size="icon"
+            variant="ghost"
+            className="h-8 w-8 shrink-0"
+            disabled={renameM.isPending}
+            aria-label="Сохранить имя"
+          >
+            <Check className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="h-8 w-8 shrink-0"
+            disabled={renameM.isPending}
+            onClick={() => setEditing(false)}
+            aria-label="Отменить"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </form>
+      ) : (
+        <>
+          <button
+            type="button"
+            onClick={onSelect}
+            aria-pressed={active}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 pr-10 text-left"
+          >
+            <Smartphone className="h-5 w-5 shrink-0 text-muted-foreground" />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <span
+                  className="truncate text-sm font-medium text-foreground"
+                  title={phone.customName?.trim() && model ? `Модель: ${model}` : undefined}
+                >
+                  {phoneLabel(phone)}
+                </span>
+                {isSignalActive(phone.signal) && (
+                  <BellRing className="h-4 w-4 shrink-0 text-red-600" aria-label="Сигнал активен" />
+                )}
+              </div>
+              <div className="truncate text-xs text-muted-foreground">{phone.ownerName}</div>
+              {battery && (
+                <div className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+                  {latest?.isCharging ? (
+                    <BatteryCharging className="h-3.5 w-3.5 text-emerald-600" />
+                  ) : (
+                    <Battery className="h-3.5 w-3.5" />
+                  )}
+                  {battery}
+                </div>
+              )}
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={startEdit}
+            className="absolute right-2 top-2 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+            aria-label="Переименовать телефон"
+            title="Переименовать"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+        </>
       )}
-    </button>
+    </div>
   );
 }
 
 function PhonePanel({ phone }: { phone: MyPhone }): ReactElement {
   const qc = useQueryClient();
   const latest = phone.latest;
-  const battery = latest ? batteryText(latest.batteryLevel, latest.isCharging) : null;
   const status = signalStatusText(phone.signal);
   const active = isSignalActive(phone.signal);
 
@@ -328,125 +426,8 @@ function PhonePanel({ phone }: { phone: MyPhone }): ReactElement {
     onError: (e) => toast.error(signalErrorMessage(e)),
   });
 
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState('');
-  const renameM = useMutation({
-    mutationFn: (name: string | null) => findPhoneApi.rename(phone.id, name),
-    onSuccess: (res) => {
-      qc.setQueryData<MyPhonesResponse>(DEVICES_KEY, (prev) =>
-        prev
-          ? {
-              items: prev.items.map((d) =>
-                d.id === res.id ? { ...d, customName: res.customName } : d,
-              ),
-            }
-          : prev,
-      );
-      void qc.invalidateQueries({ queryKey: DEVICES_KEY });
-      setEditing(false);
-      toast.success('Имя сохранено');
-    },
-    onError: (e) => toast.error(renameErrorMessage(e)),
-  });
-  const startEdit = () => {
-    setDraft(phone.customName ?? phone.deviceName ?? '');
-    setEditing(true);
-  };
-  const saveName = () => {
-    const name = draft.trim();
-    // Пустое имя или ровно модель — своё имя не нужно, показываем модель.
-    renameM.mutate(name && name !== phone.deviceName?.trim() ? name : null);
-  };
-  // Модель под своим именем — чтобы было понятно, какой это аппарат.
-  const model =
-    phone.customName?.trim() && phone.deviceName?.trim() ? phone.deviceName.trim() : null;
-
   return (
     <div className="space-y-4 p-4">
-      <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-700 text-white">
-          <Smartphone className="h-5 w-5" />
-        </div>
-        <div className="min-w-0 flex-1">
-          {editing ? (
-            <form
-              className="flex items-center gap-1"
-              onSubmit={(e) => {
-                e.preventDefault();
-                saveName();
-              }}
-            >
-              <Input
-                autoFocus
-                value={draft}
-                maxLength={PHONE_NAME_MAX}
-                placeholder={phone.deviceName ?? 'Телефон'}
-                aria-label="Имя телефона"
-                disabled={renameM.isPending}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape') setEditing(false);
-                }}
-                className="h-8"
-              />
-              <Button
-                type="submit"
-                size="icon"
-                variant="ghost"
-                className="h-8 w-8 shrink-0"
-                disabled={renameM.isPending}
-                aria-label="Сохранить имя"
-              >
-                <Check className="h-4 w-4" />
-              </Button>
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                className="h-8 w-8 shrink-0"
-                disabled={renameM.isPending}
-                onClick={() => setEditing(false)}
-                aria-label="Отменить"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </form>
-          ) : (
-            <div className="flex items-center gap-1">
-              <div className="truncate text-base font-semibold text-foreground">
-                {phoneLabel(phone)}
-              </div>
-              <button
-                type="button"
-                onClick={startEdit}
-                className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                aria-label="Переименовать телефон"
-                title="Переименовать"
-              >
-                <Pencil className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          )}
-          {(model || !phone.isMine) && (
-            <div className="mt-0.5 truncate text-xs text-muted-foreground">
-              {[!phone.isMine ? `Телефон: ${phone.ownerName}` : null, model]
-                .filter(Boolean)
-                .join(' · ')}
-            </div>
-          )}
-          {battery && (
-            <div className="mt-0.5 flex items-center gap-1.5 text-sm text-muted-foreground">
-              {latest?.isCharging ? (
-                <BatteryCharging className="h-4 w-4 text-emerald-600" />
-              ) : (
-                <Battery className="h-4 w-4" />
-              )}
-              {battery}
-            </div>
-          )}
-        </div>
-      </div>
-
       <dl className="space-y-1.5 text-sm">
         <div className="flex justify-between gap-3">
           <dt className="text-muted-foreground">Последняя связь</dt>
@@ -515,11 +496,7 @@ function PhonePanel({ phone }: { phone: MyPhone }): ReactElement {
       </div>
 
       {phone.appVersion && (
-        <p className="text-[11px] text-muted-foreground">
-          {[platformLabel(phone.platform), `Перископ Родителя v${phone.appVersion}`]
-            .filter(Boolean)
-            .join(' · ')}
-        </p>
+        <p className="text-[11px] text-muted-foreground">Перископ Родителя v{phone.appVersion}</p>
       )}
     </div>
   );

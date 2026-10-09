@@ -8,7 +8,6 @@ import {
   drawableTrack,
   isSignalActive,
   phoneLabel,
-  phoneOwnerLabel,
   platformLabel,
   pollIntervalMs,
   signalStatusText,
@@ -29,13 +28,6 @@ describe('phoneLabel', () => {
   it('пустое или null имя → «Телефон»', () => {
     expect(phoneLabel({ deviceName: null, customName: null })).toBe('Телефон');
     expect(phoneLabel({ deviceName: '   ', customName: null })).toBe('Телефон');
-  });
-});
-
-describe('phoneOwnerLabel', () => {
-  it('свой → «Вы», чужой → имя взрослого', () => {
-    expect(phoneOwnerLabel({ isMine: true, ownerName: 'Мама' })).toBe('Вы');
-    expect(phoneOwnerLabel({ isMine: false, ownerName: 'Папа' })).toBe('Папа');
   });
 });
 
