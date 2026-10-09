@@ -35,6 +35,11 @@
          геолокации (как у ребёнка) — он даёт исключение из запрета старта FGS
          из фона. Android 13+ выдаёт автоматически. -->
     <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
+    <!-- v0.77.0: «Физическая активность» — Activity Recognition переключает
+         ParentLocationService между «в движении» (GPS, 5 с) и «на месте»
+         (экономно), как у ребёнка. Необязательное: без него служба работает
+         по скорости точек и датчику движения. -->
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION"/>
     <!-- v0.73.0 «Найти телефон»: SignalSoundService (громкий сигнал по кнопке
          в личном кабинете) — media-playback foreground service, как у ребёнка;
          вибрация вместе со звуком. -->
@@ -102,6 +107,12 @@
              из ParentLocationService.onTaskRemoved). -->
         <receiver
             android:name=".ParentLocationRestartReceiver"
+            android:enabled="true"
+            android:exported="false"/>
+        <!-- v0.77.0: события Activity Recognition (PendingIntent от Play Services)
+             для ParentLocationService. -->
+        <receiver
+            android:name=".ParentActivityTransitionReceiver"
             android:enabled="true"
             android:exported="false"/>
 

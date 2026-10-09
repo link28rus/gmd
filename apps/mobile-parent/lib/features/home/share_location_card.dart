@@ -20,8 +20,10 @@ const kShareLocationExplanation =
 /// положении флага «Показывать меня семье»: точки нужны и для «Найти телефон»
 /// в личном кабинете. Шаги по порядку:
 /// геолокация → «Разрешать всегда» (настройки, перепроверка на возврате) →
-/// уведомления → без ограничений батареи. Тот же порядок и приёмы, что в
-/// мастере разрешений приложения ребёнка (location_step.dart, battery_step.dart).
+/// уведомления → без ограничений батареи → «Физическая активность»
+/// (v0.77.0, необязательный: можно пропустить, служба работает и без неё).
+/// Тот же порядок и приёмы, что в мастере разрешений приложения ребёнка
+/// (location_step.dart, battery_step.dart).
 ///
 /// Виджет всегда в дереве (пустой, когда всё выдано): он же перепроверяет
 /// разрешения при каждом возврате в приложение — отозванное в настройках
@@ -33,7 +35,7 @@ class ShareLocationCard extends ConsumerStatefulWidget {
   ConsumerState<ShareLocationCard> createState() => _ShareLocationCardState();
 }
 
-enum _Step { location, always, notifications, battery }
+enum _Step { location, always, notifications, battery, activity }
 
 class _ShareLocationCardState extends ConsumerState<ShareLocationCard> with WidgetsBindingObserver {
   bool _waitingForReturn = false;
@@ -147,6 +149,16 @@ class _ShareLocationCardState extends ConsumerState<ShareLocationCard> with Widg
     await Permission.ignoreBatteryOptimizations.request();
   }
 
+  /// После выдачи `onPermissionsChanged` → повторный старт службы, и она
+  /// подписывается на Activity Recognition (без дублей).
+  Future<void> _requestActivity() async {
+    final status = await Permission.activityRecognition.request();
+    if (!mounted || status.isGranted) return;
+    if (status.isPermanentlyDenied) {
+      _say('Ладно, без «Физической активности» передача тоже работает.');
+    }
+  }
+
   Future<void> _turnOff() async {
     try {
       await _ctl.setSharing(false);
@@ -161,6 +173,7 @@ class _ShareLocationCardState extends ConsumerState<ShareLocationCard> with Widg
     if (!p.always) return _Step.always;
     if (!p.notifications) return _Step.notifications;
     if (!p.battery) return _Step.battery;
+    if (!p.activity && !p.activitySkipped) return _Step.activity;
     return null;
   }
 
@@ -202,6 +215,13 @@ class _ShareLocationCardState extends ConsumerState<ShareLocationCard> with Widg
             'Xiaomi / Redmi / POCO ещё включите «Автозапуск» в настройках приложения.',
         'Разрешить',
         _requestBattery,
+      ),
+      _Step.activity => (
+        'Физическая активность (необязательно)',
+        'Телефон сам поймёт, что вы поехали или пошли, и будет точнее записывать '
+            'маршрут в дороге, а на месте — беречь батарею.',
+        'Разрешить',
+        _requestActivity,
       ),
     };
     final stepNo = _Step.values.indexOf(step) + 1;
@@ -266,6 +286,11 @@ class _ShareLocationCardState extends ConsumerState<ShareLocationCard> with Widg
                   ),
                 if (step == _Step.battery)
                   TextButton(onPressed: _openSettings, child: const Text('Настройки приложения')),
+                if (step == _Step.activity)
+                  TextButton(
+                    onPressed: _requesting ? null : _ctl.skipActivityRecognition,
+                    child: const Text('Пропустить'),
+                  ),
                 FilledButton(onPressed: _requesting ? null : () => _run(run), child: Text(action)),
               ],
             ),

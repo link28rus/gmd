@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api/api_exception.dart';
 import '../config/env.dart';
@@ -23,6 +24,8 @@ class ParentLocationPermissions {
     this.always = false,
     this.notifications = false,
     this.battery = false,
+    this.activity = false,
+    this.activitySkipped = false,
   });
 
   /// Статусы уже прочитаны (до этого карточку шагов не показываем).
@@ -38,6 +41,15 @@ class ParentLocationPermissions {
 
   /// Без ограничений батареи (Doze не душит службу).
   final bool battery;
+
+  /// «Физическая активность» (v0.77.0): служба переключается между «в
+  /// движении» и «на месте» по Activity Recognition. Необязательное — без него
+  /// служба работает по скорости точек.
+  final bool activity;
+
+  /// От «Физической активности» отказались («Пропустить» или «больше не
+  /// спрашивать» в системном диалоге) — шаг не показываем.
+  final bool activitySkipped;
 
   bool get allGranted => location && always && notifications && battery;
 }
@@ -98,11 +110,14 @@ class ParentLocationController extends StateNotifier<ParentLocationState> {
   final String? Function() _currentUserId;
 
   Future<void>? _syncInFlight;
+
   /// Идущий запуск: два одновременных вызова (возврат из диалога разрешений
   /// и `resumed`) иначе оба увидят «устройства нет» и зарегистрируют два.
   Future<void>? _startInFlight;
 
   static bool get _supported => !kIsWeb && Platform.isAndroid;
+
+  static const _activitySkippedKey = 'parent_location_activity_skipped';
 
   void _log(String msg) => unawaited(diagLog('ploc', msg));
 
@@ -142,6 +157,9 @@ class ParentLocationController extends StateNotifier<ParentLocationState> {
       final always = await Permission.locationAlways.status;
       final notifications = await Permission.notification.status;
       final battery = await Permission.ignoreBatteryOptimizations.status;
+      final activity = await Permission.activityRecognition.status;
+      final prefs = await SharedPreferences.getInstance();
+      final skipped = prefs.getBool(_activitySkippedKey) ?? false;
       if (!mounted) return;
       state = state.copyWith(
         perms: ParentLocationPermissions(
@@ -150,6 +168,8 @@ class ParentLocationController extends StateNotifier<ParentLocationState> {
           always: always.isGranted,
           notifications: notifications.isGranted,
           battery: battery.isGranted,
+          activity: activity.isGranted,
+          activitySkipped: skipped || activity.isPermanentlyDenied,
         ),
       );
     } catch (e) {
@@ -163,6 +183,16 @@ class ParentLocationController extends StateNotifier<ParentLocationState> {
     if (!_supported) return;
     await refreshPermissions();
     await _startIfReady();
+  }
+
+  /// Родитель отказался от «Физической активности» — шаг больше не
+  /// показываем. Служба работает и без неё (по скорости точек).
+  Future<void> skipActivityRecognition() async {
+    if (!_supported) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_activitySkippedKey, true);
+    _log('perms: «Физическая активность» пропущена');
+    await refreshPermissions();
   }
 
   /// Тумблер «Показывать меня семье» — только флаг на сервере (видимость

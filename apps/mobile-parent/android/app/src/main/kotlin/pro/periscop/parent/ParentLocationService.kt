@@ -22,9 +22,14 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
 import android.os.Looper
+import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
+import com.google.android.gms.location.ActivityRecognition
+import com.google.android.gms.location.ActivityTransition
+import com.google.android.gms.location.ActivityTransitionRequest
+import com.google.android.gms.location.DetectedActivity
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
@@ -66,6 +71,20 @@ import java.util.TimeZone
  * на Wi-Fi и вышки и почти не даёт точек, а GPS работает и офлайн. Точки копятся
  * в [ParentLocationBuffer]. Интернет вернулся — обратно BALANCED и
  * [ParentLocationUploader.onNetworkAvailable] сразу отдаёт накопленное.
+ *
+ * v0.77.0 (треки «Найти телефон» без прямых и дыр): профили «в движении /
+ * на месте», как у LocationForegroundService ребёнка. ACTIVE —
+ * PRIORITY_HIGH_ACCURACY, интервал 5 с, фильтр смещения 10 м. STILL — то,
+ * что описано выше (BALANCED 60 с / мин. 30 с, фильтр 50 м; офлайн —
+ * HIGH_ACCURACY). Keepalive 5 минут и отброс по accuracy — в обоих профилях.
+ * Решение о переключении — [ParentMotionPolicy] (скорость ≥ 2 м/с → ACTIVE
+ * сразу; обратно в STILL — после 15 минут без движения; AR «STILL» — только
+ * если движения не было 3 минуты; страховка «уехал от места стоянки»).
+ * Источники сигналов: скорость точек, Activity Recognition
+ * ([ParentActivityTransitionReceiver], разрешение «Физическая активность»),
+ * датчик значимого движения в STILL ([MotionSensorMonitor]). Стартовый
+ * профиль — STILL при выданном разрешении AR, иначе ACTIVE с уходом в STILL
+ * по таймеру без движения. Каждое переключение и причина — в DiagLog (ploc).
  */
 class ParentLocationService : Service() {
 
@@ -74,10 +93,24 @@ class ParentLocationService : Service() {
         const val NOTIF_ID = 0xB1
         const val ACTION_START = "pro.periscop.parent.location.START"
         const val ACTION_STOP = "pro.periscop.parent.location.STOP"
+        /** v0.77.0: события Activity Recognition от [ParentActivityTransitionReceiver]. */
+        const val ACTION_ACTIVITY_STILL = "pro.periscop.parent.location.ACTIVITY_STILL"
+        const val ACTION_ACTIVITY_MOVING = "pro.periscop.parent.location.ACTIVITY_MOVING"
 
-        private const val INTERVAL_MS = 60_000L
-        private const val MIN_INTERVAL_MS = 30_000L
-        private const val MIN_DISTANCE_M = 50f
+        /** STILL: на месте — экономно (как до v0.77.0). */
+        private const val STILL_INTERVAL_MS = 60_000L
+        private const val STILL_MIN_INTERVAL_MS = 30_000L
+        private const val STILL_MIN_DISTANCE_M = 50f
+        /** ACTIVE: в движении — GPS, плотный трек (как у ребёнка). */
+        private const val ACTIVE_INTERVAL_MS = 5_000L
+        private const val ACTIVE_MIN_INTERVAL_MS = 2_500L
+        private const val ACTIVE_MIN_DISTANCE_M = 10f
+        /**
+         * Первая точка после пробуждения датчиком / escape: хуже — ждём обычную
+         * точку ACTIVE (до 5 с), а не рисуем скачок от Wi-Fi.
+         */
+        private const val FRESH_LOCATION_MAX_ACCURACY_M = 30f
+        private const val ACTIVITY_REQUEST_CODE = 0xB2
         /** Без движения — подтверждающая точка не реже, чем раз в 5 минут. */
         private const val KEEPALIVE_MS = 5 * 60_000L
         private const val MAX_ACCURACY_M = 100f
@@ -111,6 +144,14 @@ class ParentLocationService : Service() {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return true
             return ContextCompat.checkSelfPermission(
                 ctx, Manifest.permission.ACCESS_BACKGROUND_LOCATION,
+            ) == PackageManager.PERMISSION_GRANTED
+        }
+
+        /** «Физическая активность» (Activity Recognition). До Android 10 не нужна. */
+        fun hasActivityRecognitionPermission(ctx: Context): Boolean {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return true
+            return ContextCompat.checkSelfPermission(
+                ctx, Manifest.permission.ACTIVITY_RECOGNITION,
             ) == PackageManager.PERMISSION_GRANTED
         }
 
@@ -179,6 +220,20 @@ class ParentLocationService : Service() {
     private var netCallback: ConnectivityManager.NetworkCallback? = null
     private val netCheck = Runnable { reevaluateNetwork() }
 
+    // v0.77.0 — профиль «в движении / на месте» (см. ParentMotionPolicy).
+    private var profile = ParentMotionPolicy.Profile.STILL
+    /** elapsedRealtime последнего движения; 0 — не было. */
+    private var lastMovingAtMs = 0L
+    /** Место, где перешли в STILL, и счётчик точек подряд далеко от него. */
+    private var stillAnchor: Location? = null
+    private var stillEscapeHits = 0
+    /** Подписка Activity Recognition поставлена (повторный start() не дублирует). */
+    private var arRegistered = false
+    private val applyArStill = Runnable { onArStill() }
+    private val motionMonitor: MotionSensorMonitor by lazy {
+        MotionSensorMonitor(applicationContext) { onMotionSensorTriggered() }
+    }
+
     private fun log(msg: String) = log(this, msg)
 
     override fun onCreate() {
@@ -198,9 +253,29 @@ class ParentLocationService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         log("onStartCommand action=${intent?.action} startId=$startId")
-        if (intent?.action == ACTION_STOP) {
-            stopEverything("ACTION_STOP")
-            return START_NOT_STICKY
+        when (intent?.action) {
+            ACTION_STOP -> {
+                stopEverything("ACTION_STOP")
+                return START_NOT_STICKY
+            }
+            ACTION_ACTIVITY_STILL, ACTION_ACTIVITY_MOVING -> {
+                // Ресивер шлёт события только живой службе (running), но к
+                // приходу intent'а её могли остановить: без подписки событие
+                // не нужно, а сервис, созданный этим startService, гасим.
+                if (callback == null) {
+                    log("AR ${intent.action}: подписки нет — пропуск")
+                    stopSelf(startId)
+                    return START_NOT_STICKY
+                }
+                if (intent.action == ACTION_ACTIVITY_STILL) {
+                    onArStill()
+                } else {
+                    applyDecision(
+                        ParentMotionPolicy.onMoving(profile, SystemClock.elapsedRealtime(), "AR: движение"),
+                    )
+                }
+                return START_STICKY
+            }
         }
         start()
         return START_STICKY
@@ -233,18 +308,44 @@ class ParentLocationService : Service() {
             return
         }
         if (callback != null) {
+            // Повторный старт из UI — в т.ч. после выдачи «Физической
+            // активности»: подписаться на AR, если ещё не подписаны.
             log("start: уже подписаны — пропуск")
+            registerActivityTransitions()
             return
         }
         online = isOnline()
-        currentPriority = priorityFor(online == true)
+        // Как у ребёнка: с разрешением AR — сразу экономный STILL (AR и датчик
+        // разбудят), без него — ACTIVE, а в STILL уйдём по 15 мин без движения.
+        val arGranted = hasActivityRecognitionPermission(this)
+        profile = if (arGranted) ParentMotionPolicy.Profile.STILL else ParentMotionPolicy.Profile.ACTIVE
+        lastMovingAtMs = if (profile == ParentMotionPolicy.Profile.ACTIVE) SystemClock.elapsedRealtime() else 0L
+        stillAnchor = null
+        stillEscapeHits = 0
+        log(
+            "start: профиль $profile (AR=$arGranted), датчик движения ${motionMonitor.sensorLabel}",
+        )
+        currentPriority = priorityFor(profile, online == true)
         subscribe()
+        if (callback == null) return // SecurityException — служба уже остановлена
+        if (profile == ParentMotionPolicy.Profile.STILL) {
+            log("motion sensor: register=${motionMonitor.start()} (старт в STILL)")
+        }
         registerNetworkCallback()
+        registerActivityTransitions()
         ioHandler?.post { uploader?.flushPending() }
     }
 
-    private fun priorityFor(isOnline: Boolean) =
-        if (isOnline) Priority.PRIORITY_BALANCED_POWER_ACCURACY else Priority.PRIORITY_HIGH_ACCURACY
+    /**
+     * ACTIVE — всегда GPS. STILL — «баланс» при интернете и GPS офлайн
+     * (v0.73.1: без сети «баланс» почти не даёт точек).
+     */
+    private fun priorityFor(p: ParentMotionPolicy.Profile, isOnline: Boolean) =
+        if (p == ParentMotionPolicy.Profile.STILL && isOnline) {
+            Priority.PRIORITY_BALANCED_POWER_ACCURACY
+        } else {
+            Priority.PRIORITY_HIGH_ACCURACY
+        }
 
     /** Есть интернет, проверенный системой (а не просто «подключено к Wi-Fi»). */
     private fun isOnline(): Boolean = try {
@@ -298,7 +399,7 @@ class ParentLocationService : Service() {
         if (now == was) return
         online = now
         log("network: ${if (now) "интернет есть" else "интернета нет"} (было ${was ?: "?"})")
-        val wanted = priorityFor(now)
+        val wanted = priorityFor(profile, now)
         if (wanted != currentPriority) {
             currentPriority = wanted
             resubscribe()
@@ -306,7 +407,7 @@ class ParentLocationService : Service() {
         if (now) ioHandler?.post { uploader?.onNetworkAvailable() }
     }
 
-    /** Та же подписка с другим приоритетом (lastSent сохраняем). */
+    /** Та же подписка с другим приоритетом / профилем (lastSent сохраняем). */
     private fun resubscribe() {
         callback?.let {
             try {
@@ -319,8 +420,10 @@ class ParentLocationService : Service() {
     }
 
     private fun subscribe() {
-        val request = LocationRequest.Builder(currentPriority, INTERVAL_MS)
-            .setMinUpdateIntervalMillis(MIN_INTERVAL_MS)
+        val active = profile == ParentMotionPolicy.Profile.ACTIVE
+        val interval = if (active) ACTIVE_INTERVAL_MS else STILL_INTERVAL_MS
+        val request = LocationRequest.Builder(currentPriority, interval)
+            .setMinUpdateIntervalMillis(if (active) ACTIVE_MIN_INTERVAL_MS else STILL_MIN_INTERVAL_MS)
             .build()
         val cb = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
@@ -331,8 +434,15 @@ class ParentLocationService : Service() {
         try {
             fused.requestLocationUpdates(request, cb, Looper.getMainLooper())
             running = true
-            val mode = if (currentPriority == Priority.PRIORITY_HIGH_ACCURACY) "GPS (офлайн)" else "balanced"
-            log("requestLocationUpdates OK $mode interval=${INTERVAL_MS}ms minDist=${MIN_DISTANCE_M}m")
+            val mode = when {
+                currentPriority != Priority.PRIORITY_HIGH_ACCURACY -> "balanced"
+                active -> "GPS"
+                else -> "GPS (офлайн)"
+            }
+            log(
+                "requestLocationUpdates OK $profile $mode interval=${interval}ms " +
+                    "minDist=${minDistance()}m",
+            )
         } catch (e: SecurityException) {
             log("requestLocationUpdates SecurityException: ${e.message}")
             callback = null
@@ -341,6 +451,17 @@ class ParentLocationService : Service() {
     }
 
     private fun onLocation(loc: Location) {
+        // v0.77.0: профиль — ДО фильтра точности, как у ребёнка: и грубая
+        // точка со скоростью 15 м/с значит «едем», а далёкая грубая точка в
+        // STILL — кандидат «уехал от места стоянки».
+        val now = SystemClock.elapsedRealtime()
+        applyDecision(
+            ParentMotionPolicy.onLocation(
+                profile, loc.hasSpeed(), loc.speed, now, lastMovingAtMs, stillEscapeHits,
+            ),
+        )
+        maybeEscapeStill(loc, now)
+
         val fine = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) ==
             PackageManager.PERMISSION_GRANTED
         val maxAccuracy = if (fine) MAX_ACCURACY_M else MAX_ACCURACY_COARSE_M
@@ -349,7 +470,7 @@ class ParentLocationService : Service() {
             return
         }
         val prev = lastSent
-        if (prev != null && loc.distanceTo(prev) < MIN_DISTANCE_M &&
+        if (prev != null && loc.distanceTo(prev) < minDistance() &&
             loc.time - prev.time < KEEPALIVE_MS
         ) {
             return
@@ -369,6 +490,179 @@ class ParentLocationService : Service() {
         loc.provider?.let { p.put("provider", it) }
         ioHandler?.post { uploader?.add(p) }
     }
+
+    /** Свой фильтр смещения: в движении плотнее. */
+    private fun minDistance(): Float =
+        if (profile == ParentMotionPolicy.Profile.ACTIVE) ACTIVE_MIN_DISTANCE_M else STILL_MIN_DISTANCE_M
+
+    // ---- v0.77.0: профили «в движении / на месте» ----------------------------
+
+    /** Применить решение политики: время движения, счётчик escape, смена профиля. */
+    private fun applyDecision(d: ParentMotionPolicy.Decision) {
+        lastMovingAtMs = d.lastMovingAtMs
+        stillEscapeHits = d.escapeHits
+        if (d.recheckInMs > 0) {
+            log("AR STILL отложен: движение было недавно, перепроверка через ${d.recheckInMs / 1000} с")
+            mainHandler.removeCallbacks(applyArStill)
+            mainHandler.postDelayed(applyArStill, d.recheckInMs)
+        }
+        if (d.profile != profile) switchProfile(d.profile, d.reason ?: "?")
+    }
+
+    /** AR «STILL ENTER» — или перепроверка отложенного (см. applyArStill). */
+    private fun onArStill() {
+        mainHandler.removeCallbacks(applyArStill)
+        if (callback == null) return
+        applyDecision(ParentMotionPolicy.onArStill(profile, SystemClock.elapsedRealtime(), lastMovingAtMs))
+    }
+
+    /** Страховка в STILL: AR в транспорте может молчать, а точки Wi-Fi/вышек — нет. */
+    private fun maybeEscapeStill(loc: Location, now: Long) {
+        if (profile != ParentMotionPolicy.Profile.STILL) return
+        val anchor = stillAnchor
+        if (anchor == null) {
+            stillAnchor = Location(loc)
+            return
+        }
+        val d = ParentMotionPolicy.onStillPoint(
+            profile,
+            loc.distanceTo(anchor).toDouble(),
+            if (loc.hasAccuracy()) loc.accuracy else null,
+            stillEscapeHits,
+            now,
+            lastMovingAtMs,
+        )
+        if (d.escapeHits > 0) {
+            log("STILL escape кандидат #${d.escapeHits}: ${loc.distanceTo(anchor).toInt()} м от стоянки")
+        }
+        val wasStill = profile == ParentMotionPolicy.Profile.STILL
+        applyDecision(d)
+        if (wasStill && profile == ParentMotionPolicy.Profile.ACTIVE) requestFreshLocationOnce()
+    }
+
+    private fun onMotionSensorTriggered() {
+        if (callback == null) return
+        val wasStill = profile == ParentMotionPolicy.Profile.STILL
+        applyDecision(
+            ParentMotionPolicy.onMoving(
+                profile, SystemClock.elapsedRealtime(), "датчик движения (${motionMonitor.sensorLabel})",
+            ),
+        )
+        if (wasStill && profile == ParentMotionPolicy.Profile.ACTIVE) requestFreshLocationOnce()
+    }
+
+    private fun switchProfile(newProfile: ParentMotionPolicy.Profile, reason: String) {
+        if (profile == newProfile) return
+        log("профиль $profile → $newProfile: $reason")
+        profile = newProfile
+        stillEscapeHits = 0
+        if (newProfile == ParentMotionPolicy.Profile.STILL) {
+            // Якорь — последняя отправленная точка (обычно точная, из ACTIVE);
+            // нет её — якорем станет первая точка в STILL.
+            stillAnchor = lastSent?.let { Location(it) }
+            log("motion sensor: register=${motionMonitor.start()}")
+        } else {
+            stillAnchor = null
+            // Вход в ACTIVE — отсчёт 15 минут до STILL с этого момента.
+            lastMovingAtMs = maxOf(lastMovingAtMs, SystemClock.elapsedRealtime())
+            mainHandler.removeCallbacks(applyArStill)
+            motionMonitor.stop()
+        }
+        if (callback != null) {
+            currentPriority = priorityFor(newProfile, online != false)
+            resubscribe()
+        }
+    }
+
+    /**
+     * Свежая точка сразу после пробуждения (датчик / escape), не дожидаясь
+     * первой точки ACTIVE. Холодная (без скорости или хуже 30 м) — отбрасываем.
+     */
+    private fun requestFreshLocationOnce() {
+        try {
+            fused.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
+                .addOnSuccessListener { loc ->
+                    if (loc == null || callback == null) return@addOnSuccessListener
+                    if (!loc.hasSpeed() || (loc.hasAccuracy() && loc.accuracy > FRESH_LOCATION_MAX_ACCURACY_M)) {
+                        log("fresh location: холодная (acc=${loc.accuracy} speed=${loc.hasSpeed()}) — ждём FLP")
+                        return@addOnSuccessListener
+                    }
+                    onLocation(loc)
+                }
+                .addOnFailureListener { e -> log("fresh location FAILED: ${e.javaClass.simpleName}: ${e.message}") }
+        } catch (e: Throwable) {
+            log("fresh location FAILED: ${e.javaClass.simpleName}: ${e.message}")
+        }
+    }
+
+    /**
+     * Activity Recognition (Play Services). Без разрешения «Физическая
+     * активность» — работаем по скорости, датчику и escape; застрявший STILL
+     * переводим в ACTIVE (уйдёт обратно по 15 мин без движения).
+     */
+    private fun registerActivityTransitions() {
+        if (arRegistered) return
+        if (!hasActivityRecognitionPermission(this)) {
+            log("AR: нет разрешения «Физическая активность» — без AR")
+            ensureActiveFallback("нет разрешения AR")
+            return
+        }
+        arRegistered = true
+        try {
+            val transitions = listOf(
+                DetectedActivity.STILL to ActivityTransition.ACTIVITY_TRANSITION_ENTER,
+                DetectedActivity.STILL to ActivityTransition.ACTIVITY_TRANSITION_EXIT,
+                DetectedActivity.IN_VEHICLE to ActivityTransition.ACTIVITY_TRANSITION_ENTER,
+                DetectedActivity.ON_FOOT to ActivityTransition.ACTIVITY_TRANSITION_ENTER,
+                DetectedActivity.WALKING to ActivityTransition.ACTIVITY_TRANSITION_ENTER,
+                DetectedActivity.RUNNING to ActivityTransition.ACTIVITY_TRANSITION_ENTER,
+                DetectedActivity.ON_BICYCLE to ActivityTransition.ACTIVITY_TRANSITION_ENTER,
+            ).map { (type, transition) ->
+                ActivityTransition.Builder()
+                    .setActivityType(type)
+                    .setActivityTransition(transition)
+                    .build()
+            }
+            ActivityRecognition.getClient(this)
+                .requestActivityTransitionUpdates(ActivityTransitionRequest(transitions), activityPendingIntent())
+                .addOnSuccessListener { log("AR: подписка OK") }
+                .addOnFailureListener { e ->
+                    arRegistered = false
+                    log("AR: подписка FAILED: ${e.javaClass.simpleName}: ${e.message}")
+                    ensureActiveFallback("подписка AR не удалась")
+                }
+        } catch (e: Throwable) {
+            arRegistered = false
+            log("AR: подписка FAILED: ${e.javaClass.simpleName}: ${e.message}")
+            ensureActiveFallback("подписка AR не удалась")
+        }
+    }
+
+    private fun ensureActiveFallback(reason: String) {
+        if (callback != null && profile == ParentMotionPolicy.Profile.STILL) {
+            switchProfile(ParentMotionPolicy.Profile.ACTIVE, reason)
+        }
+    }
+
+    private fun unregisterActivityTransitions() {
+        if (!arRegistered) return
+        arRegistered = false
+        try {
+            ActivityRecognition.getClient(this)
+                .removeActivityTransitionUpdates(activityPendingIntent())
+                .addOnFailureListener { e -> log("AR: отписка FAILED: ${e.javaClass.simpleName}: ${e.message}") }
+        } catch (_: Throwable) {
+        }
+    }
+
+    // FLAG_MUTABLE обязателен: Play Services дописывает результат в intent.
+    private fun activityPendingIntent(): PendingIntent = PendingIntent.getBroadcast(
+        this,
+        ACTIVITY_REQUEST_CODE,
+        Intent(this, ParentActivityTransitionReceiver::class.java)
+            .setAction(ParentActivityTransitionReceiver.ACTION_ACTIVITY_TRANSITION),
+        PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+    )
 
     private fun isMock(loc: Location): Boolean =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -417,6 +711,11 @@ class ParentLocationService : Service() {
 
     private fun unsubscribe() {
         unregisterNetworkCallback()
+        unregisterActivityTransitions()
+        mainHandler.removeCallbacks(applyArStill)
+        motionMonitor.stop()
+        stillAnchor = null
+        stillEscapeHits = 0
         online = null
         callback?.let {
             try {
