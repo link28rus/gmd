@@ -1,10 +1,9 @@
 {
 	admin off
 	# auto_https default — Caddy сам выпускает Let's Encrypt cert через ACME
-	# http-01 challenge на :80. На VPS открыты только 80/443 через UFW, прямой
-	# публичный IP без NAT/роутера. Обслуживаем ОБА домена: periscop.pro (primary,
-	# после ребрендинга) и gmd-online.ru (legacy-зеркало — старые установленные
-	# mobile-приложения ходят на него за API, пока пользователи не обновятся).
+	# http-01 challenge на :80. На VM 109 gmd-prod наружу открыты только 80/443
+	# (UFW), публичный IP МТС прямо на eth1. Домен — gmd.link28rus.ru (#85);
+	# periscop.pro / gmd-online.ru смотрят на потерянный VPS и не обслуживаются.
 	# HTTP/3 (QUIC) отключён: prod не пробрасывает UDP 443, и Alt-Svc: h3 в headers
 	# заставлял Chrome пытаться QUIC и кэшировать недоступный endpoint.
 	servers {

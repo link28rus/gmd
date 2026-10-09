@@ -26,7 +26,8 @@ type WsWithState = WebSocket & { [STATE]?: ConnState };
  * срезает `/api`). Авторизация — тот же device-token, что в REST
  * (`X-Child-Token`). Логика доставки — в ChildRealtimeService.
  */
-@WebSocketGateway({ path: '/child/ws' })
+// maxPayload: дефолт ws — 100 МБ, и кадр принимается до проверки токена.
+@WebSocketGateway({ path: '/child/ws', maxPayload: 256 * 1024 })
 @Injectable()
 export class ChildRealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnModuleDestroy {
   private readonly logger = new Logger(ChildRealtimeGateway.name);

@@ -14,11 +14,11 @@ const geist = Geist({ subsets: ['latin'], variable: '--font-sans' });
 export const metadata: Metadata = {
   title: 'Перископ — сервис родительского контроля',
   description: 'Геолокация детей, геозоны, SOS-кнопка и звук вокруг ребёнка',
-  metadataBase: new URL('https://periscop.pro'),
+  metadataBase: new URL('https://gmd.link28rus.ru'),
   openGraph: {
     title: 'Перископ — сервис родительского контроля',
     description: 'Геолокация детей, геозоны, SOS-кнопка и звук вокруг ребёнка',
-    url: 'https://periscop.pro',
+    url: 'https://gmd.link28rus.ru',
     siteName: 'Перископ',
     locale: 'ru_RU',
     type: 'website',

@@ -66,7 +66,7 @@ function rememberReverse(key: string, items: GeocodeItem[]): void {
 async function callYandex(params: URLSearchParams): Promise<GeocodeItem[] | NextResponse> {
   // Ключ в кабинете Яндекса ограничен по HTTP Referer (домен приложения).
   // Без заголовка Referer запросы с backend'а получают 403.
-  const referer = process.env.PUBLIC_SITE_URL ?? 'https://periscop.pro/';
+  const referer = process.env.PUBLIC_SITE_URL || 'https://gmd.link28rus.ru/';
 
   let res: Response;
   try {

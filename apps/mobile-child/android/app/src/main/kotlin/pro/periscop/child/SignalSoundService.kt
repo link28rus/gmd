@@ -116,8 +116,11 @@ class SignalSoundService : Service() {
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
             .build()
         val rawUri: Uri = Uri.parse("android.resource://$packageName/${R.raw.signal_alarm}")
-        var started = false
-        try {
+        // Повторный сигнал во время звучащего (двойное нажатие, одна команда сразу
+        // по WS, FCM и опросу) не создаёт второй плеер: прежний оставался без
+        // ссылки, и «Остановить» его не глушил (у родителя так же, v0.73).
+        var started = mediaPlayer != null
+        if (!started) try {
             val mp = MediaPlayer().apply {
                 setAudioAttributes(attrs)
                 setDataSource(this@SignalSoundService, rawUri)

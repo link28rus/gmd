@@ -138,8 +138,9 @@ export class FcmService implements OnModuleInit {
       const code = (err as { errorInfo?: { code?: string } } | null)?.errorInfo?.code;
       if (
         code === 'messaging/registration-token-not-registered' ||
-        code === 'messaging/invalid-registration-token' ||
-        code === 'messaging/invalid-argument'
+        // messaging/invalid-argument сюда не входит: он приходит и на кривой
+        // payload, и одна ошибка в сообщении отзывала бы рабочие токены (SOS).
+        code === 'messaging/invalid-registration-token'
       ) {
         this.logger.warn(
           `FCM token expired/invalid for device=${deviceId} (${code}) — clearing in DB`,
@@ -204,8 +205,9 @@ export class FcmService implements OnModuleInit {
       const code = (err as { errorInfo?: { code?: string } } | null)?.errorInfo?.code;
       if (
         code === 'messaging/registration-token-not-registered' ||
-        code === 'messaging/invalid-registration-token' ||
-        code === 'messaging/invalid-argument'
+        // messaging/invalid-argument сюда не входит: он приходит и на кривой
+        // payload, и одна ошибка в сообщении отзывала бы рабочие токены (SOS).
+        code === 'messaging/invalid-registration-token'
       ) {
         this.logger.warn(`FCM token expired (${code}) — invoking cleanup`);
         if (onInvalidToken) {

@@ -33,7 +33,10 @@ export class PasswordService {
   async recordFailure(email: string): Promise<LockStatus> {
     const key = `pwlock:${email.toLowerCase()}`;
     const n = await this.redis.incr(key);
-    if (n === 1) await this.redis.expire(key, this.cfg.lockTtlSec);
+    // ttl === -1: ключ без срока (сбой между incr и expire) — иначе вечная блокировка.
+    if (n === 1 || (await this.redis.ttl(key)) === -1) {
+      await this.redis.expire(key, this.cfg.lockTtlSec);
+    }
     const locked = n >= this.cfg.lockAfter;
     const retry = locked ? await this.redis.ttl(key) : 0;
     return { locked, retryAfterSec: retry };

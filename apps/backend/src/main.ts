@@ -27,6 +27,8 @@ async function bootstrap(): Promise<void> {
   // WS-адаптер для AudioGateway (/audio/ws). Без этого NestJS попытается
   // поднять socket.io-сервер, и handshake провалится.
   app.useWebSocketAdapter(new WsAdapter(app));
+  // onModuleDestroy (таймеры, Redis quit, закрытие сокетов) — на docker stop.
+  app.enableShutdownHooks();
   const port = Number(process.env.PORT ?? 3001);
   await app.listen(port);
   console.log(`Backend listening on http://localhost:${port}`);

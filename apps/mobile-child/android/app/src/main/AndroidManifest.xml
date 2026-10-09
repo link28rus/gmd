@@ -59,6 +59,7 @@
     <!-- v0.60.0: свой Application (PeriscopApplication.kt) — обработчик падений
          и отправка журнала после падения на старте любого процесса. -->
     <application
+        android:allowBackup="false"
         android:label="Перископ Ребёнка"
         android:name=".PeriscopApplication"
         android:icon="@mipmap/ic_launcher">

@@ -36,8 +36,14 @@ import { SecretsModule } from './common/secrets/secrets.module';
     ThrottlerModule.forRootAsync({
       useFactory: () => ({
         throttlers: [{ name: 'default', ttl: 60_000, limit: 60 }],
+        // Без офлайн-очереди и с одной попыткой: при недоступном Redis команда
+        // падает сразу, storage пропускает запрос (fail-open), а не держит
+        // каждый запрос API (включая SOS и приём точек) 10–20 секунд.
         storage: new RedisThrottlerStorage(
-          new Redis(process.env.REDIS_URL || 'redis://localhost:6379'),
+          new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
+            enableOfflineQueue: false,
+            maxRetriesPerRequest: 1,
+          }).on('error', () => undefined),
         ),
       }),
     }),

@@ -104,8 +104,10 @@ class DioFactory {
                 final retried = await dio.fetch(newOpts);
                 return handler.resolve(retried);
               } on DioException catch (e) {
-                if (e.response != null) return handler.resolve(e.response!);
-                rethrow;
+                // reject, а не resolve/rethrow: resolve отдавал 4xx повтора как
+                // успешный ответ, а rethrow из async-обработчика Dio не ждёт —
+                // запрос (и спиннер) висел навсегда.
+                return handler.reject(e);
               }
             }
           }

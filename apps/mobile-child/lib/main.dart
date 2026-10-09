@@ -63,7 +63,14 @@ void main() async {
 
   // Если device уже приклеймлен — при повторном запуске сразу
   // в /home, а не на экран «Подключиться».
-  final token = await SecureStorageService().readDeviceToken();
+  // Сбой защищённого хранилища (потерян ключ Keystore, восстановление из
+  // бэкапа) не должен оставлять белый экран до runApp — уходим на онбординг.
+  String? token;
+  try {
+    token = await SecureStorageService().readDeviceToken();
+  } catch (e) {
+    unawaited(diagLog('ui', 'readDeviceToken failed: $e'));
+  }
   final hasToken = token != null && token.isNotEmpty;
   unawaited(diagLog('ui', 'app started, hasToken=$hasToken'));
   // v0.37: запустить FCM token-регистрацию в фоне (не блокирует startup).

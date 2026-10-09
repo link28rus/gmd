@@ -60,8 +60,10 @@ export async function listDownloadFiles(): Promise<DownloadFile[]> {
   // Сортируем: app → версия (новее сверху) → abi.
   files.sort((a, b) => {
     if (a.app !== b.app) return a.app.localeCompare(b.app);
-    // Простое сравнение по version-string (без parsing) — достаточно для последних релизов.
-    if (a.version !== b.version) return b.version.localeCompare(a.version);
+    // numeric: числа сравниваются как числа (0.100.0 > 0.99.0, +10 > +9).
+    if (a.version !== b.version) {
+      return b.version.localeCompare(a.version, 'en', { numeric: true });
+    }
     return a.abi.localeCompare(b.abi);
   });
 

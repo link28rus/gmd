@@ -53,7 +53,7 @@ say "4) Prisma migrate deploy — через одноразовый контей
 # unix-сокете, потом рестарт) — ждём, пока примет соединения по TCP, иначе P1001.
 ssh "${SERVER}" "cd ${REMOTE_DOCKER} && \
   docker compose --env-file ${REMOTE_DIR}/.env.prod -f docker-compose.prod.yml up -d postgres redis && \
-  for i in \$(seq 1 60); do docker exec gmd-postgres pg_isready -h 127.0.0.1 -q && break; sleep 2; done && \
+  for i in \$(seq 1 60); do docker exec gmd-postgres pg_isready -h 127.0.0.1 -U gmd -d gmd -q && break; sleep 2; done && \
   docker compose --env-file ${REMOTE_DIR}/.env.prod -f docker-compose.prod.yml run --rm --no-deps \
     --entrypoint sh backend -c \
     'node apps/backend/node_modules/prisma/build/index.js migrate deploy --schema apps/backend/prisma/schema.prisma'"

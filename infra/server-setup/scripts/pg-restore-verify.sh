@@ -30,9 +30,12 @@ docker run -d --name "${TMP_CONTAINER}" \
   gmd-postgres:16-postgis-pgcron \
   postgres -c shared_preload_libraries=pg_cron -c cron.database_name="${POSTGRES_DB}"
 
-# Ждём готовности
-for i in {1..30}; do
-  if docker exec "${TMP_CONTAINER}" pg_isready -U postgres >/dev/null 2>&1; then break; fi
+# Ждём готовности ПО TCP. На свежем volume entrypoint сначала поднимает временный
+# сервер только на unix-сокете (initdb + PostGIS-скрипты), потом гасит его и
+# стартует настоящий. pg_isready по сокету ловил временный сервер, restore шёл в
+# него и обрывался «the database system is shutting down» (сбой 2026-10-05).
+for i in {1..90}; do
+  if docker exec "${TMP_CONTAINER}" pg_isready -h 127.0.0.1 -U postgres >/dev/null 2>&1; then break; fi
   sleep 1
 done
 

@@ -300,49 +300,54 @@ export class LocationsService {
     let accepted = 0;
     const zoneNotices: ZoneEventNotice[] = [];
     if (validRows.length > 0) {
-      await this.prisma.$transaction(async (tx) => {
-        const inserted = await tx.$executeRaw(Prisma.sql`
+      await this.prisma.$transaction(
+        async (tx) => {
+          const inserted = await tx.$executeRaw(Prisma.sql`
           INSERT INTO "locations" (
             "id","childId","childDeviceId","lat","lon","accuracy","altitude","speed","bearing","batteryLevel","isCharging","provider","networkType","wifiSsid","mobileOperator","recordedAt","trackFlag"
           ) VALUES ${Prisma.join(validRows)}
           ON CONFLICT ("childDeviceId","recordedAt") DO NOTHING
         `);
-        accepted = Number(inserted);
-        const duplicates = validRows.length - accepted;
-        if (duplicates > 0) {
-          rejectedReasons.duplicate = (rejectedReasons.duplicate ?? 0) + duplicates;
-        }
-
-        // Соседние точки, чья пометка изменилась с приходом новых (игла
-        // видна только по следующей точке).
-        for (const [flag, ids] of groupByFlag(flags.changed)) {
-          await tx.location.updateMany({ where: { id: { in: ids } }, data: { trackFlag: flag } });
-        }
-
-        // Геозоны — по каждой валидной точке новее последней сохранённой, в
-        // хронологическом порядке (validPoints отсортированы). Телепорты и
-        // подделку GPS пропускаем — иначе ложные «вышел/вошёл».
-        // v0.64.0: под блокировкой по ребёнку; события копим, push — после commit.
-        let zoneLocked = false;
-        for (const [i, p] of validPoints.entries()) {
-          if (new Date(p.recordedAt).getTime() <= zoneCutoffTs) continue;
-          if (flags.incoming[i] === 'outlier' || flags.incoming[i] === 'mock') continue;
-          if (!zoneLocked) {
-            await this.zoneDetection.lockChild(tx, ctx.childId);
-            zoneLocked = true;
+          accepted = Number(inserted);
+          const duplicates = validRows.length - accepted;
+          if (duplicates > 0) {
+            rejectedReasons.duplicate = (rejectedReasons.duplicate ?? 0) + duplicates;
           }
-          const notices = await this.zoneDetection.processPoint(tx, {
-            familyId: child.familyId,
-            childId: ctx.childId,
-            deviceId: ctx.deviceId,
-            lat: p.lat,
-            lon: p.lon,
-            accuracy: p.accuracy ?? null,
-            recordedAt: new Date(p.recordedAt),
-          });
-          zoneNotices.push(...notices);
-        }
-      });
+
+          // Соседние точки, чья пометка изменилась с приходом новых (игла
+          // видна только по следующей точке).
+          for (const [flag, ids] of groupByFlag(flags.changed)) {
+            await tx.location.updateMany({ where: { id: { in: ids } }, data: { trackFlag: flag } });
+          }
+
+          // Геозоны — по каждой валидной точке новее последней сохранённой, в
+          // хронологическом порядке (validPoints отсортированы). Телепорты и
+          // подделку GPS пропускаем — иначе ложные «вышел/вошёл».
+          // v0.64.0: под блокировкой по ребёнку; события копим, push — после commit.
+          let zoneLocked = false;
+          for (const [i, p] of validPoints.entries()) {
+            if (new Date(p.recordedAt).getTime() <= zoneCutoffTs) continue;
+            if (flags.incoming[i] === 'outlier' || flags.incoming[i] === 'mock') continue;
+            if (!zoneLocked) {
+              await this.zoneDetection.lockChild(tx, ctx.childId);
+              zoneLocked = true;
+            }
+            const notices = await this.zoneDetection.processPoint(tx, {
+              familyId: child.familyId,
+              childId: ctx.childId,
+              deviceId: ctx.deviceId,
+              lat: p.lat,
+              lon: p.lon,
+              accuracy: p.accuracy ?? null,
+              recordedAt: new Date(p.recordedAt),
+            });
+            zoneNotices.push(...notices);
+          }
+          // Пачка до 500 точек после офлайна с проверкой геозон на каждую не
+          // укладывалась в дефолтные 5 с — откат, и телефон повторял её по кругу.
+        },
+        { timeout: 30_000, maxWait: 10_000 },
+      );
     }
     // Транзакция закоммичена — теперь можно слать push о геозонах.
     this.zoneDetection.notifyParents(zoneNotices);

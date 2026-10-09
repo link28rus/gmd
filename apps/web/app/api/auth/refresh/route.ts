@@ -35,7 +35,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const r = await backend<BackendRefreshResponse>('POST', '/auth/refresh', { refreshToken: old });
   if (r.status !== 200 || !r.body) {
     const res = NextResponse.json(r.body ?? {}, { status: r.status });
-    res.cookies.delete(REFRESH_COOKIE);
+    // Cookie снимаем только когда сессия реально недействительна. 429 и 5xx —
+    // временные (лимит, деплой): иначе спам refresh разлогинивал бы кабинет.
+    if (r.status >= 400 && r.status < 500 && r.status !== 429) {
+      res.cookies.delete(REFRESH_COOKIE);
+    }
     return res;
   }
   const { accessToken, refreshToken } = r.body;

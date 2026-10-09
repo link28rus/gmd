@@ -29,7 +29,8 @@ interface WsContext {
 const CTX = Symbol('audio-ws-ctx');
 type WsWithCtx = WebSocket & { [CTX]?: WsContext };
 
-@WebSocketGateway({ path: '/audio/ws' })
+// maxPayload: дефолт ws — 100 МБ, и кадр принимается до проверки токена.
+@WebSocketGateway({ path: '/audio/ws', maxPayload: 1024 * 1024 })
 @Injectable()
 export class AudioGateway
   implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect, OnModuleDestroy

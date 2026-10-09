@@ -20,15 +20,22 @@ export class RedisThrottlerStorage implements ThrottlerStorage {
     throttlerName: string,
   ): Promise<ThrottlerStorageRecord> {
     const k = `thr:${throttlerName}:${key}`;
-    const tx = this.redis.multi();
-    tx.incr(k);
-    tx.pttl(k);
-    const res = (await tx.exec()) as [Error | null, number][];
-    const hits = Number(res[0][1]);
-    let pttl = Number(res[1][1]);
-    if (pttl < 0) {
-      await this.redis.pexpire(k, ttl);
-      pttl = ttl;
+    let hits: number;
+    let pttl: number;
+    try {
+      const tx = this.redis.multi();
+      tx.incr(k);
+      tx.pttl(k);
+      const res = (await tx.exec()) as [Error | null, number][];
+      hits = Number(res[0][1]);
+      pttl = Number(res[1][1]);
+      if (pttl < 0) {
+        await this.redis.pexpire(k, ttl);
+        pttl = ttl;
+      }
+    } catch {
+      // Redis недоступен — лимит не считаем, запрос пропускаем (fail-open).
+      return { totalHits: 0, timeToExpire: 0, isBlocked: false, timeToBlockExpire: 0 };
     }
     const isBlocked = hits > _limit;
     return {
