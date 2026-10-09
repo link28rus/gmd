@@ -1,0 +1,15 @@
+[Unit]
+Description=GMD OSRM road graph update (car + foot, OSM Geofabrik)
+Documentation=https://github.com/link28rus/gmd/blob/main/docs/deploy.md
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Подготовка графа грузит CPU: ниже приоритет, чтобы не мешать живому сервису.
+Nice=10
+IOSchedulingClass=idle
+EnvironmentFile=-/etc/default/gmd-osrm-update
+ExecStart=/opt/gmd/bin/osrm-update.sh
+StandardOutput=append:/var/log/gmd-osrm-update.log
+StandardError=append:/var/log/gmd-osrm-update.log

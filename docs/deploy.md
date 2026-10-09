@@ -188,6 +188,33 @@ ssh gmd-online 'docker restart gmd-backend && docker logs gmd-backend 2>&1 | gre
 
 Проверка: `systemctl list-timers | grep geoip`; в логах backend — `GeoIP: база … загружена`.
 
+## Привязка треков к дорогам — OSRM (v0.80.0)
+
+Backend привязывает треки детей и телефонов родителей к дорогам через два своих `osrm-routed`:
+`gmd-osrm-car` (транспорт) и `gmd-osrm-foot` (пешком). Координаты с сервера не уходят (152-ФЗ).
+Подробности алгоритма — [spec](superpowers/specs/2026-10-09-road-matching.md).
+
+- **Графы:** `/opt/gmd/osrm/current/{car,foot}` (алгоритм MLD), прежние — в `previous`. Собирает
+  `/opt/gmd/bin/osrm-update.sh`: выгрузка Geofabrik «Дальневосточный ФО» (~400 МБ) → `osmium
+extract` по прямоугольнику `OSRM_BBOX` (по умолчанию Хабаровск с пригородами,
+  `134.3,47.9,136.3,49.2`) → `osrm-extract/partition/customize` для каждого профиля → подмена
+  каталога → `docker restart gmd-osrm-*`. Весь регион на 8 ГБ памяти не собрать, поэтому город.
+- **Обновление:** `gmd-osrm-update.timer` — 5-го числа, 04:30. Если карта на Geofabrik не
+  менялась, сборка пропускается. Лог — `/var/log/gmd-osrm-update.log`. Своё значение `OSRM_BBOX`
+  задаётся в `/etc/default/gmd-osrm-update`.
+- **Backend:** env `OSRM_CAR_URL` / `OSRM_FOOT_URL` (по умолчанию `http://osrm-{car,foot}:5000`,
+  пустое значение выключает привязку). Если OSRM недоступен, треки отдаются без привязки, привязка
+  ставится на паузу на минуту, в логе пишется `osrm … unavailable`.
+- **Нет графа:** контейнеры OSRM перезапускаются, остальное работает.
+
+Установка (один раз, до первого деплоя с v0.80.0) — `infra/server/systemd/README.md`, раздел
+«gmd-osrm-update». Проверка после деплоя:
+
+```bash
+ssh gmd-online 'docker ps --format "{{.Names}} {{.Status}}" | grep osrm'
+ssh gmd-online 'docker exec gmd-backend wget -qO- "http://osrm-car:5000/route/v1/car/135.07,48.48;135.09,48.47" | head -c 200'
+```
+
 ## Обновление `.env.prod`
 
 Редактируется только на сервере (в git не коммитится):

@@ -3,7 +3,12 @@ import { Fragment, useMemo, type ReactElement } from 'react';
 import { Marker, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import type { LocationDto, StayDto, TripDto } from '@/lib/api/locations';
-import { formatGapLabel, splitTrackByGaps, type TrackGap } from '@/lib/geo/track-gaps';
+import {
+  formatGapLabel,
+  pathMidpoint,
+  splitTrackByGaps,
+  type TrackGap,
+} from '@/lib/geo/track-gaps';
 
 interface Props {
   items: LocationDto[];
@@ -51,6 +56,21 @@ const GAP_PATH: L.PathOptions = {
   dashArray: '4 6',
   interactive: false,
 };
+
+// v0.80.0: участок, достроенный сервером по дороге в разрыве без данных, —
+// пунктир цветом трека: «скорее всего ехал так», но это не записанные точки.
+const INFERRED_PATH: L.PathOptions = {
+  color: TRACK_PATH.color,
+  weight: 3,
+  dashArray: '6 8',
+  interactive: false,
+};
+
+/**
+ * v0.80.0: подпись «нет данных N мин» ставим, только если пропуск не меньше
+ * минуты — «нет данных 0 мин» на коротком достроенном куске ничего не говорит.
+ */
+const INFERRED_LABEL_MIN_MS = 60_000;
 
 // Подпись разрыва кладём под все остальные маркеры (старт/финиш, точки,
 // стоянки, аватар ребёнка): Leaflet считает z-index как y + zIndexOffset.
@@ -114,7 +134,7 @@ const stopIcon = (label: string, title: string): L.DivIcon =>
 // Компактная плашка «нет данных N мин» по центру разрыва. Видна всегда,
 // без наведения — кабинет открывают и с телефона. Цвета из токенов темы
 // (в globals.css они HSL-тройками, поэтому hsl(var(--…))).
-const gapLabelIcon = (label: string): L.DivIcon =>
+export const gapLabelIcon = (label: string): L.DivIcon =>
   L.divIcon({
     html: `<div style="transform:translate(-50%,-50%);position:absolute;left:0;top:0;white-space:nowrap;pointer-events:none;border-radius:9999px;border:1px solid hsl(var(--border, 214.3 31.8% 91.4%));background:hsl(var(--card, 0 0% 100%) / 0.92);padding:0 6px;font-size:11px;line-height:16px;font-weight:500;color:hsl(var(--muted-foreground, 215.4 16.3% 46.9%));box-shadow:0 1px 2px rgba(0,0,0,0.15);">${escapeHtml(label)}</div>`,
     className: 'gmd-gap-label',
@@ -135,7 +155,8 @@ function gapMidpoint(gap: TrackGap<LocationDto>): [number, number] {
 }
 
 export function TrackPolyline({ items, stops, stays }: Props): ReactElement | null {
-  // Шаг 1: accuracy-фильтр.
+  // Шаг 1: accuracy-фильтр. v0.80.0: в режиме «по дорогам» сервер отдаёт
+  // точки с accuracy=null (трек уже очищен) — они проходят.
   const filtered = useMemo(
     () => items.filter((p) => p.accuracy == null || p.accuracy <= UI_ACCURACY_GATE_M),
     [items],
@@ -148,7 +169,9 @@ export function TrackPolyline({ items, stops, stays }: Props): ReactElement | nu
   // маршрут мимо реальных маркеров точек) — линия идёт через все
   // отображаемые точки. Если вернуть упрощение — применять к каждому
   // сегменту отдельно, разрывы не упрощать.
-  const { segments, gaps } = useMemo(() => splitTrackByGaps(filtered), [filtered]);
+  // v0.80.0: участки, достроенные сервером по дороге (inferred), — отдельно:
+  // пунктир цветом трека с той же подписью, что у разрыва.
+  const { segments, gaps, inferred } = useMemo(() => splitTrackByGaps(filtered), [filtered]);
 
   // Мемоизируем позиции и иконки: react-leaflet на каждый новый объект в
   // props зовёт setLatLngs/setIcon, а карта ре-рендерится на каждом опросе.
@@ -170,6 +193,24 @@ export function TrackPolyline({ items, stops, stays }: Props): ReactElement | nu
         icon: gapLabelIcon(formatGapLabel(g.durationMs)),
       })),
     [gaps],
+  );
+
+  const inferredViews = useMemo(
+    () =>
+      inferred.map((r) => {
+        const mid = pathMidpoint(r.points);
+        return {
+          line: r.points.map((p): [number, number] => [p.lat, p.lon]),
+          label:
+            mid && r.durationMs >= INFERRED_LABEL_MIN_MS
+              ? {
+                  mid: [mid.lat, mid.lon] as [number, number],
+                  icon: gapLabelIcon(formatGapLabel(r.durationMs)),
+                }
+              : null,
+        };
+      }),
+    [inferred],
   );
 
   const stopMarkers = useMemo((): StopView[] => {
@@ -195,7 +236,9 @@ export function TrackPolyline({ items, stops, stays }: Props): ReactElement | nu
 
   const first = filtered[0];
   const last = filtered[filtered.length - 1];
-  const dots = withLonePoints(sampleForDots(filtered), segments);
+  // Достроенные точки кружками не рисуем: время у них условное.
+  const realPoints = inferred.length > 0 ? filtered.filter((p) => !p.inferred) : filtered;
+  const dots = withLonePoints(sampleForDots(realPoints), segments);
 
   return (
     <>
@@ -209,6 +252,20 @@ export function TrackPolyline({ items, stops, stays }: Props): ReactElement | nu
             keyboard={false}
             zIndexOffset={GAP_LABEL_Z_OFFSET}
           />
+        </Fragment>
+      ))}
+      {inferredViews.map((r, i) => (
+        <Fragment key={`inf-${i}`}>
+          <Polyline positions={r.line} pathOptions={INFERRED_PATH} />
+          {r.label && (
+            <Marker
+              position={r.label.mid}
+              icon={r.label.icon}
+              interactive={false}
+              keyboard={false}
+              zIndexOffset={GAP_LABEL_Z_OFFSET}
+            />
+          )}
         </Fragment>
       ))}
       {segmentLines.map((line, i) => (

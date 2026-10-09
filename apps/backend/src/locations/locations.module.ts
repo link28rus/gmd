@@ -8,6 +8,7 @@ import { AppSettingsModule } from '../app-settings/app-settings.module';
 import { FcmModule } from '../fcm/fcm.module';
 import { ParentDevicesModule } from '../parent-devices/parent-devices.module';
 import { ParentLocationModule } from '../parent-location/parent-location.module';
+import { RoadMatchModule } from '../road-match/road-match.module';
 import { LocationsService } from './locations.service';
 import { LocationWatchService } from './location-watch.service';
 import { TripsService } from './trips.service';
@@ -28,6 +29,7 @@ import { FamilyAccessGuard } from './guards/family-access.guard';
     FcmModule,
     ParentDevicesModule,
     ParentLocationModule,
+    RoadMatchModule,
   ],
   controllers: [LocationsController, LocationsReadController, FamilyLocationsController],
   providers: [

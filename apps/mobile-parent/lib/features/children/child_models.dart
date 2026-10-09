@@ -126,6 +126,7 @@ class ChildLocation {
     this.wifiSsid,
     this.mobileOperator,
     this.ageSec,
+    this.inferred = false,
   });
 
   final double lat;
@@ -160,6 +161,11 @@ class ChildLocation {
   /// `latest-location` endpoint, иначе null.
   final int? ageSec;
 
+  /// v0.80.0: точка достроена сервером по дороге в разрыве без данных
+  /// («скорее всего ехал так»), а не записана телефоном. Время у неё
+  /// интерполировано. Только в треках (`view=road`), иначе false.
+  final bool inferred;
+
   /// Удобный getter — Duration с момента последней точки. Если backend
   /// не вернул `ageSec`, считаем по `recordedAt`.
   Duration get age {
@@ -180,6 +186,7 @@ class ChildLocation {
         wifiSsid: json['wifiSsid'] as String?,
         mobileOperator: json['mobileOperator'] as String?,
         ageSec: json['ageSec'] as int?,
+        inferred: json['inferred'] == true,
       );
 }
 
@@ -261,6 +268,21 @@ class TrackStay {
         from: DateTime.parse(json['from'] as String).toLocal(),
         to: DateTime.parse(json['to'] as String).toLocal(),
       );
+}
+
+/// v0.80.0: вид трека — query `view` эндпоинтов трека.
+enum TrackView {
+  /// По умолчанию: трек привязан к дорогам (OSRM), разрывы достроены
+  /// точками с `inferred: true`.
+  road('road'),
+
+  /// «Как записано» — очищенный трек без привязки к дорогам.
+  recorded('recorded');
+
+  const TrackView(this.apiValue);
+
+  /// Значение query-параметра `view`.
+  final String apiValue;
 }
 
 /// Трек для карты: точки линии + стоянки.

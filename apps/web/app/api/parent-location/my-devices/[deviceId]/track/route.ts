@@ -3,6 +3,7 @@ import { proxy } from '../../../../zones/_helpers';
 
 // Только для dev: на проде Caddy шлёт /api/parent-location/* прямо в backend.
 // Query (from/to) пробрасываем как есть — валидирует backend (≤ 2 суток).
+// v0.80.0: view=road|recorded уходит так же, как есть.
 export async function GET(req: NextRequest, ctx: { params: Promise<{ deviceId: string }> }) {
   const { deviceId } = await ctx.params;
   return proxy(

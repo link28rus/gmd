@@ -135,7 +135,13 @@ export class ParentLocationController {
     @Param('deviceId') deviceId: string,
     @Query(new ZodValidationPipe(MyTrackQuerySchema)) query: MyTrackQueryDto,
   ): Promise<{ items: MyTrackPointDto[] }> {
-    return this.findPhone.getMyTrack(req.user.userId, deviceId, query.from, query.to);
+    return this.findPhone.getMyTrack(
+      req.user.userId,
+      deviceId,
+      query.from,
+      query.to,
+      query.view ?? 'road',
+    );
   }
 
   @Post('my-devices/:deviceId/signal')

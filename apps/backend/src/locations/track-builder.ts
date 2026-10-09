@@ -25,6 +25,9 @@ export interface TrackOutPoint {
   lat: number;
   lon: number;
   t: number;
+  // Погрешность исходной точки — радиус поиска дороги при привязке (road-match).
+  // У вершин стоянок null.
+  accuracy?: number | null;
 }
 
 export interface BuiltTrack {
@@ -154,7 +157,7 @@ export function buildTrack(
 // широте и долготе — перевод в метры не нужен.
 function smoothRun(run: TrackInputPoint[]): TrackOutPoint[] {
   const n = run.length;
-  if (n < 3) return run.map((p) => ({ lat: p.lat, lon: p.lon, t: p.t }));
+  if (n < 3) return run.map((p) => ({ lat: p.lat, lon: p.lon, t: p.t, accuracy: p.accuracy }));
   const r = run.map((p) => {
     const a = Math.max(3, p.accuracy ?? 25);
     return a * a;
@@ -182,7 +185,7 @@ function smoothRun(run: TrackInputPoint[]): TrackOutPoint[] {
     lat[k] = lat[k] + C * (lat[k + 1] - lat[k]);
     lon[k] = lon[k] + C * (lon[k + 1] - lon[k]);
   }
-  return run.map((p, k) => ({ lat: lat[k], lon: lon[k], t: p.t }));
+  return run.map((p, k) => ({ lat: lat[k], lon: lon[k], t: p.t, accuracy: p.accuracy }));
 }
 
 /** Длина ломаной в метрах. */
@@ -202,6 +205,8 @@ export interface TripSegment {
   startLon: number;
   endLat: number;
   endLon: number;
+  // Очищенный трек поездки — по нему считается пробег по дорогам (v0.80.0).
+  route: TrackOutPoint[];
 }
 
 const TRIP_GAP_SPLIT_MS = 60 * 60_000;
@@ -289,6 +294,7 @@ export function segmentTrips(
       startLon: start.lon,
       endLat: end.lat,
       endLon: end.lon,
+      route: built.points,
     });
   });
   return out;

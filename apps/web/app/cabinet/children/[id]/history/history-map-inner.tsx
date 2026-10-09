@@ -14,12 +14,14 @@ import type { StayDto, TripPointDto } from '@/lib/api/locations';
 import type { Zone } from '@/lib/api/zones';
 import { useTheme } from '@/components/theme/theme-provider';
 import { tileConfigFor } from '@/lib/maps/tile-config';
-import { splitTrackByGaps } from '@/lib/geo/track-gaps';
+import { formatGapLabel, pathMidpoint, splitTrackByGaps } from '@/lib/geo/track-gaps';
 import {
   ChildZonesLayer,
   useShowChildZones,
   ZonesToggleControl,
 } from '@/components/locations/child-zones-layer';
+import { gapLabelIcon } from '@/components/locations/track-polyline';
+import { TrackViewToggleControl } from '@/components/locations/track-view-toggle';
 import { fmtClock, fmtDurationMs, type DayTrip } from '@/lib/history/trip-history';
 
 export interface TripTrack {
@@ -50,6 +52,11 @@ function fitPadding(map: L.Map): L.FitBoundsOptions {
 
 // Разрыв в данных — серый пунктир, как на главной карте (track-polyline.tsx).
 const GAP_PATH: L.PathOptions = { color: '#64748b', weight: 2, dashArray: '4 6' };
+
+/** v0.80.0: подпись у достроенного участка — от минуты пропуска (как на главной карте). */
+const INFERRED_LABEL_MIN_MS = 60_000;
+/** Подпись «нет данных» — под маркерами старта/финиша и стоянок. */
+const GAP_LABEL_Z_OFFSET = -1000;
 
 function startIcon(color: string, dim: boolean): L.DivIcon {
   return L.divIcon({
@@ -125,7 +132,29 @@ function TripLayer({
   casing: string;
   onSelect: (id: string) => void;
 }): ReactElement | null {
-  const { segments, gaps } = useMemo(() => splitTrackByGaps(track.points), [track.points]);
+  const { segments, gaps, inferred } = useMemo(
+    () => splitTrackByGaps(track.points),
+    [track.points],
+  );
+  // v0.80.0: участок, достроенный сервером по дороге в разрыве без данных, —
+  // пунктир цветом поездки с подписью «нет данных N мин» посередине.
+  const inferredViews = useMemo(
+    () =>
+      inferred.map((r) => {
+        const mid = pathMidpoint(r.points);
+        return {
+          line: r.points.map((p): [number, number] => [p.lat, p.lon]),
+          label:
+            mid && r.durationMs >= INFERRED_LABEL_MIN_MS
+              ? {
+                  mid: [mid.lat, mid.lon] as [number, number],
+                  icon: gapLabelIcon(formatGapLabel(r.durationMs)),
+                }
+              : null,
+        };
+      }),
+    [inferred],
+  );
   const lines = useMemo(
     () =>
       segments
@@ -172,6 +201,35 @@ function TripLayer({
           <Tooltip sticky>{title}</Tooltip>
         </Polyline>
       ))}
+      {inferredViews.map((r, i) => (
+        <Polyline
+          key={`inf-${i}`}
+          positions={r.line}
+          eventHandlers={handlers}
+          pathOptions={{
+            color: item.color,
+            weight: selected ? 4 : 3,
+            opacity: dim ? 0.3 : 0.95,
+            dashArray: '6 8',
+            lineCap: 'round',
+          }}
+        >
+          <Tooltip sticky>{title} · нет данных, путь достроен по дорогам</Tooltip>
+        </Polyline>
+      ))}
+      {!dim &&
+        inferredViews.map((r, i) =>
+          r.label ? (
+            <Marker
+              key={`inf-label-${i}`}
+              position={r.label.mid}
+              icon={r.label.icon}
+              interactive={false}
+              keyboard={false}
+              zIndexOffset={GAP_LABEL_Z_OFFSET}
+            />
+          ) : null,
+        )}
       {!dim &&
         gaps.map((g, i) => (
           <Polyline
@@ -268,6 +326,7 @@ export function HistoryMapInner({
         />
       )}
       {showZones && <ChildZonesLayer zones={zones} />}
+      <TrackViewToggleControl marginTop={zones.length > 0 ? 120 : 80} hasTrack={trips.length > 0} />
       {ordered.map((item) => {
         const track = tracks[item.trip.id];
         if (!track) return null;

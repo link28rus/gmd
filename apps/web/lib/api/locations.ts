@@ -1,6 +1,12 @@
 // apps/web/lib/api/locations.ts
 import { apiFetch } from './client';
 
+/**
+ * v0.80.0: вид трека — привязан к дорогам (road, по умолчанию на backend) или
+ * «как записано» (recorded: у детей очищенный трек, у телефона родителя сырые точки).
+ */
+export type TrackView = 'road' | 'recorded';
+
 export interface LatestLocationDto {
   lat: number;
   lon: number;
@@ -25,6 +31,11 @@ export interface LocationDto {
   recordedAt: string;
   accuracy: number | null;
   speed: number | null;
+  /**
+   * v0.80.0: точка достроена сервером по дороге в разрыве без данных (только
+   * в режиме view=road). Время интерполировано.
+   */
+  inferred?: boolean;
 }
 
 export interface LocationHistoryDto {
@@ -59,6 +70,8 @@ export interface TripPointDto {
   lat: number;
   lon: number;
   recordedAt: string;
+  /** v0.80.0: см. LocationDto.inferred. */
+  inferred?: boolean;
 }
 
 export interface ActiveTrackDto {
@@ -105,20 +118,30 @@ export const locationsApi = {
       `/api/children/${encodeURIComponent(childId)}/location/latest`,
     ),
 
-  getHistory: (childId: string, from: string, to: string, limit = 2000) => {
+  // v0.80.0: view — трек по дорогам (road, по умолчанию) или «как записано».
+  getHistory: (
+    childId: string,
+    from: string,
+    to: string,
+    limit = 2000,
+    view: TrackView = 'road',
+  ) => {
     const qs = new URLSearchParams({
       from,
       to,
       order: 'asc',
       limit: String(limit),
+      view,
     });
     return apiFetch<LocationHistoryDto>(
       `/api/children/${encodeURIComponent(childId)}/location/history?${qs.toString()}`,
     );
   },
 
-  getActiveTrack: (childId: string) =>
-    apiFetch<ActiveTrackDto>(`/api/children/${encodeURIComponent(childId)}/trips/active-track`),
+  getActiveTrack: (childId: string, view: TrackView = 'road') =>
+    apiFetch<ActiveTrackDto>(
+      `/api/children/${encodeURIComponent(childId)}/trips/active-track?view=${view}`,
+    ),
 
   getTrips: (childId: string, from?: string, to?: string) => {
     const qs = new URLSearchParams();
@@ -129,8 +152,8 @@ export const locationsApi = {
     );
   },
 
-  getTripPoints: (childId: string, tripId: string) =>
+  getTripPoints: (childId: string, tripId: string, view: TrackView = 'road') =>
     apiFetch<{ points: TripPointDto[]; stays?: StayDto[] }>(
-      `/api/children/${encodeURIComponent(childId)}/trips/${encodeURIComponent(tripId)}/points`,
+      `/api/children/${encodeURIComponent(childId)}/trips/${encodeURIComponent(tripId)}/points?view=${view}`,
     ),
 };

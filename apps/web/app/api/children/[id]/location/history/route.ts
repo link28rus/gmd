@@ -8,6 +8,8 @@ const QuerySchema = z.object({
   to: z.string().datetime(),
   order: z.enum(['asc', 'desc']).default('asc'),
   limit: z.coerce.number().int().min(1).max(2000).default(2000),
+  // v0.80.0: трек по дорогам (road, по умолчанию на backend) или «как записано».
+  view: z.enum(['road', 'recorded']).optional(),
 });
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -20,6 +22,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     to: url.searchParams.get('to') ?? '',
     order: url.searchParams.get('order') ?? undefined,
     limit: url.searchParams.get('limit') ?? undefined,
+    view: url.searchParams.get('view') ?? undefined,
   });
   if (!parsed.success) {
     return NextResponse.json(
@@ -33,6 +36,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   // приложения родителя. Ответ отдаём в прежнем формате { items, nextCursor }.
   const { id } = await params;
   const qs = new URLSearchParams({ from: parsed.data.from, to: parsed.data.to });
+  if (parsed.data.view) qs.set('view', parsed.data.view);
   const r = await backend<TrackBody>(
     'GET',
     `/children/${encodeURIComponent(id)}/track?${qs.toString()}`,
@@ -41,6 +45,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   );
   if (r.status !== 200 || !r.body) return proxyResponse(r);
   const track = r.body;
+  // v0.80.0: spread сохраняет флаг inferred (точка достроена по дороге) —
+  // карта рисует такие участки пунктиром.
   return NextResponse.json({
     items: track.points.map((p) => ({ ...p, accuracy: null, speed: null })),
     nextCursor: null,
@@ -49,6 +55,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 interface TrackBody {
-  points: Array<{ lat: number; lon: number; recordedAt: string }>;
+  points: Array<{ lat: number; lon: number; recordedAt: string; inferred?: boolean }>;
   stays: Array<{ lat: number; lon: number; from: string; to: string }>;
 }

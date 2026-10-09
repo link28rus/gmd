@@ -34,8 +34,15 @@ class ChildrenRepository {
   /// Точки активной (незакрытой) поездки. Если ребёнок стоит на месте >
   /// TRIP_IDLE_MINUTES — backend вернёт {trip: null, points: []}.
   /// `stays` (стоянки ≥ 3 мин) — с v0.63.0, у старого сервера пусто.
-  Future<TrackData> activeTrack(String childId) async {
-    final res = await _dio.get<dynamic>('/children/$childId/trips/active-track');
+  /// v0.80.0: [view] — по дорогам (по умолчанию) или «как записано».
+  Future<TrackData> activeTrack(
+    String childId, {
+    TrackView view = TrackView.road,
+  }) async {
+    final res = await _dio.get<dynamic>(
+      '/children/$childId/trips/active-track',
+      queryParameters: {'view': view.apiValue},
+    );
     return TrackData.fromJson(res.data as Map<String, dynamic>);
   }
 
@@ -220,8 +227,16 @@ class ChildrenRepository {
   /// `{ points: [{lat, lon, recordedAt}], stays: [{lat, lon, from, to}] }`.
   /// В точках только координаты и время (без accuracy/battery — они будут null).
   /// `stays` — с v0.63.0, у старого сервера пусто.
-  Future<TrackData> tripPoints(String childId, String tripId) async {
-    final res = await _dio.get<dynamic>('/children/$childId/trips/$tripId/points');
+  /// v0.80.0: [view] — по дорогам (по умолчанию) или «как записано».
+  Future<TrackData> tripPoints(
+    String childId,
+    String tripId, {
+    TrackView view = TrackView.road,
+  }) async {
+    final res = await _dio.get<dynamic>(
+      '/children/$childId/trips/$tripId/points',
+      queryParameters: {'view': view.apiValue},
+    );
     return TrackData.fromJson(res.data as Map<String, dynamic>);
   }
 

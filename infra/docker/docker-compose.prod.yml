@@ -227,6 +227,33 @@ services:
   # на prod обязательно сделать `docker compose down coturn && docker rmi coturn/coturn:4.6`,
   # удалить /opt/gmd/coturn/, snять с UFW правила 3478/49152-49200.
 
+  # v0.80.0: привязка треков к дорогам. Два osrm-routed на графах из OSM:
+  # car — транспорт, foot — пешком. Графы собирает
+  # /opt/gmd/bin/osrm-update.sh (infra/server/bin, таймер gmd-osrm-update) в
+  # /opt/gmd/osrm/current. Без графа контейнер перезапускается, backend отдаёт
+  # треки без привязки. Наружу не открыты — только backend по gmd_net.
+  osrm-car:
+    <<: [*restart, *logging]
+    image: ghcr.io/project-osrm/osrm-backend:v6.0.0
+    container_name: gmd-osrm-car
+    command: ['osrm-routed', '--algorithm', 'mld', '--threads', '2', '/data/region.osrm']
+    volumes:
+      - /opt/gmd/osrm/current/car:/data:ro
+    networks: [gmd_net]
+    expose: ['5000']
+    mem_limit: 1g
+
+  osrm-foot:
+    <<: [*restart, *logging]
+    image: ghcr.io/project-osrm/osrm-backend:v6.0.0
+    container_name: gmd-osrm-foot
+    command: ['osrm-routed', '--algorithm', 'mld', '--threads', '2', '/data/region.osrm']
+    volumes:
+      - /opt/gmd/osrm/current/foot:/data:ro
+    networks: [gmd_net]
+    expose: ['5000']
+    mem_limit: 1g
+
   backend:
     <<: [*restart, *logging]
     build:
@@ -270,6 +297,10 @@ services:
       # FcmService стартует в DISABLED состоянии, push не отправляется,
       # backend fallback'ится на poll-команды через DeviceCommand queue.
       FIREBASE_SA_KEY: ${FIREBASE_SA_KEY:-}
+      # v0.80.0: OSRM для привязки треков к дорогам. Пустое значение выключает
+      # привязку (треки как записано, после очистки).
+      OSRM_CAR_URL: ${OSRM_CAR_URL-http://osrm-car:5000}
+      OSRM_FOOT_URL: ${OSRM_FOOT_URL-http://osrm-foot:5000}
     volumes:
       - /opt/gmd/secrets/jwt-private.pem:/run/secrets/jwt-private.pem:ro
       - /opt/gmd/secrets/jwt-public.pem:/run/secrets/jwt-public.pem:ro

@@ -10,6 +10,7 @@ import { useChildAvatarSrc } from '@/lib/hooks/use-child-avatar';
 import { LatestMarker } from './latest-marker';
 import { TrackPolyline } from './track-polyline';
 import { ChildZonesLayer, useShowChildZones, ZonesToggleControl } from './child-zones-layer';
+import { TrackViewToggleControl } from './track-view-toggle';
 
 export interface ChildMapInnerProps {
   childId: string;
@@ -170,6 +171,11 @@ export function ChildMapInner({
         />
       )}
       {showZones && <ChildZonesLayer zones={zones} />}
+      {/* v0.80.0: «Как записано» — следующей в колонке кнопок под зумом. */}
+      <TrackViewToggleControl
+        marginTop={80 + (latest ? 40 : 0) + (zones.length > 0 ? 40 : 0)}
+        hasTrack={track.length >= 2}
+      />
       {latest && (
         <LatestMarker
           lat={latest.lat}

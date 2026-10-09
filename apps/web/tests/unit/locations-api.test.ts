@@ -56,5 +56,21 @@ describe('locationsApi', () => {
     expect(url).toContain('to=2026-04-19T23%3A59%3A59.999Z');
     expect(url).toContain('order=asc');
     expect(url).toContain('limit=2000');
+    // v0.80.0: по умолчанию — трек по дорогам.
+    expect(url).toContain('view=road');
+  });
+
+  it('v0.80.0: getHistory/getActiveTrack/getTripPoints передают view', async () => {
+    const mock = global.fetch as jest.Mock;
+    mock.mockImplementation(
+      async () => new Response(JSON.stringify({ items: [], points: [] }), { status: 200 }),
+    );
+    await locationsApi.getHistory('c1', 'a', 'b', 2000, 'recorded');
+    await locationsApi.getActiveTrack('c1', 'recorded');
+    await locationsApi.getTripPoints('c1', 't1', 'road');
+    const urls = mock.mock.calls.map((c) => c[0] as string);
+    expect(urls[0]).toContain('view=recorded');
+    expect(urls[1]).toContain('/api/children/c1/trips/active-track?view=recorded');
+    expect(urls[2]).toContain('/api/children/c1/trips/t1/points?view=road');
   });
 });

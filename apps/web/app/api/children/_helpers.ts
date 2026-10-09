@@ -22,6 +22,16 @@ export function proxyResponse(r: BackendResponse<unknown>): NextResponse {
   return NextResponse.json(r.body, { status: r.status });
 }
 
+/**
+ * v0.80.0: query `view=road|recorded` для эндпоинтов трека — пробрасываем в
+ * backend как есть; без параметра (или с мусором) — пусто, backend сам берёт
+ * road. Возвращает строку для дописывания к пути: `?view=…` или `''`.
+ */
+export function trackViewQuery(req: NextRequest): string {
+  const view = req.nextUrl.searchParams.get('view');
+  return view === 'road' || view === 'recorded' ? `?view=${view}` : '';
+}
+
 export async function proxy(
   method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE',
   backendPath: string,

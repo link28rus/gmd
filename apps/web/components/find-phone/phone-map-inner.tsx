@@ -6,6 +6,7 @@ import type { PhoneLatest, PhoneTrackPoint } from '@/lib/api/find-phone';
 import { useTheme } from '@/components/theme/theme-provider';
 import { tileConfigFor } from '@/lib/maps/tile-config';
 import { TrackPolyline } from '@/components/locations/track-polyline';
+import { TrackViewToggleControl } from '@/components/locations/track-view-toggle';
 import { PhoneMarker } from './phone-marker';
 
 export interface PhoneMapInnerProps {
@@ -14,7 +15,10 @@ export interface PhoneMapInnerProps {
   phoneName: string;
   latest: PhoneLatest | null;
   ringing: boolean;
-  /** Маршрут выбранного дня (сырые точки; грубые TrackPolyline отфильтрует сам). */
+  /**
+   * Маршрут выбранного дня: по дорогам (очищен сервером) или «как записано»
+   * (сырые точки; грубые TrackPolyline отфильтрует сам) — v0.80.0.
+   */
   track: PhoneTrackPoint[];
   /** Точки, которые реально рисуются, — по ним подгоняем масштаб. */
   drawable: PhoneTrackPoint[];
@@ -129,6 +133,8 @@ export function PhoneMapInner({
       />
       <ZoomControl position="topright" />
       <GoToPhoneControl latest={latest} />
+      {/* v0.80.0: «Как записано» — под «К телефону». */}
+      <TrackViewToggleControl marginTop={latest ? 120 : 80} hasTrack={drawable.length >= 2} />
       <FitView viewKey={viewKey} latest={latest} drawable={drawable} trackLoading={trackLoading} />
       <TrackPolyline items={track} />
       {latest && (

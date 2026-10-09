@@ -42,6 +42,8 @@ export const MyTrackQuerySchema = z
   .object({
     from: z.string().datetime(),
     to: z.string().datetime(),
+    // v0.80.0: road — привязан к дорогам (по умолчанию), recorded — как записано.
+    view: z.enum(['road', 'recorded']).optional(),
   })
   .strict();
 

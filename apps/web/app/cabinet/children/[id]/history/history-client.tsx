@@ -9,6 +9,7 @@ import type { Zone } from '@/lib/api/zones';
 import { reverseGeocode, reverseKey } from '@/lib/api/geocode';
 import { useChildren } from '@/lib/hooks/use-children';
 import { useZones } from '@/lib/hooks/use-zones';
+import { useTrackView } from '@/lib/hooks/use-track-view';
 import { ZONE_ICON_EMOJI } from '@/app/cabinet/zones/components/zone-format';
 import {
   avgSpeedKmh,
@@ -28,6 +29,8 @@ import { HistoryMap } from './history-map';
 import type { TripTrack } from './history-map-inner';
 
 const RIBBON_HOURS = [6, 12, 18];
+
+type TripPointsData = Awaited<ReturnType<typeof locationsApi.getTripPoints>>;
 
 export default function HistoryClient({ childId }: { childId: string }): ReactElement {
   const tripsQ = useQuery({
@@ -59,12 +62,20 @@ export default function HistoryClient({ childId }: { childId: string }): ReactEl
   const day = days.find((d) => d.key === dayKey) ?? days[0] ?? null;
   const selected = day?.trips.find((t) => t.trip.id === selectedId) ?? null;
 
+  // v0.80.0: вид трека (по дорогам / как записано) — часть ключа. При
+  // переключении прежние точки той же поездки видны до ответа; чужие
+  // (useQueries сопоставляет запросы по индексу) не подставляем.
+  const [trackView] = useTrackView();
   const trackQs = useQueries({
     queries: (day?.trips ?? []).map(({ trip }) => ({
-      queryKey: ['trips', 'points', childId, trip.id],
-      queryFn: () => locationsApi.getTripPoints(childId, trip.id),
+      queryKey: ['trips', 'points', childId, trip.id, trackView],
+      queryFn: () => locationsApi.getTripPoints(childId, trip.id, trackView),
       staleTime: trip.isActive ? 20_000 : 5 * 60_000,
       refetchInterval: trip.isActive ? 30_000 : (false as const),
+      placeholderData: (
+        prev: TripPointsData | undefined,
+        prevQuery: { queryKey: readonly unknown[] } | undefined,
+      ) => (prevQuery?.queryKey[3] === trip.id ? prev : undefined),
     })),
   });
   const tracks = useMemo(() => {

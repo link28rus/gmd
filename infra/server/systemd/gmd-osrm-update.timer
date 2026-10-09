@@ -1,0 +1,13 @@
+[Unit]
+Description=Monthly GMD OSRM road graph update (5th, 04:30)
+Documentation=https://github.com/link28rus/gmd/blob/main/docs/deploy.md
+
+[Timer]
+# Geofabrik обновляет выгрузки ежедневно; дорогам в городе хватает раза в месяц.
+# Скрипт сам пропускает сборку, если карта не менялась.
+OnCalendar=*-*-05 04:30:00
+Persistent=true
+RandomizedDelaySec=30m
+
+[Install]
+WantedBy=timers.target

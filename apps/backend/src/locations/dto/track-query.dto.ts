@@ -7,6 +7,8 @@ export const TrackQuerySchema = z
   .object({
     from: z.string().datetime(),
     to: z.string().datetime(),
+    // v0.80.0: road — привязан к дорогам (по умолчанию), recorded — как записано.
+    view: z.enum(['road', 'recorded']).optional(),
   })
   .refine((q) => new Date(q.to).getTime() > new Date(q.from).getTime(), {
     message: 'to must be after from',

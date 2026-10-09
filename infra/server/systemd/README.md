@@ -76,3 +76,34 @@ tail -50 /var/log/gmd-cleanup.log
 Раз в месяц (3-го, 05:15) скачивает базу DB-IP City Lite в `/opt/gmd/data/geoip/`
 (временный файл + `mv -f`). Скрипт — `infra/server/bin/geoip-update.sh`, установка и
 проверка — `docs/deploy.md`, раздел «GeoIP — город по IP».
+
+## gmd-osrm-update (граф дорог для привязки треков, v0.80.0)
+
+Раз в месяц качает выгрузку OSM «Дальневосточный ФО» с Geofabrik, вырезает
+прямоугольник города (`OSRM_BBOX`, по умолчанию Хабаровск с пригородами) и
+собирает два графа OSRM — `car` и `foot` — в `/opt/gmd/osrm/current`. Прежний
+граф остаётся в `/opt/gmd/osrm/previous`. После подмены перезапускает
+`gmd-osrm-car` / `gmd-osrm-foot`. Карта не менялась — сборка пропускается
+(`OSRM_FORCE=1` — собрать всё равно).
+
+Ездите за пределы прямоугольника — расширьте его в `/etc/default/gmd-osrm-update`
+(`OSRM_BBOX=minlon,minlat,maxlon,maxlat`) и запустите сервис руками. Весь
+Дальний Восток на 8 ГБ памяти не собрать.
+
+### Установка
+
+```bash
+# С локальной машины
+scp infra/server/bin/osrm-update.sh gmd-prod:/tmp/
+scp infra/server/systemd/gmd-osrm-update.{service,timer} gmd-prod:/tmp/
+
+# На сервере
+ssh gmd-prod
+sudo install -m 0755 -o root -g root /tmp/osrm-update.sh /opt/gmd/bin/osrm-update.sh
+sudo install -m 0644 -o root -g root /tmp/gmd-osrm-update.service /etc/systemd/system/
+sudo install -m 0644 -o root -g root /tmp/gmd-osrm-update.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now gmd-osrm-update.timer
+sudo systemctl start gmd-osrm-update.service   # первая сборка, ~10–20 мин
+tail -f /var/log/gmd-osrm-update.log
+```

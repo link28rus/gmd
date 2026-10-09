@@ -223,6 +223,8 @@ function MapArea({ child }: { child: Child }): ReactElement {
     recordedAt: p.recordedAt,
     accuracy: null,
     speed: null,
+    // v0.80.0: достроенный по дороге участок рисуется пунктиром — флаг не теряем.
+    ...(p.inferred ? { inferred: true } : {}),
   }));
   const emptyState =
     latest === null && track.length === 0 && !latestQ.isPending && !activeQ.isPending;

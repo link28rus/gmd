@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/providers.dart';
 import 'child_models.dart';
 import 'children_repository.dart';
+import 'track_view_provider.dart';
 
 final childrenRepositoryProvider = Provider<ChildrenRepository>(
   (ref) => ChildrenRepository(ref.watch(dioProvider)),
@@ -24,11 +25,13 @@ final childLatestLocationProvider =
 });
 
 /// Активный трек (точки + стоянки текущей поездки). Если ребёнок стоит —
-/// пустые списки.
+/// пустые списки. v0.80.0: зависит от вида трека — переключение «Как
+/// записано» перезапрашивает трек.
 final childActiveTrackProvider =
     FutureProvider.autoDispose.family<TrackData, String>((ref, childId) async {
   final repo = ref.watch(childrenRepositoryProvider);
-  return repo.activeTrack(childId);
+  final view = await ref.watch(trackViewProvider.future);
+  return repo.activeTrack(childId, view: view);
 });
 
 /// Список поездок ребёнка (история передвижений). autoDispose — освобождается
@@ -44,10 +47,12 @@ final childTripsProvider =
 typedef TripPointsKey = ({String childId, String tripId});
 
 /// Точки и стоянки конкретной поездки (для polyline и маркеров на карте).
+/// v0.80.0: зависит от вида трека, как [childActiveTrackProvider].
 final tripPointsProvider =
     FutureProvider.autoDispose.family<TrackData, TripPointsKey>((ref, key) async {
   final repo = ref.watch(childrenRepositoryProvider);
-  return repo.tripPoints(key.childId, key.tripId);
+  final view = await ref.watch(trackViewProvider.future);
+  return repo.tripPoints(key.childId, key.tripId, view: view);
 });
 
 /// Ключ для [childAvatarPhotoProvider] — (childId, version из `photo:<version>`).

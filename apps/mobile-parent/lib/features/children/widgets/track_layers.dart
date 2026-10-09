@@ -15,11 +15,17 @@ const _kStayTextColor = Color(0xFFB45309);
 
 // Не const: в flutter_map 7.0.2 assert конструктора читает `segments.length`.
 final _kGapPattern = StrokePattern.dashed(segments: const [8, 6]);
+// v0.80.0: достроенный по дороге участок — пунктир цветом трека, штрих
+// длиннее серого: линия толще.
+final _kInferredPattern = StrokePattern.dashed(segments: const [10, 8]);
 
 /// Слои трека ребёнка для `FlutterMap.children`:
 ///   - непрерывные куски — сплошной зелёной линией (как раньше);
 ///   - разрывы (см. [splitTrackByGaps]) — тонким серым пунктиром;
 ///   - у середины каждого разрыва — подпись «нет данных N мин»;
+///   - v0.80.0: участки, достроенные сервером по дороге (точки `inferred`,
+///     см. [splitTrackForMap]), — зелёным пунктиром с той же подписью
+///     «нет данных N мин» посередине серии;
 ///   - стоянки ([stays], сервер v0.63.0+) — кружки «П», по тапу подсказка
 ///     «Стоял HH:MM–HH:MM · N мин».
 ///
@@ -35,7 +41,28 @@ List<Widget> buildTrackLayers(
 }) {
   final hasLine = points.length >= 2;
   if (!hasLine && stays.isEmpty) return const [];
-  final split = hasLine ? splitTrackByGaps(points) : null;
+  final split = hasLine ? splitTrackForMap(points) : null;
+  // Подписи: у разрыва — посередине отрезка, у достроенной серии —
+  // посередине линии по длине. Серия без реальной точки с одной из сторон
+  // (трек начат/кончен достройкой) и короче минуты — без подписи.
+  final labels = <Marker>[
+    if (split != null)
+      for (final gap in split.gaps)
+        _gapLabelMarker(
+          LatLng(
+            (gap.from.lat + gap.to.lat) / 2,
+            (gap.from.lon + gap.to.lon) / 2,
+          ),
+          gap.duration,
+        ),
+    if (split != null)
+      for (final run in split.inferred)
+        if ((run.duration?.inMinutes ?? 0) >= 1)
+          _gapLabelMarker(
+            _midpoint(run.points),
+            run.duration!,
+          ),
+  ];
   return [
     if (split != null)
       PolylineLayer(
@@ -49,32 +76,24 @@ List<Widget> buildTrackLayers(
               color: _kGapColor,
               pattern: _kGapPattern,
             ),
+          for (final run in split.inferred)
+            Polyline(
+              points: run.points.map(_latLng).toList(),
+              strokeWidth: 4,
+              color: _kTrackColor,
+              pattern: _kInferredPattern,
+            ),
           for (final segment in split.segments)
-            if (segment.length >= 2)
-              Polyline(
-                points: segment.map(_latLng).toList(),
-                strokeWidth: 4,
-                color: _kTrackColor,
-                borderStrokeWidth: 1,
-                borderColor: Colors.white,
-              ),
-        ],
-      ),
-    if (split != null && split.gaps.isNotEmpty)
-      MarkerLayer(
-        markers: [
-          for (final gap in split.gaps)
-            Marker(
-              point: LatLng(
-                (gap.from.lat + gap.to.lat) / 2,
-                (gap.from.lon + gap.to.lon) / 2,
-              ),
-              width: 160,
-              height: 24,
-              child: _GapLabel(text: formatTrackGapLabel(gap.duration)),
+            Polyline(
+              points: segment.map(_latLng).toList(),
+              strokeWidth: 4,
+              color: _kTrackColor,
+              borderStrokeWidth: 1,
+              borderColor: Colors.white,
             ),
         ],
       ),
+    if (labels.isNotEmpty) MarkerLayer(markers: labels),
     if (stays.isNotEmpty)
       MarkerLayer(
         markers: [
@@ -115,6 +134,18 @@ String _hhmm(DateTime t) =>
     '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
 LatLng _latLng(ChildLocation p) => LatLng(p.lat, p.lon);
+
+LatLng _midpoint(List<ChildLocation> points) {
+  final m = trackPolylineMidpoint(points)!;
+  return LatLng(m.lat, m.lon);
+}
+
+Marker _gapLabelMarker(LatLng point, Duration duration) => Marker(
+      point: point,
+      width: 160,
+      height: 24,
+      child: _GapLabel(text: formatTrackGapLabel(duration)),
+    );
 
 class _GapLabel extends StatelessWidget {
   const _GapLabel({required this.text});

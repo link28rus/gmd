@@ -5,13 +5,21 @@ import {
   SETTINGS_KEYS,
   TRACK_DEFAULTS,
 } from '../app-settings/app-settings.service';
-import { buildTrack, segmentTrips } from './track-builder';
-import type { TrackInputPoint, TrackParams } from './track-builder';
+import { RoadMatchService } from '../road-match/road-match.service';
+import { buildTrack, pathLength, segmentTrips } from './track-builder';
+import type { TrackInputPoint, TrackOutPoint, TrackParams } from './track-builder';
 
 const DEFAULT_IDLE_MINUTES = 30;
 const DEFAULT_IDLE_RADIUS_M = 70;
 // Трек за произвольный период (карта дня) — не больше стольких точек.
 const TRACK_MAX_POINTS = 5000;
+// v0.80.0: сколько поездок за один пересчёт привязывать к дорогам впервые.
+// Пересчёт идёт после каждой выгрузки точек; после деплоя или простоя OSRM
+// непривязанные поездки за 30 дней догоняются порциями, не задерживая push.
+const ROAD_MATCH_TRIPS_PER_RECOMPUTE = 10;
+
+/** road — привязанный к дорогам (по умолчанию), recorded — «как записано». */
+export type TrackView = 'road' | 'recorded';
 
 export interface TripDto {
   id: string;
@@ -30,6 +38,8 @@ export interface TrackPointDto {
   lat: number;
   lon: number;
   recordedAt: string;
+  // v0.80.0: участок достроен по дороге в разрыве без данных (рисуется пунктиром).
+  inferred?: true;
 }
 
 export interface TrackStayDto {
@@ -51,6 +61,7 @@ export class TripsService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(AppSettingsService) private readonly settings: AppSettingsService,
+    @Inject(RoadMatchService) private readonly road: RoadMatchService,
   ) {}
 
   private async params(): Promise<TrackParams> {
@@ -92,25 +103,26 @@ export class TripsService {
   // устойчиво к retroactive-правкам точек (офлайн-хвост, переразметка).
   // Вызывается:
   //   (а) сразу после каждого ingest — для онлайн-карты
-  //   (б) из pg_cron раз в 5 мин — подстраховка + закрытие активных поездок
-  //        у детей, которые перестали присылать точки
+  //   (б) из TrackBackfillService при смене правил разметки
   async recomputeForChild(childId: string): Promise<void> {
     const p = await this.params();
     const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const points = await this.goodPoints(childId, since);
     const trips = segmentTrips(points, { ...p, now: Date.now() });
+    const distances = await this.roadDistances(childId, trips);
 
     await this.prisma.$transaction(async (tx) => {
       await tx.trip.deleteMany({ where: { childId } });
       if (trips.length === 0) return;
       await tx.trip.createMany({
-        data: trips.map((t) => ({
+        data: trips.map((t, i) => ({
           childId,
           startedAt: new Date(t.startedAt),
           endedAt: t.isActive ? null : new Date(t.endedAt),
           isActive: t.isActive,
           pointsCount: t.pointsCount,
-          distanceM: t.distanceM,
+          distanceM: distances[i] ?? t.distanceM,
+          roadMatched: distances[i] !== undefined,
           startLat: t.startLat,
           startLon: t.startLon,
           endLat: t.endLat,
@@ -122,16 +134,71 @@ export class TripsService {
     this.logger.log(`trips recomputed child=${childId} saved=${trips.length}`);
   }
 
+  // v0.80.0: пробег поездок по дорогам. Закрытая поездка, уже посчитанная по
+  // дорогам, берёт прежний пробег (поездки пересоздаются каждым пересчётом, но
+  // те же границы и число точек — та же поездка). Остальные привязываются, не
+  // больше ROAD_MATCH_TRIPS_PER_RECOMPUTE за раз, активная — первой.
+  // undefined в результате — пробег остаётся по очищенному треку.
+  private async roadDistances(
+    childId: string,
+    trips: Array<{
+      startedAt: number;
+      endedAt: number;
+      isActive: boolean;
+      pointsCount: number;
+      route: TrackOutPoint[];
+    }>,
+  ): Promise<Array<number | undefined>> {
+    const out = new Array<number | undefined>(trips.length).fill(undefined);
+    if (!this.road.enabled() || trips.length === 0) return out;
+    const key = (startedAt: number, endedAt: number, pointsCount: number): string =>
+      `${startedAt}|${endedAt}|${pointsCount}`;
+    const known = new Map<string, number>();
+    const rows = await this.prisma.trip.findMany({
+      where: { childId, roadMatched: true, isActive: false },
+      select: { startedAt: true, endedAt: true, pointsCount: true, distanceM: true },
+    });
+    for (const r of rows) {
+      if (r.endedAt) {
+        known.set(key(r.startedAt.getTime(), r.endedAt.getTime(), r.pointsCount), r.distanceM);
+      }
+    }
+    const todo: number[] = [];
+    trips.forEach((t, i) => {
+      const prev = t.isActive ? undefined : known.get(key(t.startedAt, t.endedAt, t.pointsCount));
+      if (prev !== undefined) out[i] = prev;
+      else todo.push(i);
+    });
+    // Активная и самые свежие — первыми: их пробег смотрят чаще.
+    todo.sort((a, b) => Number(trips[b].isActive) - Number(trips[a].isActive) || b - a);
+    for (const i of todo.slice(0, ROAD_MATCH_TRIPS_PER_RECOMPUTE)) {
+      const snapped = await this.road.snap(trips[i].route);
+      if (!snapped) break; // OSRM недоступен — остальные тоже не выйдет
+      if (snapped.complete) out[i] = Math.round(pathLength(snapped.points));
+    }
+    return out;
+  }
+
   // Очищенный трек за период: без плохих точек, стоянки свёрнуты.
-  private async trackBetween(childId: string, from: Date, to?: Date): Promise<TrackDto> {
+  // v0.80.0: view=road (по умолчанию) — привязан к дорогам, если OSRM доступен.
+  private async trackBetween(
+    childId: string,
+    from: Date,
+    to: Date | undefined,
+    view: TrackView,
+  ): Promise<TrackDto> {
     const p = await this.params();
     const points = await this.goodPoints(childId, from, to, TRACK_MAX_POINTS);
     const built = buildTrack(points, p.idleRadiusM, p.stopMinMs);
+    const snapped = view === 'road' ? await this.road.snap(built.points) : null;
+    const line: Array<{ lat: number; lon: number; t: number; inferred?: true }> =
+      snapped?.points ?? built.points;
     return {
-      points: built.points.map((q) => ({
+      points: line.map((q) => ({
         lat: q.lat,
         lon: q.lon,
         recordedAt: new Date(q.t).toISOString(),
+        ...(q.inferred ? { inferred: true as const } : {}),
       })),
       stays: built.stays.map((s) => ({
         lat: s.lat,
@@ -142,11 +209,19 @@ export class TripsService {
     };
   }
 
-  async getTrack(childId: string, from: Date, to: Date): Promise<TrackDto> {
-    return this.trackBetween(childId, from, to);
+  async getTrack(
+    childId: string,
+    from: Date,
+    to: Date,
+    view: TrackView = 'road',
+  ): Promise<TrackDto> {
+    return this.trackBetween(childId, from, to, view);
   }
 
-  async getActiveTrack(childId: string): Promise<{ trip: TripDto | null } & TrackDto> {
+  async getActiveTrack(
+    childId: string,
+    view: TrackView = 'road',
+  ): Promise<{ trip: TripDto | null } & TrackDto> {
     const empty = { trip: null, points: [], stays: [] };
     const active = await this.prisma.trip.findFirst({
       where: { childId, isActive: true },
@@ -168,7 +243,7 @@ export class TripsService {
       return empty;
     }
 
-    const track = await this.trackBetween(childId, active.startedAt);
+    const track = await this.trackBetween(childId, active.startedAt, undefined, view);
     return { trip: this.toDto(active), ...track };
   }
 
@@ -187,10 +262,10 @@ export class TripsService {
     return rows.map((r) => this.toDto(r));
   }
 
-  async getTripTrack(childId: string, tripId: string): Promise<TrackDto> {
+  async getTripTrack(childId: string, tripId: string, view: TrackView = 'road'): Promise<TrackDto> {
     const trip = await this.prisma.trip.findUnique({ where: { id: tripId } });
     if (!trip || trip.childId !== childId) return { points: [], stays: [] };
-    return this.trackBetween(childId, trip.startedAt, trip.endedAt ?? new Date());
+    return this.trackBetween(childId, trip.startedAt, trip.endedAt ?? new Date(), view);
   }
 
   private toDto(r: {

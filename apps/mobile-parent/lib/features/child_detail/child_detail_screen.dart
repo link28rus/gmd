@@ -12,6 +12,7 @@ import '../children/child_models.dart';
 import '../children/children_providers.dart';
 import '../children/widgets/child_avatar.dart';
 import '../children/widgets/track_layers.dart';
+import '../children/widgets/track_view_menu.dart';
 import '../zones/widgets/zone_widgets.dart';
 import '../zones/zones_providers.dart';
 import 'widgets/child_action_sheet.dart';
@@ -222,6 +223,8 @@ class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen>
             icon: const Icon(Icons.refresh),
             onPressed: () => _refresh(manual: true),
           ),
+          // v0.80.0: «Как записано» — трек без привязки к дорогам.
+          const TrackViewMenuButton(),
         ],
       ),
       // Stack чтобы DraggableScrollableSheet ехал поверх карты, а не
@@ -289,6 +292,7 @@ class _ChildDetailScreenState extends ConsumerState<ChildDetailScreen>
                             MarkerLayer(markers: zoneCenterMarkers(childZones)),
                           ],
                           // Сплошная линия по кускам + серый пунктир на разрывах
+                          // + зелёный пунктир на достроенных по дороге участках
                           // + стоянки «П». До маркера ребёнка — он рисуется поверх.
                           ...buildTrackLayers(track, stays: trackData.stays),
                           if (latest != null)

@@ -3,6 +3,13 @@ import { Prisma } from '@prisma/client';
 import { createId } from '@paralleldrive/cuid2';
 import { PrismaService } from '../prisma/prisma.service';
 import { FcmService } from '../fcm/fcm.service';
+import {
+  AppSettingsService,
+  SETTINGS_KEYS,
+  TRACK_DEFAULTS,
+} from '../app-settings/app-settings.service';
+import { RoadMatchService } from '../road-match/road-match.service';
+import { buildTrack } from '../locations/track-builder';
 import { displayName, isSignalLive, SIGNAL_TTL_MS } from './parent-location.service';
 import type { ParentLocationAuthContext } from './parent-location.service';
 
@@ -56,7 +63,15 @@ export interface MyTrackPointDto {
   recordedAt: string;
   accuracy: number | null;
   speed: number | null;
+  // v0.80.0: участок достроен по дороге в разрыве без данных (рисуется пунктиром).
+  inferred?: true;
 }
+
+/** v0.80.0: road — очищен и привязан к дорогам (по умолчанию), recorded — сырые точки. */
+export type PhoneTrackView = 'road' | 'recorded';
+
+// Радиус стоянки — как у поездок детей (trip.idle_radius_m по умолчанию).
+const PHONE_STAY_RADIUS_M = 70;
 
 export interface SignalResult {
   signalId: string;
@@ -91,6 +106,8 @@ export class FindPhoneService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(FcmService) private readonly fcm: FcmService,
+    @Inject(AppSettingsService) private readonly settings: AppSettingsService,
+    @Inject(RoadMatchService) private readonly road: RoadMatchService,
   ) {}
 
   async listMyPhones(userId: string): Promise<MyPhoneDto[]> {
@@ -173,6 +190,7 @@ export class FindPhoneService {
     deviceId: string,
     fromIso: string,
     toIso: string,
+    view: PhoneTrackView = 'road',
   ): Promise<{ items: MyTrackPointDto[] }> {
     const from = new Date(fromIso);
     const to = new Date(toIso);
@@ -195,6 +213,7 @@ export class FindPhoneService {
       take: MAX_TRACK_POINTS,
       select: { lat: true, lon: true, recordedAt: true, accuracy: true, speed: true },
     });
+    if (view === 'road') return { items: await this.roadTrack(rows) };
     return {
       items: rows.map((r) => ({
         lat: r.lat,
@@ -204,6 +223,35 @@ export class FindPhoneService {
         speed: r.speed,
       })),
     };
+  }
+
+  /**
+   * v0.80.0: трек телефона как у детей — без грубых точек, стоянки свёрнуты,
+   * движение сглажено и привязано к дорогам (если OSRM доступен).
+   */
+  private async roadTrack(
+    rows: Array<{ lat: number; lon: number; recordedAt: Date; accuracy: number | null }>,
+  ): Promise<MyTrackPointDto[]> {
+    const [accuracyMax, stopMinutes] = await Promise.all([
+      this.settings.getNumber(SETTINGS_KEYS.TRACK_ACCURACY_MAX_M, TRACK_DEFAULTS.accuracyMaxM),
+      this.settings.getNumber(SETTINGS_KEYS.TRACK_STOP_MINUTES, TRACK_DEFAULTS.stopMinutes),
+    ]);
+    const good = rows
+      .filter((r) => r.accuracy === null || r.accuracy <= accuracyMax)
+      .map((r) => ({ lat: r.lat, lon: r.lon, t: r.recordedAt.getTime(), accuracy: r.accuracy }));
+    const built = buildTrack(good, PHONE_STAY_RADIUS_M, stopMinutes * 60_000);
+    const snapped = await this.road.snap(built.points);
+    const line: Array<{ lat: number; lon: number; t: number; inferred?: true }> =
+      snapped?.points ?? built.points;
+    // accuracy/speed у очищенной линии нет: клиент её уже не фильтрует.
+    return line.map((q) => ({
+      lat: q.lat,
+      lon: q.lon,
+      recordedAt: new Date(q.t).toISOString(),
+      accuracy: null,
+      speed: null,
+      ...(q.inferred ? { inferred: true as const } : {}),
+    }));
   }
 
   /**

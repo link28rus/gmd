@@ -4,13 +4,16 @@
 import { useQuery } from '@tanstack/react-query';
 import { locationsApi, type LocationHistoryDto } from '@/lib/api/locations';
 import { dayBoundsIso, isToday } from '@/lib/date/day-bounds';
+import { useTrackView } from './use-track-view';
 
 export function useLocationHistory(childId: string, date: string) {
+  // v0.80.0: вид трека (по дорогам / как записано) — часть ключа кэша.
+  const [view] = useTrackView();
   const query = useQuery<LocationHistoryDto>({
-    queryKey: ['location', 'history', childId, date],
+    queryKey: ['location', 'history', childId, date, view],
     queryFn: () => {
       const [from, to] = dayBoundsIso(date);
-      return locationsApi.getHistory(childId, from, to, 2000);
+      return locationsApi.getHistory(childId, from, to, 2000, view);
     },
     enabled: !!childId && !!date,
     staleTime: date && isToday(date) ? 5_000 : 5 * 60_000,

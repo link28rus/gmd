@@ -14,6 +14,7 @@ jest.mock('react-leaflet', () => {
         'data-testid': 'polyline',
         'data-positions': JSON.stringify(positions),
         'data-dash': pathOptions?.dashArray ?? '',
+        'data-color': pathOptions?.color ?? '',
       }),
     Marker: ({ position, icon, title }: any) =>
       React.createElement('div', {
@@ -32,6 +33,7 @@ type Item = {
   recordedAt: string;
   accuracy: number | null;
   speed: number | null;
+  inferred?: boolean;
 };
 
 const T0 = Date.parse('2026-04-19T08:00:00.000Z');
@@ -167,6 +169,33 @@ describe('TrackPolyline', () => {
     expect(screen.getByText('нет данных 1 ч 10 мин')).toBeInTheDocument();
     const lonePos = JSON.stringify([lone.lat, lone.lon]);
     expect(markers('gmd-dot').some((m) => m.dataset.position === lonePos)).toBe(true);
+  });
+
+  it('v0.80.0: достроенный по дороге участок — пунктир цветом трека с подписью', () => {
+    const a = at(0, 0);
+    const b = at(1, 0.001);
+    const i1 = { ...at(15, 0.008), inferred: true };
+    const i2 = { ...at(30, 0.015), inferred: true };
+    const c = at(41, 0.02); // 40 мин без данных, сервер достроил путь
+    const d = at(42, 0.021);
+    render(<TrackPolyline items={[a, b, i1, i2, c, d]} />);
+    expect(solid()).toHaveLength(2);
+    expect(dashed()).toHaveLength(1);
+    const run = dashed()[0];
+    expect(run.dataset.color).toBe('#2563eb'); // не серый, как обычный разрыв
+    expect(run.dataset.positions).toBe(JSON.stringify([b, i1, i2, c].map((p) => [p.lat, p.lon])));
+    expect(screen.getByText('нет данных 40 мин')).toBeInTheDocument();
+    // Достроенные точки кружками не рисуем — их время условное.
+    const dotPos = markers('gmd-dot').map((m) => m.dataset.position);
+    expect(dotPos).not.toContain(JSON.stringify([i1.lat, i1.lon]));
+    expect(dotPos).not.toContain(JSON.stringify([i2.lat, i2.lon]));
+  });
+
+  it('v0.80.0: без inferred — как раньше (обычный разрыв серым)', () => {
+    const track = [at(0, 0), at(1, 0.001), at(68, 0.02), at(69, 0.021)];
+    render(<TrackPolyline items={track} />);
+    expect(dashed()).toHaveLength(1);
+    expect(dashed()[0].dataset.color).toBe('#64748b');
   });
 
   it('одиночная точка не теряется при прореживании кружков (> 120 точек)', () => {

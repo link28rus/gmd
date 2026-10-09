@@ -104,3 +104,130 @@ String formatTrackGapLabel(Duration duration) {
       ? 'нет данных $hours ч'
       : 'нет данных $hours ч $minutes мин';
 }
+
+/// v0.80.0: участок, достроенный сервером по дороге в разрыве без данных
+/// («скорее всего ехал так»). Отрезок соседних точек достроен, если хотя бы
+/// одна из двух точек `inferred` (см. [ChildLocation.inferred]).
+///
+/// Серия режется на реальных точках: [points] начинается последней реальной
+/// точкой перед достройкой и кончается первой реальной после неё.
+/// Исключение — трек, начатый или законченный достроенной точкой.
+class TrackInferredRun {
+  const TrackInferredRun({required this.points});
+
+  /// Точки линии серии (≥ 2) в порядке времени.
+  final List<ChildLocation> points;
+
+  /// Последняя реальная точка перед серией; null, если трек ею начинается.
+  ChildLocation? get from => points.first.inferred ? null : points.first;
+
+  /// Первая реальная точка после серии; null, если трек ею кончается.
+  ChildLocation? get to => points.last.inferred ? null : points.last;
+
+  /// Сколько не было данных: от [from] до [to]. Времена достроенных точек
+  /// интерполированы, поэтому считаем только по реальным. null — если
+  /// с одной из сторон реальной точки нет.
+  Duration? get duration {
+    final a = from;
+    final b = to;
+    if (a == null || b == null) return null;
+    return b.recordedAt.difference(a.recordedAt);
+  }
+}
+
+/// v0.80.0: трек для карты — сплошные куски, разрывы без данных и
+/// достроенные по дороге участки.
+class TrackMapSplit {
+  const TrackMapSplit({
+    required this.segments,
+    required this.gaps,
+    required this.inferred,
+  });
+
+  /// Сплошные куски из реальных точек, каждый ≥ 2 точек.
+  final List<List<ChildLocation>> segments;
+
+  /// Разрывы между реальными точками без достройки (контракт [isTrackGap]).
+  final List<TrackGap> gaps;
+
+  /// Достроенные серии в порядке времени.
+  final List<TrackInferredRun> inferred;
+}
+
+/// v0.80.0: режет трек на сплошные куски, разрывы и достроенные серии.
+/// Для отрезка A→B по порядку `recordedAt`:
+///   - A или B `inferred` — отрезок достроенной серии (детекция разрыва на
+///     нём не работает: время интерполировано);
+///   - иначе [isTrackGap] — разрыв;
+///   - иначе — сплошная линия.
+/// Трек без достроенных точек делится так же, как [splitTrackByGaps].
+TrackMapSplit splitTrackForMap(List<ChildLocation> points) {
+  final sorted = [...points]
+    ..sort((a, b) => a.recordedAt.compareTo(b.recordedAt));
+  final segments = <List<ChildLocation>>[];
+  final gaps = <TrackGap>[];
+  final inferred = <TrackInferredRun>[];
+
+  List<ChildLocation>? solid;
+  List<ChildLocation>? run;
+  void closeSolid() {
+    if (solid != null) segments.add(solid!);
+    solid = null;
+  }
+
+  void closeRun() {
+    if (run != null) inferred.add(TrackInferredRun(points: run!));
+    run = null;
+  }
+
+  for (var i = 1; i < sorted.length; i++) {
+    final a = sorted[i - 1];
+    final b = sorted[i];
+    if (a.inferred || b.inferred) {
+      closeSolid();
+      (run ??= [a]).add(b);
+      // Дошли до реальной точки — серия кончилась.
+      if (!b.inferred) closeRun();
+    } else {
+      closeRun();
+      if (isTrackGap(a, b)) {
+        closeSolid();
+        gaps.add(TrackGap(from: a, to: b));
+      } else {
+        (solid ??= [a]).add(b);
+      }
+    }
+  }
+  closeSolid();
+  closeRun();
+  return TrackMapSplit(segments: segments, gaps: gaps, inferred: inferred);
+}
+
+/// v0.80.0: середина ломаной по длине — место подписи достроенной серии.
+/// Для пустого списка — null, для одной точки — она сама.
+({double lat, double lon})? trackPolylineMidpoint(List<ChildLocation> points) {
+  if (points.isEmpty) return null;
+  final lengths = <double>[
+    for (var i = 1; i < points.length; i++)
+      haversineMeters(
+        points[i - 1].lat,
+        points[i - 1].lon,
+        points[i].lat,
+        points[i].lon,
+      ),
+  ];
+  final total = lengths.fold<double>(0, (s, d) => s + d);
+  if (total <= 0) return (lat: points.first.lat, lon: points.first.lon);
+  var left = total / 2;
+  for (var i = 0; i < lengths.length; i++) {
+    final d = lengths[i];
+    if (left <= d) {
+      final t = d == 0 ? 0.0 : left / d;
+      final a = points[i];
+      final b = points[i + 1];
+      return (lat: a.lat + (b.lat - a.lat) * t, lon: a.lon + (b.lon - a.lon) * t);
+    }
+    left -= d;
+  }
+  return (lat: points.last.lat, lon: points.last.lon);
+}

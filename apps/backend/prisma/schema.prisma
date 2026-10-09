@@ -534,6 +534,10 @@ model Trip {
   isActive    Boolean   @default(true)
   pointsCount Int       @default(1)
   distanceM   Int       @default(0)
+  // v0.80.0: distanceM посчитан по треку, привязанному к дорогам (OSRM).
+  // false — по очищенному треку; такой пробег пересчитается при следующем
+  // пересчёте поездок, когда OSRM будет доступен.
+  roadMatched Boolean   @default(false)
   startLat    Float
   startLon    Float
   endLat      Float

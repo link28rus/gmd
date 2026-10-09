@@ -22,6 +22,12 @@ import { FamilyAccessGuard } from './guards/family-access.guard';
 import { LocationsService } from './locations.service';
 import { LocationWatchService } from './location-watch.service';
 import { TripsService } from './trips.service';
+import type { TrackView } from './trips.service';
+
+// v0.80.0: ?view=recorded — трек «как записано», без привязки к дорогам.
+function parseView(v: unknown): TrackView {
+  return v === 'recorded' ? 'recorded' : 'road';
+}
 
 @Controller('children/:id')
 @UseGuards(JwtAuthGuard, FamilyAccessGuard)
@@ -71,8 +77,8 @@ export class LocationsReadController {
   // v0.63.0: без плохих точек (trackFlag), стоянки свёрнуты + stays[].
   @Get('trips/active-track')
   @HttpCode(HttpStatus.OK)
-  async activeTrack(@Param('id') id: string): Promise<unknown> {
-    return this.trips.getActiveTrack(id);
+  async activeTrack(@Param('id') id: string, @Query('view') view?: string): Promise<unknown> {
+    return this.trips.getActiveTrack(id, parseView(view));
   }
 
   // v0.63.0: очищенный трек за период (карта дня в кабинете). Не больше 2 суток.
@@ -82,7 +88,7 @@ export class LocationsReadController {
     @Param('id') id: string,
     @Query(new ZodValidationPipe(TrackQuerySchema)) q: TrackQuery,
   ): Promise<unknown> {
-    return this.trips.getTrack(id, new Date(q.from), new Date(q.to));
+    return this.trips.getTrack(id, new Date(q.from), new Date(q.to), parseView(q.view));
   }
 
   // Список поездок (history) за период. По умолчанию 30 дней.
@@ -102,7 +108,11 @@ export class LocationsReadController {
   // Очищенный трек конкретной поездки — для страницы истории.
   @Get('trips/:tripId/points')
   @HttpCode(HttpStatus.OK)
-  async tripPoints(@Param('id') id: string, @Param('tripId') tripId: string): Promise<unknown> {
-    return this.trips.getTripTrack(id, tripId);
+  async tripPoints(
+    @Param('id') id: string,
+    @Param('tripId') tripId: string,
+    @Query('view') view?: string,
+  ): Promise<unknown> {
+    return this.trips.getTripTrack(id, tripId, parseView(view));
   }
 }

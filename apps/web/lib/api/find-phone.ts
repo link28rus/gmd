@@ -3,7 +3,7 @@
 // их маршрут и удалённый звонок. Свои телефоны; v0.74.0 — владелец семьи
 // видит, зовёт и переименовывает телефоны всех взрослых семьи.
 import { apiFetch } from './client';
-import type { LocationDto } from './locations';
+import type { LocationDto, TrackView } from './locations';
 
 /**
  * Статус сигнала «Подать сигнал»:
@@ -56,7 +56,11 @@ export interface MyPhonesResponse {
   items: MyPhone[];
 }
 
-/** Точка маршрута — та же форма, что у трека ребёнка (рисуем тем же TrackPolyline). */
+/**
+ * Точка маршрута — та же форма, что у трека ребёнка (рисуем тем же TrackPolyline).
+ * v0.80.0: в режиме view=road трек очищен сервером — accuracy и speed null,
+ * достроенные по дороге точки — с inferred: true.
+ */
 export type PhoneTrackPoint = LocationDto;
 
 export interface PhoneSignalResult {
@@ -70,9 +74,12 @@ export const findPhoneApi = {
   /** Свои телефоны сверху, затем телефоны семьи (для владельца); внутри — свежие первыми. */
   getMyDevices: () => apiFetch<MyPhonesResponse>('/api/parent-location/my-devices'),
 
-  /** Маршрут за [from, to) — не больше 2 суток; точки старше ~30 дней удалены. */
-  getTrack: (deviceId: string, from: string, to: string) => {
-    const qs = new URLSearchParams({ from, to });
+  /**
+   * Маршрут за [from, to) — не больше 2 суток; точки старше ~30 дней удалены.
+   * v0.80.0: view — по дорогам (road, по умолчанию) или сырые точки (recorded).
+   */
+  getTrack: (deviceId: string, from: string, to: string, view: TrackView = 'road') => {
+    const qs = new URLSearchParams({ from, to, view });
     return apiFetch<{ items: PhoneTrackPoint[] }>(
       `/api/parent-location/my-devices/${encodeURIComponent(deviceId)}/track?${qs.toString()}`,
     );

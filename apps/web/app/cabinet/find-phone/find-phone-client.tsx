@@ -46,6 +46,7 @@ import {
 } from '@/lib/find-phone/find-phone-format';
 import { formatAgeShort } from '@/lib/date/age-format';
 import { isToday, todayIso } from '@/lib/date/day-bounds';
+import { useTrackView } from '@/lib/hooks/use-track-view';
 import { DateSelector } from '@/components/locations/date-selector';
 import { PhoneMap } from '@/components/find-phone/phone-map';
 import { Button } from '@/components/ui/button';
@@ -135,13 +136,18 @@ export default function FindPhoneClient(): ReactElement {
   const selected = items.find((d) => d.id === selectedId) ?? items[0] ?? null;
   const [date, setDate] = useState(todayIso());
 
+  // v0.80.0: вид трека (по дорогам / как записано) — часть ключа. При его
+  // смене прежний маршрут того же телефона и дня виден до ответа.
+  const [trackView] = useTrackView();
   const trackQ = useQuery({
-    queryKey: ['find-phone', 'track', selected?.id, date],
+    queryKey: ['find-phone', 'track', selected?.id, date, trackView],
     queryFn: () => {
       const [from, to] = dayRangeIso(date);
-      return findPhoneApi.getTrack(selected!.id, from, to);
+      return findPhoneApi.getTrack(selected!.id, from, to, trackView);
     },
     enabled: !!selected,
+    placeholderData: (prev, prevQuery) =>
+      prevQuery?.queryKey[2] === selected?.id && prevQuery?.queryKey[3] === date ? prev : undefined,
     staleTime: isToday(date) ? 10_000 : 5 * 60_000,
     refetchInterval: isToday(date) ? 30_000 : false,
     retry: 1,

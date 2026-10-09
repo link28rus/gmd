@@ -10,6 +10,7 @@ import '../children/child_models.dart';
 import '../children/children_providers.dart';
 import '../children/track_gaps.dart';
 import '../children/widgets/track_layers.dart';
+import '../children/widgets/track_view_menu.dart';
 import '../zones/widgets/zone_widgets.dart';
 import '../zones/zone_models.dart';
 import '../zones/zones_providers.dart';
@@ -30,6 +31,8 @@ const _tabular = [FontFeature.tabularFigures()];
 // Разрыв в данных — серый пунктир, как на главной карте (track_layers.dart).
 final _kGapPattern = StrokePattern.dashed(segments: const [8, 6]);
 const _kGapColor = Color(0xFF757575);
+// v0.80.0: достроенный по дороге участок — пунктир цветом поездки.
+final _kInferredPattern = StrokePattern.dashed(segments: const [10, 8]);
 
 /// Экран «История передвижений»: карта дня на весь экран и шторка с днями.
 ///
@@ -158,6 +161,8 @@ class _TripHistoryScreenState extends ConsumerState<TripHistoryScreen> {
             icon: const Icon(Icons.refresh),
             onPressed: _refresh,
           ),
+          // v0.80.0: «Как записано» — трек без привязки к дорогам.
+          const TrackViewMenuButton(),
         ],
       ),
       body: tripsAsync.when(
@@ -258,7 +263,7 @@ class _TripHistoryScreenState extends ConsumerState<TripHistoryScreen> {
       final isSel = item == selected;
       final dim = selected != null && !isSel;
       if (points.length >= 2) {
-        final split = splitTrackByGaps(points);
+        final split = splitTrackForMap(points);
         if (!dim) {
           for (final gap in split.gaps) {
             polylines.add(Polyline(
@@ -269,8 +274,16 @@ class _TripHistoryScreenState extends ConsumerState<TripHistoryScreen> {
             ));
           }
         }
+        // v0.80.0: достроенное по дороге — пунктиром цветом поездки.
+        for (final run in split.inferred) {
+          polylines.add(Polyline(
+            points: run.points.map((p) => LatLng(p.lat, p.lon)).toList(),
+            strokeWidth: isSel ? 5 : 4,
+            color: dim ? item.color.withValues(alpha: 0.3) : item.color,
+            pattern: _kInferredPattern,
+          ));
+        }
         for (final seg in split.segments) {
-          if (seg.length < 2) continue;
           polylines.add(Polyline(
             points: seg.map((p) => LatLng(p.lat, p.lon)).toList(),
             strokeWidth: isSel ? 5 : 4,
