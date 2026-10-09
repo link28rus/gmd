@@ -14,6 +14,7 @@ import '../features/family/family_screen.dart';
 import '../features/family/join_family_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/parental_control/parental_control_screen.dart';
+import '../features/profile/profile_screen.dart';
 import '../features/splash/splash_screen.dart';
 import '../features/trip_history/trip_history_screen.dart';
 import '../features/trip_history/trip_route_screen.dart';
@@ -55,6 +56,8 @@ class AppRouter {
           path: '/home',
           builder: (_, _) => const HomeScreen(),
           routes: [
+            // v0.76.0: профиль — ФИО взрослого.
+            GoRoute(path: 'profile', builder: (_, _) => const ProfileScreen()),
             // v0.71.0: участники семьи (спека 2026-10-08-family-members.md).
             GoRoute(
               path: 'family',

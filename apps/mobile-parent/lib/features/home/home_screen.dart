@@ -68,6 +68,9 @@ class HomeScreen extends ConsumerWidget {
             icon: const Icon(Icons.more_vert),
             onSelected: (value) async {
               switch (value) {
+                case 'profile':
+                  await context.push('/home/profile');
+                  break;
                 case 'family':
                   await context.push('/home/family');
                   break;
@@ -88,12 +91,34 @@ class HomeScreen extends ConsumerWidget {
               }
             },
             itemBuilder: (_) => [
+              // v0.76.0: имя и email — вход в профиль (ФИО).
               PopupMenuItem<String>(
                 value: 'profile',
-                enabled: false,
-                child: Text(
-                  session?.user.email ?? '',
-                  style: const TextStyle(fontWeight: FontWeight.w600),
+                child: Row(
+                  children: [
+                    const Icon(Icons.person_outline, size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            (session?.user.name?.trim().isNotEmpty ?? false)
+                                ? session!.user.name!.trim()
+                                : 'Профиль',
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            session?.user.email ?? '',
+                            style: Theme.of(context).textTheme.bodySmall,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const PopupMenuDivider(),
