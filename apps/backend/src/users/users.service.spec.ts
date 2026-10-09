@@ -176,6 +176,35 @@ describe('UsersService', () => {
     expect(r.locale).toBe('en');
   });
 
+  it('updateMe с ФИО собирает name «Фамилия Имя Отчество», пустое отчество — null', async () => {
+    const p = makePrismaMock();
+    p._users.push({ id: 'u-1', email: 'a@b.com', name: null, locale: 'ru', deletedAt: null });
+    const svc = new UsersService(
+      p as unknown as PrismaService,
+      { emails: [] },
+      makeConsentService(),
+    );
+
+    const full = await svc.updateMe('u-1', {
+      lastName: 'Четверик',
+      firstName: 'Нина',
+      middleName: 'Александровна',
+    });
+    expect(full).toMatchObject({
+      name: 'Четверик Нина Александровна',
+      lastName: 'Четверик',
+      firstName: 'Нина',
+      middleName: 'Александровна',
+    });
+
+    const short = await svc.updateMe('u-1', {
+      lastName: 'Иванов',
+      firstName: 'Пётр',
+      middleName: null,
+    });
+    expect(short).toMatchObject({ name: 'Иванов Пётр', middleName: null });
+  });
+
   it('softDelete выставляет deletedAt и revoke всех refresh', async () => {
     const p = makePrismaMock();
     p._users.push({ id: 'u-1', email: 'a@b.com', deletedAt: null });

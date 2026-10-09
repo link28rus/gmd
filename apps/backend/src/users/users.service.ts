@@ -23,6 +23,9 @@ export class UsersService {
       id: string;
       email: string;
       name: string | null;
+      lastName: string | null;
+      firstName: string | null;
+      middleName: string | null;
       locale: string;
       acceptedPrivacyPolicyVersion: string | null;
     };
@@ -77,6 +80,9 @@ export class UsersService {
         id: user.id,
         email: user.email,
         name: user.name,
+        lastName: user.lastName,
+        firstName: user.firstName,
+        middleName: user.middleName,
         locale: user.locale,
         acceptedPrivacyPolicyVersion: user.acceptedPrivacyPolicyVersion,
       },
@@ -95,15 +101,55 @@ export class UsersService {
     };
   }
 
+  /**
+   * PATCH /me. v0.75.0: ФИО из профиля — `name` собирается из частей так же,
+   * как при регистрации («Фамилия Имя Отчество»); его видит семья.
+   */
   async updateMe(
     userId: string,
-    patch: { name?: string; locale?: string },
-  ): Promise<{ id: string; email: string; name: string | null; locale: string }> {
+    patch: {
+      name?: string;
+      locale?: string;
+      lastName?: string;
+      firstName?: string;
+      middleName?: string | null;
+    },
+  ): Promise<{
+    id: string;
+    email: string;
+    name: string | null;
+    lastName: string | null;
+    firstName: string | null;
+    middleName: string | null;
+    locale: string;
+  }> {
+    const fio =
+      patch.lastName !== undefined && patch.firstName !== undefined
+        ? {
+            lastName: patch.lastName,
+            firstName: patch.firstName,
+            middleName: patch.middleName?.trim() || null,
+          }
+        : null;
     const user = await this.prisma.user.update({
       where: { id: userId },
-      data: { name: patch.name, locale: patch.locale },
+      data: {
+        name: fio
+          ? [fio.lastName, fio.firstName, fio.middleName].filter(Boolean).join(' ')
+          : patch.name,
+        locale: patch.locale,
+        ...(fio ?? {}),
+      },
     });
-    return { id: user.id, email: user.email, name: user.name, locale: user.locale };
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      lastName: user.lastName ?? null,
+      firstName: user.firstName ?? null,
+      middleName: user.middleName ?? null,
+      locale: user.locale,
+    };
   }
 
   /**

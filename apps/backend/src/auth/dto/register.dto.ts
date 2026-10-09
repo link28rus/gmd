@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
-const nameField = z
+/** Часть ФИО: регистрация, участник семьи, профиль (PATCH /me). */
+export const nameField = z
   .string()
   .trim()
   .min(1)

@@ -164,6 +164,14 @@ export function CabinetHeader(): ReactElement {
                   </div>
                 </div>
                 <Link
+                  href="/cabinet/profile"
+                  className="block px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+                  role="menuitem"
+                  onMouseDown={(e) => e.preventDefault()}
+                >
+                  Профиль
+                </Link>
+                <Link
                   href="/cabinet/password"
                   className="block px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
                   role="menuitem"

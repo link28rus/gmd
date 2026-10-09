@@ -18,13 +18,27 @@ import { AuthService } from '../auth/auth.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ConsentRequiredGuard } from '../consent/guards/consent-required.guard';
 import { ZodValidationPipe } from '../common/zod/zod-validation.pipe';
+import { nameField } from '../auth/dto/register.dto';
 
 const UpdateMeSchema = z
   .object({
     name: z.string().min(1).max(120).optional(),
     locale: z.string().length(2).optional(),
+    // v0.75.0: ФИО из профиля кабинета. Фамилия и имя — вместе, отчество по желанию.
+    lastName: nameField.optional(),
+    firstName: nameField.optional(),
+    middleName: nameField
+      .nullable()
+      .optional()
+      .or(z.literal('').transform(() => null)),
   })
-  .strict();
+  .strict()
+  .refine(
+    (d) =>
+      (d.lastName === undefined && d.firstName === undefined && d.middleName === undefined) ||
+      (d.lastName !== undefined && d.firstName !== undefined),
+    { message: 'lastName and firstName are required together', path: ['lastName'] },
+  );
 
 interface AuthedRequest extends Request {
   user: { userId: string; familyId: string; role: 'owner' | 'parent' };
