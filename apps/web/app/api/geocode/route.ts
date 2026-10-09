@@ -44,6 +44,85 @@ function parseSpn(raw: string | null): string | null {
   return `${dLon},${dLat}`;
 }
 
+type GeocodeItem = { name: string; description: string; lat: number; lon: number };
+
+/**
+ * Кэш обратного геокодинга (адреса старта/финиша в истории поездок). Точки
+ * дом/школа повторяются изо дня в день — без кэша квота Яндекса уходит на
+ * одни и те же координаты. Ключ — координаты с точностью ~10 м. Map хранит
+ * порядок вставки, поэтому при переполнении выкидываем самые старые записи.
+ */
+const REVERSE_CACHE_MAX = 5000;
+const reverseCache = new Map<string, GeocodeItem[]>();
+
+function rememberReverse(key: string, items: GeocodeItem[]): void {
+  if (reverseCache.size >= REVERSE_CACHE_MAX) {
+    const oldest = reverseCache.keys().next().value;
+    if (oldest !== undefined) reverseCache.delete(oldest);
+  }
+  reverseCache.set(key, items);
+}
+
+async function callYandex(params: URLSearchParams): Promise<GeocodeItem[] | NextResponse> {
+  // Ключ в кабинете Яндекса ограничен по HTTP Referer (домен приложения).
+  // Без заголовка Referer запросы с backend'а получают 403.
+  const referer = process.env.PUBLIC_SITE_URL ?? 'https://periscop.pro/';
+
+  let res: Response;
+  try {
+    res = await fetch(`${YANDEX_GEOCODER_URL}?${params.toString()}`, {
+      headers: { Accept: 'application/json', Referer: referer },
+      signal: AbortSignal.timeout(8000),
+    });
+  } catch {
+    return errorJson('geocoder_unavailable', 'Yandex geocoder unreachable', 502);
+  }
+  if (!res.ok) {
+    return errorJson('geocoder_upstream_error', `Yandex responded ${res.status}`, 502);
+  }
+  let data: YandexResponse;
+  try {
+    data = (await res.json()) as YandexResponse;
+  } catch {
+    return errorJson('geocoder_upstream_error', 'Invalid Yandex response', 502);
+  }
+  return (data.response?.GeoObjectCollection?.featureMember ?? [])
+    .map((m) => {
+      const [lon, lat] = m.GeoObject.Point.pos.split(' ').map(Number);
+      return {
+        name: m.GeoObject.name,
+        description: m.GeoObject.description ?? '',
+        lat,
+        lon,
+      };
+    })
+    .filter((h) => Number.isFinite(h.lat) && Number.isFinite(h.lon));
+}
+
+/** `?reverse=lon,lat` — ближайший дом к точке (адрес старта/финиша поездки). */
+async function reverseLookup(apiKey: string, raw: string): Promise<NextResponse> {
+  const ll = parseLl(raw);
+  if (!ll) return errorJson('invalid_coordinates', 'reverse must be "lon,lat"', 400);
+  const [lon, lat] = ll.split(',').map(Number);
+  const key = `${lon.toFixed(4)},${lat.toFixed(4)}`;
+  const cached = reverseCache.get(key);
+  if (cached) return NextResponse.json({ items: cached });
+
+  const result = await callYandex(
+    new URLSearchParams({
+      apikey: apiKey,
+      format: 'json',
+      lang: 'ru_RU',
+      geocode: key,
+      kind: 'house',
+      results: '1',
+    }),
+  );
+  if (result instanceof NextResponse) return result;
+  rememberReverse(key, result);
+  return NextResponse.json({ items: result });
+}
+
 export async function GET(req: NextRequest) {
   // Yandex HTTP Геокодер ключ — server-side only. После переезда карт на
   // OSM/leaflet старый NEXT_PUBLIC_YANDEX_MAPS_API_KEY больше не нужен;
@@ -54,6 +133,9 @@ export async function GET(req: NextRequest) {
   }
 
   const url = new URL(req.url);
+  const reverse = url.searchParams.get('reverse');
+  if (reverse !== null) return reverseLookup(apiKey, reverse);
+
   const q = url.searchParams.get('q');
   if (!q || q.trim().length < 2) {
     return NextResponse.json({ items: [] });
@@ -77,38 +159,7 @@ export async function GET(req: NextRequest) {
     if (spn) params.set('spn', spn);
   }
 
-  // Ключ в кабинете Яндекса ограничен по HTTP Referer (домен приложения).
-  // Без заголовка Referer запросы с backend'а получают 403.
-  const referer = process.env.PUBLIC_SITE_URL ?? 'https://periscop.pro/';
-
-  let res: Response;
-  try {
-    res = await fetch(`${YANDEX_GEOCODER_URL}?${params.toString()}`, {
-      headers: { Accept: 'application/json', Referer: referer },
-      signal: AbortSignal.timeout(8000),
-    });
-  } catch {
-    return errorJson('geocoder_unavailable', 'Yandex geocoder unreachable', 502);
-  }
-  if (!res.ok) {
-    return errorJson('geocoder_upstream_error', `Yandex responded ${res.status}`, 502);
-  }
-  let data: YandexResponse;
-  try {
-    data = (await res.json()) as YandexResponse;
-  } catch {
-    return errorJson('geocoder_upstream_error', 'Invalid Yandex response', 502);
-  }
-  const items = (data.response?.GeoObjectCollection?.featureMember ?? [])
-    .map((m) => {
-      const [lon, lat] = m.GeoObject.Point.pos.split(' ').map(Number);
-      return {
-        name: m.GeoObject.name,
-        description: m.GeoObject.description ?? '',
-        lat,
-        lon,
-      };
-    })
-    .filter((h) => Number.isFinite(h.lat) && Number.isFinite(h.lon));
-  return NextResponse.json({ items });
+  const result = await callYandex(params);
+  if (result instanceof NextResponse) return result;
+  return NextResponse.json({ items: result });
 }

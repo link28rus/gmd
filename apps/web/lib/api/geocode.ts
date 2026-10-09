@@ -44,6 +44,22 @@ export async function geocode(q: string, near?: GeocodeNear | null): Promise<Geo
   return items;
 }
 
+/** Ключ точки для обратного геокодинга: «lon,lat» с точностью ~10 м. */
+export function reverseKey(lat: number, lon: number): string {
+  return `${lon.toFixed(4)},${lat.toFixed(4)}`;
+}
+
+/**
+ * Адрес ближайшего дома к точке («Игнатьевское шоссе, 1») или null, если
+ * рядом адресов нет. Кэш — у вызывающего (react-query по reverseKey) и на
+ * сервере.
+ */
+export async function reverseGeocode(lat: number, lon: number): Promise<GeocodeHit | null> {
+  const params = new URLSearchParams({ reverse: reverseKey(lat, lon) });
+  const data = await apiFetch<{ items?: GeocodeHit[] }>(`/api/geocode?${params.toString()}`);
+  return data?.items?.[0] ?? null;
+}
+
 export function clearGeocodeCache(): void {
   cache.clear();
 }

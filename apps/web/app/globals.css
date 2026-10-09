@@ -245,3 +245,30 @@ html[data-admin-theme='dim'] .leaflet-tile-pane {
 html[data-admin-theme='dark'] .leaflet-tile-pane {
   filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9) saturate(0.6);
 }
+
+/* Подсказки Leaflet (маршруты, старт/финиш, геозоны) в dim/dark — цвета
+   карточки темы вместо белого по умолчанию. Тоже вне @layer: класс
+   .leaflet-tooltip появляется только в рантайме. */
+html[data-admin-theme='dim'] .leaflet-tooltip,
+html[data-admin-theme='dark'] .leaflet-tooltip {
+  background: hsl(var(--popover));
+  color: hsl(var(--card-foreground));
+  border-color: hsl(var(--border));
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.45);
+}
+html[data-admin-theme='dim'] .leaflet-tooltip-top::before,
+html[data-admin-theme='dark'] .leaflet-tooltip-top::before {
+  border-top-color: hsl(var(--popover));
+}
+html[data-admin-theme='dim'] .leaflet-tooltip-bottom::before,
+html[data-admin-theme='dark'] .leaflet-tooltip-bottom::before {
+  border-bottom-color: hsl(var(--popover));
+}
+html[data-admin-theme='dim'] .leaflet-tooltip-left::before,
+html[data-admin-theme='dark'] .leaflet-tooltip-left::before {
+  border-left-color: hsl(var(--popover));
+}
+html[data-admin-theme='dim'] .leaflet-tooltip-right::before,
+html[data-admin-theme='dark'] .leaflet-tooltip-right::before {
+  border-right-color: hsl(var(--popover));
+}

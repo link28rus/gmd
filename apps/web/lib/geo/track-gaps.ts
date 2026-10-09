@@ -51,7 +51,10 @@ export interface TrackSplit<T extends TrackPoint> {
 const EARTH_RADIUS_M = 6_371_000;
 
 /** Расстояние между двумя точками по поверхности Земли (haversine), метры. */
-export function haversineMeters(a: TrackPoint, b: TrackPoint): number {
+export function haversineMeters(
+  a: Pick<TrackPoint, 'lat' | 'lon'>,
+  b: Pick<TrackPoint, 'lat' | 'lon'>,
+): number {
   const toRad = (d: number): number => (d * Math.PI) / 180;
   const dLat = toRad(b.lat - a.lat);
   const dLon = toRad(b.lon - a.lon);
