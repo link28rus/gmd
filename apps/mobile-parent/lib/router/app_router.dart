@@ -17,8 +17,6 @@ import '../features/parental_control/parental_control_screen.dart';
 import '../features/profile/profile_screen.dart';
 import '../features/splash/splash_screen.dart';
 import '../features/trip_history/trip_history_screen.dart';
-import '../features/trip_history/trip_route_screen.dart';
-import '../features/children/child_models.dart';
 import '../features/zones/zone_editor_screen.dart';
 import '../features/zones/zone_events_screen.dart';
 import '../features/zones/zones_screen.dart';
@@ -148,14 +146,13 @@ class AppRouter {
                   ),
                   routes: [
                     GoRoute(
-                      // /home/child/:id/history/:tripId — маршрут поездки.
-                      // Trip передаётся через state.extra (для заголовка).
+                      // /home/child/:id/history/:tripId — та же история с уже
+                      // выбранной поездкой (отдельного экрана маршрута с v0.79.0 нет).
                       path: ':tripId',
-                      builder: (_, state) => TripRouteScreen(
+                      builder: (_, state) => TripHistoryScreen(
                         childId: state.pathParameters['id']!,
-                        tripId: state.pathParameters['tripId']!,
                         childName: state.uri.queryParameters['name'] ?? 'Ребёнок',
-                        trip: state.extra is Trip ? state.extra as Trip : null,
+                        initialTripId: state.pathParameters['tripId'],
                       ),
                     ),
                   ],
