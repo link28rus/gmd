@@ -34,6 +34,21 @@ export function platformLabel(platform: string | null): string | null {
   return platform;
 }
 
+/** Телефон молчит дольше часа (служба шлёт точку минимум раз в 5 минут). */
+export const STALE_AFTER_SEC = 60 * 60;
+/** Заряд в процентах, ниже или равно которому подсвечиваем батарею. */
+export const LOW_BATTERY_PCT = 15;
+
+/** Давно не выходил на связь; ни разу не выходивший — не тревога. */
+export function isPhoneStale(lastSeenAt: string | null, nowMs: number = Date.now()): boolean {
+  return lastSeenAt !== null && ageSecSince(lastSeenAt, nowMs) > STALE_AFTER_SEC;
+}
+
+/** Батарея садится и телефон не на зарядке. */
+export function isBatteryLow(level: number | null, charging: boolean | null): boolean {
+  return level !== null && level <= LOW_BATTERY_PCT && charging !== true;
+}
+
 /** Сигнал «живой»: ждём подтверждения или телефон звонит прямо сейчас. */
 export function isSignalActive(signal: PhoneSignal | null): boolean {
   return signal?.status === 'pending' || signal?.status === 'ringing';

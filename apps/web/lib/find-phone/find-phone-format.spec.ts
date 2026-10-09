@@ -6,6 +6,8 @@ import {
   batteryText,
   dayRangeIso,
   drawableTrack,
+  isBatteryLow,
+  isPhoneStale,
   isSignalActive,
   phoneLabel,
   platformLabel,
@@ -28,6 +30,30 @@ describe('phoneLabel', () => {
   it('пустое или null имя → «Телефон»', () => {
     expect(phoneLabel({ deviceName: null, customName: null })).toBe('Телефон');
     expect(phoneLabel({ deviceName: '   ', customName: null })).toBe('Телефон');
+  });
+});
+
+describe('isPhoneStale', () => {
+  const now = Date.parse('2026-10-09T12:00:00.000Z');
+  it('больше часа без связи — тревога, ровно час и меньше — нет', () => {
+    expect(isPhoneStale('2026-10-09T10:59:59.000Z', now)).toBe(true);
+    expect(isPhoneStale('2026-10-09T11:00:00.000Z', now)).toBe(false);
+    expect(isPhoneStale('2026-10-09T11:55:00.000Z', now)).toBe(false);
+  });
+  it('ни разу не выходил на связь — не тревога', () => {
+    expect(isPhoneStale(null, now)).toBe(false);
+  });
+});
+
+describe('isBatteryLow', () => {
+  it('15% и ниже без зарядки — низкий', () => {
+    expect(isBatteryLow(15, false)).toBe(true);
+    expect(isBatteryLow(3, null)).toBe(true);
+    expect(isBatteryLow(16, false)).toBe(false);
+  });
+  it('на зарядке или заряд неизвестен — не тревога', () => {
+    expect(isBatteryLow(5, true)).toBe(false);
+    expect(isBatteryLow(null, false)).toBe(false);
   });
 });
 

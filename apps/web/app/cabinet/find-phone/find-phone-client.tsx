@@ -12,7 +12,16 @@ import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Battery, BatteryCharging, BellRing, Check, Pencil, Smartphone, X } from 'lucide-react';
+import {
+  Battery,
+  BatteryCharging,
+  BatteryLow,
+  BellRing,
+  Check,
+  Pencil,
+  Smartphone,
+  X,
+} from 'lucide-react';
 import { useAuthStore } from '@/lib/auth-store';
 import { refreshAccessToken } from '@/lib/auth/refresh-singleflight';
 import { ApiError } from '@/lib/api/client';
@@ -27,6 +36,8 @@ import {
   batteryText,
   dayRangeIso,
   drawableTrack,
+  isBatteryLow,
+  isPhoneStale,
   isSignalActive,
   PHONE_NAME_MAX,
   phoneLabel,
@@ -42,6 +53,8 @@ import { Input } from '@/components/ui/input';
 
 const DEVICES_KEY = ['find-phone', 'devices'] as const;
 const EMPTY_TRACK: PhoneTrackPoint[] = [];
+/** Тревожный текст в карточке: телефон давно молчит или садится батарея. */
+const ALERT_TEXT = 'font-medium text-red-600 dark:text-red-400';
 
 function fmtDateTime(iso: string): string {
   return new Date(iso).toLocaleString('ru', {
@@ -255,6 +268,8 @@ function DeviceCard({
   const qc = useQueryClient();
   const latest = phone.latest;
   const battery = latest ? batteryText(latest.batteryLevel, latest.isCharging) : null;
+  const lowBattery = latest ? isBatteryLow(latest.batteryLevel, latest.isCharging) : false;
+  const stale = isPhoneStale(phone.lastSeenAt);
   const model = phone.deviceName?.trim() || null;
 
   const [editing, setEditing] = useState(false);
@@ -348,27 +363,39 @@ function DeviceCard({
             <Smartphone className="h-5 w-5 shrink-0 text-muted-foreground" />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
-                <span
-                  className="truncate text-sm font-medium text-foreground"
-                  title={phone.customName?.trim() && model ? `Модель: ${model}` : undefined}
-                >
+                <span className="truncate text-sm font-medium text-foreground">
                   {phoneLabel(phone)}
                 </span>
                 {isSignalActive(phone.signal) && (
                   <BellRing className="h-4 w-4 shrink-0 text-red-600" aria-label="Сигнал активен" />
                 )}
               </div>
-              <div className="truncate text-xs text-muted-foreground">{phone.ownerName}</div>
-              {battery && (
-                <div className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
-                  {latest?.isCharging ? (
-                    <BatteryCharging className="h-3.5 w-3.5 text-emerald-600" />
-                  ) : (
-                    <Battery className="h-3.5 w-3.5" />
-                  )}
-                  {battery}
-                </div>
+              {/* Своё имя задано — модель строкой ниже, чтобы было видно, какой это аппарат. */}
+              {phone.customName?.trim() && model && (
+                <div className="truncate text-xs text-muted-foreground">{model}</div>
               )}
+              <div className="truncate text-xs text-muted-foreground">{phone.ownerName}</div>
+              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+                {battery && (
+                  <span
+                    className={`flex items-center gap-1 ${lowBattery ? ALERT_TEXT : 'text-muted-foreground'}`}
+                  >
+                    {latest?.isCharging ? (
+                      <BatteryCharging className="h-3.5 w-3.5 text-emerald-600" />
+                    ) : lowBattery ? (
+                      <BatteryLow className="h-3.5 w-3.5" />
+                    ) : (
+                      <Battery className="h-3.5 w-3.5" />
+                    )}
+                    {battery}
+                  </span>
+                )}
+                <span className={stale ? ALERT_TEXT : 'text-muted-foreground'}>
+                  {phone.lastSeenAt
+                    ? `на связи ${formatAgeShort(ageSecSince(phone.lastSeenAt))}`
+                    : 'ещё не выходил на связь'}
+                </span>
+              </div>
             </div>
           </button>
           <button
