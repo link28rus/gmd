@@ -16,6 +16,10 @@ COPY apps/web/ apps/web/
 # NEXT_STANDALONE=true включает output: 'standalone' в next.config.ts
 # (локально не делаем standalone из-за Windows EPERM на symlinks).
 ENV NEXT_STANDALONE=true
+# NEXT_PUBLIC_* Next.js вшивает в клиентский бандл при сборке — runtime-env
+# контейнера до браузера не доходит. DSN публичный по замыслу Sentry.
+ARG NEXT_PUBLIC_SENTRY_DSN=
+ENV NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN
 RUN pnpm --filter @periscop/web build
 
 FROM node:22-alpine AS runner

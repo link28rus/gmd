@@ -1,11 +1,15 @@
 # Перископ — мониторинг (Phase 0.4)
 
-Два сервиса на prod-сервере `45.67.230.87` (periscop.pro, legacy API gmd-online.ru): **GlitchTip** (error tracking) и **Uptime Kuma** (uptime + алерты). Оба доступны только через SSH-туннель.
+Два сервиса на gmd-prod (VM 109, `gmd.link28rus.ru`): **GlitchTip** (error tracking) и **Uptime Kuma** (uptime + алерты). Оба доступны только через SSH-туннель.
+
+> **2026-10-10:** оба подняты заново — на новом сервере Kuma стояла без учётной записи и
+> мониторов, а база GlitchTip без миграций (подробности — CHANGELOG v0.80.1/v0.80.2).
 
 ## Быстрый доступ
 
 ```bash
-ssh -N gmd-online-tunnels &
+ssh -N -L 3010:127.0.0.1:8000 -L 3011:127.0.0.1:3001 gmd-online &
+# или алиас: ssh -N gmd-online-tunnels &
 # откроет:
 # - http://localhost:3010 → GlitchTip
 # - http://localhost:3011 → Uptime Kuma
@@ -14,23 +18,47 @@ ssh -N gmd-online-tunnels &
 
 Креды: memory-compiler → `save_secret` project `gmd`:
 
-- `GlitchTip admin credentials`
-- `Uptime Kuma admin credentials`
-- `Telegram alerts bot @periscop_monitoring_bot`
+- `GlitchTip admin на gmd-prod (с 2026-10-10)`
+- `Uptime Kuma admin на gmd-prod (с 2026-10-10)`
+- `Telegram alerts bot @gmd_khv_bot — токен и chat_id`
 
 ## Что мониторим
 
-| #   | Монитор (имя в Kuma)          | Критичность | Notification     |
-| --- | ----------------------------- | ----------- | ---------------- |
-| 1   | Caddy (вход, /healthz)        | warn        | Telegram         |
-| 2   | Веб-сайт (/api/healthz)       | warn        | Telegram         |
-| 3   | Бэкенд API (/api/readyz)      | critical    | Telegram + email |
-| 4   | Контейнер PostgreSQL          | critical    | Telegram + email |
-| 5   | Контейнер Redis               | critical    | Telegram + email |
-| 6   | TLS-сертификат (periscop.pro) | warn        | Telegram (<14d)  |
-| 7   | Свободное место на диске      | warn        | Telegram (push)  |
-| 8   | Бэкап БД (ежедневный)         | critical    | Telegram + email |
-| 9   | Контейнер бэкенда             | critical    | Telegram + email |
+| #   | Монитор (имя в Kuma)              | Критичность | Notification     |
+| --- | --------------------------------- | ----------- | ---------------- |
+| 1   | Caddy (вход, /healthz)            | warn        | Telegram         |
+| 2   | Веб-сайт (/api/healthz)           | warn        | Telegram         |
+| 3   | Бэкенд API (/api/readyz)          | critical    | Telegram + email |
+| 4   | Контейнер PostgreSQL              | critical    | Telegram + email |
+| 5   | Контейнер Redis                   | critical    | Telegram + email |
+| 6   | TLS-сертификат (gmd.link28rus.ru) | warn        | Telegram (<14d)  |
+| 7   | Свободное место на диске          | warn        | Telegram (push)  |
+| 8   | Бэкап БД (ежедневный)             | critical    | Telegram + email |
+| 9   | Контейнер бэкенда                 | critical    | Telegram + email |
+| 10  | Контейнер веб-сайта               | critical    | Telegram + email |
+| 11  | Контейнер Caddy                   | critical    | Telegram + email |
+
+Мониторы создаёт идемпотентный `infra/server-setup/scripts/kuma-bootstrap.py`. Запуск — на
+сервере, в venv `/opt/gmd/venv-kuma` (`pip install uptime-kuma-api`), с
+`KUMA_URL=http://127.0.0.1:3001`, `KUMA_ADMIN_PASSWORD` и переменными из `.env.prod`.
+Скрипт печатает push-URL: диск → `KUMA_PUSH_URL` в `/etc/default/gmd-disk-heartbeat`
+(таймер `gmd-disk-heartbeat`), бэкап → `KUMA_BACKUP_HEARTBEAT_URL` в `.env.prod`
+(читает `pg-backup.sh`). Окно монитора бэкапа — 26 ч (таймер со случайной задержкой).
+
+### Telegram через LAN
+
+С МТС-адреса сервера `api.telegram.org` недоступен (таймаут). Подсети Telegram
+(`149.154.160.0/20`, `91.108.0.0/16`) идут через LAN-шлюз `192.168.1.1`: drop-in
+`infra/server/networkd/telegram-via-lan.conf` →
+`/etc/systemd/network/10-netplan-eth0.network.d/` (применяется при загрузке; на живом
+сервере те же маршруты добавлены `ip route add … via 192.168.1.1 dev eth0`).
+Проверка: `ip route get 149.154.166.110` → `via 192.168.1.1 dev eth0`.
+
+### GlitchTip
+
+Организация `periscop`, проекты `backend` (id 1) и `web` (id 2), алерт «Новая ошибка» —
+email участникам проекта. Регистрация закрыта (`GLITCHTIP_ENABLE_USER_REGISTRATION=False`).
+Миграции — одноразовый сервис `glitchtip-migrate` в compose.
 
 ### Текст уведомлений
 

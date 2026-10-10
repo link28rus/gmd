@@ -17,6 +17,24 @@
 
 ---
 
+## v0.80.2 — 2026-10-10
+
+### Исправления
+
+- fix(infra): ошибки backend и web снова уходят в GlitchTip — backend ждал `SENTRY_DSN_BACKEND`,
+  а compose передавал `SENTRY_DSN`; серверная часть web не получала `SENTRY_DSN_WEB`, а DSN для
+  браузера не вшивался при сборке (теперь build-arg)
+
+### Изменения
+
+- chore(monitoring): Uptime Kuma поднята заново — 11 мониторов (сайт, API, контейнеры, TLS,
+  диск, ежедневный бэкап), алерты в Telegram и на почту, сквозная доставка проверена;
+  `kuma-bootstrap.py` берёт домен из `KUMA_SITE` и не печатает пароль
+- chore(monitoring): GlitchTip — организация, проекты backend и web, алерт на новую ошибку
+  по почте, регистрация закрыта
+- chore(infra): Telegram API у МТС недоступен — его подсети идут через LAN-шлюз
+  (drop-in systemd-networkd); на сервере установлен таймер проверки свободного места
+
 ## v0.80.1 — 2026-10-10
 
 ### Исправления

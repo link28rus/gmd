@@ -16,6 +16,10 @@ Secrets читаются из env:
   SMTP_PORT                (default 465)
   SMTP_USER, SMTP_PASS     (required для email channel)
   SMTP_TO                  (default link28rus@gmail.com)
+  KUMA_SITE                (default gmd.link28rus.ru — домен прода, #85)
+
+Пароль администратора не печатается: задавайте KUMA_ADMIN_PASSWORD сами и
+сразу кладите в memory-compiler (save_secret, проект gmd).
 
 Идемпотентен: повторный запуск не дублирует мониторы/notifications.
 """
@@ -31,6 +35,7 @@ from uptime_kuma_api import UptimeKumaApi, MonitorType, NotificationType  # type
 KUMA_URL = os.environ.get("KUMA_URL", "http://127.0.0.1:3011")
 ADMIN_USER = os.environ.get("KUMA_ADMIN_USER", "admin")
 ADMIN_PASSWORD = os.environ.get("KUMA_ADMIN_PASSWORD") or secrets.token_urlsafe(18)
+SITE = os.environ.get("KUMA_SITE", "gmd.link28rus.ru")
 
 
 def ensure_setup(api: UptimeKumaApi) -> None:
@@ -159,7 +164,7 @@ def main() -> int:
             api,
             name="Caddy (вход, /healthz)",
             type=MonitorType.HTTP,
-            url="https://periscop.pro/healthz",
+            url=f"https://{SITE}/healthz",
             interval=60,
             maxretries=2,
             notification_ids=warn_chans,
@@ -169,7 +174,7 @@ def main() -> int:
             api,
             name="Веб-сайт (/api/healthz)",
             type=MonitorType.HTTP,
-            url="https://periscop.pro/api/healthz",
+            url=f"https://{SITE}/api/healthz",
             interval=60,
             maxretries=2,
             notification_ids=warn_chans,
@@ -179,7 +184,7 @@ def main() -> int:
             api,
             name="Бэкенд API (/api/readyz)",
             type=MonitorType.KEYWORD,
-            url="https://periscop.pro/api/readyz",
+            url=f"https://{SITE}/api/readyz",
             keyword='"status":"ok"',
             interval=60,
             maxretries=2,
@@ -218,12 +223,24 @@ def main() -> int:
             maxretries=1,
             notification_ids=crit_chans,
         )
+        # 5c. Web и Caddy docker
+        for container, title in (("gmd-web", "Контейнер веб-сайта"), ("gmd-caddy", "Контейнер Caddy")):
+            ensure_monitor(
+                api,
+                name=title,
+                type=MonitorType.DOCKER,
+                docker_container=container,
+                docker_host=docker_host_id,
+                interval=120,
+                maxretries=1,
+                notification_ids=crit_chans,
+            )
         # 6. TLS cert expiry (использует встроенный HTTP monitor + expiry alerts)
         ensure_monitor(
             api,
-            name="TLS-сертификат (periscop.pro)",
+            name=f"TLS-сертификат ({SITE})",
             type=MonitorType.HTTP,
-            url="https://periscop.pro/",
+            url=f"https://{SITE}/",
             interval=86400,
             maxretries=1,
             expiryNotification=True,
@@ -243,26 +260,27 @@ def main() -> int:
             api,
             name="Бэкап БД (ежедневный)",
             type=MonitorType.PUSH,
-            interval=86400,
+            # 26 ч: таймер pg-backup раз в сутки со случайной задержкой — окно
+            # ровно 24 ч давало бы ложные DOWN.
+            interval=93600,
             maxretries=0,
             notification_ids=crit_chans,
         )
 
-        # Извлекаем push-URL для heartbeat'ов
+        # Push-URL для скриптов на хосте (порт Kuma проброшен на 127.0.0.1:3001):
+        # disk-heartbeat.sh сам добавляет status/msg/ping, pg-backup.sh — только msg.
         print()
-        print("=== PUSH URLs для /opt/gmd/.env.prod ===")
-        for mid, env_key in ((disk, "KUMA_DISK_HEARTBEAT_URL"), (pgbak, "KUMA_BACKUP_HEARTBEAT_URL")):
+        print("=== PUSH URLs ===")
+        for mid, env_key, query in (
+            (disk, "KUMA_PUSH_URL (/etc/default/gmd-disk-heartbeat)", ""),
+            (pgbak, "KUMA_BACKUP_HEARTBEAT_URL (/opt/gmd/.env.prod)", "?status=up&ping="),
+        ):
             if isinstance(mid, int):
-                m = api.get_monitor(mid)
-                token = m.get("pushToken")
+                token = api.get_monitor(mid).get("pushToken")
                 if token:
-                    # kuma push URL — внутри docker-сети
-                    url = f"http://uptime-kuma:3001/api/push/{token}?status=up&msg=OK&ping="
-                    print(f"{env_key}={url}")
-
+                    print(f"{env_key}=http://127.0.0.1:3001/api/push/{token}{query}")
         print()
-        print(f"KUMA_ADMIN_USER={ADMIN_USER}")
-        print(f"KUMA_ADMIN_PASSWORD={ADMIN_PASSWORD}")
+        print(f"admin user: {ADMIN_USER} (пароль не печатается)")
         return 0
     finally:
         api.disconnect()
