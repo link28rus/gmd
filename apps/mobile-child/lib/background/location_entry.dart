@@ -47,11 +47,17 @@ Future<void> _bootstrap() async {
       api: api,
       deviceToken: storage.readDeviceToken,
       onUnauthorized: () async {
-        // Device revoked на сервере — чистим токен, при следующем старте
-        // main.dart повёдет на /onboarding автоматически. Foreground сервис
-        // остаётся — его стопнет UI-изолят через homeInitProvider.
-        diagLog('bg', 'ingestor: UNAUTHORIZED → clearing token');
+        // Device revoked на сервере — чистим токен (следующий старт UI уйдёт
+        // на /onboarding) и сами останавливаем сервис: UI может не открыться
+        // никогда, а без этого GPS, wakelock и realtime жили бы до повторной
+        // привязки, копя точки, которые некуда отправить.
+        diagLog('bg', 'ingestor: UNAUTHORIZED → clearing token, stopping service');
         await storage.clearAll();
+        try {
+          await const MethodChannel('pro.periscop.child/location').invokeMethod('deviceUnlinked');
+        } catch (e) {
+          diagLog('bg', 'deviceUnlinked failed: $e');
+        }
       },
       onCommand: (cmd) async {
         diagLog('bg', 'command received: ${cmd.type} id=${cmd.id}');

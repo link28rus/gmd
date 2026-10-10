@@ -26,6 +26,12 @@ class LocationServiceChannel {
     await _channel.invokeMethod('stopService');
   }
 
+  /// Сервер отозвал токен: остановить сервис и запретить его автозапуск
+  /// (загрузка, будильник, Activity Recognition) до повторной привязки.
+  Future<void> deviceUnlinked() async {
+    await _channel.invokeMethod('deviceUnlinked');
+  }
+
   /// v0.31.2 — читает текущий профиль GPS-сервиса. Native пишет его в
   /// SharedPreferences при каждом `switchProfile`; UI опрашивает этот метод
   /// раз в несколько секунд для chip-индикатора на home-экране.

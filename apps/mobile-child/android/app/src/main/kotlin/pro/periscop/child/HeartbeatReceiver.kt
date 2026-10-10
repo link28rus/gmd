@@ -21,6 +21,12 @@ class HeartbeatReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         val action = intent?.action ?: return
         DiagLog.write(context, "heartbeat-recv", "alarm fired: $action")
+        // Без разрешения на геолокацию startForeground в сервисе уронил бы
+        // процесс (Android 14+); на отвязанном устройстве цепочку обрываем.
+        if (!LocationForegroundService.canAutoStart(context)) {
+            DiagLog.write(context, "heartbeat-recv", "skip: no location permission or device unlinked")
+            return
+        }
         val svc = Intent(context, LocationForegroundService::class.java)
             .setAction(LocationForegroundService.ACTION_HEARTBEAT)
         try {

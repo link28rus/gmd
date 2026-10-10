@@ -73,6 +73,11 @@ class BootReceiver : BroadcastReceiver() {
             return
         }
 
+        if (NativeCreds.isUnlinked(context)) {
+            DiagLog.write(context, "boot", "BootReceiver: $action → SKIPPED (device unlinked)")
+            return
+        }
+
         DiagLog.write(context, "boot", "BootReceiver: $action → startForegroundService")
         val svc = Intent(context, LocationForegroundService::class.java)
             .setAction(LocationForegroundService.ACTION_START)

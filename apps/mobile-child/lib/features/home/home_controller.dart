@@ -33,8 +33,8 @@ final homeInitProvider = FutureProvider<HomeInitResult>((ref) async {
     // Токен отозван сервером — чистим secure storage, чтобы на следующем
     // старте hasToken=false и main.dart повёл на /onboarding.
     await storage.clearAll();
-    // Параллельно стопаем foreground сервис — он уже без токена бесполезен.
-    unawaited(ref.watch(serviceChannelProvider).stopService());
+    // Стопаем foreground сервис и запрещаем автозапуск — без токена он бесполезен.
+    unawaited(ref.watch(serviceChannelProvider).deviceUnlinked());
   }
   return HomeInitResult(tokenValid: me.tokenValid, familyName: me.familyName);
 });

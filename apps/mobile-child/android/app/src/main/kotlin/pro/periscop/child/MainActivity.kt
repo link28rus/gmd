@@ -120,6 +120,8 @@ class MainActivity : FlutterActivity() {
                 when (call.method) {
                     "startService" -> {
                         DiagLog.write(this, "ui", "startService invoked from Dart")
+                        // Явный запуск с главного экрана = устройство привязано.
+                        NativeCreds.clearUnlinked(this)
                         val intent = Intent(this, LocationForegroundService::class.java)
                             .setAction(LocationForegroundService.ACTION_START)
                         if (android.os.Build.VERSION.SDK_INT >= 26) {
@@ -127,6 +129,15 @@ class MainActivity : FlutterActivity() {
                         } else {
                             startService(intent)
                         }
+                        result.success(null)
+                    }
+                    "deviceUnlinked" -> {
+                        DiagLog.write(this, "ui", "deviceUnlinked invoked from Dart")
+                        NativeCreds.markUnlinked(this)
+                        startService(
+                            Intent(this, LocationForegroundService::class.java)
+                                .setAction(LocationForegroundService.ACTION_STOP),
+                        )
                         result.success(null)
                     }
                     "stopService" -> {

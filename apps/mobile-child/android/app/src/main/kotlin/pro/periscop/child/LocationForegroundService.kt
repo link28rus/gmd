@@ -42,6 +42,21 @@ class LocationForegroundService : Service() {
         // в этот сервис через startForegroundService(intent).
         const val ACTION_ACTIVITY_STILL = "ACTION_ACTIVITY_STILL"
         const val ACTION_ACTIVITY_MOVING = "ACTION_ACTIVITY_MOVING"
+
+        /**
+         * Можно ли поднимать сервис из автоматических точек (BootReceiver,
+         * heartbeat-будильник, Activity Recognition). Без разрешения на
+         * геолокацию startForeground(type=location) на Android 14+ роняет
+         * процесс; на отвязанном устройстве сервис бесполезен — копил бы
+         * точки, которые некуда отправить. Явный запуск из UI сюда не ходит.
+         */
+        fun canAutoStart(ctx: Context): Boolean {
+            val perm = ctx.checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED ||
+                ctx.checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED
+            return perm && !NativeCreds.isUnlinked(ctx)
+        }
         private const val WAKE_LOCK_TAG = "periscop:LocationForegroundService"
         // Heartbeat — гарантированная точка раз в 90 секунд, даже если телефон
         // неподвижен и fused с distance-filter 30м не присылает обновлений.
@@ -228,13 +243,7 @@ class LocationForegroundService : Service() {
         log("onStartCommand action=${intent?.action} flags=$flags startId=$startId")
         when (intent?.action) {
             ACTION_STOP -> {
-                cancelHeartbeatAlarm()
-                unregisterNetworkMonitor()
-                unregisterActivityTransitions()
-                motionMonitor.stop()
-                releaseWakeLock()
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                stopSelf()
+                stopAll()
                 return START_NOT_STICKY
             }
             ACTION_HEARTBEAT -> {
@@ -242,7 +251,7 @@ class LocationForegroundService : Service() {
                 // иначе на Android 12+ startForegroundService без startForeground
                 // в 5 сек = ANR. Если сервис уже живой, повторный startForeground
                 // безопасен.
-                startForeground(NOTIF_ID, buildNotification())
+                if (!promoteForeground("heartbeat")) return START_NOT_STICKY
                 if (!ensureStarted("heartbeat")) return START_NOT_STICKY
                 if (callback != null && subscribedBatched) {
                     // v0.59.0: без сети в движении FLP сам копит точки каждые
@@ -264,12 +273,12 @@ class LocationForegroundService : Service() {
                 // но не сразу после движения — см. onArStill.
                 // Сервис может быть ещё не started — promote в foreground
                 // безопасен и идемпотентен.
-                startForeground(NOTIF_ID, buildNotification())
+                if (!promoteForeground("AR STILL")) return START_NOT_STICKY
                 if (!ensureStarted("AR STILL")) return START_NOT_STICKY
                 onArStill()
             }
             ACTION_ACTIVITY_MOVING -> {
-                startForeground(NOTIF_ID, buildNotification())
+                if (!promoteForeground("AR MOVING")) return START_NOT_STICKY
                 if (!ensureStarted("AR MOVING")) return START_NOT_STICKY
                 // Движение по AR — такой же сигнал, как скорость: отменяет
                 // отложенный STILL и перезапускает 15-мин debounce.
@@ -288,6 +297,34 @@ class LocationForegroundService : Service() {
     // маршрут пропадал до следующего открытия приложения (журнал 2026-09-30:
     // 10 минут пути без точек). false — start() не смог стартовать (нет
     // разрешения на геолокацию) и уже вызвал stopSelf.
+    // Остановка целиком: и по ACTION_STOP из UI, и когда сервер отозвал токен.
+    // Realtime-канал команд живёт вместе с FGS — без stop() он переподключался
+    // со старым токеном раз в 10 минут бесконечно.
+    private fun stopAll() {
+        cancelHeartbeatAlarm()
+        unregisterNetworkMonitor()
+        unregisterActivityTransitions()
+        motionMonitor.stop()
+        ChildRealtimeClient.stop(this)
+        releaseWakeLock()
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
+    }
+
+    // Будильник или AR подняли сервис через startForegroundService — promote
+    // обязателен. Разрешение на геолокацию могли отозвать после того, как
+    // receiver его проверил: тогда SecurityException, а не падение процесса.
+    private fun promoteForeground(reason: String): Boolean {
+        return try {
+            startForeground(NOTIF_ID, buildNotification())
+            true
+        } catch (e: SecurityException) {
+            logErr("$reason: startForeground denied (location permission revoked?)", e)
+            stopAll()
+            false
+        }
+    }
+
     private fun ensureStarted(reason: String): Boolean {
         if (callback != null) return true
         log("$reason: подписки FLP нет (новый процесс) — полный start()")
@@ -357,6 +394,30 @@ class LocationForegroundService : Service() {
         }
     }
 
+    // Вызовы из headless-Dart в native по тому же каналу. Engine кэширован на
+    // процесс и переживает экземпляр сервиса — поэтому только applicationContext
+    // и intent, без ссылок на this.
+    private fun registerLifecycleHandler(channel: MethodChannel) {
+        val app = applicationContext
+        channel.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "deviceUnlinked" -> {
+                    DiagLog.write(app, "bg", "deviceUnlinked: token revoked → stop location service")
+                    NativeCreds.markUnlinked(app)
+                    try {
+                        app.startService(
+                            Intent(app, LocationForegroundService::class.java).setAction(ACTION_STOP),
+                        )
+                    } catch (e: Throwable) {
+                        DiagLog.write(app, "bg", "deviceUnlinked: stop failed: ${e.message}")
+                    }
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
+    }
+
     private fun ensureBackgroundEngine() {
         if (bgEngine != null) {
             log("ensureBackgroundEngine: already have engine")
@@ -367,6 +428,7 @@ class LocationForegroundService : Service() {
             log("ensureBackgroundEngine: using cached engine")
             bgEngine = cached
             bgChannel = MethodChannel(cached.dartExecutor.binaryMessenger, METHOD_CHANNEL)
+            registerLifecycleHandler(bgChannel!!)
             return
         }
 
@@ -393,6 +455,7 @@ class LocationForegroundService : Service() {
 
             bgEngine = engine
             bgChannel = MethodChannel(engine.dartExecutor.binaryMessenger, METHOD_CHANNEL)
+            registerLifecycleHandler(bgChannel!!)
 
             // Диагностический канал для headless-Dart: diagLog/diagDebug/diagUpload.
             DiagChannel.register(applicationContext, engine.dartExecutor.binaryMessenger, "bg")
@@ -462,6 +525,9 @@ class LocationForegroundService : Service() {
         startForeground(NOTIF_ID, buildNotification())
         acquireWakeLock()
         ensureBackgroundEngine()
+        // stop → start одной парой (баннер AR) может прийти в тот же экземпляр,
+        // минуя onCreate: realtime, остановленный в stopAll, поднимаем здесь.
+        ChildRealtimeClient.start(this)
         if (callback != null) {
             log("start: callback already subscribed, skip requestLocationUpdates")
             return

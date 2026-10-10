@@ -1,6 +1,6 @@
 {
   "name": "@periscop/backend",
-  "version": "0.80.2",
+  "version": "0.80.3",
   "private": true,
   "description": "Перископ backend — NestJS API",
   "scripts": {

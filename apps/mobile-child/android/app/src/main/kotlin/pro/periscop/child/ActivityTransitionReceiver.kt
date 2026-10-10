@@ -61,6 +61,12 @@ class ActivityTransitionReceiver : BroadcastReceiver() {
             else -> null
         } ?: return
 
+        // Подписка AR переживает сервис: без разрешения на геолокацию
+        // startForeground уронил бы процесс на каждом событии (Android 14+).
+        if (!LocationForegroundService.canAutoStart(context)) {
+            DiagLog.write(context, "activity", "skip $serviceAction: no location permission or device unlinked")
+            return
+        }
         val svcIntent = Intent(context, LocationForegroundService::class.java).setAction(serviceAction)
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
