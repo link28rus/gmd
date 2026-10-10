@@ -15,6 +15,19 @@ enum LocationProfile {
   still,
 }
 
+/// v0.81.0 — переключатель «Автозапуск» в MIUI/HyperOS. Без него после
+/// перезагрузки или убийства процесса геолокация не поднимается сама.
+enum AutostartState {
+  enabled,
+  disabled,
+
+  /// Прошивка не дала прочитать — плашку не показываем.
+  unknown,
+
+  /// Не Xiaomi: переключателя нет.
+  notMiui,
+}
+
 class LocationServiceChannel {
   static const MethodChannel _channel = MethodChannel('pro.periscop.child/location');
 
@@ -46,5 +59,24 @@ class LocationServiceChannel {
     } catch (_) {
       return LocationProfile.unknown;
     }
+  }
+
+  Future<AutostartState> autostartState() async {
+    try {
+      final raw = await _channel.invokeMethod<String>('autostartState');
+      return switch (raw) {
+        'ENABLED' => AutostartState.enabled,
+        'DISABLED' => AutostartState.disabled,
+        'NOT_MIUI' => AutostartState.notMiui,
+        _ => AutostartState.unknown,
+      };
+    } catch (_) {
+      return AutostartState.unknown;
+    }
+  }
+
+  /// Экран «Автозапуск» в «Безопасности» MIUI (или карточка приложения).
+  Future<void> openAutostartSettings() async {
+    await _channel.invokeMethod('openAutostartSettings');
   }
 }

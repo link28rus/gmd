@@ -20,7 +20,11 @@ class PeriscopApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         DiagCrashHandler.install(this)
-        if (isMainProcess()) DiagCrashHandler.reportPendingCrash(this)
+        if (isMainProcess()) {
+            DiagCrashHandler.reportPendingCrash(this)
+            // v0.81.0 — чем бы ни подняли процесс, геолокация должна работать.
+            LocationForegroundService.ensureRunning(this, "process start")
+        }
     }
 
     private fun isMainProcess(): Boolean {

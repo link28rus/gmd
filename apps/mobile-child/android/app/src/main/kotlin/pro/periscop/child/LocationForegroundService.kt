@@ -57,6 +57,49 @@ class LocationForegroundService : Service() {
                 android.content.pm.PackageManager.PERMISSION_GRANTED
             return perm && !NativeCreds.isUnlinked(ctx)
         }
+
+        // v0.81.0 — экземпляр сервиса жив в этом процессе (onCreate…onDestroy).
+        @Volatile
+        var alive: Boolean = false
+            private set
+
+        @Volatile
+        private var lastEnsureAtMs: Long = 0L
+
+        /**
+         * v0.81.0 — процесс подняли не ради геолокации (push «Звука вокруг»,
+         * WorkManager), а сервис мёртв: запускаем. Журнал Степана 2026-10-10:
+         * FCM START_AUDIO поднял процесс в 18:31, а точки пошли только в 19:01,
+         * когда ребёнок открыл приложение. Из фона на Android 12+ запуск
+         * разрешён не всегда (окно high-priority push, игнор оптимизации
+         * батареи) — отказ только логируем, следующий шанс будет при новом пробуждении.
+         */
+        fun ensureRunning(ctx: Context, reason: String) {
+            if (alive) return
+            if (!canAutoStart(ctx) || NativeCreds.getToken(ctx).isNullOrEmpty()) return
+            val now = android.os.SystemClock.elapsedRealtime()
+            // Application.onCreate и onMessageReceived идут подряд в одном
+            // процессе, а onCreate сервиса — асинхронно после них. Отметку
+            // ставим только после удачного запуска: отказ в Application.onCreate
+            // не должен мешать попытке из onMessageReceived (у неё есть окно push).
+            if (lastEnsureAtMs != 0L && now - lastEnsureAtMs < 10_000L) return
+            val svc = Intent(ctx, LocationForegroundService::class.java).setAction(ACTION_START)
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    ctx.startForegroundService(svc)
+                } else {
+                    ctx.startService(svc)
+                }
+                lastEnsureAtMs = now
+                DiagLog.write(ctx, "svc", "ensureRunning($reason): сервис не работал — запущен")
+            } catch (e: Throwable) {
+                DiagLog.write(
+                    ctx,
+                    "svc",
+                    "ensureRunning($reason): запуск из фона запрещён: ${e.javaClass.simpleName}: ${e.message}",
+                )
+            }
+        }
         private const val WAKE_LOCK_TAG = "periscop:LocationForegroundService"
         // Heartbeat — гарантированная точка раз в 90 секунд, даже если телефон
         // неподвижен и fused с distance-filter 30м не присылает обновлений.
@@ -229,6 +272,7 @@ class LocationForegroundService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        alive = true
         log("onCreate")
         fused = LocationServices.getFusedLocationProviderClient(this)
         createChannel()
@@ -1186,6 +1230,7 @@ class LocationForegroundService : Service() {
 
     override fun onDestroy() {
         log("onDestroy")
+        alive = false
         // Alarm НЕ отменяем в onDestroy — если система прибила service, но
         // потом перезапустит его по START_STICKY/RestartReceiver, alarm-цепочка
         // сохранит heartbeat. Отменяем только при явном ACTION_STOP.

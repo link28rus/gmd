@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
+import '../../core/native/location_service_channel.dart';
 
 /// Красный баннер сверху на home, если критические permissions для фонового
 /// трекинга не даны. Показывается и при первом запуске, и после обновлений
@@ -18,6 +19,9 @@ class _PermissionHealthBannerState extends State<PermissionHealthBanner>
     with WidgetsBindingObserver {
   List<String> _missing = const [];
   String _route = '/permissions/battery';
+  // v0.81.0: если первым не хватает «Автозапуска» — нажатие открывает
+  // сразу экран автозапуска MIUI, а не шаг мастера.
+  bool _openAutostart = false;
   Timer? _recheckTimer;
 
   @override
@@ -69,10 +73,20 @@ class _PermissionHealthBannerState extends State<PermissionHealthBanner>
       missing.add('Звук вокруг после перезагрузки');
       if (missing.length == 1) route = '/permissions/overlay';
     }
+    // v0.81.0: MIUI «Автозапуск». Выключен — после перезагрузки или убийства
+    // процесса геолокация стоит до открытия приложения (у Степана — сутками).
+    // Состояние «неизвестно» (прошивка не дала прочитать) плашку не включает.
+    var openAutostart = false;
+    final autostart = await LocationServiceChannel().autostartState();
+    if (autostart == AutostartState.disabled) {
+      missing.add('Автозапуск');
+      if (missing.length == 1) openAutostart = true;
+    }
     if (!mounted) return;
     setState(() {
       _missing = missing;
       _route = route;
+      _openAutostart = openAutostart;
     });
   }
 
@@ -83,7 +97,11 @@ class _PermissionHealthBannerState extends State<PermissionHealthBanner>
       color: Colors.red.shade50,
       child: InkWell(
         onTap: () {
-          context.go(_route);
+          if (_openAutostart) {
+            LocationServiceChannel().openAutostartSettings();
+          } else {
+            context.go(_route);
+          }
         },
         child: Padding(
           padding: const EdgeInsets.all(12),

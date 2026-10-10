@@ -161,6 +161,11 @@ class MainActivity : FlutterActivity() {
                         )
                         result.success(profile)
                     }
+                    // v0.81.0 — MIUI «Автозапуск»: ENABLED/DISABLED/UNKNOWN/NOT_MIUI.
+                    // Опрашивается на каждом возврате на экран — в журнал не пишем,
+                    // состояние и способ чтения есть в снимке («автозапуск MIUI»).
+                    "autostartState" -> result.success(MiuiAutostart.state(this).name)
+                    "openAutostartSettings" -> result.success(MiuiAutostart.openSettings(this))
                     else -> result.notImplemented()
                 }
             }

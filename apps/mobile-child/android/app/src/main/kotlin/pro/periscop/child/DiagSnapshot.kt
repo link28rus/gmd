@@ -51,6 +51,8 @@ object DiagSnapshot {
             val upSec = (SystemClock.elapsedRealtime() - Process.getStartElapsedRealtime()) / 1000
             "pid=${Process.myPid()} работает ${upSec}с, importance=${processImportance()}"
         }
+        // v0.81.0 — отличить перезагрузку телефона от убийства процесса.
+        line("ОС работает с загрузки") { "${SystemClock.elapsedRealtime() / 60_000} мин" }
 
         line("RECORD_AUDIO") { perm(ctx, Manifest.permission.RECORD_AUDIO) }
         line("ACCESS_FINE_LOCATION") { perm(ctx, Manifest.permission.ACCESS_FINE_LOCATION) }
@@ -101,6 +103,7 @@ object DiagSnapshot {
                 "n/a"
             }
         }
+        line("автозапуск MIUI") { MiuiAutostart.describe(ctx) }
         line("сеть") { networkType(ctx) }
 
         line("LocationForegroundService") { serviceState(am, LocationForegroundService::class.java.name) }

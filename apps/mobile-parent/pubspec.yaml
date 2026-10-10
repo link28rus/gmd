@@ -1,7 +1,7 @@
 name: periscop_parent
 description: "Перископ Родителя — родительский контроль и геолокация ребёнка"
 publish_to: 'none'
-version: 0.80.3+51
+version: 0.81.0+51
 
 environment:
   sdk: ^3.11.5

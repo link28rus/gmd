@@ -89,6 +89,10 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         super.onMessageReceived(remoteMessage)
         val data = remoteMessage.data
         DiagLog.write(this, "fcm", "onMessageReceived type=${data["type"]} from=${remoteMessage.from}")
+        // v0.81.0 — high-priority push даёт короткое окно, в котором Android 12+
+        // разрешает запуск foreground-сервиса из фона. Если геолокация умерла
+        // вместе с процессом, поднимаем её здесь, а не ждём открытия приложения.
+        LocationForegroundService.ensureRunning(this, "fcm ${data["type"]}")
         // v0.57: обработка общая с realtime-каналом — см. ChildPushDispatcher.
         ChildPushDispatcher.dispatch(this, data, "fcm")
     }

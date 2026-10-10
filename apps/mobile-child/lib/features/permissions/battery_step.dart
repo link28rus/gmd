@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
+import '../../core/native/location_service_channel.dart';
 import 'permissions_wizard.dart';
 import 'wizard_steps.dart';
 
@@ -33,12 +34,39 @@ class BatteryPermissionsStep extends StatelessWidget {
           'взрослый.',
       onRequest: () => _request(context),
       onSkip: () => context.go(wizardNextRoute(_route)),
-      footer: Center(
-        child: TextButton.icon(
-          onPressed: openAppSettings,
-          icon: const Icon(Icons.settings_outlined, size: 18),
-          label: const Text('Открыть настройки приложения'),
-        ),
+      footer: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // v0.81.0: на Xiaomi — сразу экран «Автозапуск».
+          FutureBuilder<AutostartState>(
+            future: LocationServiceChannel().autostartState(),
+            builder: (context, snap) {
+              final s = snap.data;
+              if (s == null || s == AutostartState.notMiui) {
+                return const SizedBox.shrink();
+              }
+              return TextButton.icon(
+                onPressed: LocationServiceChannel().openAutostartSettings,
+                icon: Icon(
+                  s == AutostartState.enabled
+                      ? Icons.check_circle_outline
+                      : Icons.restart_alt,
+                  size: 18,
+                ),
+                label: Text(
+                  s == AutostartState.enabled
+                      ? '«Автозапуск» включён'
+                      : 'Включить «Автозапуск»',
+                ),
+              );
+            },
+          ),
+          TextButton.icon(
+            onPressed: openAppSettings,
+            icon: const Icon(Icons.settings_outlined, size: 18),
+            label: const Text('Открыть настройки приложения'),
+          ),
+        ],
       ),
     );
   }
