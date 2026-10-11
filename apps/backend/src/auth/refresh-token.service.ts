@@ -79,10 +79,24 @@ export class RefreshTokenService {
     if (row.expiresAt <= new Date()) return { ok: false };
 
     const { token: newToken, id: newId } = await this.create(row.userId, meta);
-    await this.prisma.refreshToken.update({
-      where: { id: row.id },
+    // Атомарный захват: отзываем старый токен, только если его ещё никто не
+    // отозвал. Два параллельных refresh с одним токеном оба прошли проверку
+    // выше, но строку получит один — второй видит count 0 и не плодит вторую
+    // живую цепочку.
+    const claimed = await this.prisma.refreshToken.updateMany({
+      where: { id: row.id, revokedAt: null },
       data: { revokedAt: new Date(), rotatedToId: newId },
     });
+    if (claimed.count !== 1) {
+      // Проиграли гонку: только что выпущенный токен никому не отдан — гасим.
+      // Ответ как для токена, отозванного внутри grace-окна (без revoke-all):
+      // соседняя вкладка уже получила новую пару.
+      await this.prisma.refreshToken.updateMany({
+        where: { id: newId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      return { ok: false };
+    }
     return { ok: true, token: newToken, userId: row.userId };
   }
 

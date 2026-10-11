@@ -545,7 +545,7 @@ No JWT needed for child — simpler, device-bound lifecycle.
 ### PIN Management (Parent Protection)
 
 ```
-POST /auth/set-password {password}  // Password for email+OTP or password login
+POST /auth/set-password {password, currentPassword?}  // currentPassword обязателен, если пароль уже есть; ответ — новая пара токенов
 
 POST /auth/set-pin {pin}            // 4-digit PIN for quick unlock on mobile-parent
                                      // Stored as Argon2 hash on User entity

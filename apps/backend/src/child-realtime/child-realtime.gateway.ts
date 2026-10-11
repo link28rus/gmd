@@ -155,6 +155,31 @@ export class ChildRealtimeGateway implements OnGatewayInit, OnGatewayConnection,
       }
       this.send(client, { op: 'ping' });
     }
+    void this.closeRevoked();
+  }
+
+  // Отвязанное после подключения устройство (родитель удалил ребёнка, сбросил
+  // устройство, админ отозвал) держало сокет до обрыва сети. 4401 — тот же код,
+  // что при неверном токене: клиент ребёнка на него перестаёт переподключаться.
+  private async closeRevoked(): Promise<void> {
+    const ids = [...new Set([...this.sockets].map((c) => c[STATE]?.deviceId))].filter(
+      (id): id is string => !!id,
+    );
+    if (ids.length === 0) return;
+    let active: Set<string>;
+    try {
+      active = await this.devices.activeDeviceIds(ids);
+    } catch (err) {
+      this.logger.warn(`closeRevoked: lookup failed: ${String(err)}`);
+      return;
+    }
+    for (const client of this.sockets) {
+      const id = client[STATE]?.deviceId;
+      if (id && !active.has(id)) {
+        this.logger.log(`device=${id} revoked — closing socket`);
+        this.reject(client, 4401, 'revoked');
+      }
+    }
   }
 
   private send(client: WebSocket, msg: Record<string, unknown>): void {

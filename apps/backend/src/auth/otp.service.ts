@@ -43,27 +43,31 @@ export class OtpService {
     });
     if (!row) return { ok: false, reason: 'invalid_code' };
 
+    // Попытка засчитывается ДО проверки хеша и атомарно: параллельные
+    // угадывания не прочитают одно и то же значение attempts. Лимит исчерпан
+    // (или код уже погашен соседним запросом) — count 0.
+    const charged = await this.prisma.otpCode.updateMany({
+      where: { id: row.id, consumedAt: null, attempts: { lt: this.cfg.maxAttempts } },
+      data: { attempts: { increment: 1 } },
+    });
+    if (charged.count !== 1) return { ok: false, reason: 'invalid_code' };
+
     const match = await argonVerify(row.codeHash, code);
     if (!match) {
-      const nextAttempts = row.attempts + 1;
-      if (nextAttempts >= this.cfg.maxAttempts) {
-        await this.prisma.otpCode.update({
-          where: { id: row.id },
-          data: { attempts: nextAttempts, consumedAt: new Date() },
-        });
-      } else {
-        await this.prisma.otpCode.update({
-          where: { id: row.id },
-          data: { attempts: nextAttempts },
-        });
-      }
+      // Последняя попытка израсходована — гасим код.
+      await this.prisma.otpCode.updateMany({
+        where: { id: row.id, consumedAt: null, attempts: { gte: this.cfg.maxAttempts } },
+        data: { consumedAt: new Date() },
+      });
       return { ok: false, reason: 'invalid_code' };
     }
 
-    await this.prisma.otpCode.update({
-      where: { id: row.id },
+    // Гасим атомарно: верный код, поданный дважды параллельно, сработает один раз.
+    const consumed = await this.prisma.otpCode.updateMany({
+      where: { id: row.id, consumedAt: null },
       data: { consumedAt: new Date() },
     });
+    if (consumed.count !== 1) return { ok: false, reason: 'invalid_code' };
     return { ok: true, otpId: row.id };
   }
 }

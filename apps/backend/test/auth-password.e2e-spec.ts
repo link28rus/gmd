@@ -161,13 +161,37 @@ describe('Auth password (e2e)', () => {
       .expect(200);
 
     const accessToken = otpRes.body.accessToken as string;
+    const oldRefresh = otpRes.body.refreshToken as string;
 
-    // Set password using JWT-protected endpoint
-    await request(server())
+    // Пароль уже есть (задан при регистрации) — без текущего и с неверным отказ.
+    const noCurrent = await request(server())
       .post('/auth/set-password')
       .set('Authorization', `Bearer ${accessToken}`)
       .send({ password: 'newSecurePass1' })
-      .expect(204);
+      .expect(400);
+    expect(noCurrent.body.error.code).toBe('current_password_required');
+    const wrong = await request(server())
+      .post('/auth/set-password')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ password: 'newSecurePass1', currentPassword: 'not-my-password' })
+      .expect(400);
+    expect(wrong.body.error.code).toBe('invalid_current_password');
+
+    // Set password using JWT-protected endpoint
+    const setRes = await request(server())
+      .post('/auth/set-password')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ password: 'newSecurePass1', currentPassword: 'test-password-1' })
+      .expect(200);
+    expect(setRes.body.accessToken).toBeTruthy();
+    expect(setRes.body.refreshToken).toBeTruthy();
+
+    // Прежние сессии отозваны, выданная пара работает.
+    await request(server()).post('/auth/refresh').send({ refreshToken: oldRefresh }).expect(401);
+    await request(server())
+      .post('/auth/refresh')
+      .send({ refreshToken: setRes.body.refreshToken })
+      .expect(200);
 
     // Login with new password
     const loginRes = await request(server())

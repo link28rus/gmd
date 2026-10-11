@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { backend } from '@/lib/backend';
 
 const YANDEX_GEOCODER_URL = 'https://geocode-maps.yandex.ru/1.x/';
 
@@ -20,6 +21,30 @@ interface YandexResponse {
 function errorJson(code: string, message: string, status: number): NextResponse {
   // Формат как у backend'а (`{ error: { code, message } }`) — apiFetch достаёт code.
   return NextResponse.json({ error: { code, message } }, { status });
+}
+
+// Геокодер только для вошедших: открытый эндпоинт позволял любому выжечь
+// квоту ключа Яндекса. Токен проверяем у backend (GET /me) и помним успех
+// 5 минут — кабинет и приложение родителя дёргают геокодер пачками.
+const AUTH_TTL_MS = 5 * 60_000;
+const AUTH_CACHE_MAX = 500;
+const authCache = new Map<string, number>();
+
+async function isAuthorized(req: NextRequest): Promise<boolean> {
+  const auth = req.headers.get('authorization');
+  if (!auth?.startsWith('Bearer ')) return false;
+  const token = auth.slice('Bearer '.length);
+  const now = Date.now();
+  const until = authCache.get(token);
+  if (until !== undefined && until > now) return true;
+  const r = await backend('GET', '/me', undefined, token).catch(() => null);
+  if (r?.status !== 200) {
+    authCache.delete(token);
+    return false;
+  }
+  if (authCache.size >= AUTH_CACHE_MAX) authCache.clear();
+  authCache.set(token, now + AUTH_TTL_MS);
+  return true;
 }
 
 /** «lon,lat» → строка для Yandex или null, если числа невалидны. */
@@ -130,6 +155,10 @@ export async function GET(req: NextRequest) {
   const apiKey = process.env.YANDEX_GEOCODER_API_KEY;
   if (!apiKey) {
     return errorJson('geocoder_not_configured', 'Yandex API key missing', 503);
+  }
+
+  if (!(await isAuthorized(req))) {
+    return errorJson('unauthorized', 'Missing or invalid Bearer token', 401);
   }
 
   const url = new URL(req.url);

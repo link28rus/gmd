@@ -16,8 +16,11 @@ export default function PasswordClient(): ReactElement {
   const user = useAuthStore((s) => s.user);
   const setAll = useAuthStore((s) => s.setAll);
   const patchUser = useAuthStore((s) => s.patchUser);
+  const setAccess = useAuthStore((s) => s.setAccess);
 
   const [bootstrapping, setBootstrapping] = useState(accessToken === null);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [currentError, setCurrentError] = useState<string | null>(null);
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -52,6 +55,7 @@ export default function PasswordClient(): ReactElement {
   const hasPassword = user?.hasPassword === true;
 
   function validate(): string | null {
+    if (hasPassword && currentPassword.length === 0) return 'Введите текущий пароль';
     if (password.length < MIN_LEN) return `Минимум ${MIN_LEN} символов`;
     if (password.length > MAX_LEN) return `Максимум ${MAX_LEN} символов`;
     if (password !== confirm) return 'Пароли не совпадают';
@@ -70,6 +74,7 @@ export default function PasswordClient(): ReactElement {
       return;
     }
     setSubmitting(true);
+    setCurrentError(null);
     try {
       const res = await fetch('/api/auth/set-password', {
         method: 'POST',
@@ -77,10 +82,15 @@ export default function PasswordClient(): ReactElement {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify(hasPassword ? { password, currentPassword } : { password }),
       });
-      if (res.status === 204) {
+      if (res.ok) {
+        // Backend отозвал все сессии и выдал новую пару: refresh уже в cookie
+        // (route-хендлер), access — сюда, иначе следующий запрос получит 401.
+        const ok = (await res.json().catch(() => null)) as { accessToken?: string } | null;
+        if (ok?.accessToken) setAccess(ok.accessToken);
         patchUser({ hasPassword: true });
+        setCurrentPassword('');
         setPassword('');
         setConfirm('');
         toast.success(hasPassword ? 'Пароль обновлён' : 'Пароль установлен');
@@ -92,8 +102,24 @@ export default function PasswordClient(): ReactElement {
       }
       const data = (await res.json().catch(() => null)) as {
         message?: string;
-        error?: { message?: string };
+        error?: { code?: string; message?: string };
       } | null;
+      const code = data?.error?.code;
+      if (code === 'invalid_current_password' || code === 'current_password_required') {
+        const msg =
+          code === 'invalid_current_password'
+            ? 'Неверный текущий пароль'
+            : 'Введите текущий пароль';
+        // Флаг в store мог устареть (пароль задан в другой вкладке) — показать поле.
+        if (!hasPassword) patchUser({ hasPassword: true });
+        setCurrentError(msg);
+        toast.error(msg);
+        return;
+      }
+      if (res.status === 423) {
+        toast.error('Слишком много неверных попыток. Попробуйте позже');
+        return;
+      }
       toast.error(data?.error?.message ?? data?.message ?? 'Не удалось сохранить пароль');
     } catch {
       toast.error('Сетевая ошибка');
@@ -120,7 +146,7 @@ export default function PasswordClient(): ReactElement {
 
   const title = hasPassword ? 'Сменить пароль' : 'Установить пароль';
   const subtitle = hasPassword
-    ? 'Обновите постоянный пароль для входа. Текущий пароль будет заменён.'
+    ? 'Обновите постоянный пароль для входа. На других устройствах и в других браузерах потребуется войти заново.'
     : 'Установите постоянный пароль, чтобы входить без одноразового кода из письма.';
 
   return (
@@ -134,6 +160,34 @@ export default function PasswordClient(): ReactElement {
         <h1 className="mb-1 text-2xl font-semibold text-foreground">{title}</h1>
         <p className="mb-6 text-sm text-muted-foreground">{subtitle}</p>
         <form onSubmit={onSubmit} className="space-y-4">
+          {hasPassword && (
+            <div>
+              <label htmlFor="pwd0" className="mb-1 block text-sm font-medium text-foreground">
+                Текущий пароль
+              </label>
+              <input
+                id="pwd0"
+                type="password"
+                autoComplete="current-password"
+                maxLength={MAX_LEN}
+                value={currentPassword}
+                onChange={(e) => {
+                  setCurrentPassword(e.target.value);
+                  setCurrentError(null);
+                }}
+                disabled={submitting}
+                aria-invalid={currentError !== null}
+                aria-describedby={currentError ? 'pwd0-err' : undefined}
+                className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground focus:border-zinc-900 focus:outline-none disabled:bg-muted"
+                required
+              />
+              {currentError && (
+                <p id="pwd0-err" className="mt-1 text-xs text-destructive">
+                  {currentError}
+                </p>
+              )}
+            </div>
+          )}
           <div>
             <label htmlFor="pwd" className="mb-1 block text-sm font-medium text-foreground">
               Новый пароль

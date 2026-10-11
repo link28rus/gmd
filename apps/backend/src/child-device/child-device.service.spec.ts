@@ -142,6 +142,15 @@ describe('ChildDeviceService.claim', () => {
     expect(p._devices[0].deviceName).toBe('Pixel');
   });
 
+  it('гонка двух приглашений (P2002 на childId) → 409 child_has_device, а не 500', async () => {
+    const p = makePrismaMock();
+    p.$transaction.mockRejectedValue(
+      Object.assign(new Error('Unique constraint'), { code: 'P2002' }),
+    );
+    const svc = makeSvc(p);
+    await expect(svc.claim('ABCD1234', {})).rejects.toThrow(ConflictException);
+  });
+
   it('несуществующий код → 400 invite_invalid', async () => {
     const p = makePrismaMock();
     const svc = makeSvc(p);

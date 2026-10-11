@@ -11,6 +11,7 @@ function setup() {
     touchLastSeen: jest.fn(),
     setAppVersion: jest.fn().mockResolvedValue(undefined),
     setMicReady: jest.fn().mockResolvedValue(true),
+    activeDeviceIds: jest.fn().mockResolvedValue(new Set(['dev-1'])),
   };
   const realtime = { handleAck: jest.fn() };
   const gw = new ChildRealtimeGateway(
@@ -74,6 +75,27 @@ describe('ChildRealtimeGateway — micReady (v0.62)', () => {
       expect(devices.setMicReady).not.toHaveBeenCalled();
     },
   );
+
+  it('closeRevoked закрывает сокет отозванного устройства кодом 4401', async () => {
+    const { gw, devices, client } = setup();
+    client.close = jest.fn();
+    await connect(gw, devices, client);
+    devices.activeDeviceIds.mockResolvedValue(new Set());
+    await (gw as any).closeRevoked();
+    expect(devices.activeDeviceIds).toHaveBeenCalledWith(['dev-1']);
+    expect(client.close).toHaveBeenCalledWith(4401, 'revoked');
+  });
+
+  it('closeRevoked не трогает действующее устройство и переживает сбой БД', async () => {
+    const { gw, devices, client } = setup();
+    client.close = jest.fn();
+    await connect(gw, devices, client);
+    await (gw as any).closeRevoked();
+    expect(client.close).not.toHaveBeenCalled();
+    devices.activeDeviceIds.mockRejectedValue(new Error('db down'));
+    await (gw as any).closeRevoked();
+    expect(client.close).not.toHaveBeenCalled();
+  });
 
   it('битый JSON и сообщение без авторизации игнорируются', async () => {
     const { gw, devices, client } = setup();

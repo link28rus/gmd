@@ -1,5 +1,11 @@
 import type { OnModuleInit } from '@nestjs/common';
-import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  Optional,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { OtpService } from './otp.service';
@@ -12,6 +18,7 @@ import { PasswordService } from './password.service';
 import { LockedException } from '../common/exceptions/locked.exception';
 import { EmailVerificationService } from './email-verification.service';
 import { PasswordResetService } from './password-reset.service';
+import { StaleTokenService } from './stale-token.service';
 
 export interface AuthServiceConfig {
   privacyPolicyVersion: string;
@@ -50,6 +57,8 @@ export type ConfirmEmailResult =
   | (LoginResult & { ok: true })
   | { ok: false; reason: 'invalid_token' | 'token_expired' | 'token_consumed' };
 
+export type SetPasswordResult = { accessToken: string; refreshToken: string };
+
 export type RefreshResult =
   | { ok: true; accessToken: string; refreshToken: string }
   | { ok: false; replay?: boolean };
@@ -70,6 +79,7 @@ export class AuthService implements OnModuleInit {
     private readonly emailVerification: EmailVerificationService,
     @Inject(PasswordResetService)
     private readonly passwordReset: PasswordResetService,
+    @Optional() @Inject(StaleTokenService) private readonly stale?: StaleTokenService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -127,13 +137,22 @@ export class AuthService implements OnModuleInit {
     if (!r.ok) return { ok: false, replay: r.replay };
 
     const [userRow, membership] = await Promise.all([
-      this.prisma.user.findUnique({ where: { id: r.userId }, select: { email: true } }),
+      this.prisma.user.findUnique({
+        where: { id: r.userId },
+        select: { email: true, deletedAt: true, blockedAt: true },
+      }),
       this.prisma.membership.findFirst({
         where: { userId: r.userId },
         orderBy: { createdAt: 'asc' },
       }),
     ]);
     if (!membership || !userRow) return { ok: false };
+    // Заблокирован/удалён: админка отзывает refresh-токены, но и токен,
+    // переживший отзыв (гонка с ротацией), пару не получает.
+    if (userRow.deletedAt || userRow.blockedAt) {
+      await this.refresh.revokeAllForUser(r.userId);
+      return { ok: false };
+    }
     const accessToken = await this.jwt.signAccessToken({
       sub: r.userId,
       email: userRow.email,
@@ -205,8 +224,11 @@ export class AuthService implements OnModuleInit {
    * Регистрация по почте + паролю. Создаёт User (unverified), Family,
    * Membership (owner) в одной транзакции, затем отправляет письмо
    * подтверждения. Повторная регистрация с тем же email, пока он не
-   * подтверждён, перезаписывает ФИО/пароль/семью и перевыпускает токен
-   * подтверждения — чтобы таймер начинался заново.
+   * подтверждён, только перевыпускает ссылку подтверждения (таймер заново).
+   * Пароль, ФИО и семью НЕ меняет: иначе посторонний занял бы email своим
+   * паролем, а владелец, нажав новую ссылку, подтвердил бы аккаунт с чужим
+   * паролем. Ответ клиенту тот же, что при первой регистрации; письмо уходит
+   * на сам email — прочитает его только владелец.
    */
   async register(dto: {
     email: string;
@@ -229,36 +251,22 @@ export class AuthService implements OnModuleInit {
     }
 
     let userId: string;
+    let mailName = fullName;
     if (existing && !existing.deletedAt) {
-      // Пользователь зарегистрирован, но ещё не подтвердил email — разрешаем
-      // обновить данные и перевыпустить ссылку (по UX: «регистрируюсь снова —
-      // перезапустить таймер»).
-      const updatedUser = await this.prisma.user.update({
-        where: { id: existing.id },
-        data: {
-          firstName: dto.firstName,
-          lastName: dto.lastName,
-          middleName: dto.middleName ?? null,
-          name: fullName,
-          passwordHash,
-          acceptedPrivacyPolicyVersion: this.cfg.privacyPolicyVersion,
-        },
-      });
+      // Не подтверждён — данные первой регистрации не трогаем, только
+      // переотправляем письмо. Семью создаём, лишь если её нет (без членства
+      // подтверждение не выдаст токены).
       const membership = await this.prisma.membership.findFirst({
-        where: { userId: updatedUser.id },
+        where: { userId: existing.id },
       });
-      if (membership) {
-        await this.prisma.family.update({
-          where: { id: membership.familyId },
-          data: { name: familyName },
-        });
-      } else {
+      if (!membership) {
         const family = await this.prisma.family.create({ data: { name: familyName } });
         await this.prisma.membership.create({
-          data: { userId: updatedUser.id, familyId: family.id, role: 'owner' },
+          data: { userId: existing.id, familyId: family.id, role: 'owner' },
         });
       }
-      userId = updatedUser.id;
+      userId = existing.id;
+      mailName = existing.name || fullName;
     } else {
       const created = await this.prisma.$transaction(async (tx) => {
         const u = await tx.user.create({
@@ -281,7 +289,7 @@ export class AuthService implements OnModuleInit {
       userId = created.id;
     }
 
-    await this.emailVerification.issueAndSend(userId, normalized, fullName);
+    await this.emailVerification.issueAndSend(userId, normalized, mailName);
     return { ok: true };
   }
 
@@ -317,9 +325,71 @@ export class AuthService implements OnModuleInit {
     );
   }
 
-  async setPassword(userId: string, password: string): Promise<void> {
+  /**
+   * Установка/смена пароля из кабинета. Если пароль уже есть — нужен текущий
+   * (украденный access-токен не даёт перехватить аккаунт). После смены
+   * отзываются ВСЕ refresh-токены (по access-токену текущую сессию не
+   * определить: в JWT нет id refresh-токена), access-токены помечаются
+   * устаревшими, а вызывающему выдаётся новая пара — он остаётся в системе,
+   * остальные сессии нет.
+   */
+  async setPassword(
+    userId: string,
+    password: string,
+    currentPassword: string | undefined,
+    meta: TokenMeta,
+  ): Promise<SetPasswordResult> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { memberships: { include: { family: true }, orderBy: { createdAt: 'asc' } } },
+    });
+    if (!user || user.deletedAt || user.blockedAt) {
+      throw new UnauthorizedException({ code: 'unauthorized', message: 'User not found' });
+    }
+    const membership = user.memberships[0];
+    if (!membership) {
+      throw new UnauthorizedException({ code: 'unauthorized', message: 'No family membership' });
+    }
+
+    if (user.passwordHash) {
+      if (!currentPassword) {
+        throw new BadRequestException({
+          code: 'current_password_required',
+          message: 'Current password is required',
+        });
+      }
+      // Тот же счётчик, что у входа по паролю: перебор текущего пароля
+      // с чужим access-токеном упирается в блокировку.
+      const lock = await this.password.isLocked(user.email);
+      if (lock.locked) throw new LockedException('Account temporarily locked', lock.retryAfterSec);
+      const ok = await this.password.verify(user.passwordHash, currentPassword);
+      if (!ok) {
+        await this.password.recordFailure(user.email);
+        throw new BadRequestException({
+          code: 'invalid_current_password',
+          message: 'Current password is incorrect',
+        });
+      }
+      await this.password.clearFailures(user.email);
+    }
+
     const h = await this.password.hash(password);
-    await this.prisma.user.update({ where: { id: userId }, data: { passwordHash: h } });
+    await this.prisma.$transaction([
+      this.prisma.user.update({ where: { id: userId }, data: { passwordHash: h } }),
+      this.prisma.refreshToken.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
+    // Сначала отметка, потом новый токен: его iatMs не раньше отметки,
+    // поэтому сам вызывающий token_stale не получит.
+    await this.stale?.markStale([userId]);
+    const tokens = await this.issueTokens(
+      { id: user.id, email: user.email, name: user.name },
+      { id: membership.family.id, name: membership.family.name, role: membership.role },
+      meta,
+    );
+    return { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken };
   }
 
   async devSetPassword(email: string, password: string): Promise<void> {

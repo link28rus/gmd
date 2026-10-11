@@ -40,7 +40,11 @@ function makePrismaMock(): MockPrisma {
       updateMany: jest.fn(({ where, data }: any) => {
         let count = 0;
         rows.forEach((r) => {
-          if (r.userId === where.userId && r.revokedAt === null) {
+          const match =
+            (where.id === undefined || r.id === where.id) &&
+            (where.userId === undefined || r.userId === where.userId) &&
+            (where.revokedAt === undefined || r.revokedAt === where.revokedAt);
+          if (match) {
             Object.assign(r, data);
             count++;
           }
@@ -129,5 +133,21 @@ describe('RefreshTokenService', () => {
     const { token } = await svc.create('user-1', {});
     const r = await svc.rotate(token, {});
     expect(r.ok).toBe(false);
+  });
+
+  it('параллельный rotate одного token: живая цепочка одна, лишний новый токен отозван', async () => {
+    const p = makePrismaMock();
+    const svc = new RefreshTokenService(p as unknown as PrismaService, cfg);
+    const { token: t1 } = await svc.create('user-1', {});
+    const [a, b] = await Promise.all([svc.rotate(t1, {}), svc.rotate(t1, {})]);
+    const oks = [a, b].filter((r) => r.ok);
+    expect(oks).toHaveLength(1);
+    const loser = [a, b].find((r) => !r.ok)!;
+    expect(loser.ok).toBe(false);
+    if (!loser.ok) expect(loser.replay).toBeUndefined();
+    // Обе вкладки создали по новому токену, но живой остался только у победителя.
+    const live = p._rows.filter((x: any) => x.revokedAt === null);
+    expect(live).toHaveLength(1);
+    expect(p._rows[0].rotatedToId).toBe(live[0].id);
   });
 });

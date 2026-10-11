@@ -194,7 +194,10 @@
 
 - ✅ **Пароли (Phase 1.4)**
   - Хранятся как argon2id-хэши в `users.passwordHash`
-  - `POST /auth/set-password` (requiresJWT) — родитель устанавливает пароль
+  - `POST /auth/set-password` (requiresJWT) — родитель устанавливает пароль. С 2026-10-12: при
+    уже заданном пароле нужен `currentPassword` (тот же счётчик блокировки, что у входа); после
+    смены отзываются все refresh-токены, access помечаются устаревшими, вызывающему выдаётся
+    новая пара (ответ 200 `{accessToken, refreshToken}`)
   - `POST /auth/login-password` — вход по паролю
   - Rate-limit: 5 попыток → lock на 15 минут (счётчик в Redis)
 

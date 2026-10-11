@@ -2,6 +2,11 @@ import { AdminService } from './admin.service';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { PasswordResetService } from '../auth/password-reset.service';
+import type { StaleTokenService } from '../auth/stale-token.service';
+
+function makeStale(): StaleTokenService {
+  return { markStale: jest.fn().mockResolvedValue(undefined) } as unknown as StaleTokenService;
+}
 
 function makePasswordReset(): PasswordResetService {
   return {
@@ -84,7 +89,7 @@ describe('AdminService', () => {
       .mockResolvedValue(15)
       .mockResolvedValueOnce(15)
       .mockResolvedValueOnce(4);
-    const svc = new AdminService(p, makePasswordReset());
+    const svc = new AdminService(p, makePasswordReset(), makeStale());
     const r = await svc.getStats();
     expect(r).toHaveProperty('users');
     expect(r).toHaveProperty('families');
@@ -109,7 +114,7 @@ describe('AdminService', () => {
         _count: { memberships: 1 },
       },
     ]);
-    const svc = new AdminService(p, makePasswordReset());
+    const svc = new AdminService(p, makePasswordReset(), makeStale());
     const r = await svc.listUsers(1, 50);
     expect(r.total).toBe(3);
     expect(r.items).toHaveLength(1);
@@ -133,7 +138,7 @@ describe('AdminService', () => {
         _count: { memberships: 0 },
       },
     ]);
-    const svc = new AdminService(p, makePasswordReset());
+    const svc = new AdminService(p, makePasswordReset(), makeStale());
     const r = await svc.listUsers(1, 50, 'admin');
     // verify Prisma was called with contains filter
     const call = (p.user.findMany as jest.Mock).mock.calls[0][0];
@@ -144,7 +149,7 @@ describe('AdminService', () => {
   it('getUserDetail 404 если не найден', async () => {
     const p = makePrisma();
     (p.user.findUnique as jest.Mock).mockResolvedValue(null);
-    const svc = new AdminService(p, makePasswordReset());
+    const svc = new AdminService(p, makePasswordReset(), makeStale());
     await expect(svc.getUserDetail('nonexistent')).rejects.toThrow(NotFoundException);
   });
 
@@ -172,7 +177,7 @@ describe('AdminService', () => {
     ]);
     (p.refreshToken.count as jest.Mock).mockResolvedValue(2);
     (p.otpCode.count as jest.Mock).mockResolvedValue(1);
-    const svc = new AdminService(p, makePasswordReset());
+    const svc = new AdminService(p, makePasswordReset(), makeStale());
     const r = await svc.getUserDetail('u1');
     expect(r.user.email).toBe('a@b.com');
     expect(r.memberships).toHaveLength(1);
@@ -193,7 +198,7 @@ describe('AdminService', () => {
         children: [{ device: { revokedAt: null } }],
       },
     ]);
-    const svc = new AdminService(p, makePasswordReset());
+    const svc = new AdminService(p, makePasswordReset(), makeStale());
     const r = await svc.listFamilies(1, 50);
     expect(r.total).toBe(2);
     expect(r.items[0].id).toBe('f1');
@@ -214,7 +219,7 @@ describe('AdminService', () => {
         deletedAt: null,
       },
     ]);
-    const svc = new AdminService(p, makePasswordReset());
+    const svc = new AdminService(p, makePasswordReset(), makeStale());
     const r = await svc.listChildren(1, 50);
     expect(r.total).toBe(3);
     expect(r.items[0].name).toBe('Ваня');
@@ -235,7 +240,7 @@ describe('AdminService', () => {
         deletedAt: null,
       },
     ]);
-    const svc = new AdminService(p, makePasswordReset());
+    const svc = new AdminService(p, makePasswordReset(), makeStale());
     const r = await svc.listChildren(1, 50);
     expect(r.items[0].deviceStatus).toBe('online');
   });
@@ -254,7 +259,7 @@ describe('AdminService', () => {
         deletedAt: null,
       },
     ]);
-    const svc = new AdminService(p, makePasswordReset());
+    const svc = new AdminService(p, makePasswordReset(), makeStale());
     const r = await svc.listChildren(1, 50);
     expect(r.items[0].deviceStatus).toBe('offline');
   });
@@ -273,7 +278,7 @@ describe('AdminService', () => {
         deletedAt: null,
       },
     ]);
-    const svc = new AdminService(p, makePasswordReset());
+    const svc = new AdminService(p, makePasswordReset(), makeStale());
     const r = await svc.listChildren(1, 50);
     expect(r.items[0].deviceStatus).toBe('revoked');
   });
@@ -291,7 +296,7 @@ describe('AdminService', () => {
         children: [],
       },
     ]);
-    const svc = new AdminService(p, makePasswordReset());
+    const svc = new AdminService(p, makePasswordReset(), makeStale());
     await svc.listFamilies(1, 50, 'Ив', false);
     const call = (p.family.findMany as jest.Mock).mock.calls[0][0];
     expect(call.where?.deletedAt).toBeNull();
@@ -302,7 +307,7 @@ describe('AdminService', () => {
     const p = makePrisma();
     (p.family.count as jest.Mock).mockResolvedValue(0);
     (p.family.findMany as jest.Mock).mockResolvedValue([]);
-    const svc = new AdminService(p, makePasswordReset());
+    const svc = new AdminService(p, makePasswordReset(), makeStale());
     await svc.listFamilies(1, 50, undefined, true);
     const call = (p.family.findMany as jest.Mock).mock.calls[0][0];
     expect(call.where?.deletedAt).toBeUndefined();
@@ -311,21 +316,21 @@ describe('AdminService', () => {
   it('softDeleteFamily 404 если нет семьи', async () => {
     const p = makePrisma();
     (p.family.findUnique as jest.Mock).mockResolvedValue(null);
-    const svc = new AdminService(p, makePasswordReset());
+    const svc = new AdminService(p, makePasswordReset(), makeStale());
     await expect(svc.softDeleteFamily('f404')).rejects.toThrow(NotFoundException);
   });
 
   it('softDeleteFamily BadRequest если уже удалена', async () => {
     const p = makePrisma();
     (p.family.findUnique as jest.Mock).mockResolvedValue({ id: 'f1', deletedAt: new Date() });
-    const svc = new AdminService(p, makePasswordReset());
+    const svc = new AdminService(p, makePasswordReset(), makeStale());
     await expect(svc.softDeleteFamily('f1')).rejects.toThrow(BadRequestException);
   });
 
   it('softDeleteChild 404', async () => {
     const p = makePrisma();
     (p.child.findUnique as jest.Mock).mockResolvedValue(null);
-    const svc = new AdminService(p, makePasswordReset());
+    const svc = new AdminService(p, makePasswordReset(), makeStale());
     await expect(svc.softDeleteChild('ch404')).rejects.toThrow(NotFoundException);
   });
 
@@ -336,7 +341,7 @@ describe('AdminService', () => {
       deletedAt: null,
       device: null,
     });
-    const svc = new AdminService(p, makePasswordReset());
+    const svc = new AdminService(p, makePasswordReset(), makeStale());
     await expect(svc.resetChildDevice('ch1')).rejects.toThrow(BadRequestException);
   });
 
@@ -347,7 +352,7 @@ describe('AdminService', () => {
       deletedAt: null,
       device: { id: 'd1', revokedAt: null },
     });
-    const svc = new AdminService(p, makePasswordReset());
+    const svc = new AdminService(p, makePasswordReset(), makeStale());
     await svc.resetChildDevice('ch1');
     expect(p.childDevice.update).toHaveBeenCalledWith({
       where: { id: 'd1' },
@@ -377,7 +382,7 @@ describe('AdminService', () => {
       },
     ]);
     (p.user.findMany as jest.Mock).mockResolvedValue([{ id: 'u1', email: 'parent@example.com' }]);
-    const svc = new AdminService(p, makePasswordReset());
+    const svc = new AdminService(p, makePasswordReset(), makeStale());
     const r = await svc.listInvites(1, 50);
     expect(r.total).toBe(1);
     expect(r.items).toHaveLength(1);
@@ -389,7 +394,7 @@ describe('AdminService', () => {
     const p = makePrisma();
     (p.invite.count as jest.Mock).mockResolvedValue(0);
     (p.invite.findMany as jest.Mock).mockResolvedValue([]);
-    const svc = new AdminService(p, makePasswordReset());
+    const svc = new AdminService(p, makePasswordReset(), makeStale());
     await svc.listInvites(1, 50, 'ваня');
     const call = (p.invite.findMany as jest.Mock).mock.calls[0][0];
     expect(Array.isArray(call.where.OR)).toBe(true);
@@ -404,7 +409,7 @@ describe('AdminService', () => {
       consumedAt: null,
       expiresAt: future,
     });
-    const svc = new AdminService(p, makePasswordReset());
+    const svc = new AdminService(p, makePasswordReset(), makeStale());
     await svc.revokeInvite('i1');
     expect(p.invite.update as jest.Mock).toHaveBeenCalledWith({
       where: { id: 'i1' },
@@ -420,7 +425,7 @@ describe('AdminService', () => {
       consumedAt: null,
       expiresAt: past,
     });
-    const svc = new AdminService(p, makePasswordReset());
+    const svc = new AdminService(p, makePasswordReset(), makeStale());
     await expect(svc.revokeInvite('i1')).rejects.toBeInstanceOf(BadRequestException);
   });
 
@@ -446,7 +451,7 @@ describe('AdminService', () => {
       { familyId: 'f1', _count: { _all: 2 } },
       { familyId: 'f2', _count: { _all: 3 } },
     ]);
-    const svc = new AdminService(p, makePasswordReset());
+    const svc = new AdminService(p, makePasswordReset(), makeStale());
     const r = await svc.listUsers(1, 50);
     expect(r.items[0].childrenCount).toBe(5);
   });
@@ -458,7 +463,50 @@ describe('AdminService', () => {
       deletedAt: new Date(),
       family: { deletedAt: new Date() },
     });
-    const svc = new AdminService(p, makePasswordReset());
+    const svc = new AdminService(p, makePasswordReset(), makeStale());
     await expect(svc.restoreChild('ch1')).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('blockUser отзывает refresh и помечает access-токены устаревшими', async () => {
+    const p = makePrisma();
+    (p.user.findUnique as jest.Mock).mockResolvedValue({
+      id: 'u2',
+      deletedAt: null,
+      blockedAt: null,
+    });
+    const updateMany = jest.fn().mockResolvedValue({ count: 2 });
+    Object.assign(p.user, { update: jest.fn().mockResolvedValue({}) });
+    Object.assign(p.refreshToken, { updateMany });
+    const stale = makeStale();
+    const svc = new AdminService(p, makePasswordReset(), stale);
+    await svc.blockUser('u2', 'спам', 'admin1');
+    expect(updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: 'u2', revokedAt: null } }),
+    );
+    expect(stale.markStale).toHaveBeenCalledWith(['u2']);
+  });
+
+  it('softDeleteUser помечает устаревшими токены удалённого и наследника прав', async () => {
+    const p = makePrisma();
+    (p.user.findUnique as jest.Mock).mockResolvedValue({ id: 'u2', deletedAt: null });
+    const tx = {
+      membership: {
+        findMany: jest
+          .fn()
+          .mockResolvedValueOnce([{ id: 'm1', familyId: 'f1', userId: 'u2', role: 'owner' }])
+          .mockResolvedValueOnce([{ id: 'm2', familyId: 'f1', userId: 'u3', role: 'parent' }]),
+        update: jest.fn().mockResolvedValue({}),
+        delete: jest.fn().mockResolvedValue({}),
+      },
+      refreshToken: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      user: { update: jest.fn().mockResolvedValue({}) },
+      zoneNotificationPref: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+    };
+    (p.$transaction as jest.Mock).mockImplementation(async (fn: (t: unknown) => unknown) => fn(tx));
+    const stale = makeStale();
+    const svc = new AdminService(p, makePasswordReset(), stale);
+    await svc.softDeleteUser('u2', 'admin1');
+    expect(tx.refreshToken.updateMany).toHaveBeenCalled();
+    expect(stale.markStale).toHaveBeenCalledWith(['u2', 'u3']);
   });
 });

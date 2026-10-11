@@ -43,7 +43,40 @@ export class ChildDeviceService {
   async claim(rawCode: string, meta: ClaimMeta): Promise<ClaimResult> {
     const code = normalizeInviteCode(rawCode);
 
-    const result = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const result = await this.claimTx(code, meta);
+
+    // Record 14+ consent outside transaction (after device created successfully)
+    if (result.childAge != null && result.childAge >= 14) {
+      await this.consent.recordChildConsent(result.childId, result.parentUserId, meta.ip, meta.ua);
+    }
+
+    return {
+      deviceToken: result.deviceToken,
+      child: result.child,
+      device: result.device,
+    };
+  }
+
+  // Два разных одноразовых приглашения на одного ребёнка, принятые одновременно:
+  // FOR UPDATE держит только своё приглашение, обе транзакции не видят
+  // активного устройства и вторая падает на @unique(childId) — P2002 → 500.
+  // Отдаём тот же child_has_device, что при последовательном claim.
+  private async claimTx(code: string, meta: ClaimMeta) {
+    try {
+      return await this.claimTxInner(code, meta);
+    } catch (e) {
+      if ((e as { code?: string } | null)?.code === 'P2002') {
+        throw new ConflictException({
+          code: 'child_has_device',
+          message: 'Child already has active device',
+        });
+      }
+      throw e;
+    }
+  }
+
+  private claimTxInner(code: string, meta: ClaimMeta) {
+    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // v0.50.7: multi-use invites — claim допустим пока usesCount < maxUses
       // И consumedAt IS NULL. Для single-use (maxUses=1, default) условие
       // эквивалентно прежнему `consumedAt IS NULL`. Для multi-use (maxUses>1)
@@ -145,17 +178,6 @@ export class ChildDeviceService {
         childId: child.id,
       };
     });
-
-    // Record 14+ consent outside transaction (after device created successfully)
-    if (result.childAge != null && result.childAge >= 14) {
-      await this.consent.recordChildConsent(result.childId, result.parentUserId, meta.ip, meta.ua);
-    }
-
-    return {
-      deviceToken: result.deviceToken,
-      child: result.child,
-      device: result.device,
-    };
   }
 
   // Короткий запрос protection-state для mobile-child: возвращает только
@@ -168,6 +190,25 @@ export class ChildDeviceService {
       select: { protectionEnabled: true },
     });
     return { enabled: child?.protectionEnabled ?? false };
+  }
+
+  /**
+   * Из переданных устройств — те, что всё ещё действуют (не отозваны, ребёнок и
+   * семья не удалены). Токен realtime-сокета проверяется только при
+   * подключении; шлюз периодически сверяется, чтобы закрыть сокеты устройств,
+   * отвязанных уже после подключения.
+   */
+  async activeDeviceIds(ids: string[]): Promise<Set<string>> {
+    if (ids.length === 0) return new Set();
+    const rows = await this.prisma.childDevice.findMany({
+      where: {
+        id: { in: ids },
+        revokedAt: null,
+        child: { deletedAt: null, family: { deletedAt: null } },
+      },
+      select: { id: true },
+    });
+    return new Set(rows.map((r) => r.id));
   }
 
   async verifyToken(token: string): Promise<ChildAuthContext | null> {

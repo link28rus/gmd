@@ -76,7 +76,13 @@ function ApkLink({
   );
 }
 
-export default function LoginClient({ apps }: { apps: LoginApps }): ReactElement {
+export default function LoginClient({
+  apps,
+  serverUnavailable = false,
+}: {
+  apps: LoginApps;
+  serverUnavailable?: boolean;
+}): ReactElement {
   const router = useRouter();
   const setAll = useAuthStore((s) => s.setAll);
 
@@ -254,6 +260,19 @@ export default function LoginClient({ apps }: { apps: LoginApps }): ReactElement
           <p className="mb-6 text-center text-xs text-slate-400">
             Родительский контроль и геолокация
           </p>
+
+          {serverUnavailable && (
+            <div className="mb-6 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-200">
+              Сервер временно недоступен — вход сохранён, ничего вводить не нужно.
+              <button
+                type="button"
+                onClick={() => window.location.assign('/cabinet')}
+                className="mt-2 block font-medium text-amber-100 underline"
+              >
+                Повторить
+              </button>
+            </div>
+          )}
 
           <div className="mb-6 flex rounded-md border border-slate-700 bg-slate-950/40 p-1">
             <button

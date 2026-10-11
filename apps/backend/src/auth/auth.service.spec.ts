@@ -9,6 +9,7 @@ import type { PrismaService } from '../prisma/prisma.service';
 import type { PasswordService } from './password.service';
 import type { EmailVerificationService } from './email-verification.service';
 import type { PasswordResetService } from './password-reset.service';
+import type { StaleTokenService } from './stale-token.service';
 import { LockedException } from '../common/exceptions/locked.exception';
 
 function makeEmailVerificationMock(): jest.Mocked<EmailVerificationService> {
@@ -108,17 +109,27 @@ function makePasswordMock(): jest.Mocked<PasswordService> {
   } as unknown as jest.Mocked<PasswordService>;
 }
 
-function makeService(prisma: MockPrisma, passwordMock?: jest.Mocked<PasswordService>): AuthService {
+function makeService(
+  prisma: MockPrisma,
+  passwordMock?: jest.Mocked<PasswordService>,
+  extra: {
+    stale?: StaleTokenService;
+    rtSvc?: RefreshTokenService;
+    emailVerification?: jest.Mocked<EmailVerificationService>;
+  } = {},
+): AuthService {
   const otpSvc: OtpService = { verify: jest.fn(), generate: jest.fn() } as unknown as OtpService;
-  const rtSvc: RefreshTokenService = {
-    create: jest.fn().mockResolvedValue({ token: 'rt', id: 'rt-id' }),
-  } as unknown as RefreshTokenService;
+  const rtSvc: RefreshTokenService =
+    extra.rtSvc ??
+    ({
+      create: jest.fn().mockResolvedValue({ token: 'rt', id: 'rt-id' }),
+    } as unknown as RefreshTokenService);
   const jwt: JwtService = {
     signAccessToken: jest.fn().mockResolvedValue('at'),
   } as unknown as JwtService;
   const delivery = new FakeOtpProvider();
   const password = passwordMock ?? makePasswordMock();
-  const emailVerification = makeEmailVerificationMock();
+  const emailVerification = extra.emailVerification ?? makeEmailVerificationMock();
   const passwordReset = makePasswordResetMock();
   const svc = new AuthService(
     prisma as unknown as PrismaService,
@@ -130,6 +141,7 @@ function makeService(prisma: MockPrisma, passwordMock?: jest.Mocked<PasswordServ
     password,
     emailVerification,
     passwordReset,
+    extra.stale,
   );
   // Skip onModuleInit (DUMMY_HASH) for unit tests — password.hash is mocked
   return svc;
@@ -476,17 +488,73 @@ describe('AuthService.loginWithPassword', () => {
     );
   });
 
-  it('setPassword обновляет hash юзера', async () => {
-    const prisma = makePrismaMock();
-    prisma._users.push({ id: 'u-1', email: 'a@b.com', deletedAt: null });
-    const password = makePasswordMock();
-    password.hash.mockResolvedValueOnce('new-hash');
-    const svc = makeService(prisma, password);
+  describe('setPassword', () => {
+    function setup(passwordHash: string | null) {
+      const prisma = makePrismaMock();
+      prisma._users.push({
+        id: 'u-1',
+        email: 'a@b.com',
+        name: 'A',
+        deletedAt: null,
+        blockedAt: null,
+        passwordHash,
+        memberships: [{ role: 'owner', family: { id: 'f-1', name: 'Семья' } }],
+      });
+      prisma.user.findUnique = jest.fn(({ where }: any) =>
+        Promise.resolve(prisma._users.find((u: any) => u.id === where.id) ?? null),
+      );
+      (prisma as any).refreshToken = { updateMany: jest.fn().mockResolvedValue({ count: 3 }) };
+      prisma.$transaction = jest.fn((ops: any) =>
+        typeof ops === 'function' ? ops(prisma) : Promise.all(ops),
+      );
+      const password = makePasswordMock();
+      password.hash.mockResolvedValue('new-hash');
+      const stale = { markStale: jest.fn().mockResolvedValue(undefined) };
+      const svc = makeService(prisma, password, {
+        stale: stale as unknown as StaleTokenService,
+      });
+      return { prisma, password, stale, svc };
+    }
 
-    await svc.setPassword('u-1', 'newPassword');
-    expect(prisma.user.update).toHaveBeenCalledWith({
-      where: { id: 'u-1' },
-      data: { passwordHash: 'new-hash' },
+    it('без пароля (OTP-only): текущий не нужен, сессии отозваны, новая пара', async () => {
+      const { prisma, password, stale, svc } = setup(null);
+      const r = await svc.setPassword('u-1', 'newPassword', undefined, {});
+      expect(password.verify).not.toHaveBeenCalled();
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'u-1' },
+        data: { passwordHash: 'new-hash' },
+      });
+      expect((prisma as any).refreshToken.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { userId: 'u-1', revokedAt: null } }),
+      );
+      expect(stale.markStale).toHaveBeenCalledWith(['u-1']);
+      expect(r).toEqual({ accessToken: 'at', refreshToken: 'rt' });
+    });
+
+    it('пароль есть, текущий не передан → 400 current_password_required', async () => {
+      const { prisma, svc } = setup('old-hash');
+      await expect(svc.setPassword('u-1', 'newPassword', undefined, {})).rejects.toMatchObject({
+        response: { code: 'current_password_required' },
+      });
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('неверный текущий пароль → 400 invalid_current_password + recordFailure', async () => {
+      const { prisma, password, stale, svc } = setup('old-hash');
+      password.verify.mockResolvedValueOnce(false);
+      await expect(svc.setPassword('u-1', 'newPassword', 'wrong', {})).rejects.toMatchObject({
+        response: { code: 'invalid_current_password' },
+      });
+      expect(password.recordFailure).toHaveBeenCalledWith('a@b.com');
+      expect(prisma.user.update).not.toHaveBeenCalled();
+      expect(stale.markStale).not.toHaveBeenCalled();
+    });
+
+    it('верный текущий пароль → hash обновлён', async () => {
+      const { prisma, password, svc } = setup('old-hash');
+      await svc.setPassword('u-1', 'newPassword', 'oldPassword', {});
+      expect(password.verify).toHaveBeenCalledWith('old-hash', 'oldPassword');
+      expect(prisma.user.update).toHaveBeenCalled();
     });
   });
 
@@ -517,5 +585,77 @@ describe('AuthService.loginWithPassword', () => {
       where: { id: 'u-1' },
       data: { passwordHash: 'updated-hash' },
     });
+  });
+});
+
+describe('AuthService.register (повтор на неподтверждённый email)', () => {
+  it('не меняет пароль/ФИО, только переотправляет письмо', async () => {
+    const prisma = makePrismaMock();
+    prisma._users.push({
+      id: 'u-1',
+      email: 'v@x.com',
+      name: 'Жертва Настоящая',
+      firstName: 'Настоящая',
+      lastName: 'Жертва',
+      passwordHash: 'victim-hash',
+      deletedAt: null,
+      emailVerifiedAt: null,
+    });
+    prisma._memberships.push({ id: 'm-1', userId: 'u-1', familyId: 'fam-1', role: 'owner' });
+    const emailVerification = makeEmailVerificationMock();
+    const svc = makeService(prisma, undefined, { emailVerification });
+
+    const r = await svc.register({
+      email: 'V@x.com',
+      password: 'attacker-pass',
+      firstName: 'Злой',
+      lastName: 'Хакер',
+    });
+
+    expect(r).toEqual({ ok: true });
+    expect(prisma.user.update).not.toHaveBeenCalled();
+    expect(prisma._users[0].passwordHash).toBe('victim-hash');
+    expect(prisma.family.create).not.toHaveBeenCalled();
+    expect(emailVerification.issueAndSend).toHaveBeenCalledWith(
+      'u-1',
+      'v@x.com',
+      'Жертва Настоящая',
+    );
+  });
+});
+
+describe('AuthService.refreshTokens', () => {
+  function setup(user: any) {
+    const prisma = makePrismaMock();
+    prisma.user.findUnique = jest.fn().mockResolvedValue(user);
+    prisma.membership.findFirst = jest
+      .fn()
+      .mockResolvedValue({ userId: 'u-1', familyId: 'f-1', role: 'owner' });
+    const rtSvc = {
+      rotate: jest.fn().mockResolvedValue({ ok: true, token: 'rt2', userId: 'u-1' }),
+      revokeAllForUser: jest.fn().mockResolvedValue(undefined),
+    };
+    const svc = makeService(prisma, undefined, {
+      rtSvc: rtSvc as unknown as RefreshTokenService,
+    });
+    return { svc, rtSvc };
+  }
+
+  it('активный пользователь → новая пара', async () => {
+    const { svc } = setup({ email: 'a@b.com', deletedAt: null, blockedAt: null });
+    expect(await svc.refreshTokens('rt1', {})).toEqual({
+      ok: true,
+      accessToken: 'at',
+      refreshToken: 'rt2',
+    });
+  });
+
+  it.each([
+    ['заблокирован', { email: 'a@b.com', deletedAt: null, blockedAt: new Date() }],
+    ['удалён', { email: 'a@b.com', deletedAt: new Date(), blockedAt: null }],
+  ])('%s → ok:false и все refresh отозваны', async (_n, user) => {
+    const { svc, rtSvc } = setup(user);
+    expect(await svc.refreshTokens('rt1', {})).toEqual({ ok: false });
+    expect(rtSvc.revokeAllForUser).toHaveBeenCalledWith('u-1');
   });
 });

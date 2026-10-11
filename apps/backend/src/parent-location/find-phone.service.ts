@@ -209,10 +209,13 @@ export class FindPhoneService {
         isMock: false,
         recordedAt: { gte: from > floor ? from : floor, lt: to },
       },
-      orderBy: { recordedAt: 'asc' },
+      // Аудит 2026-10-12: при обрезке берём последние точки (свежий конец
+      // трека важнее начала), затем восстанавливаем порядок по времени.
+      orderBy: { recordedAt: 'desc' },
       take: MAX_TRACK_POINTS,
       select: { lat: true, lon: true, recordedAt: true, accuracy: true, speed: true },
     });
+    rows.reverse();
     if (view === 'road') return { items: await this.roadTrack(rows) };
     return {
       items: rows.map((r) => ({
@@ -269,10 +272,23 @@ export class FindPhoneService {
     } else {
       signalId = createId();
       requestedAt = now;
-      await this.prisma.parentLocationDevice.update({
-        where: { id: device.id },
+      // Условная запись: два одновременных нажатия читали устройство до записи
+      // и плодили два signalId — ack телефона совпадал только с одним, второе
+      // окно показывало «истёк». Проиграл гонку — берём сигнал победителя.
+      const won = await this.prisma.parentLocationDevice.updateMany({
+        where: { id: device.id, signalId: device.signalId ?? null },
         data: { signalId, signalRequestedAt: requestedAt, signalAckedAt: null },
       });
+      if (won.count === 0) {
+        const cur = await this.prisma.parentLocationDevice.findUnique({
+          where: { id: device.id },
+          select: { signalId: true, signalRequestedAt: true },
+        });
+        if (cur?.signalId && cur.signalRequestedAt) {
+          signalId = cur.signalId;
+          requestedAt = cur.signalRequestedAt;
+        }
+      }
     }
 
     let pushed = false;

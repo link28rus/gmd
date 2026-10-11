@@ -172,13 +172,18 @@ export class AuthController {
   }
 
   @Post('set-password')
-  @HttpCode(HttpStatus.NO_CONTENT)
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: 600_000 } })
   @UseGuards(JwtAuthGuard)
   @UsePipes(new ZodValidationPipe(SetPasswordSchema))
-  async setPwd(@Body() dto: SetPasswordDto, @Req() req: Request): Promise<void> {
+  async setPwd(
+    @Body() dto: SetPasswordDto,
+    @Req() req: Request,
+  ): Promise<{ accessToken: string; refreshToken: string }> {
     const userId = (req as Request & { user?: { userId: string } }).user?.userId;
     if (!userId) throw new UnauthorizedException();
-    await this.auth.setPassword(userId, dto.password);
+    // Прежние сессии отозваны — отдаём новую пару (web кладёт refresh в cookie).
+    return this.auth.setPassword(userId, dto.password, dto.currentPassword, extractMeta(req));
   }
 
   @Post('dev/set-password')

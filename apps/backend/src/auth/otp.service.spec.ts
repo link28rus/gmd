@@ -45,8 +45,18 @@ function makePrismaMock(): MockPrisma {
       updateMany: jest.fn(({ where, data }: any) => {
         let count = 0;
         otpCodes.forEach((r) => {
-          if (r.email === where.email && r.consumedAt === null) {
-            Object.assign(r, data);
+          const a = where.attempts;
+          const match =
+            (where.id === undefined || r.id === where.id) &&
+            (where.email === undefined || r.email === where.email) &&
+            r.consumedAt === null &&
+            (a === undefined ||
+              ((a.lt === undefined || r.attempts < a.lt) &&
+                (a.gte === undefined || r.attempts >= a.gte)));
+          if (match) {
+            const { attempts, ...rest } = data;
+            Object.assign(r, rest);
+            if (attempts?.increment) r.attempts += attempts.increment;
             count++;
           }
         });
@@ -119,5 +129,27 @@ describe('OtpService', () => {
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.reason).toBe('invalid_code');
+  });
+
+  it('параллельные неверные попытки считаются все и не превышают лимит', async () => {
+    const prisma = makePrismaMock();
+    const svc = new OtpService(prisma as unknown as PrismaService, cfg);
+    const { code } = await svc.generate('a@b.com');
+    // 5 одновременных угадываний при лимите 3: каждое читает attempts=0,
+    // но списание атомарное — засчитано ровно 3, код погашен.
+    const rs = await Promise.all(Array.from({ length: 5 }, () => svc.verify('a@b.com', '000000')));
+    expect(rs.every((r) => !r.ok)).toBe(true);
+    expect(prisma._state[0].attempts).toBe(3);
+    expect(prisma._state[0].consumedAt).not.toBeNull();
+    const r = await svc.verify('a@b.com', code);
+    expect(r.ok).toBe(false);
+  });
+
+  it('верный код, поданный дважды параллельно, срабатывает один раз', async () => {
+    const prisma = makePrismaMock();
+    const svc = new OtpService(prisma as unknown as PrismaService, cfg);
+    const { code } = await svc.generate('a@b.com');
+    const rs = await Promise.all([svc.verify('a@b.com', code), svc.verify('a@b.com', code)]);
+    expect(rs.filter((r) => r.ok)).toHaveLength(1);
   });
 });

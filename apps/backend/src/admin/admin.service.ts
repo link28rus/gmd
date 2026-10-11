@@ -3,6 +3,7 @@ import { BadRequestException, Inject, Injectable, NotFoundException } from '@nes
 import { PrismaService } from '../prisma/prisma.service';
 import { detachUserFromFamilies } from '../family/family-lifecycle';
 import { PasswordResetService } from '../auth/password-reset.service';
+import { StaleTokenService } from '../auth/stale-token.service';
 
 export type AdminUserAction =
   | 'make_admin'
@@ -38,6 +39,7 @@ export class AdminService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(PasswordResetService) private readonly passwordReset: PasswordResetService,
+    @Inject(StaleTokenService) private readonly stale: StaleTokenService,
   ) {}
 
   async getStats(): Promise<{
@@ -255,6 +257,9 @@ export class AdminService {
         data: { revokedAt: new Date() },
       }),
     ]);
+    // Access-токен живёт 15 мин, guard в БД не ходит: отметка «устарел» →
+    // 401 token_stale → refresh, а refresh-токены уже отозваны.
+    await this.stale.markStale([targetUserId]);
   }
 
   async unblockUser(targetUserId: string): Promise<void> {
@@ -308,8 +313,8 @@ export class AdminService {
     }
 
     const now = new Date();
-    await this.prisma.$transaction(async (tx) => {
-      await detachUserFromFamilies(tx, target.id, now);
+    const heirs = await this.prisma.$transaction(async (tx) => {
+      const h = await detachUserFromFamilies(tx, target.id, now);
 
       await tx.refreshToken.updateMany({
         where: { userId: target.id, revokedAt: null },
@@ -319,7 +324,10 @@ export class AdminService {
         where: { id: target.id },
         data: { deletedAt: now, blockedById: actorUserId },
       });
+      return h;
     });
+    // Как в DELETE /me: удалённому и наследникам прав нужен свежий токен.
+    await this.stale.markStale([target.id, ...heirs]);
   }
 
   async getUserDetail(id: string): Promise<{

@@ -16,6 +16,8 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ZodValidationPipe } from '../common/zod/zod-validation.pipe';
 import { ListLocationsQuerySchema } from './dto/list-locations.dto';
 import type { ListLocationsQuery } from './dto/list-locations.dto';
+import { ListTripsQuerySchema } from './dto/list-trips.dto';
+import type { ListTripsQuery } from './dto/list-trips.dto';
 import { TrackQuerySchema } from './dto/track-query.dto';
 import type { TrackQuery } from './dto/track-query.dto';
 import { FamilyAccessGuard } from './guards/family-access.guard';
@@ -96,16 +98,16 @@ export class LocationsReadController {
   @HttpCode(HttpStatus.OK)
   async listTrips(
     @Param('id') id: string,
-    @Query('from') from?: string,
-    @Query('to') to?: string,
+    @Query(new ZodValidationPipe(ListTripsQuerySchema)) q: ListTripsQuery,
   ): Promise<unknown> {
-    const fromDate = from ? new Date(from) : undefined;
-    const toDate = to ? new Date(to) : undefined;
+    const fromDate = q.from ? new Date(q.from) : undefined;
+    const toDate = q.to ? new Date(q.to) : undefined;
     const trips = await this.trips.listTrips(id, fromDate, toDate);
     return { trips };
   }
 
   // Очищенный трек конкретной поездки — для страницы истории.
+  // Нет такой поездки у этого ребёнка — 404 (клиент обновит список).
   @Get('trips/:tripId/points')
   @HttpCode(HttpStatus.OK)
   async tripPoints(

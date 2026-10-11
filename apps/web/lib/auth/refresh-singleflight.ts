@@ -22,6 +22,7 @@
  */
 
 import type { AuthFamily, AuthUser } from '@/lib/auth-store';
+import { REFRESH_UNAVAILABLE_COOKIE } from '@/lib/auth/session-cookie';
 
 export interface RefreshResponse {
   accessToken: string;
@@ -32,11 +33,31 @@ export interface RefreshResponse {
 
 const LOCK_NAME = 'gmd-auth-refresh';
 
+function markUnavailable(): void {
+  if (typeof document === 'undefined') return;
+  document.cookie = `${REFRESH_UNAVAILABLE_COOKIE}=1; Max-Age=30; Path=/; SameSite=Lax`;
+}
+
+function clearUnavailable(): void {
+  if (typeof document === 'undefined') return;
+  document.cookie = `${REFRESH_UNAVAILABLE_COOKIE}=; Max-Age=0; Path=/; SameSite=Lax`;
+}
+
 let inFlight: Promise<RefreshResponse | null> | null = null;
 
 async function doRefresh(): Promise<RefreshResponse | null> {
-  const res = await fetch('/api/auth/refresh', { method: 'POST' });
-  if (!res.ok) return null;
+  let res: Response;
+  try {
+    res = await fetch('/api/auth/refresh', { method: 'POST' });
+  } catch {
+    markUnavailable();
+    return null;
+  }
+  if (!res.ok) {
+    if (res.status === 429 || res.status >= 500) markUnavailable();
+    return null;
+  }
+  clearUnavailable();
   return (await res.json()) as RefreshResponse;
 }
 
