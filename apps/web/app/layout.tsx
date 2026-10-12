@@ -7,7 +7,6 @@ import './globals.css';
 import 'leaflet/dist/leaflet.css';
 import { Geist } from 'next/font/google';
 import { cn } from '@/lib/utils';
-import { Footer } from '@/components/layout/footer';
 
 const geist = Geist({ subsets: ['latin'], variable: '--font-sans' });
 
@@ -33,8 +32,9 @@ export default function RootLayout({
   return (
     <html lang="ru" className={cn('font-sans', geist.variable)}>
       <body className="flex min-h-screen flex-col">
+        {/* Футер (© · Политика · Условия) временно скрыт — прод семейный (#85).
+            Компонент сохранён в components/layout/footer.tsx. */}
         <main className="flex-1">{children}</main>
-        <Footer />
       </body>
     </html>
   );

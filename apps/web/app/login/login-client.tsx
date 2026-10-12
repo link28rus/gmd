@@ -402,24 +402,6 @@ export default function LoginClient({
             </form>
           )}
 
-          <p className="mt-5 text-center text-xs text-slate-500">
-            Ещё нет аккаунта?{' '}
-            <Link href="/register" className="font-medium text-sky-300 hover:text-sky-200">
-              Зарегистрироваться
-            </Link>
-          </p>
-
-          <p className="mt-2 text-center text-[11px] leading-relaxed text-slate-500">
-            Нажимая кнопку, вы принимаете{' '}
-            <Link href="/privacy" className="underline hover:text-sky-300">
-              Политику конфиденциальности
-            </Link>{' '}
-            и{' '}
-            <Link href="/terms" className="underline hover:text-sky-300">
-              Условия использования
-            </Link>
-          </p>
-
           {error && (
             <div className="mt-4 rounded-md border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
               {error}
