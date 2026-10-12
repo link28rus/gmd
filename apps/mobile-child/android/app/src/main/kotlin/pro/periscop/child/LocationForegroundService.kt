@@ -244,6 +244,7 @@ class LocationForegroundService : Service() {
     private var lastSentLat: Double? = null
     private var lastSentLon: Double? = null
     private var lastSentTimeMs: Long = 0L
+    private var lastSentAccuracy: Float? = null
 
     // v0.40.1: время последнего "движущегося" speed (≥ SPEED_MOVING_MS).
     // Если 0 — ни разу не двигались с момента старта сервиса.
@@ -257,6 +258,23 @@ class LocationForegroundService : Service() {
     private var stillAnchorLon: Double? = null
     private var stillEscapeHits: Int = 0
     private val applyArStill = Runnable { onArStill() }
+
+    // v0.82.0 — проба после срабатывания датчика движения (см. MotionProbe).
+    // lastRealMovementMs — только настоящие признаки движения (скорость, AR
+    // MOVING, выход из стоянки), без датчика движения: он срабатывает и когда
+    // ребёнок просто берёт телефон в руки.
+    private var lastRealMovementMs: Long = 0L
+    private var motionIdleProbes: Int = 0
+    private var probeTriggerAtMs: Long = 0L
+    private var probeAnchorLat: Double? = null
+    private var probeAnchorLon: Double? = null
+    private val armMotionSensor = Runnable {
+        if (profile == Profile.STILL) {
+            val ok = motionMonitor.start()
+            log("motion sensor: register=$ok kind=${motionMonitor.sensorLabel}")
+        }
+    }
+    private val motionProbeCheck = Runnable { onMotionProbeEnd() }
 
     // v0.59.0 — есть ли интернет (INTERNET + VALIDATED) и копит ли текущая
     // подписка FLP точки пачками (setMaxUpdateDelayMillis).
@@ -327,6 +345,7 @@ class LocationForegroundService : Service() {
                 // Движение по AR — такой же сигнал, как скорость: отменяет
                 // отложенный STILL и перезапускает 15-мин debounce.
                 lastMovingTimeMs = System.currentTimeMillis()
+                markRealMovement()
                 mainHandler.removeCallbacks(applyArStill)
                 switchProfile(Profile.ACTIVE)
             }
@@ -348,6 +367,7 @@ class LocationForegroundService : Service() {
         cancelHeartbeatAlarm()
         unregisterNetworkMonitor()
         unregisterActivityTransitions()
+        cancelMotionTimers()
         motionMonitor.stop()
         ChildRealtimeClient.stop(this)
         releaseWakeLock()
@@ -592,10 +612,7 @@ class LocationForegroundService : Service() {
         // Если стартуем в STILL — сразу регистрируем motion sensor для wake-on-motion.
         // (switchProfile сделает то же самое при переключении, но при первом
         // start() мы не вызываем switchProfile, поэтому делаем явно здесь.)
-        if (initial == Profile.STILL) {
-            val ok = motionMonitor.start()
-            log("start: motion sensor register=$ok (initial STILL)")
-        }
+        if (initial == Profile.STILL) scheduleMotionArm()
         // Heartbeat: шлём текущую точку раз в 90 с через AlarmManager.
         // Ставим даже если повторный start() — PendingIntent с одним requestCode
         // идемпотентен (replace-semantics), лишнего alarm'а не будет.
@@ -789,6 +806,7 @@ class LocationForegroundService : Service() {
 
         if (speed >= SPEED_MOVING_MS) {
             lastMovingTimeMs = now
+            markRealMovement()
             if (profile == Profile.STILL) {
                 log("auto-switch STILL→ACTIVE: speed=${"%.1f".format(speed)} m/s ≥ $SPEED_MOVING_MS")
                 switchProfile(Profile.ACTIVE)
@@ -848,6 +866,7 @@ class LocationForegroundService : Service() {
         log("STILL escape candidate #$stillEscapeHits: ${"%.0f".format(dist)}m from anchor, acc=$acc")
         if (stillEscapeHits >= STILL_ESCAPE_CONFIRMATIONS) {
             lastMovingTimeMs = System.currentTimeMillis()
+            markRealMovement()
             switchProfile(Profile.ACTIVE)
             requestFreshLocationOnce()
         }
@@ -874,14 +893,63 @@ class LocationForegroundService : Service() {
         // экономит батарею + предотвращает «двойные» switch'и (sensor + speed).
         when (newProfile) {
             Profile.STILL -> {
-                val ok = motionMonitor.start()
-                log("motion sensor: register=$ok kind=${motionMonitor.sensorLabel}")
+                // v0.82.0: проба закончилась вместе с ACTIVE; датчик взводим не
+                // сразу — сразу после взвода MOTION_DETECT срабатывает сам.
+                mainHandler.removeCallbacks(motionProbeCheck)
+                probeTriggerAtMs = 0L
+                scheduleMotionArm()
             }
             Profile.ACTIVE -> {
+                mainHandler.removeCallbacks(armMotionSensor)
                 motionMonitor.stop()
                 log("motion sensor: unregistered (entering ACTIVE)")
             }
         }
+    }
+
+    private fun scheduleMotionArm() {
+        mainHandler.removeCallbacks(armMotionSensor)
+        val delay = MotionProbe.armDelayMs(motionIdleProbes)
+        log("motion sensor: arm in ${delay / 1000}s (idle probes=$motionIdleProbes)")
+        mainHandler.postDelayed(armMotionSensor, delay)
+    }
+
+    private fun cancelMotionTimers() {
+        mainHandler.removeCallbacks(armMotionSensor)
+        mainHandler.removeCallbacks(motionProbeCheck)
+        probeTriggerAtMs = 0L
+    }
+
+    private fun markRealMovement() {
+        lastRealMovementMs = System.currentTimeMillis()
+        motionIdleProbes = 0
+    }
+
+    // Конец пробы: не было движения — назад в STILL (GPS гаснет), было —
+    // остаёмся в ACTIVE, дальше обычная логика (скорость, AR, 15-мин debounce).
+    private fun onMotionProbeEnd() {
+        val triggerAt = probeTriggerAtMs
+        probeTriggerAtMs = 0L
+        if (profile != Profile.ACTIVE || triggerAt == 0L) return
+        val aLat = probeAnchorLat
+        val aLon = probeAnchorLon
+        val lat = lastSentLat
+        val lon = lastSentLon
+        val displacement = if (aLat != null && aLon != null && lat != null && lon != null) {
+            haversineMeters(aLat, aLon, lat, lon)
+        } else null
+        val moved = MotionProbe.isRealMovement(
+            triggerAt, lastRealMovementMs, displacement, lastSentAccuracy,
+        )
+        val distText = displacement?.let { "%.0f".format(it) } ?: "?"
+        if (moved) {
+            log("motion probe: movement confirmed (moved ${distText}m) — stay ACTIVE")
+            motionIdleProbes = 0
+            return
+        }
+        motionIdleProbes++
+        log("motion probe: no movement in ${MotionProbe.PROBE_MS / 1000}s (moved ${distText}m) → STILL, idle probes=$motionIdleProbes")
+        switchProfile(Profile.STILL)
     }
 
     /**
@@ -903,8 +971,14 @@ class LocationForegroundService : Service() {
     private fun onMotionSensorTriggered() {
         lastMovingTimeMs = System.currentTimeMillis()
         if (profile == Profile.STILL) {
+            // v0.82.0: проба вместо безусловных 15+ минут HIGH_ACCURACY.
+            probeTriggerAtMs = System.currentTimeMillis()
+            probeAnchorLat = lastSentLat
+            probeAnchorLon = lastSentLon
             switchProfile(Profile.ACTIVE)
             requestFreshLocationOnce()
+            mainHandler.removeCallbacks(motionProbeCheck)
+            mainHandler.postDelayed(motionProbeCheck, MotionProbe.PROBE_MS)
         }
     }
 
@@ -1091,6 +1165,7 @@ class LocationForegroundService : Service() {
         lastSentLat = loc.latitude
         lastSentLon = loc.longitude
         lastSentTimeMs = loc.time
+        lastSentAccuracy = if (loc.hasAccuracy()) loc.accuracy else null
         log("sendToDart lat=${loc.latitude} lon=${loc.longitude} acc=${loc.accuracy} hasSpeed=${loc.hasSpeed()} provider=${loc.provider} hb=$heartbeat")
         val (batteryLevel, isCharging) = batterySnapshot()
         val payload = mapOf(
@@ -1242,6 +1317,7 @@ class LocationForegroundService : Service() {
         subscribedBatched = false
         // Motion sensor отписываем — иначе если service rebornит, при start()
         // будет регистрация поверх старой (хотя isRegistered защищает).
+        cancelMotionTimers()
         motionMonitor.stop()
         releaseWakeLock()
         // Не рушим bgEngine при onDestroy — он может пригодиться, если service
