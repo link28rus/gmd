@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import '../core/providers.dart';
 import '../features/audio/audio_listen_screen.dart';
 import '../features/auth/login_screen.dart';
-import '../features/auth/register_screen.dart';
 import '../features/child_detail/child_detail_screen.dart';
 import '../features/consent/consent_providers.dart';
 import '../features/consent/consent_screen.dart';
@@ -32,7 +31,9 @@ class AppRouter {
         final loc = state.matchedLocation;
         if (loc == '/splash') return null; // splash сам управляет навигацией
         if (loc == '/debug') return null; // /debug доступен всегда — нужен для диагностики login-проблем
-        final isAuthRoute = loc == '/login' || loc == '/register';
+        // Регистрация в приложении скрыта (v0.82.3): экран register_screen.dart
+        // сохранён, но маршрута /register нет.
+        final isAuthRoute = loc == '/login';
         if (session == null && !isAuthRoute) return '/login';
         // v0.72.0: политика не принята — держим на экране согласия.
         final needConsent =
@@ -44,7 +45,6 @@ class AppRouter {
       routes: [
         GoRoute(path: '/splash', builder: (_, _) => const SplashScreen()),
         GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
-        GoRoute(path: '/register', builder: (_, _) => const RegisterScreen()),
         GoRoute(path: '/consent', builder: (_, _) => const ConsentScreen()),
         // Скрытый диагностический экран — открывается долгим нажатием на
         // лейбле версии в AppBar /home. Доступен из любого состояния auth,

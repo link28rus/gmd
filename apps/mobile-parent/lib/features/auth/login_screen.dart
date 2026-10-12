@@ -31,7 +31,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   bool _loading = false;
   String? _error;
-  bool _showRegisterCta = false;
 
   @override
   void dispose() {
@@ -46,7 +45,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _mode = next;
       _stage = _Stage.email;
       _error = null;
-      _showRegisterCta = false;
       _codeCtl.clear();
       _passwordCtl.clear();
     });
@@ -56,7 +54,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     setState(() {
       _loading = true;
       _error = null;
-      _showRegisterCta = false;
     });
     try {
       await ref.read(authRepositoryProvider).requestOtp(_emailCtl.text.trim());
@@ -103,7 +100,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     setState(() {
       _loading = true;
       _error = null;
-      _showRegisterCta = false;
     });
     try {
       final session = await ref.read(authRepositoryProvider).loginWithPassword(
@@ -129,15 +125,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   void _handleAuthError(ApiException e, {bool isRegisterFlow = false}) {
     String msg;
-    bool cta = false;
     switch (e.code) {
       case 'user_not_found':
         msg = 'Пользователь с такой почтой не найден';
-        cta = true;
         break;
       case 'email_not_verified':
         msg = 'Почта не подтверждена. Проверьте письмо';
-        cta = true;
         break;
       case 'account_blocked':
         msg = 'Аккаунт заблокирован. Обратитесь к администратору';
@@ -162,7 +155,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
     setState(() {
       _error = msg;
-      _showRegisterCta = cta;
     });
   }
 
@@ -211,13 +203,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       const SizedBox(height: 24),
                       if (_mode == _Mode.otp) _buildOtpForms() else _buildPasswordForm(),
                       if (_error != null) _buildError(),
-                      const SizedBox(height: 16),
-                      Center(
-                        child: TextButton(
-                          onPressed: () => context.push('/register'),
-                          child: const Text('Ещё нет аккаунта? Зарегистрироваться'),
-                        ),
-                      ),
                     ],
                   ),
                 ),
@@ -353,19 +338,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(_error!, style: TextStyle(color: scheme.onErrorContainer)),
-            if (_showRegisterCta) ...[
-              const SizedBox(height: 8),
-              GestureDetector(
-                onTap: () => context.push('/register'),
-                child: Text(
-                  '→ Зарегистрироваться',
-                  style: TextStyle(
-                    color: scheme.primary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
           ],
         ),
       ),
