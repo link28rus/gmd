@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, type ReactElement } from 'react';
 import {
   MapContainer,
   Marker,
+  Pane,
   Polyline,
   TileLayer,
   Tooltip,
@@ -57,6 +58,14 @@ const GAP_PATH: L.PathOptions = { color: '#64748b', weight: 2, dashArray: '4 6' 
 const INFERRED_LABEL_MIN_MS = 60_000;
 /** Подпись «нет данных» — под маркерами старта/финиша и стоянок. */
 const GAP_LABEL_Z_OFFSET = -1000;
+
+/**
+ * Выбранная поездка рисуется в своих pane'ах поверх overlayPane (400), но под
+ * маркерами (600). В общем pane подложка, добавленная при выборе, ложилась
+ * поверх цветной линии: SVG рисует пути в порядке добавления.
+ */
+const CASING_PANE = 'history-selected-casing';
+const SELECTED_PANE = 'history-selected-line';
 
 function startIcon(color: string, dim: boolean): L.DivIcon {
   return L.divIcon({
@@ -182,13 +191,16 @@ function TripLayer({
           <Polyline
             key={`case-${i}`}
             positions={line}
+            pane={CASING_PANE}
             pathOptions={{ color: casing, weight: 9, opacity: 0.9, interactive: false }}
           />
         ))}
       {lines.map((line, i) => (
         <Polyline
-          key={`line-${i}`}
+          // pane задаётся только при создании слоя — при смене выбора пересоздаём.
+          key={`line-${i}-${selected}`}
           positions={line}
+          pane={selected ? SELECTED_PANE : 'overlayPane'}
           eventHandlers={handlers}
           pathOptions={{
             color: item.color,
@@ -318,6 +330,8 @@ export function HistoryMapInner({
         maxZoom={tile.maxZoom}
       />
       <ZoomControl position="topright" />
+      <Pane name={CASING_PANE} style={{ zIndex: '410' }} />
+      <Pane name={SELECTED_PANE} style={{ zIndex: '420' }} />
       {zones.length > 0 && (
         <ZonesToggleControl
           show={showZones}
