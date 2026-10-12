@@ -1,5 +1,5 @@
 [Unit]
-Description=GMD weekly Docker garbage collection
+Description=GMD daily Docker garbage collection
 Documentation=https://github.com/link28rus/gmd/blob/main/CLAUDE.md
 After=docker.service
 Requires=docker.service
@@ -10,6 +10,10 @@ Type=oneshot
 # не попадают под нож). `--volumes=false` явно запрещает трогать volumes —
 # гарантия для БД, даже если в будущем кто-то добавит named volume.
 ExecStart=/usr/bin/docker system prune -a -f --filter until=72h --volumes=false
+# Build cache: сборка образов идёт на сервере несколько раз в день, и
+# system prune с until=72h его почти не трогает — за пару дней набегало 17 ГБ.
+# Держим не больше 5 ГБ свежего кэша (пересборка остаётся быстрой).
+ExecStart=/usr/bin/docker builder prune -f --keep-storage 5g
 StandardOutput=append:/var/log/gmd-cleanup.log
 StandardError=append:/var/log/gmd-cleanup.log
 ExecStartPost=/bin/sh -c 'echo "=== gmd-cleanup finished $(date -Iseconds) ===" >> /var/log/gmd-cleanup.log'

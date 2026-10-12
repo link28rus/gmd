@@ -218,9 +218,11 @@ services:
     <<: [*restart, *logging]
     image: louislam/uptime-kuma:1
     container_name: gmd-uptime-kuma
+    # docker.sock убран 2026-10-12: :ro на сокете не ограничивает Docker API —
+    # взлом Kuma давал бы root на сервере. Контейнеры покрыты HTTP-мониторами
+    # (readyz падает при лежащих Postgres/Redis/backend).
     volumes:
       - /opt/gmd/data/uptime-kuma:/app/data
-      - /var/run/docker.sock:/var/run/docker.sock:ro
     networks: [gmd_net]
     # Пиним домен на публичный IP (МТС, eth1 VM 109), чтобы мониторы проверяли полный
     # путь Caddy+TLS+backend и не зависели от резолва внутри контейнера. Прежние

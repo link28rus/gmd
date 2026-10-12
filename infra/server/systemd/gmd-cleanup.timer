@@ -1,5 +1,5 @@
 [Unit]
-Description=Weekly GMD Docker cleanup (Sunday 04:30)
+Description=Daily GMD Docker cleanup (04:30)
 Documentation=https://github.com/link28rus/gmd/blob/main/CLAUDE.md
 
 [Timer]
@@ -7,7 +7,7 @@ Documentation=https://github.com/link28rus/gmd/blob/main/CLAUDE.md
 # и в безусловно бездейственный для пользователей час.
 # Persistent=true — если сервер был выключен в момент запуска, выполнить
 # при следующем старте.
-OnCalendar=Sun *-*-* 04:30:00
+OnCalendar=*-*-* 04:30:00
 Persistent=true
 RandomizedDelaySec=10m
 

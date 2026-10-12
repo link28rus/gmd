@@ -117,23 +117,6 @@ def find_monitor(api: UptimeKumaApi, name: str):
     return None
 
 
-def ensure_docker_host(api: UptimeKumaApi) -> int:
-    """Создаёт (или возвращает существующий) docker-host для local socket."""
-    target_name = "local-docker"
-    for h in api.get_docker_hosts():
-        if h.get("name") == target_name:
-            print(f"[docker-host] '{target_name}' exists id={h['id']}")
-            return h["id"]
-    result = api.add_docker_host(
-        name=target_name,
-        dockerType="socket",
-        dockerDaemon="/var/run/docker.sock",
-    )
-    hid = result.get("id") or result.get("dockerHostID") or result
-    print(f"[docker-host] '{target_name}' created id={hid}")
-    return hid
-
-
 def ensure_monitor(api: UptimeKumaApi, *, name: str, notification_ids: list[int], **kwargs):
     existing = find_monitor(api, name)
     if existing:
@@ -154,7 +137,6 @@ def main() -> int:
 
         tg = ensure_telegram(api)
         em = ensure_email(api)
-        docker_host_id = ensure_docker_host(api)
 
         warn_chans = [nid for nid in (tg,) if nid]
         crit_chans = [nid for nid in (tg, em) if nid]
@@ -190,51 +172,8 @@ def main() -> int:
             maxretries=2,
             notification_ids=crit_chans,
         )
-        # 4. Postgres docker
-        ensure_monitor(
-            api,
-            name="Контейнер PostgreSQL",
-            type=MonitorType.DOCKER,
-            docker_container="gmd-postgres",
-            docker_host=docker_host_id,
-            interval=120,
-            maxretries=1,
-            notification_ids=crit_chans,
-        )
-        # 5. Redis docker
-        ensure_monitor(
-            api,
-            name="Контейнер Redis",
-            type=MonitorType.DOCKER,
-            docker_container="gmd-redis",
-            docker_host=docker_host_id,
-            interval=120,
-            maxretries=1,
-            notification_ids=crit_chans,
-        )
-        # 5b. Backend docker
-        ensure_monitor(
-            api,
-            name="Контейнер бэкенда",
-            type=MonitorType.DOCKER,
-            docker_container="gmd-backend",
-            docker_host=docker_host_id,
-            interval=120,
-            maxretries=1,
-            notification_ids=crit_chans,
-        )
-        # 5c. Web и Caddy docker
-        for container, title in (("gmd-web", "Контейнер веб-сайта"), ("gmd-caddy", "Контейнер Caddy")):
-            ensure_monitor(
-                api,
-                name=title,
-                type=MonitorType.DOCKER,
-                docker_container=container,
-                docker_host=docker_host_id,
-                interval=120,
-                maxretries=1,
-                notification_ids=crit_chans,
-            )
+        # 4-5. Мониторов контейнеров нет: docker.sock у Kuma убран (2026-10-12),
+        #      Postgres/Redis/backend покрывает readyz, web и Caddy — HTTP выше.
         # 6. TLS cert expiry (использует встроенный HTTP monitor + expiry alerts)
         ensure_monitor(
             api,

@@ -29,14 +29,13 @@ ssh -N -L 3010:127.0.0.1:8000 -L 3011:127.0.0.1:3001 gmd-online &
 | 1   | Caddy (вход, /healthz)            | warn        | Telegram         |
 | 2   | Веб-сайт (/api/healthz)           | warn        | Telegram         |
 | 3   | Бэкенд API (/api/readyz)          | critical    | Telegram + email |
-| 4   | Контейнер PostgreSQL              | critical    | Telegram + email |
-| 5   | Контейнер Redis                   | critical    | Telegram + email |
-| 6   | TLS-сертификат (gmd.link28rus.ru) | warn        | Telegram (<14d)  |
-| 7   | Свободное место на диске          | warn        | Telegram (push)  |
-| 8   | Бэкап БД (ежедневный)             | critical    | Telegram + email |
-| 9   | Контейнер бэкенда                 | critical    | Telegram + email |
-| 10  | Контейнер веб-сайта               | critical    | Telegram + email |
-| 11  | Контейнер Caddy                   | critical    | Telegram + email |
+| 9   | TLS-сертификат (gmd.link28rus.ru) | warn        | Telegram (<14d)  |
+| 10  | Свободное место на диске          | warn        | Telegram (push)  |
+| 11  | Бэкап БД (ежедневный)             | critical    | Telegram + email |
+
+Мониторов контейнеров нет: с 2026-10-12 у Kuma убран `/var/run/docker.sock` — `:ro` на
+сокете не ограничивает Docker API, и взлом Kuma давал бы root на сервере. Postgres, Redis и
+backend покрывает `readyz` (проверяет БД и Redis), web и Caddy — HTTP-мониторы 1–2.
 
 Мониторы создаёт идемпотентный `infra/server-setup/scripts/kuma-bootstrap.py`. Запуск — на
 сервере, в venv `/opt/gmd/venv-kuma` (`pip install uptime-kuma-api`), с
@@ -84,14 +83,14 @@ push-мониторов** #7/#8 (формируются скриптами `disk
 4. Перезапуск: `ssh gmd-online 'docker restart gmd-backend'`.
 5. Если не помогло — см. GlitchTip (project `backend`) за свежими 5xx.
 
-### Postgres container down (Monitor #4)
+### Postgres недоступен (readyz: `db: down`, Monitor #3)
 
 1. `ssh gmd-online 'docker logs gmd-postgres --tail 100'`.
 2. Типичная причина: OOM → swap full → `dmesg | tail`.
 3. Восстановление: `docker start gmd-postgres`, ждать healthy.
 4. Если не стартует — restore из бэкапа (см. `docs/backup-restore.md`).
 
-### Disk space warning (Monitor #7)
+### Disk space warning (Monitor #10)
 
 1. `ssh gmd-online 'df -h /opt/gmd/data'` — что занимает место?
 2. Типичные причины:
@@ -99,7 +98,7 @@ push-мониторов** #7/#8 (формируются скриптами `disk
    - Старые дампы → проверить retention в `pg-backup.sh` и `kuma-backup.sh`
    - Postgres WAL → `docker exec gmd-postgres pg_archivecleanup …` (осторожно)
 
-### PG backup heartbeat не пришёл > 36h (Monitor #8)
+### PG backup heartbeat не пришёл > 26h (Monitor #11)
 
 1. Проверить systemd-timer: `ssh gmd-online 'systemctl list-timers | grep backup'`.
 2. Прогнать вручную: `ssh gmd-online '/opt/gmd/bin/pg-backup.sh'`.
@@ -147,11 +146,6 @@ push-мониторов** #7/#8 (формируются скриптами `disk
 - `docker logs gmd-glitchtip-web --tail 50` — ищем `400` или `ECONN*`.
 - Проверить worker жив: `docker ps | grep glitchtip-worker`.
 - DSN в `.env.prod` совпадает с тем, что в GlitchTip UI в project-settings.
-
-### Kuma docker-монитор показывает down при живом контейнере
-
-- Проверить, что `/var/run/docker.sock:ro` смонтирован: `docker inspect gmd-uptime-kuma | grep docker.sock`.
-- Если нет — поправить compose и redeploy.
 
 ### Алерт не приходит в Telegram
 

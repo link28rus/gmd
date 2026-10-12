@@ -37,9 +37,11 @@ sudo systemctl start gmd-disk-heartbeat.service  # тест-пинг сразу
 Token берётся из Uptime Kuma → Monitor «disk-space /opt/gmd/data» →
 Push URL (формат `/api/push/<TOKEN>`).
 
-## gmd-cleanup (weekly Docker GC)
+## gmd-cleanup (daily Docker GC)
 
-Раз в неделю чистит unused Docker images / build cache старше 72 часов.
+Каждый день в 04:30 чистит unused Docker images старше 72 часов и урезает build cache
+до 5 ГБ (`docker builder prune --keep-storage 5g`). Раньше был раз в неделю — при
+нескольких деплоях в день build cache успевал дорасти до 17–23 ГБ (2026-10).
 **Не трогает** volumes (`--volumes=false`) и активные контейнеры (Docker сам
 защищает referenced images).
 
