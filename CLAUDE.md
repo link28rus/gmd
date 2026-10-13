@@ -3,6 +3,9 @@
 Self-hosted сервис. Бренд — «Перископ». **С 2026-09-27 (задача #85) прод — для своей семьи:**
 домен `gmd.link28rus.ru`, приложения ставятся на устройства вручную, RuStore на паузе.
 periscop.pro / gmd-online.ru указывают на потерянный VPS — не используются.
+**С 2026-10-13 публичная регистрация закрыта** (env `REGISTRATION_ENABLED`, по умолчанию закрыта
+в production): взрослому аккаунт создаёт владелец семьи в «Семье» кабинета.
+
 Дизайн MVP: [docs/superpowers/specs/2026-04-18-gmd-mvp-design.md](docs/superpowers/specs/2026-04-18-gmd-mvp-design.md).
 
 ## Кратко

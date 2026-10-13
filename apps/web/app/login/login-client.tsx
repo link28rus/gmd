@@ -406,14 +406,9 @@ export default function LoginClient({
             <div className="mt-4 rounded-md border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
               {error}
               {showRegisterCta && (
-                <div className="mt-2">
-                  <Link
-                    href="/register"
-                    className="inline-flex items-center gap-1 font-medium text-sky-300 hover:text-sky-200"
-                  >
-                    → Зарегистрироваться
-                  </Link>
-                </div>
+                <p className="mt-2 text-red-100/90">
+                  Регистрация закрыта: аккаунт создаёт владелец семьи в разделе «Семья» кабинета.
+                </p>
               )}
             </div>
           )}

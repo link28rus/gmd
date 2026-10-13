@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  ForbiddenException,
   Headers,
   HttpCode,
   HttpStatus,
@@ -32,6 +33,7 @@ import type { SetPasswordDto } from './dto/set-password.dto';
 import { DevSetPasswordSchema } from './dto/dev-set-password.dto';
 import type { DevSetPasswordDto } from './dto/dev-set-password.dto';
 import { RegisterSchema } from './dto/register.dto';
+import { registrationEnabled } from './registration';
 import type { RegisterDto } from './dto/register.dto';
 import { ConfirmEmailSchema } from './dto/confirm-email.dto';
 import type { ConfirmEmailDto } from './dto/confirm-email.dto';
@@ -97,6 +99,12 @@ export class AuthController {
   @Throttle({ default: { ttl: 600_000, limit: 5 } })
   @UsePipes(new ZodValidationPipe(RegisterSchema))
   async register(@Body() dto: RegisterDto): Promise<{ ok: true }> {
+    if (!registrationEnabled()) {
+      throw new ForbiddenException({
+        code: 'registration_closed',
+        message: 'Registration is closed — ask the family owner to create an account',
+      });
+    }
     const r = await this.auth.register(dto);
     if (!r.ok) {
       throw new BadRequestException({

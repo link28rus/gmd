@@ -299,6 +299,8 @@ services:
       SMTP_SECRET_KEY: ${SMTP_SECRET_KEY:-}
       OTP_LOG_DEV: ${OTP_LOG_DEV:-false}
       OTP_FIXED_DEV: ${OTP_FIXED_DEV:-}
+      # Публичная регистрация закрыта (прод семейный, 2026-10-13); true — открыть.
+      REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-false}
       INVITE_TTL_SECONDS: ${INVITE_TTL_SECONDS:-600}
       CLAIM_LANDING_BASE_URL: ${CLAIM_LANDING_BASE_URL:-https://gmd.link28rus.ru}
       # База ссылок в письмах (сброс пароля, SOS). Тот же адрес, что PUBLIC_SITE_URL у web.
@@ -358,6 +360,7 @@ services:
       PUBLIC_SITE_URL: ${PUBLIC_SITE_URL:-}
       BACKEND_URL: http://backend:3001
       ALLOW_INSECURE_COOKIE: ${ALLOW_INSECURE_COOKIE:-false}
+      REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-false}
       DOWNLOAD_DIR: /srv/download
     volumes:
       - /opt/gmd/download:/srv/download:ro

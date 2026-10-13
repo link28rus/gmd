@@ -153,16 +153,13 @@ export default function JoinClient({ rawCode, hasSession }: Props): ReactElement
                 Вас пригласили в семью в Перископ
               </h1>
               <p className="mb-5 text-sm text-slate-300">
-                Войдите или зарегистрируйтесь, чтобы присоединиться. После входа мы вернём вас к
-                этому приглашению.
+                Войдите, чтобы присоединиться. После входа мы вернём вас к этому приглашению. Нет
+                аккаунта — попросите владельца семьи создать его в разделе «Семья» кабинета.
               </p>
               <CodeBox code={code} />
               <div className="mt-6 flex flex-col gap-2">
                 <Link href="/login" className={primaryBtn}>
                   Войти
-                </Link>
-                <Link href="/register" className={secondaryBtn}>
-                  Зарегистрироваться
                 </Link>
               </div>
             </>

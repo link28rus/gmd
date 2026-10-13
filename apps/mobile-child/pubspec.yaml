@@ -1,7 +1,7 @@
 name: periscop_child
 description: "Перископ — приложение ребёнка"
 publish_to: 'none'
-version: 0.82.4+6106
+version: 0.83.0+6106
 
 environment:
   sdk: ^3.11.5

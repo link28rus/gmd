@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import type { ReactElement } from 'react';
+import { registrationEnabled } from '@/lib/registration';
 import RegisterClient from './register-client';
 
 export default async function RegisterPage(): Promise<ReactElement> {
@@ -10,5 +11,7 @@ export default async function RegisterPage(): Promise<ReactElement> {
   if (cookieStore.get('gmd_refresh')?.value) {
     redirect('/cabinet');
   }
+  // Регистрация закрыта (прод семейный) — старые ссылки ведут на вход.
+  if (!registrationEnabled()) redirect('/login');
   return <RegisterClient />;
 }
