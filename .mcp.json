@@ -10,13 +10,15 @@
     },
     "gmd-postgres": {
       "type": "stdio",
-      "command": "uvx",
+      "command": "docker",
       "args": [
-        "--with",
-        "mcp[cli]<2",
-        "postgres-mcp",
-        "--access-mode=restricted",
-        "postgresql://gmd:gmd_dev_password@localhost:54320/gmd_dev"
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "DATABASE_URI=postgresql://gmd:gmd_dev_password@host.docker.internal:54320/gmd_dev",
+        "crystaldba/postgres-mcp:0.3.0",
+        "--access-mode=restricted"
       ]
     }
   }

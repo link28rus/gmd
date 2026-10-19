@@ -271,7 +271,7 @@ releases/apk-X.Y.Z/     локальные сборки и журналы smoke-
 
 - ✅ `memory-compiler` — контекст проекта, решения, секреты
 - ⏸ `gmd-taskmaster` — задачи/PRD ([.mcp.json](.mcp.json)); на паузе с 2026-09-27, см. «Рабочий процесс»
-- ✅ `gmd-postgres` — read-only SQL к локальному `gmd_dev` на `localhost:54320` ([.mcp.json](.mcp.json), `uvx postgres-mcp --access-mode=restricted`; есть ещё `analyze_db_health`, `explain_query`, `analyze_query_indexes`). Удобно для отладки PostGIS-геометрии, индексов, аналитики локаций без `docker exec`.
+- ✅ `gmd-postgres` — read-only SQL к локальному `gmd_dev` на `localhost:54320` ([.mcp.json](.mcp.json), Docker-образ `crystaldba/postgres-mcp:0.3.0 --access-mode=restricted`, нужен запущенный Docker Desktop. Через `uvx` не ставится: 0.3.0 требует `pglast==7.2.0`, которого нет на PyPI, и uv молча берёт сломанную 0.1.0 — «Please provide a database URL»; есть ещё `analyze_db_health`, `explain_query`, `analyze_query_indexes`). Удобно для отладки PostGIS-геометрии, индексов, аналитики локаций без `docker exec`.
 - ✅ `filesystem`
 - ✅ `chrome-devtools-mcp`, `playwright` — отладка и тесты web
 - ✅ `shadcn-ui` — компоненты
