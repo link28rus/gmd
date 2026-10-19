@@ -68,6 +68,8 @@
 	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>Камера нужна, чтобы сфотографировать ребёнка для его профиля.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Местоположение нужно, чтобы показать вас на карте и быстро поставить геозону там, где вы сейчас.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Доступ к фото нужен, чтобы выбрать фотографию для профиля ребёнка.</string>
 </dict>

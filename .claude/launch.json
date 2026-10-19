@@ -9,6 +9,15 @@
       "autoPort": true
     },
     {
+      "name": "web + локальный backend (:3003)",
+      "runtimeExecutable": "C:\\Windows\\System32\\cmd.exe",
+      "runtimeArgs": [
+        "/c",
+        "set BACKEND_URL=http://127.0.0.1:3001&& C:\\Users\\link2\\AppData\\Roaming\\npm\\pnpm.cmd --filter @periscop/web dev"
+      ],
+      "port": 3003
+    },
+    {
       "name": "backend (NestJS :3001)",
       "runtimeExecutable": "C:\\Users\\link2\\AppData\\Roaming\\npm\\pnpm.cmd",
       "runtimeArgs": ["--filter", "@periscop/backend", "dev"],

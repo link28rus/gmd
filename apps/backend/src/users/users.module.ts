@@ -5,11 +5,12 @@ import { AdminModule } from '../admin/admin.module';
 import { ConsentModule } from '../consent/consent.module';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
+import { AccountPurgeService } from './account-purge.service';
 
 @Module({
   imports: [AuthModule, PrismaModule, AdminModule, ConsentModule],
   controllers: [UsersController],
-  providers: [UsersService],
+  providers: [UsersService, AccountPurgeService],
   exports: [UsersService],
 })
 export class UsersModule {}

@@ -22,6 +22,14 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 const ME_KEY = ['me', 'profile'] as const;
 
@@ -99,6 +107,7 @@ export default function ProfileClient(): ReactElement {
           <ProfileForm email={meQ.data.user.email} initial={initialNameParts(meQ.data.user)} />
         )}
       </div>
+      {meQ.data && <DeleteAccount email={meQ.data.user.email} />}
     </div>
   );
 }
@@ -169,5 +178,83 @@ function ProfileForm({ email, initial }: { email: string; initial: NameParts }):
         {saveM.isPending ? 'Сохраняем…' : 'Сохранить'}
       </Button>
     </form>
+  );
+}
+
+/**
+ * v0.84.0: удаление своего аккаунта. Подтверждение — ввод своего email.
+ * Backend: soft-delete, через 30 дней данные стираются насовсем.
+ */
+function DeleteAccount({ email }: { email: string }): ReactElement {
+  const router = useRouter();
+  const clear = useAuthStore((s) => s.clear);
+  const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState('');
+  const matches = typed.trim().toLowerCase() === email.toLowerCase();
+
+  const deleteM = useMutation({
+    mutationFn: () => apiFetch<null>('/api/me', { method: 'DELETE' }),
+    onSuccess: async () => {
+      try {
+        await fetch('/api/auth/logout', { method: 'POST' });
+      } catch {
+        /* cookie снимет и истёкший refresh */
+      }
+      clear();
+      toast.success('Аккаунт удалён');
+      router.replace('/');
+    },
+    onError: () => toast.error('Не удалось удалить аккаунт'),
+  });
+
+  return (
+    <div className="mt-6 rounded-lg border border-destructive/40 bg-card p-8 shadow-sm">
+      <h2 className="mb-1 text-lg font-semibold text-foreground">Удаление аккаунта</h2>
+      <p className="mb-4 text-sm text-muted-foreground">
+        Если вы единственный взрослый в семье, вместе с аккаунтом удаляются семья, дети, их телефоны
+        и вся история. Если в семье есть другие взрослые, права владельца перейдут тому, кто вступил
+        раньше. Через 30 дней данные стираются насовсем, до этого аккаунт может восстановить
+        администратор.
+      </p>
+      <Button
+        variant="destructive"
+        className="w-full"
+        onClick={() => {
+          setTyped('');
+          setOpen(true);
+        }}
+      >
+        Удалить аккаунт
+      </Button>
+      <Dialog open={open} onOpenChange={(v) => !deleteM.isPending && setOpen(v)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Удалить аккаунт?</DialogTitle>
+            <DialogDescription>
+              Чтобы подтвердить, введите свой email: <b className="text-foreground">{email}</b>
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            aria-label="Email для подтверждения"
+            value={typed}
+            autoComplete="off"
+            disabled={deleteM.isPending}
+            onChange={(e) => setTyped(e.target.value)}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={deleteM.isPending}>
+              Отмена
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deleteM.mutate()}
+              disabled={!matches || deleteM.isPending}
+            >
+              {deleteM.isPending ? 'Удаляем…' : 'Удалить аккаунт'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }

@@ -29,3 +29,13 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
   const r = await backend('PATCH', '/me', body, token);
   return NextResponse.json(r.body ?? {}, { status: r.status });
 }
+
+// v0.84.0: удаление своего аккаунта из профиля кабинета. Backend делает
+// soft-delete, через 30 дней данные стираются (AccountPurgeService).
+export async function DELETE(req: NextRequest): Promise<NextResponse> {
+  const token = bearer(req);
+  if (!token) return unauthorized();
+  const r = await backend('DELETE', '/me', undefined, token);
+  if (r.status === 204) return new NextResponse(null, { status: 204 });
+  return NextResponse.json(r.body ?? {}, { status: r.status });
+}
