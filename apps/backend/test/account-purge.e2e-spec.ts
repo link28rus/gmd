@@ -2,6 +2,8 @@ import request from 'supertest';
 import { bootTestApp, registerVerifiedUser, truncateAll } from './helpers/test-app';
 import type { TestAppHandle } from './helpers/test-app';
 import { AccountPurgeService } from '../src/users/account-purge.service';
+import { AdminService } from '../src/admin/admin.service';
+import { UsersService } from '../src/users/users.service';
 
 /** 152-ФЗ: удалённое старше 30 дней стирается насовсем. */
 describe('Окончательное удаление через 30 дней (e2e)', () => {
@@ -152,5 +154,45 @@ describe('Окончательное удаление через 30 дней (e2
     expect(await h.prisma.child.count({ where: { id: oldChild } })).toBe(0);
     expect(await h.prisma.child.count({ where: { id: freshChild } })).toBe(1);
     expect(await h.prisma.family.count({ where: { id: u.familyId } })).toBe(1);
+  });
+
+  describe('восстановление аккаунта админом', () => {
+    it('одиночка: возвращается своя семья с детьми, он снова владелец', async () => {
+      const u = await registerVerifiedUser(h, 'solo@x.com');
+      const childId = await addChild(u.accessToken);
+      await request(server()).delete('/me').set(bearer(u.accessToken)).expect(204);
+      expect(await h.prisma.membership.count({ where: { userId: u.userId } })).toBe(0);
+
+      await h.app.get(AdminService).restoreUser(u.userId);
+
+      const m = await h.prisma.membership.findMany({ where: { userId: u.userId } });
+      expect(m).toEqual([expect.objectContaining({ familyId: u.familyId, role: 'owner' })]);
+      expect(
+        (await h.prisma.family.findUniqueOrThrow({ where: { id: u.familyId } })).deletedAt,
+      ).toBeNull();
+      expect(
+        (await h.prisma.child.findUniqueOrThrow({ where: { id: childId } })).deletedAt,
+      ).toBeNull();
+      // Вход снова работает и ведёт в ту же семью.
+      const login = await request(server())
+        .post('/auth/login-password')
+        .send({ email: 'solo@x.com', password: 'test-password-1' })
+        .expect(200);
+      expect(login.body.family.id).toBe(u.familyId);
+    });
+
+    it('второй взрослый: старая семья остаётся у владельца, ему — новая пустая', async () => {
+      const { owner, second } = await familyOfTwo();
+      // Токен второго устарел после вступления — удаляем напрямую, как DELETE /me.
+      await h.app.get(UsersService).softDelete(second.userId);
+
+      await h.app.get(AdminService).restoreUser(second.userId);
+
+      const m = await h.prisma.membership.findMany({ where: { userId: second.userId } });
+      expect(m).toHaveLength(1);
+      expect(m[0]!.role).toBe('owner');
+      expect(m[0]!.familyId).not.toBe(owner.familyId);
+      expect(await h.prisma.membership.count({ where: { familyId: owner.familyId } })).toBe(1);
+    });
   });
 });

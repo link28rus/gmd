@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { detachUserFromFamilies } from '../family/family-lifecycle';
+import { createSoloFamily, detachUserFromFamilies } from '../family/family-lifecycle';
 import { PasswordResetService } from '../auth/password-reset.service';
 import { StaleTokenService } from '../auth/stale-token.service';
 
@@ -184,7 +184,7 @@ export class AdminService {
     return { items, page, limit, total };
   }
 
-  /** Снять soft-delete с пользователя (восстановление до ночного hard-delete cron). */
+  /** Снять soft-delete с пользователя (до окончательного удаления через 30 дней, AccountPurgeService). */
   async restoreUser(targetUserId: string): Promise<void> {
     const target = await this.prisma.user.findUnique({
       where: { id: targetUserId },
@@ -196,13 +196,39 @@ export class AdminService {
     if (!target.deletedAt) {
       throw new BadRequestException({ code: 'not_deleted', message: 'User is not deleted' });
     }
-    // Восстанавливаем только сам аккаунт. Membership'ы при удалении были
-    // удалены физически (delete, не soft) — если семья ушла каскадом, её
-    // восстанавливают отдельно. blockedById чистим (он использовался как
-    // «кто удалил»).
-    await this.prisma.user.update({
-      where: { id: targetUserId },
-      data: { deletedAt: null, blockedById: null },
+    // Членства при удалении стираются физически (detachUserFromFamilies), без
+    // семьи живой аккаунт нарушает инвариант «ровно одно членство». Семья,
+    // ушедшая в soft-delete вместе с ним (тот же deletedAt, участников нет), —
+    // его: возвращаем её с детьми, удалёнными в тот же момент. Иначе (права
+    // ушли другому взрослому или семью уже стёрли) — новая пустая семья.
+    // Телефоны детей остаются отвязанными: привязать заново по приглашению.
+    // blockedById чистим (он использовался как «кто удалил»).
+    const deletedAt = target.deletedAt;
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: targetUserId },
+        data: { deletedAt: null, blockedById: null },
+      });
+      if ((await tx.membership.count({ where: { userId: targetUserId } })) > 0) return;
+      const own = await tx.family.findMany({
+        where: { deletedAt, memberships: { none: {} } },
+        select: { id: true },
+        orderBy: { createdAt: 'asc' },
+        take: 1,
+      });
+      const family = own[0];
+      if (!family) {
+        await createSoloFamily(tx, targetUserId);
+        return;
+      }
+      await tx.family.update({ where: { id: family.id }, data: { deletedAt: null } });
+      await tx.child.updateMany({
+        where: { familyId: family.id, deletedAt },
+        data: { deletedAt: null },
+      });
+      await tx.membership.create({
+        data: { userId: targetUserId, familyId: family.id, role: 'owner' },
+      });
     });
   }
 
