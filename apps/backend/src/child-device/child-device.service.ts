@@ -33,6 +33,8 @@ function sha256(v: string): string {
   return createHash('sha256').update(v).digest('hex');
 }
 
+export const hashDeviceToken = sha256;
+
 @Injectable()
 export class ChildDeviceService {
   constructor(
@@ -57,10 +59,9 @@ export class ChildDeviceService {
     };
   }
 
-  // Два разных одноразовых приглашения на одного ребёнка, принятые одновременно:
-  // FOR UPDATE держит только своё приглашение, обе транзакции не видят
-  // активного устройства и вторая падает на @unique(childId) — P2002 → 500.
-  // Отдаём тот же child_has_device, что при последовательном claim.
+  // Первая привязка ребёнка двумя приглашениями одновременно: записи
+  // устройства ещё нет, блокировать FOR UPDATE нечего, вторая транзакция
+  // падает на @unique(childId) — P2002 → 500. Отдаём child_has_device.
   private async claimTx(code: string, meta: ClaimMeta) {
     try {
       return await this.claimTxInner(code, meta);
@@ -98,36 +99,30 @@ export class ChildDeviceService {
       if (!invite) {
         throw new BadRequestException({ code: 'invite_invalid', message: 'Invite invalid' });
       }
-      // Multi-use invites автоматически revoke'ают activeDevice (поведение
-      // для тест-инвайта модератора RuStore: каждая новая итерация модерации
-      // получает свежее устройство, старая привязка снимается).
-      // Single-use invites сохраняют прежний контракт: claim падает с
-      // child_has_device если для ребёнка уже есть активное устройство.
-      const activeDevice = await tx.childDevice.findFirst({
-        where: { childId: invite.childId, revokedAt: null },
-      });
+      // Запись устройства у ребёнка одна (`childId @unique`) и переиспользуется
+      // при каждой новой привязке: точки, SOS, поездки ссылаются на неё, и
+      // история ребёнка переживает сброс или замену телефона (v0.85; раньше
+      // старая запись удалялась вместе со всей историей). FOR UPDATE — два
+      // одновременных claim на одного ребёнка идут по очереди.
+      const deviceRows = (await tx.$queryRawUnsafe(
+        `SELECT id FROM child_devices WHERE "childId" = $1 FOR UPDATE`,
+        invite.childId,
+      )) as Array<{ id: string }>;
+      const existing =
+        deviceRows.length > 0
+          ? await tx.childDevice.findFirst({ where: { id: deviceRows[0].id } })
+          : null;
       const maxUses = invite.maxUses ?? 1;
       const usesCount = invite.usesCount ?? 0;
-      if (activeDevice) {
-        if (maxUses <= 1) {
-          throw new ConflictException({
-            code: 'child_has_device',
-            message: 'Child already has active device',
-          });
-        }
-        await tx.childDevice.update({
-          where: { id: activeDevice.id },
-          data: { revokedAt: new Date() },
+      // Активное устройство заменяют только invite перепривязки (v0.85) и
+      // multi-use (тест-инвайт модератора RuStore). Обычный одноразовый
+      // invite по-прежнему падает с child_has_device.
+      if (existing && existing.revokedAt === null && maxUses <= 1 && !invite.replaceDevice) {
+        throw new ConflictException({
+          code: 'child_has_device',
+          message: 'Child already has active device',
         });
       }
-      // `ChildDevice.childId` имеет глобальный `@unique`, не partial — поэтому
-      // старые revoked-записи (после /reset-device или multi-use auto-revoke)
-      // остаются в индексе и валят следующий claim с P2002. Удаляем их до
-      // create (cascade снесёт старые locations/sos — они уже привязаны к
-      // revoked-устройству и не нужны новому claim'у).
-      await tx.childDevice.deleteMany({
-        where: { childId: invite.childId, revokedAt: { not: null } },
-      });
       const child = await tx.child.findFirst({
         where: { id: invite.childId, deletedAt: null },
       });
@@ -149,15 +144,54 @@ export class ChildDeviceService {
       }
 
       const token = randomBytes(32).toString('base64url');
-      const newDevice = await tx.childDevice.create({
-        data: {
-          childId: invite.childId,
-          tokenHash: sha256(token),
-          deviceName: meta.deviceName,
-          osVersion: meta.osVersion,
-          appVersion: meta.appVersion,
-        },
-      });
+      let deviceId: string;
+      if (existing) {
+        // Старый токен — в retired: живой старый телефон получит из
+        // /child/auth-status `device_revoked` и снимет Device Admin. Push-токены,
+        // часовой пояс и готовность микрофона принадлежали старому телефону.
+        await tx.childDeviceRetiredToken.upsert({
+          where: { tokenHash: existing.tokenHash },
+          create: { tokenHash: existing.tokenHash, childDeviceId: existing.id },
+          update: {},
+        });
+        await tx.childDevice.update({
+          where: { id: existing.id },
+          data: {
+            tokenHash: sha256(token),
+            deviceName: meta.deviceName ?? null,
+            osVersion: meta.osVersion ?? null,
+            appVersion: meta.appVersion ?? null,
+            revokedAt: null,
+            lastSeenAt: null,
+            createdAt: new Date(),
+            fcmToken: null,
+            fcmTokenUpdatedAt: null,
+            rustorePushToken: null,
+            rustorePushTokenUpdatedAt: null,
+            timezone: null,
+            micReady: null,
+            micReadyAt: null,
+          },
+        });
+        // Неисполненные команды адресовались старому телефону — новый не
+        // должен, например, подать сигнал при первом запуске.
+        await tx.deviceCommand.updateMany({
+          where: { childDeviceId: existing.id, status: 'pending' },
+          data: { status: 'cancelled' },
+        });
+        deviceId = existing.id;
+      } else {
+        const created = await tx.childDevice.create({
+          data: {
+            childId: invite.childId,
+            tokenHash: sha256(token),
+            deviceName: meta.deviceName,
+            osVersion: meta.osVersion,
+            appVersion: meta.appVersion,
+          },
+        });
+        deviceId = created.id;
+      }
       const newUsesCount = usesCount + 1;
       await tx.invite.update({
         where: { id: invite.id },
@@ -172,7 +206,7 @@ export class ChildDeviceService {
       return {
         deviceToken: token,
         child: { id: child.id, name: child.name, familyId: child.familyId },
-        device: { id: newDevice.id },
+        device: { id: deviceId },
         childAge,
         parentUserId: invite.createdBy,
         childId: child.id,
@@ -193,22 +227,23 @@ export class ChildDeviceService {
   }
 
   /**
-   * Из переданных устройств — те, что всё ещё действуют (не отозваны, ребёнок и
-   * семья не удалены). Токен realtime-сокета проверяется только при
-   * подключении; шлюз периодически сверяется, чтобы закрыть сокеты устройств,
-   * отвязанных уже после подключения.
+   * Из переданных хэшей токенов — те, что всё ещё действуют (устройство не
+   * отозвано, токен не заменён перепривязкой, ребёнок и семья не удалены).
+   * Токен realtime-сокета проверяется только при подключении; шлюз
+   * периодически сверяется, чтобы закрыть сокеты устройств, отвязанных или
+   * заменённых уже после подключения.
    */
-  async activeDeviceIds(ids: string[]): Promise<Set<string>> {
-    if (ids.length === 0) return new Set();
+  async activeTokenHashes(hashes: string[]): Promise<Set<string>> {
+    if (hashes.length === 0) return new Set();
     const rows = await this.prisma.childDevice.findMany({
       where: {
-        id: { in: ids },
+        tokenHash: { in: hashes },
         revokedAt: null,
         child: { deletedAt: null, family: { deletedAt: null } },
       },
-      select: { id: true },
+      select: { tokenHash: true },
     });
-    return new Set(rows.map((r) => r.id));
+    return new Set(rows.map((r) => r.tokenHash));
   }
 
   async verifyToken(token: string): Promise<ChildAuthContext | null> {
@@ -238,7 +273,8 @@ export class ChildDeviceService {
   //
   // 'active'         — токен живой, child не удалён, продолжаем как обычно.
   // 'device_revoked' — родитель сделал /reset-device → ChildDevice.revokedAt != null,
-  //                    нужно self-destruct (Device Admin блокирует uninstall).
+  //                    или привязал вместо этого телефона другой (токен в
+  //                    retired) — нужно self-destruct (Device Admin блокирует uninstall).
   // 'child_deleted'  — родитель удалил ребёнка → Child.deletedAt != null,
   //                    нужно self-destruct.
   // 'unknown'        — токен никогда не существовал (фейковый/мусорный),
@@ -252,7 +288,14 @@ export class ChildDeviceService {
       where: { tokenHash },
       select: { id: true, childId: true, revokedAt: true },
     });
-    if (!device) return { status: 'unknown' };
+    if (!device) {
+      // Токен телефона, вместо которого привязали другой (v0.85).
+      const retired = await this.prisma.childDeviceRetiredToken.findUnique({
+        where: { tokenHash },
+        select: { tokenHash: true },
+      });
+      return { status: retired ? 'device_revoked' : 'unknown' };
+    }
     if (device.revokedAt !== null) return { status: 'device_revoked' };
     const child = await this.prisma.child.findFirst({
       where: { id: device.childId },

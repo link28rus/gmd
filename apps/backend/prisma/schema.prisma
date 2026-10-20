@@ -382,6 +382,10 @@ model Invite {
   // обычные родительские invites всегда maxUses=1.
   maxUses              Int       @default(1)
   usesCount            Int       @default(0)
+  // v0.85: перепривязка (телефон ребёнка сброшен или заменён). Такой invite
+  // можно создать при активном устройстве; claim переносит привязку на новый
+  // телефон в ту же запись child_devices — история ребёнка сохраняется.
+  replaceDevice        Boolean   @default(false)
   createdBy            String
   createdAt            DateTime  @default(now())
 
@@ -449,8 +453,24 @@ model ChildDevice {
   blockSessions BlockSession[]
   appBlockSchedules AppBlockSchedule[]
   diagUploads   DiagLogUpload[]
+  retiredTokens ChildDeviceRetiredToken[]
 
   @@map("child_devices")
+}
+
+// v0.85: токены, выданные этой записи устройства раньше. Новая привязка
+// переиспользует запись child_devices (история не теряется) и меняет tokenHash;
+// старый телефон, если он жив, по своему токену получает из /child/auth-status
+// `device_revoked` и снимает Device Admin, а не `unknown`.
+model ChildDeviceRetiredToken {
+  tokenHash     String   @id
+  childDeviceId String
+  retiredAt     DateTime @default(now())
+
+  childDevice ChildDevice @relation(fields: [childDeviceId], references: [id], onDelete: Cascade)
+
+  @@index([childDeviceId])
+  @@map("child_device_retired_tokens")
 }
 
 enum DeviceCommandType {

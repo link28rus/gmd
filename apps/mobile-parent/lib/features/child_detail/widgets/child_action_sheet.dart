@@ -6,6 +6,7 @@ import '../../../core/api/api_exception.dart';
 import '../../../core/features.dart';
 import '../../children/child_models.dart';
 import '../../children/children_providers.dart';
+import '../../children/widgets/add_child_flow.dart';
 import '../../children/widgets/child_avatar_sheet.dart';
 import '../../consent/consent_providers.dart';
 import 'child_status_card.dart';
@@ -146,6 +147,14 @@ class _ChildActionSheetState extends ConsumerState<ChildActionSheet> {
             label: 'Звук вокруг',
             onTap: _onListenAudio,
           ),
+          // Сброшенный или новый телефон ребёнка: при живой привязке — код
+          // перепривязки (старый отключится, когда новый примет код), после
+          // отвязки — обычный код привязки. История сохраняется в обоих случаях.
+          _ActionTile(
+            icon: Icons.phonelink_setup_outlined,
+            label: _hasActiveDevice ? 'Перепривязать телефон' : 'Привязать телефон',
+            onTap: _onRelinkDevice,
+          ),
           _ActionTile(
             icon: Icons.link_off_outlined,
             label: 'Отвязать устройство',
@@ -233,6 +242,17 @@ class _ChildActionSheetState extends ConsumerState<ChildActionSheet> {
   void _onHistory() {
     final encoded = Uri.encodeQueryComponent(widget.child.name);
     context.push('/home/child/${widget.child.id}/history?name=$encoded');
+  }
+
+  Future<void> _onRelinkDevice() {
+    return showInviteQrSheet(
+      context,
+      ref,
+      childId: widget.child.id,
+      childName: widget.child.name,
+      dateOfBirth: widget.child.dateOfBirth,
+      relink: _hasActiveDevice,
+    );
   }
 
   Future<void> _onUnbindDevice() async {

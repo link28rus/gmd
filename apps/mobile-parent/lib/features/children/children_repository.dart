@@ -183,10 +183,16 @@ class ChildrenRepository {
   Future<InviteResponse> createInvite(
     String childId, {
     bool consent14PlusGranted = false,
+    // v0.85: код перепривязки — создаётся при привязанном устройстве; старый
+    // телефон отключится, когда новый примет код, история сохранится.
+    bool replaceDevice = false,
   }) async {
     final res = await _dio.post<dynamic>(
       '/family/children/$childId/invites',
-      data: {'consent14PlusGranted': consent14PlusGranted},
+      data: {
+        'consent14PlusGranted': consent14PlusGranted,
+        'replaceDevice': replaceDevice,
+      },
     );
     final data = res.data as Map<String, dynamic>;
     return InviteResponse(

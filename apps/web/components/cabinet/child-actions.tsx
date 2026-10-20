@@ -2,10 +2,21 @@
 
 import { useState, type ReactElement } from 'react';
 import Link from 'next/link';
-import { Bell, Clock, Ear, ImageIcon, RotateCcw, Shield, ShieldCheck, Trash2 } from 'lucide-react';
+import {
+  Bell,
+  Clock,
+  Ear,
+  ImageIcon,
+  RotateCcw,
+  Shield,
+  ShieldCheck,
+  Smartphone,
+  Trash2,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import type { Child } from '@/lib/api/children';
 import { ResetDeviceDialog } from '@/components/children/reset-device-dialog';
+import { InviteQrDialog } from '@/components/children/invite-qr-dialog';
 import { DeleteChildDialog } from '@/components/children/delete-child-dialog';
 import { SendSignalDialog } from '@/components/children/send-signal-dialog';
 import { AudioListenDialog } from '@/components/children/audio-listen-dialog';
@@ -21,6 +32,7 @@ interface Props {
 
 export function ChildActions({ child, showReset }: Props): ReactElement {
   const [resetOpen, setResetOpen] = useState(false);
+  const [relinkOpen, setRelinkOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [signalOpen, setSignalOpen] = useState(false);
   const [audioOpen, setAudioOpen] = useState(false);
@@ -130,6 +142,16 @@ export function ChildActions({ child, showReset }: Props): ReactElement {
         {showReset && (
           <button
             type="button"
+            onClick={() => setRelinkOpen(true)}
+            className="flex w-full items-center gap-2 border-t border-border px-3 py-2 text-left text-sm text-foreground hover:bg-muted"
+          >
+            <Smartphone className="h-4 w-4 text-muted-foreground" />
+            Перепривязать телефон
+          </button>
+        )}
+        {showReset && (
+          <button
+            type="button"
             onClick={() => setResetOpen(true)}
             className="flex w-full items-center gap-2 border-t border-border px-3 py-2 text-left text-sm text-foreground hover:bg-muted"
           >
@@ -150,6 +172,9 @@ export function ChildActions({ child, showReset }: Props): ReactElement {
       </div>
       {showReset && (
         <ResetDeviceDialog child={child} open={resetOpen} onOpenChange={setResetOpen} />
+      )}
+      {showReset && (
+        <InviteQrDialog child={child} open={relinkOpen} onOpenChange={setRelinkOpen} relink />
       )}
       {canSignal && (
         <SendSignalDialog child={child} open={signalOpen} onOpenChange={setSignalOpen} />

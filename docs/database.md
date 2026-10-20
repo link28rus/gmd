@@ -169,14 +169,18 @@
 #### `child_devices`
 
 - `id` (uuid) — первичный ключ
-- `childId` (uuid) — foreign key → children (UNIQUE, один device на ребёнка)
-- `tokenHash` (varchar) — SHA256-хэш long-lived device-token (32 байта)
+- `childId` (uuid) — foreign key → children (UNIQUE, один device на ребёнка). С v0.85.0 запись
+  переиспользуется при каждой новой привязке (после отвязки или перепривязкой): claim меняет
+  `tokenHash`, метаданные телефона, сбрасывает push-токены, `timezone`, `micReady`, отменяет
+  `pending`-команды. Точки, поездки, SOS остаются на ней — история ребёнка не теряется
+- `tokenHash` (varchar) — SHA256-хэш long-lived device-token (32 байта); прежние значения —
+  в `child_device_retired_tokens`
 - `deviceName`, `osVersion`, `appVersion` (varchar) — метаданные устройства; с v0.57.0
   `appVersion` обновляется при каждом подключении к realtime-каналу (`hello`), а не только при claim
 - `lastSeenAt` (timestamptz) — время последнего контакта (REST-запросы ребёнка + `pong`
   realtime-канала раз в 45 с)
 - `revokedAt` (timestamptz) — время отзыва токена родителем
-- `createdAt` (timestamptz)
+- `createdAt` (timestamptz) — время последней привязки (с v0.85.0 обновляется при новой привязке)
 - `diagConfig` (jsonb, nullable, v0.60.0) — настройки журнала приложения (`DiagConfig`: какие
   категории отправлять, подробный режим до `debugUntil`, logcat, снимок состояния, автоотправка);
   `NULL` = значения по умолчанию. Телефон получает их по realtime-каналу (`DIAG_CONFIG`) при каждом
@@ -195,6 +199,22 @@ Enum `AudioFailureReason` (`audio_sessions.failureReason`) с v0.62.0 допол
 микрофон из фона.
 
 **Безопасность:** токен используется для аутентификации всех запросов ребёнка через заголовок `X-Child-Token`.
+
+#### `child_device_retired_tokens` (v0.85.0)
+
+- `tokenHash` (text) — первичный ключ, SHA256 прежнего device-token
+- `childDeviceId` — foreign key → child_devices (CASCADE)
+- `retiredAt` (timestamptz)
+
+Токены, которые запись устройства выдавала до последней привязки. `POST /child/auth-status` по
+такому токену отвечает `device_revoked` — заменённый телефон, если он жив, снимает Device Admin
+и чистит токен. Realtime-шлюз закрывает сокет кодом 4401, когда токен сокета перестал
+совпадать с `child_devices.tokenHash`.
+
+Перепривязку начинает `invites.replaceDevice = true` (`POST /family/children/:id/invites` с
+`{replaceDevice: true}`): такой одноразовый код создаётся и принимается при активном устройстве,
+старый телефон отключается в момент claim. Обычный одноразовый код при активном устройстве
+по-прежнему даёт `409 child_has_device`.
 
 #### `diag_log_uploads` (v0.60.0)
 

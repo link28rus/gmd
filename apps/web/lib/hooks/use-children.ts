@@ -38,8 +38,11 @@ export function useDeleteChild() {
 export function useCreateInvite() {
   // не invalidate — invite вне queries
   return useMutation({
-    mutationFn: (args: { id: string; consent14PlusGranted?: boolean }) =>
-      childrenApi.createInvite(args.id, { consent14PlusGranted: args.consent14PlusGranted }),
+    mutationFn: (args: { id: string; consent14PlusGranted?: boolean; replaceDevice?: boolean }) =>
+      childrenApi.createInvite(args.id, {
+        consent14PlusGranted: args.consent14PlusGranted,
+        replaceDevice: args.replaceDevice,
+      }),
   });
 }
 

@@ -23,6 +23,9 @@ const CreateInviteSchema = z
     // на обработку геолокации. Обязательно true, если ребёнок старше 14 лет,
     // иначе claim упадёт с consent14plus_required.
     consent14PlusGranted: z.boolean().optional(),
+    // v0.85: код перепривязки — можно при активном устройстве, история
+    // ребёнка переходит на новый телефон.
+    replaceDevice: z.boolean().optional(),
   })
   .optional()
   .transform((v) => v ?? {});
@@ -47,6 +50,7 @@ export class InvitesController {
   ): Promise<unknown> {
     return this.invites.createInvite(req.user.familyId, childId, req.user.userId, {
       consent14PlusGranted: body.consent14PlusGranted === true,
+      replaceDevice: body.replaceDevice === true,
     });
   }
 

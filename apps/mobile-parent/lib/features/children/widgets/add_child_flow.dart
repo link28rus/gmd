@@ -39,15 +39,17 @@ Future<void> startAddChildFlow(BuildContext context, WidgetRef ref) async {
   );
 }
 
-/// Открывает только QR-шит — для существующего ребёнка (например, повторная
-/// привязка после `reset-device`). Публичный API, может вызываться из других
-/// мест. На v0.47 не используется, заложено на будущее.
+/// Открывает только QR-шит — для существующего ребёнка: привязка после
+/// отвязки или перепривязка ([relink]) сброшенного/нового телефона при ещё
+/// привязанном старом. После закрытия обновляем список — телефон мог принять
+/// код, пока шит был открыт.
 Future<void> showInviteQrSheet(
   BuildContext context,
   WidgetRef ref, {
   required String childId,
   required String childName,
   DateTime? dateOfBirth,
+  bool relink = false,
 }) async {
   await showModalBottomSheet<void>(
     context: context,
@@ -57,8 +59,10 @@ Future<void> showInviteQrSheet(
       childId: childId,
       childName: childName,
       dateOfBirth: dateOfBirth,
+      relink: relink,
     ),
   );
+  if (context.mounted) ref.invalidate(childrenListProvider);
 }
 
 // ─── Step 1: Create child ───────────────────────────────────────────────
@@ -255,11 +259,13 @@ class _InviteQrSheet extends ConsumerStatefulWidget {
     required this.childId,
     required this.childName,
     required this.dateOfBirth,
+    this.relink = false,
   });
 
   final String childId;
   final String childName;
   final DateTime? dateOfBirth;
+  final bool relink;
 
   @override
   ConsumerState<_InviteQrSheet> createState() => _InviteQrSheetState();
@@ -317,6 +323,7 @@ class _InviteQrSheetState extends ConsumerState<_InviteQrSheet> {
       final r = await ref.read(childrenRepositoryProvider).createInvite(
             widget.childId,
             consent14PlusGranted: _needsConsent ? _consentGranted : false,
+            replaceDevice: widget.relink,
           );
       if (!mounted) return;
       _ticker?.cancel();
@@ -375,14 +382,20 @@ class _InviteQrSheetState extends ConsumerState<_InviteQrSheet> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Привязка устройства — ${widget.childName}',
+            '${widget.relink ? 'Перепривязка телефона' : 'Привязка устройства'}'
+            ' — ${widget.childName}',
             style: theme.textTheme.titleLarge,
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 4),
           Text(
-            'Откройте на телефоне ребёнка приложение «Перископ Ребёнка» '
-            'и отсканируйте QR.',
+            widget.relink
+                ? 'Установите на сброшенный или новый телефон приложение '
+                    '«Перископ Ребёнка» и отсканируйте QR. Старый телефон '
+                    'отключится, только когда новый примет код. История '
+                    'передвижений и геозоны сохранятся.'
+                : 'Откройте на телефоне ребёнка приложение «Перископ Ребёнка» '
+                    'и отсканируйте QR.',
             style: theme.textTheme.bodySmall
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
             textAlign: TextAlign.center,

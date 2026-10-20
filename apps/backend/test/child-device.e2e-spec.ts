@@ -86,6 +86,59 @@ describe('Child Device (e2e)', () => {
     await request(server).get('/child/me').set('X-Child-Token', claim.body.deviceToken).expect(401);
   });
 
+  it('перепривязка: новый телефон на ту же запись, точки сохранены, старый отвязан', async () => {
+    const server = h.app.getHttpServer();
+    const { accessToken, childId, code } = await setupChildAndInvite();
+    const auth = { Authorization: `Bearer ${accessToken}` };
+    const oldClaim = await request(server)
+      .post('/child/claim')
+      .send({ code, deviceName: 'Old phone' })
+      .expect(200);
+    const deviceId = oldClaim.body.device.id;
+    await h.prisma.location.create({
+      data: { childId, childDeviceId: deviceId, lat: 55.75, lon: 37.62, recordedAt: new Date() },
+    });
+
+    // Обычный код при живом устройстве по-прежнему запрещён.
+    await request(server).post(`/family/children/${childId}/invites`).set(auth).expect(409);
+    const relink = await request(server)
+      .post(`/family/children/${childId}/invites`)
+      .set(auth)
+      .send({ replaceDevice: true })
+      .expect(201);
+
+    // Пока новый телефон не принял код, старый работает.
+    await request(server)
+      .get('/child/me')
+      .set('X-Child-Token', oldClaim.body.deviceToken)
+      .expect(200);
+
+    const newClaim = await request(server)
+      .post('/child/claim')
+      .send({ code: relink.body.code, deviceName: 'New phone' })
+      .expect(200);
+    expect(newClaim.body.device.id).toBe(deviceId);
+
+    await request(server)
+      .get('/child/me')
+      .set('X-Child-Token', newClaim.body.deviceToken)
+      .expect(200);
+    await request(server)
+      .get('/child/me')
+      .set('X-Child-Token', oldClaim.body.deviceToken)
+      .expect(401);
+    const status = await request(server)
+      .post('/child/auth-status')
+      .send({ deviceToken: oldClaim.body.deviceToken })
+      .expect(200);
+    expect(status.body.status).toBe('device_revoked');
+
+    expect(await h.prisma.location.count({ where: { childId } })).toBe(1);
+    const device = await h.prisma.childDevice.findUnique({ where: { id: deviceId } });
+    expect(device?.deviceName).toBe('New phone');
+    expect(device?.revokedAt).toBeNull();
+  });
+
   it('DELETE child → X-Child-Token → 401', async () => {
     const server = h.app.getHttpServer();
     const { accessToken, childId, code } = await setupChildAndInvite();

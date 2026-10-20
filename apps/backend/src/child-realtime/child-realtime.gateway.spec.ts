@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { ChildRealtimeGateway } from './child-realtime.gateway';
+import { hashDeviceToken } from '../child-device/child-device.service';
 import type { ChildDeviceService } from '../child-device/child-device.service';
 import type { ChildRealtimeService } from './child-realtime.service';
 
@@ -11,7 +12,7 @@ function setup() {
     touchLastSeen: jest.fn(),
     setAppVersion: jest.fn().mockResolvedValue(undefined),
     setMicReady: jest.fn().mockResolvedValue(true),
-    activeDeviceIds: jest.fn().mockResolvedValue(new Set(['dev-1'])),
+    activeTokenHashes: jest.fn().mockResolvedValue(new Set([hashDeviceToken('t')])),
   };
   const realtime = { handleAck: jest.fn() };
   const gw = new ChildRealtimeGateway(
@@ -80,9 +81,9 @@ describe('ChildRealtimeGateway — micReady (v0.62)', () => {
     const { gw, devices, client } = setup();
     client.close = jest.fn();
     await connect(gw, devices, client);
-    devices.activeDeviceIds.mockResolvedValue(new Set());
+    devices.activeTokenHashes.mockResolvedValue(new Set());
     await (gw as any).closeRevoked();
-    expect(devices.activeDeviceIds).toHaveBeenCalledWith(['dev-1']);
+    expect(devices.activeTokenHashes).toHaveBeenCalledWith([hashDeviceToken('t')]);
     expect(client.close).toHaveBeenCalledWith(4401, 'revoked');
   });
 
@@ -92,7 +93,7 @@ describe('ChildRealtimeGateway — micReady (v0.62)', () => {
     await connect(gw, devices, client);
     await (gw as any).closeRevoked();
     expect(client.close).not.toHaveBeenCalled();
-    devices.activeDeviceIds.mockRejectedValue(new Error('db down'));
+    devices.activeTokenHashes.mockRejectedValue(new Error('db down'));
     await (gw as any).closeRevoked();
     expect(client.close).not.toHaveBeenCalled();
   });

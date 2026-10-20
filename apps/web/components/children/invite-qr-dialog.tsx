@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { toast } from 'sonner';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   Dialog,
   DialogContent,
@@ -21,6 +22,12 @@ interface Props {
   child: Child;
   open: boolean;
   onOpenChange: (v: boolean) => void;
+  /**
+   * Перепривязка: телефон ребёнка сброшен или заменён. Код создаётся при
+   * привязанном устройстве; старое отключится, когда новый телефон примет код,
+   * история ребёнка сохраняется.
+   */
+  relink?: boolean;
 }
 
 function formatCode(code: string): string {
@@ -38,8 +45,9 @@ function computeAgeYears(dateOfBirth: string | null): number | null {
   return age;
 }
 
-export function InviteQrDialog({ child, open, onOpenChange }: Props) {
+export function InviteQrDialog({ child, open, onOpenChange, relink = false }: Props) {
   const create = useCreateInvite();
+  const qc = useQueryClient();
   const [invite, setInvite] = useState<InviteResponse | null>(null);
   const [expiresAt, setExpiresAt] = useState<number | null>(null);
   const [consentGranted, setConsentGranted] = useState(false);
@@ -55,6 +63,7 @@ export function InviteQrDialog({ child, open, onOpenChange }: Props) {
       const r = await create.mutateAsync({
         id: child.id,
         consent14PlusGranted: needsConsent ? consentGranted : false,
+        replaceDevice: relink,
       });
       setInvite(r);
       setExpiresAt(Date.now() + r.expiresIn * 1000);
@@ -65,6 +74,8 @@ export function InviteQrDialog({ child, open, onOpenChange }: Props) {
 
   useEffect(() => {
     if (!open) {
+      // Телефон мог принять код, пока диалог был открыт, — обновляем карточку.
+      if (invite) void qc.invalidateQueries({ queryKey: ['children'] });
       setInvite(null);
       setExpiresAt(null);
       setConsentGranted(false);
@@ -79,11 +90,21 @@ export function InviteQrDialog({ child, open, onOpenChange }: Props) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>Привязка устройства — {child.name}</DialogTitle>
+          <DialogTitle>
+            {relink ? 'Перепривязка телефона' : 'Привязка устройства'} — {child.name}
+          </DialogTitle>
           <DialogDescription>
             Отсканируйте QR на телефоне ребёнка в приложении «Перископ для ребёнка».
           </DialogDescription>
         </DialogHeader>
+
+        {relink && (
+          <div className="rounded-md border border-border bg-muted/50 p-3 text-sm text-muted-foreground">
+            Для сброшенного или нового телефона: установите на него приложение и отсканируйте код.
+            Старый телефон отключится, только когда новый примет код. История передвижений, геозоны
+            и настройки сохранятся.
+          </div>
+        )}
 
         {needsConsent && !invite && (
           <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">

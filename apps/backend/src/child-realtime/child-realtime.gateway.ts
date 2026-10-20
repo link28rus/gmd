@@ -4,7 +4,7 @@ import { WebSocketGateway } from '@nestjs/websockets';
 import type { OnGatewayConnection, OnGatewayInit } from '@nestjs/websockets';
 import type { IncomingMessage } from 'node:http';
 import type { WebSocket } from 'ws';
-import { ChildDeviceService } from '../child-device/child-device.service';
+import { ChildDeviceService, hashDeviceToken } from '../child-device/child-device.service';
 import { ChildRealtimeService } from './child-realtime.service';
 
 // Пинг раз в 45с держит NAT-маппинг мобильного оператора и даёт телефону
@@ -15,6 +15,9 @@ const STALE_MS = 2 * PING_INTERVAL_MS + 15_000;
 
 interface ConnState {
   deviceId: string;
+  // Перепривязка (v0.85) оставляет deviceId прежним и меняет токен — живость
+  // сокета сверяем по токену, с которым он подключился.
+  tokenHash: string;
   lastSeenAt: number;
 }
 
@@ -67,7 +70,7 @@ export class ChildRealtimeGateway implements OnGatewayInit, OnGatewayConnection,
     }
     if (client.readyState !== client.OPEN) return;
 
-    client[STATE] = { deviceId, lastSeenAt: Date.now() };
+    client[STATE] = { deviceId, tokenHash: hashDeviceToken(token), lastSeenAt: Date.now() };
     this.sockets.add(client);
     client.on('message', (data, isBinary) => {
       if (!isBinary) this.handleMessage(client, (data as Buffer).toString('utf-8'));
@@ -159,24 +162,25 @@ export class ChildRealtimeGateway implements OnGatewayInit, OnGatewayConnection,
   }
 
   // Отвязанное после подключения устройство (родитель удалил ребёнка, сбросил
-  // устройство, админ отозвал) держало сокет до обрыва сети. 4401 — тот же код,
-  // что при неверном токене: клиент ребёнка на него перестаёт переподключаться.
+  // устройство, привязал вместо него другой телефон, админ отозвал) держало
+  // сокет до обрыва сети. 4401 — тот же код, что при неверном токене: клиент
+  // ребёнка на него перестаёт переподключаться.
   private async closeRevoked(): Promise<void> {
-    const ids = [...new Set([...this.sockets].map((c) => c[STATE]?.deviceId))].filter(
-      (id): id is string => !!id,
+    const hashes = [...new Set([...this.sockets].map((c) => c[STATE]?.tokenHash))].filter(
+      (h): h is string => !!h,
     );
-    if (ids.length === 0) return;
+    if (hashes.length === 0) return;
     let active: Set<string>;
     try {
-      active = await this.devices.activeDeviceIds(ids);
+      active = await this.devices.activeTokenHashes(hashes);
     } catch (err) {
       this.logger.warn(`closeRevoked: lookup failed: ${String(err)}`);
       return;
     }
     for (const client of this.sockets) {
-      const id = client[STATE]?.deviceId;
-      if (id && !active.has(id)) {
-        this.logger.log(`device=${id} revoked — closing socket`);
+      const st = client[STATE];
+      if (st && !active.has(st.tokenHash)) {
+        this.logger.log(`device=${st.deviceId} revoked — closing socket`);
         this.reject(client, 4401, 'revoked');
       }
     }

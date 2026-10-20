@@ -27,7 +27,12 @@ export class InvitesService {
     familyId: string,
     childId: string,
     createdBy: string,
-    opts: { consent14PlusGranted?: boolean; maxUses?: number; ttlSec?: number } = {},
+    opts: {
+      consent14PlusGranted?: boolean;
+      maxUses?: number;
+      ttlSec?: number;
+      replaceDevice?: boolean;
+    } = {},
   ): Promise<InviteResult> {
     const child = await this.prisma.child.findFirst({
       where: { id: childId, familyId, deletedAt: null },
@@ -41,7 +46,10 @@ export class InvitesService {
     // аккаунта модерации RuStore: каждый новый модератор приходит "на свежее"
     // привязанное устройство). Single-use invites (maxUses=1) сохраняют
     // классическое поведение: блокируются если уже привязано.
-    if (maxUses === 1) {
+    // v0.85: invite перепривязки (replaceDevice) — тоже при активном
+    // устройстве: старый телефон отключится, только когда новый примет код.
+    const replaceDevice = opts.replaceDevice === true;
+    if (maxUses === 1 && !replaceDevice) {
       const activeDevice = await this.prisma.childDevice.findFirst({
         where: { childId, revokedAt: null },
       });
@@ -64,6 +72,7 @@ export class InvitesService {
         createdBy,
         consent14PlusGranted: opts.consent14PlusGranted === true,
         maxUses,
+        replaceDevice,
       },
     });
     return {

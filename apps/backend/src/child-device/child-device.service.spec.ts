@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { ChildDeviceService } from './child-device.service';
+import { ChildDeviceService, hashDeviceToken } from './child-device.service';
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { ConsentService } from '../consent/consent.service';
@@ -15,6 +15,9 @@ interface MockPrisma {
     update: jest.Mock;
     deleteMany: jest.Mock;
   };
+  childDeviceRetiredToken: { upsert: jest.Mock; findUnique: jest.Mock };
+  deviceCommand: { updateMany: jest.Mock };
+  _retired: any[];
   child: { findFirst: jest.Mock };
   $transaction: jest.Mock;
   $queryRawUnsafe: jest.Mock;
@@ -24,7 +27,19 @@ function makePrismaMock(): MockPrisma {
   const invites: any[] = [];
   const children: any[] = [];
   const devices: any[] = [];
+  const retired: any[] = [];
   const api: MockPrisma = {
+    _retired: retired,
+    childDeviceRetiredToken: {
+      upsert: jest.fn(({ create }: any) => {
+        if (!retired.some((r) => r.tokenHash === create.tokenHash)) retired.push(create);
+        return Promise.resolve(create);
+      }),
+      findUnique: jest.fn(({ where }: any) =>
+        Promise.resolve(retired.find((r) => r.tokenHash === where.tokenHash) ?? null),
+      ),
+    },
+    deviceCommand: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
     _invites: invites,
     _children: children,
     _devices: devices,
@@ -42,6 +57,7 @@ function makePrismaMock(): MockPrisma {
       findFirst: jest.fn(({ where }: any) => {
         return Promise.resolve(
           devices.find((d) => {
+            if (where.id) return d.id === where.id;
             if (where.tokenHash) return d.tokenHash === where.tokenHash && d.revokedAt === null;
             if (where.childId) return d.childId === where.childId && d.revokedAt === null;
             return false;
@@ -85,7 +101,12 @@ function makePrismaMock(): MockPrisma {
       ),
     },
     $transaction: jest.fn((fn: any) => fn(api)),
-    $queryRawUnsafe: jest.fn((_sql: string, code: string) => {
+    $queryRawUnsafe: jest.fn((sql: string, code: string) => {
+      if (sql.includes('child_devices')) {
+        return Promise.resolve(
+          devices.filter((d) => d.childId === code).map((d) => ({ id: d.id })),
+        );
+      }
       const row = invites.find(
         (i) => i.code === code && i.consumedAt === null && i.expiresAt > new Date(),
       );
@@ -200,7 +221,7 @@ describe('ChildDeviceService.claim', () => {
     await expect(svc.claim('K4HJ9XPN', {})).rejects.toThrow(ConflictException);
   });
 
-  it('revoked device для того же child → старая запись удаляется, новый claim проходит', async () => {
+  it('revoked device для того же child → запись переиспользуется, история остаётся', async () => {
     const p = makePrismaMock();
     p._children.push({ id: 'c1', familyId: 'f1', name: 'V', deletedAt: null, dateOfBirth: null });
     p._invites.push({
@@ -218,15 +239,52 @@ describe('ChildDeviceService.claim', () => {
       childId: 'c1',
       revokedAt: new Date(),
       tokenHash: 'old-hash',
+      fcmToken: 'old-fcm',
     });
     const svc = makeSvc(p);
     const r = await svc.claim('K4HJ9XPN', { deviceName: 'Pixel-new' });
-    expect(r.deviceToken).toBeTruthy();
-    // старая запись удалена, в массиве остался только новый device
+    expect(r.device.id).toBe('d-old');
+    expect(p.childDevice.deleteMany).not.toHaveBeenCalled();
     expect(p._devices).toHaveLength(1);
-    expect(p._devices[0].id).not.toBe('d-old');
     expect(p._devices[0].revokedAt).toBeNull();
     expect(p._devices[0].deviceName).toBe('Pixel-new');
+    expect(p._devices[0].fcmToken).toBeNull();
+    expect(p._devices[0].tokenHash).not.toBe('old-hash');
+    expect(p._retired).toEqual([{ tokenHash: 'old-hash', childDeviceId: 'd-old' }]);
+  });
+
+  it('invite перепривязки при активном устройстве → тот же device, старый токен в retired', async () => {
+    const p = makePrismaMock();
+    p._children.push({ id: 'c1', familyId: 'f1', name: 'V', deletedAt: null, dateOfBirth: null });
+    p._invites.push({
+      id: 'i1',
+      code: 'K4HJ9XPN',
+      familyId: 'f1',
+      childId: 'c1',
+      createdBy: 'u-parent',
+      expiresAt: new Date(Date.now() + 600_000),
+      consumedAt: null,
+      replaceDevice: true,
+    });
+    p._devices.push({ id: 'd1', childId: 'c1', revokedAt: null, tokenHash: 'old-hash' });
+    const svc = makeSvc(p);
+    const r = await svc.claim('K4HJ9XPN', { deviceName: 'Pixel-new' });
+    expect(r.device.id).toBe('d1');
+    expect(p._devices[0].tokenHash).not.toBe('old-hash');
+    expect(p._retired.map((x) => x.tokenHash)).toEqual(['old-hash']);
+    expect(p.deviceCommand.updateMany).toHaveBeenCalledWith({
+      where: { childDeviceId: 'd1', status: 'pending' },
+      data: { status: 'cancelled' },
+    });
+    expect(p._invites[0].consumedAt).toBeInstanceOf(Date);
+  });
+
+  it('getAuthStatus: токен заменённого телефона → device_revoked, чужой → unknown', async () => {
+    const p = makePrismaMock();
+    p._retired.push({ tokenHash: hashDeviceToken('old-token'), childDeviceId: 'd1' });
+    const svc = makeSvc(p);
+    expect(await svc.getAuthStatus('old-token')).toEqual({ status: 'device_revoked' });
+    expect(await svc.getAuthStatus('fake-token')).toEqual({ status: 'unknown' });
   });
 
   it('нормализует code (lower-case и пробелы)', async () => {
