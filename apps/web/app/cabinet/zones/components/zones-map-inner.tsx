@@ -1,11 +1,12 @@
 // apps/web/app/cabinet/zones/components/zones-map-inner.tsx
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
 import {
   Circle,
   CircleMarker,
   MapContainer,
+  Polyline,
   Popup,
   TileLayer,
   Tooltip,
@@ -25,6 +26,7 @@ import { useChildAvatarSrc } from '@/lib/hooks/use-child-avatar';
 import { formatAgeShort } from '@/lib/date/age-format';
 import { LatestMarker } from '@/components/locations/latest-marker';
 import { ParentMarker } from '@/components/locations/parent-marker';
+import { spreadMarkers, type SpreadLatLng } from '@/lib/maps/marker-spread';
 import { mapViewStorageKey, readSavedMapView, writeSavedMapView } from './zone-format';
 
 export interface MapKid {
@@ -381,11 +383,16 @@ function KidMarker({
   point,
   onCreateAt,
   onClick,
+  displayLat,
+  displayLon,
 }: {
   kid: MapKid;
   point: FamilyLatestItem;
   onCreateAt?: (childId: string, lat: number, lon: number) => void;
   onClick?: (childId: string) => void;
+  /** Веер: куда рисовать иконку, если метка разведена (круг точности — на месте). */
+  displayLat?: number;
+  displayLon?: number;
 }): ReactElement {
   const avatarUrl = useChildAvatarSrc(kid.id, kid.avatarKey);
   const kidId = kid.id;
@@ -400,6 +407,8 @@ function KidMarker({
         ageSec={point.ageSec}
         avatarUrl={avatarUrl}
         onClick={handleClick}
+        displayLat={displayLat}
+        displayLon={displayLon}
       />
     );
   }
@@ -411,6 +420,8 @@ function KidMarker({
       childName={kid.name}
       ageSec={point.ageSec}
       avatarUrl={avatarUrl}
+      displayLat={displayLat}
+      displayLon={displayLon}
     >
       <Popup
         offset={[0, -84]}
@@ -436,6 +447,115 @@ function KidMarker({
         </div>
       </Popup>
     </LatestMarker>
+  );
+}
+
+/**
+ * Веер меток семьи: налезающие друг на друга метки (дети + родители)
+ * раздвигаются по кругу, к настоящему месту каждой ведёт тонкая линия с
+ * точкой. Считается в пикселях текущего зума (см. {@link spreadMarkers}),
+ * поэтому живёт внутри карты и пересчитывается при смене зума.
+ */
+function FamilySpreadLayer({
+  kids,
+  kidPoints,
+  parents,
+  onCreateAtChild,
+  onKidClick,
+}: {
+  kids: Map<string, MapKid>;
+  kidPoints: FamilyLatestItem[];
+  parents: FamilyLatestParent[];
+  onCreateAtChild?: (childId: string, lat: number, lon: number) => void;
+  onKidClick?: (childId: string) => void;
+}): ReactElement {
+  const map = useMap();
+  // Зум веера; шаг 0.25 — пересчитываем только при заметной смене.
+  const quantize = (z: number): number => Math.round(z * 4) / 4;
+  const [zoom, setZoom] = useState(() => quantize(map.getZoom()));
+  const syncZoom = useCallback(() => {
+    const z = quantize(map.getZoom());
+    setZoom((prev) => (prev === z ? prev : z));
+  }, [map]);
+  useMapEvents({ zoom: syncZoom, zoomend: syncZoom });
+
+  const real = new Map<string, SpreadLatLng>();
+  for (const p of kidPoints) real.set(`kid:${p.childId}`, { lat: p.lat, lon: p.lon });
+  for (const p of parents) real.set(`parent:${p.userId}`, { lat: p.lat, lon: p.lon });
+
+  const spread = spreadMarkers(real, {
+    toPixel: (p) => map.project([p.lat, p.lon], zoom),
+    toLatLng: (px) => {
+      const ll = map.unproject([px.x, px.y], zoom);
+      return { lat: ll.lat, lon: ll.lng };
+    },
+  });
+
+  return (
+    <>
+      {/* Линии к настоящему месту + белая точка — под метками. */}
+      {[...spread.entries()].map(([key, pos]) => {
+        const r = real.get(key) as SpreadLatLng;
+        return (
+          <Fragment key={`lead-${key}`}>
+            <Polyline
+              positions={[
+                [r.lat, r.lon],
+                [pos.lat, pos.lon],
+              ]}
+              interactive={false}
+              pathOptions={{ color: 'rgba(0,0,0,0.54)', weight: 1.5 }}
+            />
+            <CircleMarker
+              center={[r.lat, r.lon]}
+              radius={4}
+              interactive={false}
+              pathOptions={{
+                color: 'rgba(0,0,0,0.54)',
+                weight: 1.5,
+                fillColor: '#ffffff',
+                fillOpacity: 1,
+              }}
+            />
+          </Fragment>
+        );
+      })}
+
+      {/* Родители — под детьми: дети главнее. */}
+      {parents.map((p) => {
+        const s = spread.get(`parent:${p.userId}`);
+        return (
+          <ParentMarker
+            key={`parent-${p.userId}`}
+            lat={p.lat}
+            lon={p.lon}
+            accuracy={p.accuracy}
+            name={p.name}
+            ageSec={p.ageSec}
+            isMe={p.isMe}
+            displayLat={s?.lat}
+            displayLon={s?.lon}
+          />
+        );
+      })}
+
+      {kidPoints.map((p) => {
+        const kid = kids.get(p.childId);
+        if (!kid) return null;
+        const s = spread.get(`kid:${p.childId}`);
+        return (
+          <KidMarker
+            key={p.childId}
+            kid={kid}
+            point={p}
+            onCreateAt={onCreateAtChild}
+            onClick={onKidClick}
+            displayLat={s?.lat}
+            displayLon={s?.lon}
+          />
+        );
+      })}
+    </>
   );
 }
 
@@ -535,31 +655,13 @@ export function ZonesMapInner({
           );
         })}
 
-      {parents.map((p) => (
-        <ParentMarker
-          key={`parent-${p.userId}`}
-          lat={p.lat}
-          lon={p.lon}
-          accuracy={p.accuracy}
-          name={p.name}
-          ageSec={p.ageSec}
-          isMe={p.isMe}
-        />
-      ))}
-
-      {kidPoints.map((p) => {
-        const kid = kidsById.get(p.childId);
-        if (!kid) return null;
-        return (
-          <KidMarker
-            key={p.childId}
-            kid={kid}
-            point={p}
-            onCreateAt={onCreateAtChild}
-            onClick={onKidClick}
-          />
-        );
-      })}
+      <FamilySpreadLayer
+        kids={kidsById}
+        kidPoints={kidPoints}
+        parents={parents}
+        onCreateAtChild={onCreateAtChild}
+        onKidClick={onKidClick}
+      />
     </MapContainer>
   );
 }

@@ -16,6 +16,12 @@ interface Props {
   ageSec: number;
   /** Своя метка — подпись «Вы». */
   isMe: boolean;
+  /**
+   * Веер: куда рисовать иконку с подписью, если метка разведена. Круг
+   * точности остаётся на настоящем месте (`lat`/`lon`). По умолчанию — там же.
+   */
+  displayLat?: number;
+  displayLon?: number;
 }
 
 // Родители — тёмно-бирюзовые со скруглённым квадратом, чтобы не путать с
@@ -27,7 +33,16 @@ const STALE_COLOR = '#9ca3af';
  * Метка родителя на общей карте семьи: инициал, подпись имени («Вы» для
  * своей), возраст точки сверху, круг точности. Старше 10 минут — серая.
  */
-export function ParentMarker({ lat, lon, accuracy, name, ageSec, isMe }: Props): ReactElement {
+export function ParentMarker({
+  lat,
+  lon,
+  accuracy,
+  name,
+  ageSec,
+  isMe,
+  displayLat,
+  displayLon,
+}: Props): ReactElement {
   const stale = isStalePoint(ageSec);
   const label = isMe ? 'Вы' : name;
   const initial = avatarInitial(name);
@@ -72,7 +87,7 @@ export function ParentMarker({ lat, lon, accuracy, name, ageSec, isMe }: Props):
           }}
         />
       )}
-      <Marker position={[lat, lon]} icon={icon} zIndexOffset={-100}>
+      <Marker position={[displayLat ?? lat, displayLon ?? lon]} icon={icon} zIndexOffset={-100}>
         <Tooltip direction="top" offset={[0, -70]}>
           {isMe ? `Вы (${name})` : name} · {ageText}
           {accuracy !== null ? ` · ±${Math.round(accuracy)} м` : ''}

@@ -18,6 +18,12 @@ interface Props {
   avatarUrl?: string | null;
   /** Клик по маркеру (например, переход к ребёнку с общей карты). */
   onClick?: () => void;
+  /**
+   * Веер: куда рисовать иконку с подписью, если метка разведена. Круг
+   * точности остаётся на настоящем месте (`lat`/`lon`). По умолчанию — там же.
+   */
+  displayLat?: number;
+  displayLon?: number;
   /** Содержимое маркера (например, `<Popup>` с действиями). */
   children?: ReactNode;
 }
@@ -39,6 +45,8 @@ export function LatestMarker({
   ageSec,
   avatarUrl,
   onClick,
+  displayLat,
+  displayLon,
   children,
 }: Props): ReactElement {
   const initial = avatarInitial(childName);
@@ -98,7 +106,11 @@ export function LatestMarker({
           }
         />
       )}
-      <Marker position={[lat, lon]} icon={icon} eventHandlers={eventHandlers}>
+      <Marker
+        position={[displayLat ?? lat, displayLon ?? lon]}
+        icon={icon}
+        eventHandlers={eventHandlers}
+      >
         {children}
       </Marker>
     </>
