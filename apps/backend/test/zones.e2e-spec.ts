@@ -184,6 +184,8 @@ describe('POST/GET/PATCH/DELETE /zones (e2e)', () => {
           lat: 48.1,
           lon: 135.1,
           accuracy: 10,
+          batteryLevel: 77,
+          isCharging: true,
           recordedAt: new Date(now - 120_000),
         },
         {
@@ -202,7 +204,13 @@ describe('POST/GET/PATCH/DELETE /zones (e2e)', () => {
       .set('Authorization', `Bearer ${accessToken}`)
       .expect(200);
     expect(res.body.items).toHaveLength(1);
-    expect(res.body.items[0]).toMatchObject({ childId: anya.id, lat: 48.1, lon: 135.1 });
+    expect(res.body.items[0]).toMatchObject({
+      childId: anya.id,
+      lat: 48.1,
+      lon: 135.1,
+      batteryLevel: 77,
+      isCharging: true,
+    });
     expect(res.body.items.find((i: { childId: string }) => i.childId === petya.id)).toBeUndefined();
   });
 

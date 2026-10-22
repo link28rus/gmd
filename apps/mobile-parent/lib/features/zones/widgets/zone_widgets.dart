@@ -5,6 +5,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../../children/child_models.dart';
 import '../../children/widgets/child_avatar.dart';
+import '../../map/battery.dart';
 import '../zone_format.dart';
 import '../zone_models.dart';
 import '../zones_providers.dart';
@@ -92,6 +93,10 @@ const kStalePointSec = 600;
 /// Цвет рамки метки, когда точка устарела.
 const kStaleMarkerBorder = Color(0xFF9E9E9E);
 
+/// Рамка выбранной метки на общей карте — янтарная, как выделение пункта
+/// «Все» в кабинете (зелёный primary сливается с зелёной меткой ребёнка).
+const kSelectedMarkerBorder = Color(0xFFF59E0B);
+
 /// Подпись метки на карте: имя и, если известна, давность точки.
 class MapMarkerLabel extends StatelessWidget {
   const MapMarkerLabel({
@@ -99,11 +104,17 @@ class MapMarkerLabel extends StatelessWidget {
     required this.title,
     this.ageSec,
     this.maxWidth = KidMapMarker.width,
+    this.batteryLevel,
+    this.isCharging,
   });
 
   final String title;
   final int? ageSec;
   final double maxWidth;
+
+  /// v0.86.0: заряд рядом с давностью (общая карта семьи).
+  final int? batteryLevel;
+  final bool? isCharging;
 
   @override
   Widget build(BuildContext context) {
@@ -133,16 +144,34 @@ class MapMarkerLabel extends StatelessWidget {
               color: stale ? Colors.black54 : Colors.black87,
             ),
           ),
-          if (age != null)
-            Text(
-              formatAgeShort(age),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 10,
-                height: 1.2,
-                color: stale ? const Color(0xFF757575) : Colors.black54,
-              ),
+          if (age != null || batteryLevel != null)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (age != null)
+                  Flexible(
+                    child: Text(
+                      // С зарядом подпись не влезает в ширину метки — без «назад».
+                      batteryLevel == null
+                          ? formatAgeShort(age)
+                          : formatAgeShort(age).replaceFirst(' назад', ''),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 10,
+                        height: 1.2,
+                        color: stale ? const Color(0xFF757575) : Colors.black54,
+                      ),
+                    ),
+                  ),
+                if (age != null && batteryLevel != null) const SizedBox(width: 3),
+                BatteryBadge(
+                  level: batteryLevel,
+                  charging: isCharging,
+                  fontSize: 10,
+                  color: Colors.black54,
+                ),
+              ],
             ),
         ],
       ),
@@ -154,11 +183,24 @@ class MapMarkerLabel extends StatelessWidget {
 /// [ageSec]). Точка старше [kStalePointSec] — серая рамка. Круг точности
 /// рисуется отдельным слоем (см. `accuracyCircle` в features/map/family_map.dart).
 class KidMapMarker extends StatelessWidget {
-  const KidMapMarker({super.key, required this.child, this.ageSec, this.onTap});
+  const KidMapMarker({
+    super.key,
+    required this.child,
+    this.ageSec,
+    this.onTap,
+    this.batteryLevel,
+    this.isCharging,
+    this.selected = false,
+  });
 
   final Child child;
   final int? ageSec;
   final VoidCallback? onTap;
+  final int? batteryLevel;
+  final bool? isCharging;
+
+  /// Выбран на общей карте — янтарная рамка [kSelectedMarkerBorder].
+  final bool selected;
 
   static const width = 96.0;
   static const height = 76.0;
@@ -178,7 +220,12 @@ class KidMapMarker extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
-            MapMarkerLabel(title: child.name, ageSec: age),
+            MapMarkerLabel(
+              title: child.name,
+              ageSec: age,
+              batteryLevel: batteryLevel,
+              isCharging: isCharging,
+            ),
             const SizedBox(height: 2),
             Container(
               width: 36,
@@ -186,7 +233,15 @@ class KidMapMarker extends StatelessWidget {
               decoration: BoxDecoration(
                 color: stale ? kStaleMarkerBorder : const Color(0xFF2E7D32),
                 shape: BoxShape.circle,
-                border: Border.all(color: stale ? kStaleMarkerBorder : Colors.white, width: 3),
+                border: Border.all(
+                  color: selected
+                      ? kSelectedMarkerBorder
+                      : (stale ? kStaleMarkerBorder : Colors.white),
+                  width: 3,
+                ),
+                boxShadow: selected
+                    ? [BoxShadow(color: Colors.black.withValues(alpha: 0.35), blurRadius: 6)]
+                    : null,
               ),
               alignment: Alignment.center,
               child: ChildAvatar(

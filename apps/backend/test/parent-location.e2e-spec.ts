@@ -423,7 +423,9 @@ describe('Parent location (e2e, v0.70.0 + v0.73.0 find phone)', () => {
       // Свежая, но подделанная — на карту не идёт, остаётся 48.1
       pt(10_000, { lat: 10, isMock: true }),
     ]).expect(200);
-    await postPoints(dadDev.token, [pt(60_000, { lat: 48.2, accuracy: 30 })]).expect(200);
+    await postPoints(dadDev.token, [
+      pt(60_000, { lat: 48.2, accuracy: 30, batteryLevel: 41, isCharging: false }),
+    ]).expect(200);
     await postPoints(strangerDev.token, [pt(60_000, { lat: 1 })]).expect(200);
 
     const res = await request(server())
@@ -437,9 +439,27 @@ describe('Parent location (e2e, v0.70.0 + v0.73.0 find phone)', () => {
     expect(me).toMatchObject({ name: 'Мама', lat: 48.1, lon: 135.08, accuracy: 12, isMe: true });
     expect(me.ageSec).toBeGreaterThanOrEqual(119);
     expect(Object.keys(me).sort()).toEqual(
-      ['accuracy', 'ageSec', 'isMe', 'lat', 'lon', 'name', 'recordedAt', 'userId'].sort(),
+      [
+        'accuracy',
+        'ageSec',
+        'batteryLevel',
+        'isCharging',
+        'isMe',
+        'lat',
+        'lon',
+        'name',
+        'recordedAt',
+        'userId',
+      ].sort(),
     );
-    expect(papa).toMatchObject({ name: 'papa', lat: 48.2, accuracy: 30, isMe: false });
+    expect(papa).toMatchObject({
+      name: 'papa',
+      lat: 48.2,
+      accuracy: 30,
+      isMe: false,
+      batteryLevel: 41,
+      isCharging: false,
+    });
 
     // Отец выключил «Показывать меня семье» → пропадает с карты
     await request(server())

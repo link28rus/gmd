@@ -14,14 +14,17 @@ import '../zones/widgets/zone_widgets.dart';
 import '../zones/zone_map_view.dart';
 import '../zones/zone_models.dart';
 import '../zones/zones_providers.dart';
+import 'marker_spread.dart';
 
 /// Общая карта семьи (v0.70.0): OSM-тайлы, круги и значки геозон, метки
 /// детей (давность точки, круг точности, серая метка у старой точки), метки
 /// родителей, кнопки «Где я» и «Показать всё».
 ///
-/// Используется на главном экране (только просмотр, нажатие на ребёнка —
-/// экран ребёнка) и на экране геозон (выбор зоны, меню у метки ребёнка).
-/// Обновлением данных карта не занимается — их передаёт экран.
+/// Используется на главном экране (v0.86.0: на весь экран, нажатие на метку
+/// выбирает человека — карточка в шторке) и на экране геозон (выбор зоны,
+/// меню у метки ребёнка). Обновлением данных карта не занимается — их
+/// передаёт экран. Метки, стоящие рядом, разводятся веером (см.
+/// [spreadMarkers]).
 
 /// Цвет меток родителей — отличается от зелёных меток детей.
 const kParentMarkerColor = Color(0xFF1E88E5);
@@ -44,9 +47,20 @@ class FamilyMapController {
   /// Стартовый центр (null — ещё не определён).
   LatLng? get initialCenter => _initialCenter;
 
+  _FamilyMapState? _state;
+
   void move(LatLng point, double zoom) {
     if (_ready) _map.move(point, zoom);
   }
+
+  /// Плавно навести камеру на точку: зум не меньше [minZoom], точка
+  /// смещена на [offset] пикселей от центра (вверх — над шторкой).
+  void focus(LatLng point, {double minZoom = 16, Offset offset = Offset.zero}) {
+    _state?._focus(point, minZoom: minZoom, offset: offset);
+  }
+
+  /// «Показать всех» — вписать зоны и все метки.
+  void fitAll() => _state?._fitAll();
 }
 
 /// Стартовый вид карты — результат цепочки центра.
@@ -87,6 +101,11 @@ class FamilyMap extends ConsumerStatefulWidget {
     this.onKidTap,
     this.heroTagPrefix = 'map',
     this.fitAllTooltip = 'Показать всех',
+    this.onParentTap,
+    this.onMapTap,
+    this.onFitAll,
+    this.selectedKey,
+    this.fitPadding,
   });
 
   final FamilyMapController controller;
@@ -110,11 +129,27 @@ class FamilyMap extends ConsumerStatefulWidget {
   final String heroTagPrefix;
   final String fitAllTooltip;
 
+  /// v0.86.0 (главный экран): нажатие на метку родителя и на пустую карту.
+  final void Function(FamilyLatestParent parent)? onParentTap;
+  final VoidCallback? onMapTap;
+
+  /// Нажата кнопка «Показать всех» (главный экран снимает выбор).
+  final VoidCallback? onFitAll;
+
+  /// Выбранная метка: [kidMarkerKey] / [parentMarkerKey].
+  final String? selectedKey;
+
+  /// Поля при вписывании всех меток (снизу — высота шторки). По умолчанию 48.
+  final EdgeInsets Function()? fitPadding;
+
   @override
   ConsumerState<FamilyMap> createState() => _FamilyMapState();
 }
 
-class _FamilyMapState extends ConsumerState<FamilyMap> {
+String kidMarkerKey(String childId) => 'kid:$childId';
+String parentMarkerKey(String userId) => 'parent:$userId';
+
+class _FamilyMapState extends ConsumerState<FamilyMap> with SingleTickerProviderStateMixin {
   // Пересоздание TileLayer после onMapReady — workaround flutter_map 7.0.2:
   // первый mount не запрашивает тайлы до user-event (см. child_detail_screen).
   int _tileGen = 0;
@@ -125,16 +160,37 @@ class _FamilyMapState extends ConsumerState<FamilyMap> {
   Timer? _saveTimer;
   String? _userId;
 
+  /// Зум, по которому разведены метки; шаг 0.25 (см. [_onPositionChanged]).
+  double? _spreadZoom;
+
+  late final AnimationController _fly = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 450),
+  );
+  VoidCallback? _flyListener;
+
   FamilyMapController get _c => widget.controller;
 
   @override
   void initState() {
     super.initState();
     _userId = ref.read(authSessionProvider)?.user.id;
+    _c._state = this;
+  }
+
+  @override
+  void didUpdateWidget(covariant FamilyMap oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      if (oldWidget.controller._state == this) oldWidget.controller._state = null;
+      widget.controller._state = this;
+    }
   }
 
   @override
   void dispose() {
+    _fly.dispose();
+    if (_c._state == this) _c._state = null;
     _saveTimer?.cancel();
     final cam = _c._camera;
     if (cam != null) {
@@ -165,7 +221,7 @@ class _FamilyMapState extends ConsumerState<FamilyMap> {
         zoom: 14,
         fit: CameraFit.coordinates(
           coordinates: pts,
-          padding: const EdgeInsets.all(48),
+          padding: _fitPadding,
           maxZoom: 16,
         ),
       );
@@ -204,6 +260,10 @@ class _FamilyMapState extends ConsumerState<FamilyMap> {
 
   void _onPositionChanged(MapCamera camera, bool hasGesture) {
     _c._camera = camera;
+    // Веер считается в пикселях — пересчитать при заметной смене зума.
+    final z = (camera.zoom * 4).round() / 4;
+    if (z != _spreadZoom) setState(() => _spreadZoom = z);
+    if (hasGesture && _fly.isAnimating) _fly.stop();
     if (!hasGesture) return;
     _saveTimer?.cancel();
     _saveTimer = Timer(const Duration(milliseconds: 800), () {
@@ -216,22 +276,56 @@ class _FamilyMapState extends ConsumerState<FamilyMap> {
     });
   }
 
+  EdgeInsets get _fitPadding => widget.fitPadding?.call() ?? const EdgeInsets.all(48);
+
   void _fitAll() {
     if (!_c._ready) return;
     final pts = _pointsInFrame(me: _me);
     if (pts.length >= 2) {
-      _c._map.fitCamera(
-        CameraFit.coordinates(coordinates: pts, padding: const EdgeInsets.all(48), maxZoom: 16),
-      );
+      final cam = CameraFit.coordinates(
+        coordinates: pts,
+        padding: _fitPadding,
+        maxZoom: 16,
+      ).fit(_c._map.camera);
+      _flyTo(cam.center, cam.zoom);
     } else if (pts.length == 1) {
-      _c._map.move(pts.first, 15);
+      final pad = _fitPadding;
+      _focus(pts.first, minZoom: 15, offset: Offset(0, (pad.top - pad.bottom) / 2));
     }
+  }
+
+  void _focus(LatLng point, {required double minZoom, required Offset offset}) {
+    if (!_c._ready) return;
+    final camera = _c._map.camera;
+    final zoom = math.max(camera.zoom, minZoom);
+    // Центр, при котором точка видна на [offset] от середины экрана.
+    final crs = camera.crs;
+    final p = crs.latLngToPoint(point, zoom);
+    _flyTo(crs.pointToLatLng(p - math.Point(offset.dx, offset.dy), zoom), zoom);
+  }
+
+  /// Плавный перелёт камеры (своей анимации у flutter_map 7 нет).
+  void _flyTo(LatLng center, double zoom) {
+    final from = _c._map.camera;
+    final lat = Tween(begin: from.center.latitude, end: center.latitude);
+    final lon = Tween(begin: from.center.longitude, end: center.longitude);
+    final z = Tween(begin: from.zoom, end: zoom);
+    if (_flyListener != null) _fly.removeListener(_flyListener!);
+    _flyListener = () {
+      if (!_c._ready) return;
+      final t = Curves.easeInOutCubic.transform(_fly.value);
+      _c._map.move(LatLng(lat.transform(t), lon.transform(t)), z.transform(t));
+    };
+    _fly
+      ..addListener(_flyListener!)
+      ..forward(from: 0);
   }
 
   Future<void> _whereAmI() async {
     final me = await locateMe(context);
     if (me == null || !mounted) return;
     setState(() => _me = me);
+    _fly.stop();
     if (_c._ready) _c._map.move(me, math.max(_c._camera?.zoom ?? 15, 15));
   }
 
@@ -250,6 +344,56 @@ class _FamilyMapState extends ConsumerState<FamilyMap> {
         if (widget.kidById[p.childId] != null) (kid: widget.kidById[p.childId]!, point: p),
     ];
     final onKidTap = widget.onKidTap;
+    final onParentTap = widget.onParentTap;
+    final selected = widget.selectedKey;
+
+    final real = <String, LatLng>{
+      for (final p in widget.parents) parentMarkerKey(p.userId): LatLng(p.lat, p.lon),
+      for (final k in kids) kidMarkerKey(k.kid.id): LatLng(k.point.lat, k.point.lon),
+    };
+    // Веер: налезающие друг на друга метки раздвигаются по кругу вокруг общей
+    // точки; к настоящему месту ведёт тонкая линия с точкой.
+    final spread = spreadMarkers(real, zoom: _spreadZoom ?? view.zoom);
+    LatLng shown(String key) => spread[key] ?? real[key]!;
+
+    final markers = <({String key, Marker marker})>[
+      // Родители — под детьми: дети главнее.
+      for (final p in widget.parents)
+        (
+          key: parentMarkerKey(p.userId),
+          marker: Marker(
+            point: shown(parentMarkerKey(p.userId)),
+            width: ParentMapMarker.width,
+            height: ParentMapMarker.height,
+            alignment: Alignment.topCenter,
+            child: ParentMapMarker(
+              parent: p,
+              selected: selected == parentMarkerKey(p.userId),
+              onTap: onParentTap == null ? null : () => onParentTap(p),
+            ),
+          ),
+        ),
+      for (final k in kids)
+        (
+          key: kidMarkerKey(k.kid.id),
+          marker: Marker(
+            point: shown(kidMarkerKey(k.kid.id)),
+            width: KidMapMarker.width,
+            height: KidMapMarker.height,
+            alignment: Alignment.topCenter,
+            child: KidMapMarker(
+              child: k.kid,
+              ageSec: k.point.ageSec,
+              batteryLevel: k.point.batteryLevel,
+              isCharging: k.point.isCharging,
+              selected: selected == kidMarkerKey(k.kid.id),
+              onTap: onKidTap == null ? null : () => onKidTap(k.kid, k.point),
+            ),
+          ),
+        ),
+    ];
+    // Выбранная метка — поверх остальных (сортировка устойчивая).
+    final selectedMarker = markers.where((m) => m.key == selected).toList();
 
     return Stack(
       // StackFit.expand ОБЯЗАТЕЛЕН: иначе FlutterMap может стартовать с size=0
@@ -268,6 +412,7 @@ class _FamilyMapState extends ConsumerState<FamilyMap> {
               flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
             ),
             onPositionChanged: _onPositionChanged,
+            onTap: widget.onMapTap == null ? null : (_, _) => widget.onMapTap!(),
             onMapReady: () {
               if (!mounted) return;
               _c._ready = true;
@@ -293,29 +438,31 @@ class _FamilyMapState extends ConsumerState<FamilyMap> {
                   ?accuracyCircle(k.point.lat, k.point.lon, k.point.accuracy, _kKidAccuracyColor),
               ],
             ),
+            if (spread.isNotEmpty) ...[
+              PolylineLayer(
+                polylines: [
+                  for (final e in spread.entries)
+                    Polyline(points: [real[e.key]!, e.value], strokeWidth: 1.5, color: Colors.black54),
+                ],
+              ),
+              CircleLayer(
+                circles: [
+                  for (final key in spread.keys)
+                    CircleMarker(
+                      point: real[key]!,
+                      radius: 4,
+                      color: Colors.white,
+                      borderColor: Colors.black54,
+                      borderStrokeWidth: 1.5,
+                    ),
+                ],
+              ),
+            ],
             MarkerLayer(
               markers: [
-                // Родители — под детьми: дети главнее.
-                for (final p in widget.parents)
-                  Marker(
-                    point: LatLng(p.lat, p.lon),
-                    width: ParentMapMarker.width,
-                    height: ParentMapMarker.height,
-                    alignment: Alignment.topCenter,
-                    child: ParentMapMarker(parent: p),
-                  ),
-                for (final k in kids)
-                  Marker(
-                    point: LatLng(k.point.lat, k.point.lon),
-                    width: KidMapMarker.width,
-                    height: KidMapMarker.height,
-                    alignment: Alignment.topCenter,
-                    child: KidMapMarker(
-                      child: k.kid,
-                      ageSec: k.point.ageSec,
-                      onTap: onKidTap == null ? null : () => onKidTap(k.kid, k.point),
-                    ),
-                  ),
+                for (final m in markers)
+                  if (m.key != selected) m.marker,
+                for (final m in selectedMarker) m.marker,
                 if (_me != null)
                   Marker(point: _me!, width: 18, height: 18, child: const MyLocationDot()),
               ],
@@ -344,7 +491,10 @@ class _FamilyMapState extends ConsumerState<FamilyMap> {
               FloatingActionButton.small(
                 heroTag: '${widget.heroTagPrefix}_fit_all',
                 tooltip: widget.fitAllTooltip,
-                onPressed: _fitAll,
+                onPressed: () {
+                  widget.onFitAll?.call();
+                  _fitAll();
+                },
                 child: const Icon(Icons.zoom_out_map),
               ),
             ],
@@ -372,11 +522,15 @@ class _FamilyMapState extends ConsumerState<FamilyMap> {
 }
 
 /// Метка родителя: синий скруглённый квадрат с силуэтом, подпись — имя или
-/// «Вы», давность точки; старая точка — серая.
+/// «Вы», давность точки и заряд; старая точка — серая.
 class ParentMapMarker extends StatelessWidget {
-  const ParentMapMarker({super.key, required this.parent});
+  const ParentMapMarker({super.key, required this.parent, this.onTap, this.selected = false});
 
   final FamilyLatestParent parent;
+  final VoidCallback? onTap;
+
+  /// Выбран на общей карте — янтарная рамка [kSelectedMarkerBorder].
+  final bool selected;
 
   static const width = 96.0;
   static const height = 72.0;
@@ -388,29 +542,45 @@ class ParentMapMarker extends StatelessWidget {
     final color = stale ? kStaleMarkerBorder : kParentMarkerColor;
     return MediaQuery.withClampedTextScaling(
       maxScaleFactor: 1.1,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          MapMarkerLabel(title: title, ageSec: parent.ageSec),
-          const SizedBox(height: 2),
-          Container(
-            width: 30,
-            height: 30,
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.white, width: 2.5),
-              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.25), blurRadius: 3)],
+      child: GestureDetector(
+        onTap: onTap,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            MapMarkerLabel(
+              title: title,
+              ageSec: parent.ageSec,
+              batteryLevel: parent.batteryLevel,
+              isCharging: parent.isCharging,
             ),
-            alignment: Alignment.center,
-            child: Icon(
-              parent.isMe ? Icons.person_pin : Icons.person,
-              size: 17,
-              color: Colors.white,
+            const SizedBox(height: 2),
+            Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: selected ? kSelectedMarkerBorder : Colors.white,
+                  width: 2.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: selected ? 0.35 : 0.25),
+                    blurRadius: selected ? 6 : 3,
+                  ),
+                ],
+              ),
+              alignment: Alignment.center,
+              child: Icon(
+                parent.isMe ? Icons.person_pin : Icons.person,
+                size: 17,
+                color: Colors.white,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -41,6 +41,9 @@ export interface FamilyLatestPoint {
   accuracy: number | null;
   recordedAt: string;
   ageSec: number;
+  /** v0.86.0: заряд в момент точки (общая карта в приложении родителя). */
+  batteryLevel: number | null;
+  isCharging: boolean | null;
 }
 
 export interface LocationDto {
@@ -409,10 +412,13 @@ export class LocationsService {
         lon: number;
         accuracy: number | null;
         recordedAt: Date;
+        batteryLevel: number | null;
+        isCharging: boolean | null;
       }>
     >(Prisma.sql`
       SELECT DISTINCT ON (l."childId")
-             l."childId", l.lat, l.lon, l.accuracy, l."recordedAt"
+             l."childId", l.lat, l.lon, l.accuracy, l."recordedAt",
+             l."batteryLevel", l."isCharging"
       FROM locations l
       JOIN children c ON c.id = l."childId"
       WHERE c."familyId" = ${familyId}
@@ -428,6 +434,8 @@ export class LocationsService {
       accuracy: r.accuracy,
       recordedAt: r.recordedAt.toISOString(),
       ageSec: Math.max(0, Math.floor((now - r.recordedAt.getTime()) / 1000)),
+      batteryLevel: r.batteryLevel,
+      isCharging: r.isCharging,
     }));
   }
 

@@ -394,6 +394,8 @@ class FamilyLatestPoint {
     required this.ageSec,
     this.accuracy,
     this.recordedAt,
+    this.batteryLevel,
+    this.isCharging,
   });
 
   final String childId;
@@ -403,6 +405,10 @@ class FamilyLatestPoint {
   final DateTime? recordedAt;
   final int ageSec;
 
+  /// Заряд в момент точки, % (v0.86.0; у старого сервера — null).
+  final int? batteryLevel;
+  final bool? isCharging;
+
   factory FamilyLatestPoint.fromJson(Map<String, dynamic> json) => FamilyLatestPoint(
         childId: json['childId'] as String,
         lat: _double(json['lat']),
@@ -410,6 +416,8 @@ class FamilyLatestPoint {
         accuracy: (json['accuracy'] as num?)?.toDouble(),
         recordedAt: _date(json['recordedAt']),
         ageSec: _int(json['ageSec']),
+        batteryLevel: (json['batteryLevel'] as num?)?.toInt(),
+        isCharging: json['isCharging'] as bool?,
       );
 }
 
@@ -426,6 +434,8 @@ class FamilyLatestParent {
     this.accuracy,
     this.recordedAt,
     this.isMe = false,
+    this.batteryLevel,
+    this.isCharging,
   });
 
   final String userId;
@@ -439,6 +449,10 @@ class FamilyLatestParent {
   /// Точка текущего пользователя — на карте подпись «Вы».
   final bool isMe;
 
+  /// Заряд в момент точки, % (v0.86.0; у старого сервера — null).
+  final int? batteryLevel;
+  final bool? isCharging;
+
   factory FamilyLatestParent.fromJson(Map<String, dynamic> json) => FamilyLatestParent(
         userId: (json['userId'] as String?) ?? '',
         name: (json['name'] as String?) ?? '',
@@ -448,6 +462,8 @@ class FamilyLatestParent {
         recordedAt: _date(json['recordedAt']),
         ageSec: _int(json['ageSec']),
         isMe: (json['isMe'] as bool?) ?? false,
+        batteryLevel: (json['batteryLevel'] as num?)?.toInt(),
+        isCharging: json['isCharging'] as bool?,
       );
 }
 

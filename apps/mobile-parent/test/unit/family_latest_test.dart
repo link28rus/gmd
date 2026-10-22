@@ -47,6 +47,24 @@ void main() {
       expect(other.lat, 56.0);
     });
 
+    test('v0.86.0: заряд у детей и родителей; у старого сервера — null', () {
+      final r = FamilyLatest.fromJson({
+        'items': [
+          {'childId': 'c1', 'lat': 1, 'lon': 2, 'ageSec': 3, 'batteryLevel': 17, 'isCharging': false},
+          {'childId': 'c2', 'lat': 1, 'lon': 2, 'ageSec': 3},
+        ],
+        'parents': [
+          {'userId': 'u1', 'name': 'Мама', 'lat': 1, 'lon': 2, 'ageSec': 3, 'batteryLevel': 88, 'isCharging': true},
+        ],
+      });
+      expect(r.items.first.batteryLevel, 17);
+      expect(r.items.first.isCharging, isFalse);
+      expect(r.items.last.batteryLevel, isNull);
+      expect(r.items.last.isCharging, isNull);
+      expect(r.parents.single.batteryLevel, 88);
+      expect(r.parents.single.isCharging, isTrue);
+    });
+
     test('не Map — пустой ответ', () {
       expect(FamilyLatest.fromJson(null).items, isEmpty);
       expect(FamilyLatest.fromJson('x').parents, isEmpty);

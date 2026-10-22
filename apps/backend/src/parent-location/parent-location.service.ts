@@ -53,6 +53,9 @@ export interface FamilyParentPoint {
   recordedAt: string;
   ageSec: number;
   isMe: boolean;
+  /** v0.86.0: заряд в момент точки. */
+  batteryLevel: number | null;
+  isCharging: boolean | null;
 }
 
 // Окно времени. v0.73.1: в прошлое — 30 дней (= retention), а не 7, как у
@@ -252,11 +255,14 @@ export class ParentLocationService {
         lon: number;
         accuracy: number | null;
         recordedAt: Date;
+        batteryLevel: number | null;
+        isCharging: boolean | null;
       }>
     >(Prisma.sql`
       SELECT DISTINCT ON (pl."userId")
              pl."userId", u.name, u."firstName", u.email,
-             pl.lat, pl.lon, pl.accuracy, pl."recordedAt"
+             pl.lat, pl.lon, pl.accuracy, pl."recordedAt",
+             pl."batteryLevel", pl."isCharging"
       FROM parent_locations pl
       JOIN memberships m ON m."userId" = pl."userId" AND m."familyId" = ${familyId}
       JOIN users u ON u.id = pl."userId"
@@ -276,6 +282,8 @@ export class ParentLocationService {
       recordedAt: r.recordedAt.toISOString(),
       ageSec: Math.max(0, Math.floor((now - r.recordedAt.getTime()) / 1000)),
       isMe: r.userId === meUserId,
+      batteryLevel: r.batteryLevel,
+      isCharging: r.isCharging,
     }));
   }
 }

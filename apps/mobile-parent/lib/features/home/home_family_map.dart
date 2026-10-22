@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../core/push/live_location_push.dart';
 import '../children/child_models.dart';
@@ -12,7 +11,8 @@ import '../zones/zone_models.dart';
 import '../zones/zones_providers.dart';
 
 /// Карта семьи на главном экране (v0.70.0) — только просмотр: дети, родители,
-/// геозоны. Нажатие на ребёнка — его экран.
+/// геозоны. v0.86.0: на весь экран под шторкой; нажатие на метку выбирает
+/// человека (решает [HomeScreen]).
 ///
 /// Живое обновление (по образцу экрана ребёнка), пока главный экран сверху и
 /// приложение на переднем плане: раз в 30 с `PUT /family/locations/watch`
@@ -21,7 +21,24 @@ import '../zones/zones_providers.dart';
 /// чтобы пачка push'ей дала один запрос. Ушли на другой экран (экран ребёнка,
 /// геозоны) или свернули приложение — таймеры стоят.
 class HomeFamilyMap extends ConsumerStatefulWidget {
-  const HomeFamilyMap({super.key});
+  const HomeFamilyMap({
+    super.key,
+    required this.controller,
+    required this.onKidTap,
+    required this.onParentTap,
+    required this.onMapTap,
+    required this.onFitAll,
+    required this.fitPadding,
+    this.selectedKey,
+  });
+
+  final FamilyMapController controller;
+  final void Function(Child kid) onKidTap;
+  final void Function(FamilyLatestParent parent) onParentTap;
+  final VoidCallback onMapTap;
+  final VoidCallback onFitAll;
+  final EdgeInsets Function() fitPadding;
+  final String? selectedKey;
 
   @override
   ConsumerState<HomeFamilyMap> createState() => _HomeFamilyMapState();
@@ -31,7 +48,6 @@ class _HomeFamilyMapState extends ConsumerState<HomeFamilyMap> with WidgetsBindi
   static const _pollInterval = Duration(seconds: 30);
   static const _pushDebounce = Duration(milliseconds: 1500);
 
-  final FamilyMapController _map = FamilyMapController();
   Timer? _poll;
   Timer? _debounce;
   StreamSubscription<String>? _pushSub;
@@ -139,14 +155,19 @@ class _HomeFamilyMapState extends ConsumerState<HomeFamilyMap> with WidgetsBindi
     final latestDone = latestAsync.hasValue || latestAsync.hasError;
 
     return FamilyMap(
-      controller: _map,
+      controller: widget.controller,
       zones: zones,
       points: latest.items,
       parents: latest.parents,
       kidById: {for (final k in kids) k.id: k},
       dataReady: zonesDone && latestDone,
       heroTagPrefix: 'home',
-      onKidTap: (kid, _) => context.push('/home/child/${kid.id}'),
+      onKidTap: (kid, _) => widget.onKidTap(kid),
+      onParentTap: widget.onParentTap,
+      onMapTap: widget.onMapTap,
+      onFitAll: widget.onFitAll,
+      selectedKey: widget.selectedKey,
+      fitPadding: widget.fitPadding,
     );
   }
 }

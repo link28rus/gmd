@@ -273,6 +273,8 @@ describe('ParentLocationService', () => {
             lon: 2,
             accuracy: 15,
             recordedAt,
+            batteryLevel: 64,
+            isCharging: true,
           },
           {
             userId: 'u2',
@@ -287,7 +289,14 @@ describe('ParentLocationService', () => {
         ],
       });
       const r = await svc.getLatestForFamily('f1', 'u1');
-      expect(r[0]).toMatchObject({ userId: 'u1', name: 'Ольга', isMe: true, accuracy: 15 });
+      expect(r[0]).toMatchObject({
+        userId: 'u1',
+        name: 'Ольга',
+        isMe: true,
+        accuracy: 15,
+        batteryLevel: 64,
+        isCharging: true,
+      });
       expect(r[0].ageSec).toBeGreaterThanOrEqual(89);
       expect(r[0].recordedAt).toBe(recordedAt.toISOString());
       expect(r[1]).toMatchObject({ userId: 'u2', name: 'dad', isMe: false });
