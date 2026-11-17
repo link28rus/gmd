@@ -10,6 +10,7 @@ import '../../children/widgets/add_child_flow.dart';
 import '../../children/widgets/child_avatar_sheet.dart';
 import '../../consent/consent_providers.dart';
 import 'child_status_card.dart';
+import '../../children/widgets/permission_state_card.dart';
 
 /// Собственно содержимое DraggableScrollableSheet — порт `_BottomPanel`.
 ///
@@ -91,6 +92,7 @@ class _ChildActionSheetState extends ConsumerState<ChildActionSheet> {
             latest: widget.latest,
           ),
           const Divider(height: 24),
+          if (_hasActiveDevice) PermissionStateCard(childId: widget.child.id),
           // Action tiles
           _ActionTile(
             icon: Icons.account_circle_outlined,

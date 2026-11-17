@@ -28,6 +28,12 @@ class BootReceiver : BroadcastReceiver() {
             action != "com.htc.intent.action.QUICKBOOT_POWERON"
         ) return
 
+        // Проверка работает и когда отозвана геолокация: до gate ниже.
+        if (!NativeCreds.getToken(context).isNullOrEmpty() && !NativeCreds.isUnlinked(context)) {
+            AppControlScheduler.scheduleAll(context)
+            AppControlScheduler.reportPermissionsNow(context)
+        }
+
         // v0.62.0: причина запуска — после неё prewarm микрофона из фона обычно
         // падает на Android 14+ (см. MicReadiness).
         DiagLog.write(

@@ -89,6 +89,14 @@ object AppControlScheduler {
       ExistingPeriodicWorkPolicy.KEEP,
       fcmRefreshReq,
     )
+    wm.enqueueUniquePeriodicWork(
+      PermissionStateReportWorker.PERIODIC_NAME,
+      ExistingPeriodicWorkPolicy.KEEP,
+      PeriodicWorkRequestBuilder<PermissionStateReportWorker>(6, TimeUnit.HOURS)
+        .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+        .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 1, TimeUnit.MINUTES)
+        .build(),
+    )
     DiagLog.write(
       ctx,
       TAG,
@@ -105,8 +113,23 @@ object AppControlScheduler {
     val wm = WorkManager.getInstance(ctx)
     wm.cancelUniqueWork(EscapeProbeWorker.UNIQUE_NAME)
     wm.cancelUniqueWork(FcmTokenRefreshWorker.UNIQUE_NAME)
+    wm.cancelUniqueWork(PermissionStateReportWorker.PERIODIC_NAME)
     DiagLog.write(ctx, TAG, "cancelled existing workers, re-enqueueing")
     scheduleAll(ctx)
+  }
+
+  fun reportPermissionsNow(ctx: Context) {
+    if (NativeCreds.isUnlinked(ctx) || NativeCreds.getToken(ctx).isNullOrEmpty()) return
+    WorkManager.getInstance(ctx).enqueueUniqueWork(
+      PermissionStateReportWorker.IMMEDIATE_NAME,
+      // Новый триггер после уже собранного слепка должен породить следующий
+      // сбор, даже если текущий worker ещё ждёт HTTP или повторяет запрос.
+      androidx.work.ExistingWorkPolicy.APPEND_OR_REPLACE,
+      androidx.work.OneTimeWorkRequestBuilder<PermissionStateReportWorker>()
+        .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+        .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 1, TimeUnit.MINUTES)
+        .build(),
+    )
   }
 
   /**

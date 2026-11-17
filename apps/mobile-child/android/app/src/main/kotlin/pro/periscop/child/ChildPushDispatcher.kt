@@ -28,6 +28,7 @@ object ChildPushDispatcher {
     fun dispatch(ctx: Context, data: Map<String, String>, source: String) {
         val type = data["type"]
         when (type) {
+            "REPORT_PERMISSION_STATE" -> AppControlScheduler.reportPermissionsNow(ctx)
             "START_AUDIO" -> handleStartAudio(ctx, data, source)
             "STOP_AUDIO" -> handleStopAudio(ctx, data, source)
             // v0.43 — мгновенный сигнал «найди телефон» от родителя.

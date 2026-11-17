@@ -238,6 +238,7 @@ export class FcmService implements OnModuleInit {
     ttlSec: number;
     label: string;
     onInvalidToken?: (token: string) => Promise<void>;
+    notification?: { title: string; body: string };
   }): Promise<boolean> {
     const { appKind, token, data, ttlSec, label, onInvalidToken } = args;
     const projectId =
@@ -251,6 +252,7 @@ export class FcmService implements OnModuleInit {
       message: {
         token,
         data,
+        ...(args.notification ? { notification: args.notification } : {}),
         android: {
           priority: 'HIGH',
           ttl: `${ttlSec}s`,
@@ -261,6 +263,7 @@ export class FcmService implements OnModuleInit {
     try {
       const resp = await fetch(url, {
         method: 'POST',
+        signal: AbortSignal.timeout(15_000),
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${serviceToken}`,
@@ -304,11 +307,12 @@ export class FcmService implements OnModuleInit {
     deviceId: string,
     tokens: { fcmToken: string | null; rustorePushToken: string | null },
     data: Record<string, string>,
+    options: { rustore?: boolean } = {},
   ): Promise<boolean> {
     // 0. Свой realtime-канал — мгновенно и без внешних ключей.
     if (await this.realtime.sendWithAck(deviceId, data)) return true;
     // 1. Если есть RuStore-токен — пробуем его первым (не сбрасывается MIUI).
-    if (tokens.rustorePushToken && this.isRustoreEnabled('child')) {
+    if (options.rustore !== false && tokens.rustorePushToken && this.isRustoreEnabled('child')) {
       const ok = await this._sendRustoreMessage({
         appKind: 'child',
         token: tokens.rustorePushToken,
@@ -347,6 +351,8 @@ export class FcmService implements OnModuleInit {
     ttlSec?: number;
     /** v0.65.0: видимое уведомление для FCM (см. sendToToken). */
     notification?: { title: string; body: string; channelId?: string };
+    /** Видимый RuStore push: data-only не отображается текущим SDK родителя. */
+    rustoreNotification?: { title: string; body: string };
     /** v0.69.0: только FCM, см. sendToToken. */
     priority?: 'high' | 'normal';
     collapseKey?: string;
@@ -361,6 +367,7 @@ export class FcmService implements OnModuleInit {
         ttlSec,
         label,
         onInvalidToken: args.onInvalidRustoreToken,
+        notification: args.rustoreNotification,
       });
       if (ok) return true;
     }

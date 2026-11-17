@@ -26,6 +26,7 @@ import { ParentDevicesModule } from './parent-devices/parent-devices.module';
 import { DiagModule } from './diag/diag.module';
 import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storage';
 import { SecretsModule } from './common/secrets/secrets.module';
+import { PermissionStateModule } from './permission-state/permission-state.module';
 
 @Module({
   imports: [
@@ -65,6 +66,7 @@ import { SecretsModule } from './common/secrets/secrets.module';
     AppControlModule,
     ParentDevicesModule,
     DiagModule,
+    PermissionStateModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

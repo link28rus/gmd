@@ -454,8 +454,40 @@ model ChildDevice {
   appBlockSchedules AppBlockSchedule[]
   diagUploads   DiagLogUpload[]
   retiredTokens ChildDeviceRetiredToken[]
+  permissionState ChildDevicePermissionState?
+  permissionAlerts PermissionAlert[]
 
   @@map("child_devices")
+}
+
+// Хеш привязки отделяет состояние старого телефона при переиспользовании ChildDevice.
+model ChildDevicePermissionState {
+  childDeviceId String      @id
+  bindingHash   String
+  sequence      BigInt
+  permissions   Json
+  lastKnown     Json?
+  reportedAt    DateTime    @default(now())
+  childDevice   ChildDevice @relation(fields: [childDeviceId], references: [id], onDelete: Cascade)
+
+  @@map("child_device_permission_states")
+}
+
+// Отдельная доставка на устройство: успешные получатели повторно не оповещаются.
+model PermissionAlert {
+  id             String      @id @default(cuid())
+  childDeviceId  String
+  bindingHash    String
+  parentDeviceId String
+  permissions    Json
+  createdAt      DateTime    @default(now())
+  retryAt        DateTime    @default(now())
+  leaseUntil     DateTime?
+  completedAt    DateTime?
+  childDevice    ChildDevice @relation(fields: [childDeviceId], references: [id], onDelete: Cascade)
+
+  @@index([completedAt, retryAt])
+  @@map("permission_alerts")
 }
 
 // v0.85: токены, выданные этой записи устройства раньше. Новая привязка

@@ -1,3 +1,5 @@
+import 'permission_state.dart';
+
 /// Модель ребёнка из `GET /family/children` (см. children.controller.ts).
 class Child {
   Child({
@@ -51,6 +53,7 @@ class ChildDevice {
     this.appVersion,
     this.lastSeenAt,
     this.revokedAt,
+    this.permissionState,
   });
 
   final String id;
@@ -59,6 +62,7 @@ class ChildDevice {
   final String? appVersion;
   final DateTime? lastSeenAt;
   final DateTime? revokedAt;
+  final PermissionState? permissionState;
 
   factory ChildDevice.fromJson(Map<String, dynamic> json) => ChildDevice(
         id: json['id'] as String,
@@ -67,6 +71,8 @@ class ChildDevice {
         appVersion: json['appVersion'] as String?,
         lastSeenAt: _parseDate(json['lastSeenAt']),
         revokedAt: _parseDate(json['revokedAt']),
+        permissionState: json['permissionState'] is Map<String, dynamic>
+            ? PermissionState.fromJson(json['permissionState'] as Map<String, dynamic>) : null,
       );
 }
 

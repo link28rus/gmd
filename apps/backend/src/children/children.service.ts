@@ -9,6 +9,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CHILD_AVATAR_MAX_BYTES, SetChildAvatarSchema } from './dto/set-child-avatar.dto';
 import type { ChildAvatarMime } from './dto/set-child-avatar.dto';
+import { permissionView } from '../permission-state/permission-state';
 
 export interface ChildAvatarPhotoBytes {
   mime: string;
@@ -72,48 +73,13 @@ export class ChildrenService {
     });
   }
 
-  async listChildren(familyId: string): Promise<
-    Array<{
-      id: string;
-      name: string;
-      dateOfBirth: Date | null;
-      avatarKey: string | null;
-      protectionEnabled: boolean;
-      protectionEnabledAt: Date | null;
-      device: {
-        id: string;
-        deviceName: string | null;
-        osVersion: string | null;
-        appVersion: string | null;
-        micReady: boolean | null;
-        lastSeenAt: Date | null;
-        revokedAt: Date | null;
-      } | null;
-    }>
-  > {
-    type Row = {
-      id: string;
-      name: string;
-      dateOfBirth: Date | null;
-      avatarKey: string | null;
-      protectionEnabled: boolean;
-      protectionEnabledAt: Date | null;
-      device: {
-        id: string;
-        deviceName: string | null;
-        osVersion: string | null;
-        appVersion: string | null;
-        micReady: boolean | null;
-        lastSeenAt: Date | null;
-        revokedAt: Date | null;
-      } | null;
-    };
-    const rows = (await this.prisma.child.findMany({
+  async listChildren(familyId: string) {
+    const rows = await this.prisma.child.findMany({
       where: { familyId, deletedAt: null },
       orderBy: { createdAt: 'asc' },
-      include: { device: true },
-    })) as Row[];
-    return rows.map((c: Row) => ({
+      include: { device: { include: { permissionState: true } } },
+    });
+    return rows.map((c) => ({
       id: c.id,
       name: c.name,
       dateOfBirth: c.dateOfBirth,
@@ -127,6 +93,13 @@ export class ChildrenService {
             osVersion: c.device.osVersion,
             appVersion: c.device.appVersion,
             micReady: c.device.micReady ?? null,
+            permissionState: permissionView(
+              !c.device.revokedAt && c.device.permissionState?.bindingHash === c.device.tokenHash
+                ? c.device.permissionState
+                : null,
+              new Date(),
+              c.protectionEnabled,
+            ),
             lastSeenAt: c.device.lastSeenAt,
             revokedAt: c.device.revokedAt,
           }

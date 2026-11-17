@@ -84,7 +84,11 @@ class ParentFirebaseMessagingService : FirebaseMessagingService() {
         val deeplinkChildId = data["childId"]
         val zoneId = data["zoneId"]
         // v0.66.0: у GEOFENCE_* — по паре ребёнок × зона (см. notificationId).
-        val notificationId = GeofenceNotificationText.notificationId(type, deeplinkChildId, zoneId)
+        val notificationId = if (type == "PERMISSION_DEGRADED") {
+            PermissionNotificationText.notificationId(data["alertId"], deeplinkChildId)
+        } else {
+            GeofenceNotificationText.notificationId(type, deeplinkChildId, zoneId)
+        }
         // Тап → MainActivity: extras уходят в Dart через канал
         // pro.periscop.parent/push (getInitialPush / onPush).
         val intent = Intent(this, MainActivity::class.java).apply {
@@ -113,6 +117,7 @@ class ParentFirebaseMessagingService : FirebaseMessagingService() {
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setPriority(importance)
             .setAutoCancel(true)
+            .setOnlyAlertOnce(type == "PERMISSION_DEGRADED")
             .setContentIntent(pi)
             .build()
 
@@ -139,6 +144,12 @@ class ParentFirebaseMessagingService : FirebaseMessagingService() {
         val delayed = data["delayed"] == "1"
         val recordedAt = data["recordedAt"]
         return when (type) {
+            "PERMISSION_DEGRADED" -> Render(
+                title = PermissionNotificationText.TITLE,
+                body = PermissionNotificationText.body(childName, data["permissionLabels"]),
+                channelId = CHANNEL_EVENTS,
+                importance = NotificationCompat.PRIORITY_HIGH,
+            )
             "GEOFENCE_ENTER" -> Render(
                 title = if (zoneName != null) "Вход в зону «$zoneName»" else "Вход в зону",
                 body = GeofenceNotificationText.body(

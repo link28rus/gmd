@@ -15,6 +15,7 @@ class ChildDeviceAdminReceiver : DeviceAdminReceiver() {
     override fun onEnabled(context: Context, intent: Intent) {
         super.onEnabled(context, intent)
         DiagLog.write(context, "admin", "DeviceAdmin enabled")
+        AppControlScheduler.reportPermissionsNow(context)
     }
 
     // Сигнатура в platform API — CharSequence? (nullable). Возвращаемый текст
@@ -27,6 +28,7 @@ class ChildDeviceAdminReceiver : DeviceAdminReceiver() {
     override fun onDisabled(context: Context, intent: Intent) {
         super.onDisabled(context, intent)
         DiagLog.write(context, "admin", "DeviceAdmin disabled")
+        AppControlScheduler.reportPermissionsNow(context)
     }
 
     companion object {

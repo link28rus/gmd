@@ -170,7 +170,11 @@ class KidSheetRow extends StatelessWidget {
       leading: KidAvatar(child: child),
       title: Text(child.name, style: const TextStyle(fontWeight: FontWeight.w600)),
       subtitle: Text(
-        p != null ? placeAge(p.ageSec) : _deviceStatus(child),
+        [
+          p != null ? placeAge(p.ageSec) : _deviceStatus(child),
+          if (child.device?.revokedAt == null && child.device?.permissionState?.needsAttention == true)
+            child.device!.permissionState!.summary,
+        ].join('\n'),
         style: theme.textTheme.bodyMedium?.copyWith(
           color: stale ? scheme.onSurfaceVariant : AppColors.online,
         ),

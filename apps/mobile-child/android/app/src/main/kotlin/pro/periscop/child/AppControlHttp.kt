@@ -73,8 +73,11 @@ object AppControlHttp {
     return doPost(ctx, "/child/audio/sessions/$sessionId/error", payload)
   }
 
-  private fun doPost(ctx: Context, path: String, payload: JSONObject): Result {
-    val token = NativeCreds.getToken(ctx)
+  fun postPermissionState(ctx: Context, payload: JSONObject, token: String): Result =
+    doPost(ctx, "/child/permission-state", payload, token)
+
+  private fun doPost(ctx: Context, path: String, payload: JSONObject, capturedToken: String? = null): Result {
+    val token = capturedToken ?: NativeCreds.getToken(ctx)
     val baseUrl = NativeCreds.getApiBaseUrl(ctx)
     if (token.isNullOrEmpty() || baseUrl.isNullOrEmpty()) {
       DiagLog.write(ctx, TAG, "POST $path skipped — no creds (token=${token != null}, base=${baseUrl != null})")

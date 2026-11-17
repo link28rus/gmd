@@ -14,6 +14,7 @@ import { ChildAvatarDialog } from './child-avatar-dialog';
 import { ChildAvatar } from '@/components/avatar/child-avatar';
 import type { Child } from '@/lib/api/children';
 import { APP_CONTROL_ENABLED } from '@/lib/features';
+import { PermissionStateCard } from './permission-state-card';
 
 interface Props {
   child: Child;
@@ -107,6 +108,7 @@ export function ChildCard({ child }: Props) {
           )}
         </div>
       </header>
+      {hasActiveDevice && <PermissionStateCard childId={child.id} />}
       <div className="mt-4 flex flex-wrap gap-2">
         <Button
           variant="default"

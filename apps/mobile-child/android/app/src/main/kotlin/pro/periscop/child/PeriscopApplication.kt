@@ -22,6 +22,10 @@ class PeriscopApplication : Application() {
         DiagCrashHandler.install(this)
         if (isMainProcess()) {
             DiagCrashHandler.reportPendingCrash(this)
+            if (!NativeCreds.getToken(this).isNullOrEmpty() && !NativeCreds.isUnlinked(this)) {
+                AppControlScheduler.scheduleAll(this)
+                AppControlScheduler.reportPermissionsNow(this)
+            }
             // v0.81.0 — чем бы ни подняли процесс, геолокация должна работать.
             LocationForegroundService.ensureRunning(this, "process start")
         }

@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_rustore_push/flutter_rustore_push.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'push_deeplink.dart';
 
 /// v0.51 RuStore Push (lesson #24): параллельный FCM-каналу транспорт push'ей
 /// для parent-устройства. Регистрирует RuStore-токен на backend и подписывается
@@ -31,13 +32,17 @@ class ParentRuStorePushRegistrar {
         final available = await RustorePushClient.available();
         debugPrint('[Periscop rustore-push] available: $available');
       } catch (e) {
-        debugPrint('[Periscop rustore-push] available() failed: $e (likely no client)');
+        debugPrint(
+          '[Periscop rustore-push] available() failed: $e (likely no client)',
+        );
         return;
       }
 
       final token = await RustorePushClient.getToken();
       if (token.isEmpty) {
-        debugPrint('[Periscop rustore-push] empty token — SDK not ready or project_id missing');
+        debugPrint(
+          '[Periscop rustore-push] empty token — SDK not ready or project_id missing',
+        );
         return;
       }
       await _sendToBackend(token);
@@ -57,10 +62,19 @@ class ParentRuStorePushRegistrar {
         });
       },
       onMessageReceived: (msg) {
-        debugPrint('[Periscop rustore-push] onMessageReceived id=${msg.messageId} data=${msg.data}');
+        debugPrint(
+          '[Periscop rustore-push] onMessageReceived id=${msg.messageId} data=${msg.data}',
+        );
       },
       onMessageOpenedApp: (msg) {
-        debugPrint('[Periscop rustore-push] onMessageOpenedApp id=${msg.messageId}');
+        debugPrint(
+          '[Periscop rustore-push] onMessageOpenedApp id=${msg.messageId}',
+        );
+        final data = msg.data;
+        if (data?['type'] == 'PERMISSION_DEGRADED') {
+          final link = PushDeepLink.fromMap(data);
+          if (link != null) PushDeepLinkChannel.openExternal(link);
+        }
       },
       onDeletedMessages: () {
         debugPrint('[Periscop rustore-push] onDeletedMessages');
@@ -81,6 +95,8 @@ class ParentRuStorePushRegistrar {
         'appVersion': '${pkg.version}+${pkg.buildNumber}',
       },
     );
-    debugPrint('[Periscop rustore-push] token registered (len=${token.length})');
+    debugPrint(
+      '[Periscop rustore-push] token registered (len=${token.length})',
+    );
   }
 }

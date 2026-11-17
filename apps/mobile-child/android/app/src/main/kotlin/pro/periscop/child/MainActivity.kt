@@ -96,6 +96,7 @@ class MainActivity : FlutterActivity() {
     override fun onResume() {
         super.onResume()
         AppUpdater.uiVisible = true
+        AppControlScheduler.reportPermissionsNow(this)
     }
 
     override fun onPause() {
@@ -261,6 +262,7 @@ class MainActivity : FlutterActivity() {
                             ChildRealtimeClient.restart(this)
                             try {
                                 AppControlScheduler.scheduleAll(this)
+                                AppControlScheduler.reportPermissionsNow(this)
                             } catch (e: Throwable) {
                                 DiagLog.write(this, "native", "scheduleAll after creds failed: ${e.message}")
                             }

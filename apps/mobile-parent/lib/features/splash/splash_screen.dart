@@ -41,6 +41,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   }
 
   Future<void> _bootstrap() async {
+    PushDeepLinkChannel.prepareStartup();
     // Стартуем восстановление сессии и таймер одновременно, ждём оба (max).
     final routeFuture = _resolveRoute();
     // v0.66.0: приложение запустили тапом по уведомлению — после входа ведём
@@ -50,10 +51,17 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     final route = await routeFuture;
     // v0.70.0: сессии нет (протухла / не было) — служба геолокации родителя
     // не должна работать без вошедшего пользователя.
-    if (route == '/login') unawaited(ref.read(parentLocationProvider.notifier).stopLocal());
+    if (route == '/login') {
+      unawaited(ref.read(parentLocationProvider.notifier).stopLocal());
+    }
     final push = await pushFuture;
-    final target = route == '/home' ? (push?.route ?? route) : route;
-    if (push != null) unawaited(diagLog('push', 'initial ${push.type} -> $target'));
+    final externalPush = PushDeepLinkChannel.completeStartup();
+    final target = route == '/home'
+        ? (externalPush?.route ?? push?.route ?? route)
+        : route;
+    if (push != null) {
+      unawaited(diagLog('push', 'initial ${push.type} -> $target'));
+    }
     _go(target);
   }
 

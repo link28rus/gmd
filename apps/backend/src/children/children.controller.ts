@@ -55,6 +55,7 @@ export class ChildrenController {
               appVersion: c.device.appVersion,
               // v0.62: false — микрофон заблокирован (после перезагрузки), null — неизвестно
               micReady: c.device.micReady,
+              permissionState: c.device.permissionState,
               lastSeenAt: c.device.lastSeenAt,
               revokedAt: c.device.revokedAt,
             }

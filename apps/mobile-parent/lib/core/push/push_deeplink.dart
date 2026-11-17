@@ -2,6 +2,7 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_rustore_push/flutter_rustore_push.dart';
 
 /// v0.66.0: переход из системного уведомления.
 ///
@@ -43,6 +44,28 @@ class PushDeepLink {
 
 class PushDeepLinkChannel {
   static const MethodChannel _ch = MethodChannel('pro.periscop.parent/push');
+  static void Function(PushDeepLink)? _onExternalPush;
+  static PushDeepLink? _pendingExternal;
+  static bool _externalReady = false;
+
+  static void prepareStartup() {
+    _externalReady = false;
+  }
+
+  static PushDeepLink? completeStartup() {
+    _externalReady = true;
+    final pending = _pendingExternal;
+    _pendingExternal = null;
+    return pending;
+  }
+
+  static void openExternal(PushDeepLink link) {
+    if (_externalReady && _onExternalPush != null) {
+      _onExternalPush!(link);
+    } else {
+      _pendingExternal = link;
+    }
+  }
 
   /// Push, которым приложение запустили. Отдаётся один раз.
   static Future<PushDeepLink?> takeInitial() async {
@@ -51,14 +74,29 @@ class PushDeepLinkChannel {
     if (!Platform.isAndroid) return null;
     try {
       final map = await _ch.invokeMapMethod<Object?, Object?>('getInitialPush');
-      return PushDeepLink.fromMap(map);
+      final link = PushDeepLink.fromMap(map);
+      if (link != null) return link;
     } catch (_) {
-      return null; // iOS / тесты — канала нет
+      // Нет FCM-интента — проверяем собственный cold-start API RuStore.
+    }
+    return takeRuStoreInitial();
+  }
+
+  static Future<PushDeepLink?> takeRuStoreInitial() async {
+    try {
+      final message = await RustorePushClient.getInitialMessage();
+      final data = message?.data;
+      return data?['type'] == 'PERMISSION_DEGRADED'
+          ? PushDeepLink.fromMap(data)
+          : null;
+    } catch (_) {
+      return null;
     }
   }
 
   /// Тапы по уведомлениям, пока приложение открыто.
   static void listen(void Function(PushDeepLink link) onPush) {
+    _onExternalPush = onPush;
     _ch.setMethodCallHandler((call) async {
       if (call.method != 'onPush') return null;
       final args = call.arguments;
