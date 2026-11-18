@@ -49,7 +49,20 @@ export interface UsageResponseDto {
 // HARDCODED packages зашиты в backend (см. AppBlockingService.HARDCODED_ALLOWED).
 // UI должен показывать их в whitelist как «всегда разрешено» (toggle disabled
 // в позиции ON), чтобы родитель видел, что наш child app не заблокируется.
-export const HARDCODED_ALLOWED_PACKAGES = ['ru.link28rus.gmd.child', 'ru.oneme.app'] as const;
+export const HARDCODED_ALLOWED_PACKAGES = [
+  'pro.periscop.child',
+  'ru.oneme.app',
+  'ru.link28rus.gmd.child',
+] as const;
+
+export interface AppControlStatus {
+  timezone: string | null;
+  reportedAt: string | null;
+  usageReportedAt: string | null;
+  accessibility: boolean | null;
+  usageStats: boolean | null;
+  applied: boolean;
+}
 
 export type AppRuleMode = 'DEFAULT' | 'ALWAYS_ALLOWED' | 'ALWAYS_BLOCKED';
 export type AppRuleSource = 'PARENT' | 'SYSTEM_DEFAULT' | 'HARDCODED';
@@ -111,6 +124,8 @@ export interface UpdateScheduleBody {
 }
 
 export const appControlApi = {
+  status: (childId: string) =>
+    apiFetch<AppControlStatus>(`/api/children/${childId}/app-control/status`),
   installedApps: (childId: string) =>
     apiFetch<{ apps: InstalledAppDto[] }>(`/api/children/${childId}/app-control/installed-apps`),
   usage: (childId: string, range: 'day' | 'week', date?: string) => {

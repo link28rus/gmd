@@ -20,10 +20,9 @@ import java.util.concurrent.TimeUnit
  *  - EscapeProbeWorker: 1 ч — снять защиту, если ребёнка удалили из кабинета.
  *  - FcmTokenRefreshWorker: 6 ч — держать FCM-токен на backend'е актуальным.
  *
- * v0.58.0: блокировка приложений и экранное время временно отключены —
- * BlockPollWorker, UsageStatsReportWorker и InstalledAppsReportWorker удалены.
- * [scheduleAll] снимает их периодические задачи, оставшиеся в WorkManager
- * на устройствах после обновления со старой версии.
+ * Контроль приложений: общий триггер каждые 15 мин и отдельные последовательные
+ * очереди синхронизации/отчётов; список приложений раз в сутки. Старые имена
+ * periodic jobs отменяются, чтобы не выполнять отчёты параллельно.
  *
  * Backoff: exponential, default min 30 сек.
  */
@@ -47,6 +46,19 @@ object AppControlScheduler {
     for (name in LEGACY_UNIQUE_NAMES) {
       wm.cancelUniqueWork(name)
     }
+
+    wm.enqueueUniquePeriodicWork(
+      "periscop_app_control_refresh",
+      ExistingPeriodicWorkPolicy.KEEP,
+      PeriodicWorkRequestBuilder<AppControlRefreshWorker>(15, TimeUnit.MINUTES).build(),
+    )
+    wm.enqueueUniquePeriodicWork(
+      "periscop_installed_apps_v2",
+      ExistingPeriodicWorkPolicy.KEEP,
+      PeriodicWorkRequestBuilder<InstalledAppsReportWorker>(1, TimeUnit.DAYS)
+        .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+        .build(),
+    )
 
     // v0.38 escape hatch: probe раз в час. Лёгкая операция, низкие constraints
     // (только NETWORK), чтобы максимально быстро задетектить child_deleted /
@@ -129,6 +141,33 @@ object AppControlScheduler {
         .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
         .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 1, TimeUnit.MINUTES)
         .build(),
+    )
+  }
+
+  fun syncNow(ctx: Context) {
+    if (NativeCreds.isUnlinked(ctx) || NativeCreds.getToken(ctx).isNullOrEmpty()) return
+    WorkManager.getInstance(ctx).enqueueUniqueWork(
+      BlockSyncWorker.IMMEDIATE_NAME,
+      androidx.work.ExistingWorkPolicy.APPEND_OR_REPLACE,
+      androidx.work.OneTimeWorkRequestBuilder<BlockSyncWorker>()
+        .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+        .setBackoffCriteria(BackoffPolicy.EXPONENTIAL,1,TimeUnit.MINUTES).build(),
+    )
+  }
+
+  fun runUsageNow(ctx: Context) {
+    WorkManager.getInstance(ctx).enqueueUniqueWork(
+      "periscop_usage_now", androidx.work.ExistingWorkPolicy.KEEP,
+      androidx.work.OneTimeWorkRequestBuilder<UsageStatsReportWorker>()
+        .setBackoffCriteria(BackoffPolicy.EXPONENTIAL,1,TimeUnit.MINUTES).build(),
+    )
+  }
+
+  fun runInstalledAppsNow(ctx: Context) {
+    WorkManager.getInstance(ctx).enqueueUniqueWork(
+      "periscop_installed_apps_now", androidx.work.ExistingWorkPolicy.KEEP,
+      androidx.work.OneTimeWorkRequestBuilder<InstalledAppsReportWorker>()
+        .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).build(),
     )
   }
 

@@ -97,6 +97,8 @@ class MainActivity : FlutterActivity() {
         super.onResume()
         AppUpdater.uiVisible = true
         AppControlScheduler.reportPermissionsNow(this)
+        AppControlScheduler.syncNow(this)
+        AppControlScheduler.runUsageNow(this)
     }
 
     override fun onPause() {
@@ -253,7 +255,7 @@ class MainActivity : FlutterActivity() {
                         DiagLog.write(
                             this,
                             "native",
-                            "saveNativeCreds: token=${token?.take(6)}… base=$baseUrl",
+                            "saveNativeCreds: tokenPresent=${!token.isNullOrEmpty()} base=$baseUrl",
                         )
                         // v0.38 Phase 6.1: после claim'а запускаем periodic workers.
                         // Идемпотентно (KEEP) — если уже стояли, ничего не меняется.
@@ -263,6 +265,7 @@ class MainActivity : FlutterActivity() {
                             try {
                                 AppControlScheduler.scheduleAll(this)
                                 AppControlScheduler.reportPermissionsNow(this)
+                                AppControlScheduler.syncNow(this)
                             } catch (e: Throwable) {
                                 DiagLog.write(this, "native", "scheduleAll after creds failed: ${e.message}")
                             }
@@ -278,11 +281,18 @@ class MainActivity : FlutterActivity() {
         // иначе POLL-команда START_AUDIO в фоне падает с MissingPluginException.
         SoundAroundChannel.register(this, flutterEngine.dartExecutor.binaryMessenger)
 
-        // Канал app_control: после отключения блокировки и экранного времени
-        // (v0.58.0) в нём остался только флаг «первый запуск после обновления».
+        // UI-канал разрешений и фоновой синхронизации контроля приложений.
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, APP_CONTROL_METHOD_CHANNEL)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
+                    "hasUsageStatsPermission" -> result.success(AppControlNative.hasUsageStatsPermission(this))
+                    "isAccessibilityServiceEnabled" -> result.success(AppControlNative.isAccessibilityServiceEnabled(this))
+                    "openUsageStatsSettings" -> { AppControlNative.openUsageStatsSettings(this); result.success(null) }
+                    "openAccessibilitySettings" -> { AppControlNative.openAccessibilitySettings(this); result.success(null) }
+                    "openAppDetailsSettings" -> { AppControlNative.openAppDetailsSettings(this); result.success(null) }
+                    "scheduleAll" -> { AppControlScheduler.scheduleAll(this); AppControlScheduler.syncNow(this); result.success(null) }
+                    "runUsageNow" -> { AppControlScheduler.runUsageNow(this); result.success(null) }
+                    "runInstalledAppsNow" -> { AppControlScheduler.runInstalledAppsNow(this); result.success(null) }
                     // Задача #61: one-shot consume флага «первый запуск после
                     // обновления APK». Возвращает map {fromVersionName, toVersionName}
                     // если флаг был выставлен (PostUpdateGuard детектит смену

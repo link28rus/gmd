@@ -21,6 +21,8 @@ import { InstalledAppsBodySchema, type InstalledAppsBody } from './dto/installed
 import { UsageReportBodySchema, type UsageReportBody } from './dto/usage-report.dto';
 import { AppIconsBodySchema, type AppIconsBody } from './dto/app-icons.dto';
 import { formatHHMM, type AppBlockScheduleDto } from './dto/schedule.dto';
+import { AppControlSyncService } from './app-control-sync.service';
+import { AppControlAckSchema, type AppControlAck } from './dto/app-control-state.dto';
 
 interface ChildRequest extends Request {
   childDevice: ChildAuthContext;
@@ -42,7 +44,24 @@ export class AppControlChildController {
     @Inject(AppControlService) private readonly svc: AppControlService,
     @Inject(AppBlockingService) private readonly blocking: AppBlockingService,
     @Inject(ScheduleService) private readonly schedules: ScheduleService,
+    @Inject(AppControlSyncService) private readonly sync: AppControlSyncService,
   ) {}
+
+  @Get('app-control-state')
+  @Throttle({ default: { ttl: 60_000, limit: 30 } })
+  getState(@Req() req: ChildRequest) {
+    return this.sync.get(req.childDevice.deviceId, req.headers['x-child-token'] as string);
+  }
+
+  @Post('app-control-state/ack')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Throttle({ default: { ttl: 60_000, limit: 30 } })
+  ackState(
+    @Req() req: ChildRequest,
+    @Body(new ZodValidationPipe(AppControlAckSchema)) dto: AppControlAck,
+  ) {
+    return this.sync.ack(req.childDevice.deviceId, req.headers['x-child-token'] as string, dto);
+  }
 
   @Post('installed-apps')
   @HttpCode(HttpStatus.OK)
@@ -51,7 +70,11 @@ export class AppControlChildController {
     @Req() req: ChildRequest,
     @Body(new ZodValidationPipe(InstalledAppsBodySchema)) dto: InstalledAppsBody,
   ): Promise<{ missingIconSha256: string[] }> {
-    return this.svc.upsertInstalledApps(req.childDevice.deviceId, dto);
+    return this.svc.upsertInstalledApps(
+      req.childDevice.deviceId,
+      dto,
+      req.headers['x-child-token'] as string,
+    );
   }
 
   @Post('app-icons')
@@ -70,7 +93,11 @@ export class AppControlChildController {
     @Req() req: ChildRequest,
     @Body(new ZodValidationPipe(UsageReportBodySchema)) dto: UsageReportBody,
   ): Promise<void> {
-    await this.svc.upsertUsageBuckets(req.childDevice.deviceId, dto);
+    await this.svc.upsertUsageBuckets(
+      req.childDevice.deviceId,
+      dto,
+      req.headers['x-child-token'] as string,
+    );
   }
 
   // ─── Phase 6.2 (v0.39): App Blocking — child poll endpoints ────────────

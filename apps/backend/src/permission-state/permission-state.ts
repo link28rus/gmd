@@ -17,14 +17,14 @@ export type PermissionKey = keyof typeof PERMISSION_LABELS;
 const value = z.boolean().nullable();
 export const PermissionsSchema = z
   .object({
-    accessibility: z.null(),
+    accessibility: value,
     deviceAdmin: value,
     overlay: value,
     notifications: value,
     locationForeground: value,
     locationBackground: value,
     batteryUnrestricted: value,
-    usageStats: z.null(),
+    usageStats: value,
     microphone: value,
     activityRecognition: value,
     installPackages: value,

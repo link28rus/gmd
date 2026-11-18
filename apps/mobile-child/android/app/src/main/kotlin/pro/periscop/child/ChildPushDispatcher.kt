@@ -28,6 +28,7 @@ object ChildPushDispatcher {
     fun dispatch(ctx: Context, data: Map<String, String>, source: String) {
         val type = data["type"]
         when (type) {
+            "BLOCK_APPS", "UNBLOCK_APPS", "SYNC_RULES", "SYNC_SCHEDULES" -> AppControlScheduler.syncNow(ctx)
             "REPORT_PERMISSION_STATE" -> AppControlScheduler.reportPermissionsNow(ctx)
             "START_AUDIO" -> handleStartAudio(ctx, data, source)
             "STOP_AUDIO" -> handleStopAudio(ctx, data, source)
@@ -37,8 +38,6 @@ object ChildPushDispatcher {
             // и запрос журнала (команда из очереди, отметка — сам upload с commandId).
             "DIAG_CONFIG" -> handleDiagConfig(ctx, data, source)
             "UPLOAD_DIAG" -> DiagUpload.requestManual(ctx, data["commandId"], source)
-            // BLOCK_APPS / UNBLOCK_APPS / SYNC_RULES / SYNC_SCHEDULES — блокировка
-            // приложений временно отключена (v0.58.0), падают сюда и игнорируются.
             else -> DiagLog.write(ctx, source, "unknown type=$type — ignored")
         }
     }

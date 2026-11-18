@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Inject, Injectable } from '@nestjs/common';
 import { createHash, randomBytes } from 'node:crypto';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { normalizeInviteCode } from '../invites/lib/code-generator';
 import { computeAgeYears } from '../common/age';
@@ -169,6 +169,8 @@ export class ChildDeviceService {
             rustorePushToken: null,
             rustorePushTokenUpdatedAt: null,
             timezone: null,
+            appControlStatus: Prisma.DbNull,
+            usageReportedAt: null,
             micReady: null,
             micReadyAt: null,
           },

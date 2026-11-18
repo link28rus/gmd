@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { TimezoneSchema } from './app-control-state.dto';
 
 // POST /child/installed-apps body — snapshot всех установленных у ребёнка apps.
 // Шлёт InstalledAppsWorker раз в сутки + при первом запуске + при смене user-id
@@ -15,7 +16,7 @@ import { z } from 'zod';
 //     (cleanup на стороне UI парента — рисуем серым; жёсткого DELETE не делаем).
 export const InstalledAppsBodySchema = z
   .object({
-    timezone: z.string().min(1).max(64),
+    timezone: TimezoneSchema,
     apps: z
       .array(
         z

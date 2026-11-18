@@ -15,6 +15,20 @@ const good = {
 };
 
 describe('Состояние разрешений', () => {
+  it('принимает действующие разрешения возвращённого контроля приложений', () => {
+    for (const enabled of [true, false]) {
+      expect(
+        PermissionReportSchema.safeParse({
+          sequence: 1,
+          permissions: {
+            ...good,
+            accessibility: enabled,
+            usageStats: enabled,
+          },
+        }).success,
+      ).toBe(true);
+    }
+  });
   it('принимает полный слепок и отклоняет неполный/лишние поля/строковый boolean', () => {
     expect(PermissionReportSchema.safeParse({ sequence: 1, permissions: good }).success).toBe(true);
     expect(PermissionReportSchema.safeParse({ sequence: 0, permissions: good }).success).toBe(
@@ -44,11 +58,11 @@ describe('Состояние разрешений', () => {
         sequence: 1,
         permissions: { ...good, accessibility: false },
       }).success,
-    ).toBe(false);
+    ).toBe(true);
     expect(
       PermissionReportSchema.safeParse({ sequence: 1, permissions: { ...good, usageStats: true } })
         .success,
-    ).toBe(false);
+    ).toBe(true);
   });
   it('не выдаёт неизвестное или устаревшее состояние за исправное', () => {
     const now = new Date('2026-11-17T10:00:00Z');

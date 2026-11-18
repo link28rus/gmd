@@ -39,7 +39,11 @@ export class AppBlockingService implements OnModuleInit {
   // - наш child app — иначе родитель не сможет принять команду «снять блок»
   // - MAX (мессенджер ru.oneme.app, пока не используется массово, но добавлен
   //   на случай если ребёнок захочет связаться с родителем во время блокировки)
-  static readonly HARDCODED_ALLOWED = ['ru.link28rus.gmd.child', 'ru.oneme.app'] as const;
+  static readonly HARDCODED_ALLOWED = [
+    'pro.periscop.child',
+    'ru.oneme.app',
+    'ru.link28rus.gmd.child',
+  ] as const;
 
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,

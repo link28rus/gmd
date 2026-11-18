@@ -56,7 +56,7 @@ export function BlockDialog({ childId, childName, open, onOpenChange }: Props): 
     if (createBlock.isPending) return;
     createBlock.mutate(durationMin, {
       onSuccess: () => {
-        toast.success(`Блокировка включена на ${fmtDuration(durationMin)}`);
+        toast.success(`Блокировка на ${fmtDuration(durationMin)} отправлена на телефон`);
         onOpenChange(false);
       },
       onError: (err: unknown) => {

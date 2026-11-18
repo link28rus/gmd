@@ -32,6 +32,7 @@ import {
 } from '@/lib/api/app-control';
 import {
   useActiveBlock,
+  useAppControlStatus,
   useAppRules,
   useDeleteSchedule,
   useInstalledApps,
@@ -85,16 +86,6 @@ function fmtMinutes(seconds: number): string {
   return m > 0 ? `${h} ч ${m} мин` : `${h} ч`;
 }
 
-function ymdInTz(date: Date): string {
-  // Используем локальное время браузера парента — backend сравнивает с TZ ребёнка
-  // только при default-today; явно переданный date просто берётся как DATE.
-  // На v0.38 показываем «Сегодня в TZ родителя» (упрощение для MVP).
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
 export default function ParentalControlClient({
   childId,
   onBack,
@@ -111,19 +102,12 @@ export default function ParentalControlClient({
   const [tab, setTab] = useState<RangeTab>('today');
   const [blockDialogOpen, setBlockDialogOpen] = useState(false);
 
-  // Считаем дату для запроса usage. Today — backend default; yesterday/week —
-  // явная дата.
-  const queryParams = useMemo(() => {
-    const now = new Date();
-    if (tab === 'today') return { range: 'day' as const, date: undefined };
-    if (tab === 'yesterday') {
-      const d = new Date(now);
-      d.setDate(d.getDate() - 1);
-      return { range: 'day' as const, date: ymdInTz(d) };
-    }
-    return { range: 'week' as const, date: ymdInTz(now) };
-  }, [tab]);
-
+  const statusQ = useAppControlStatus(childId);
+  // Даты определяет сервер по часовому поясу ребёнка.
+  const queryParams = {
+    range: tab === 'week' ? ('week' as const) : ('day' as const),
+    date: tab === 'yesterday' ? 'yesterday' : undefined,
+  };
   const usageQ = useUsage(childId, queryParams.range, queryParams.date);
   const appsQ = useInstalledApps(childId);
   const activeBlockQ = useActiveBlock(childId);
@@ -168,7 +152,45 @@ export default function ParentalControlClient({
       </div>
 
       {/* v0.39: активная блокировка показывается всегда (не зависит от таб'а) */}
-      {activeBlock && <ActiveBlockCard childId={childId} session={activeBlock} />}
+      {statusQ.isPending && (
+        <p className="mb-4 text-sm text-muted-foreground">Проверяем состояние защиты…</p>
+      )}
+      {statusQ.isError && (
+        <p role="alert" className="mb-4 text-sm text-amber-700">
+          Не удалось проверить защиту. Состояние блокировки неизвестно.
+        </p>
+      )}
+      {statusQ.data && (
+        <div className="mb-4 rounded-xl border border-border p-4 text-sm" role="status">
+          <p>
+            {statusQ.data.reportedAt === null
+              ? 'Откройте обновлённый Перископ на телефоне ребёнка и включите блокировку и статистику в настройках.'
+              : statusQ.data.accessibility === false
+                ? 'Блокировка на телефоне выключена. Включите «Блокировка приложений» в настройках Перископа ребёнка.'
+                : statusQ.data.applied
+                  ? 'Правила применены на телефоне ребёнка'
+                  : 'Ожидаем подтверждение правил с телефона ребёнка'}
+          </p>
+          {statusQ.data.usageStats === false && (
+            <p className="mt-1">Доступ к статистике выключен. Новые данные не собираются.</p>
+          )}
+          <p className="mt-1 text-muted-foreground">
+            {statusQ.data.usageReportedAt
+              ? `Статистика получена: ${new Date(statusQ.data.usageReportedAt).toLocaleString('ru-RU')}`
+              : 'Статистика с телефона ещё не получена'}
+          </p>
+          {statusQ.data.timezone && (
+            <p className="mt-1 text-muted-foreground">Время ребёнка: {statusQ.data.timezone}</p>
+          )}
+        </div>
+      )}
+      {activeBlock && (
+        <ActiveBlockCard
+          childId={childId}
+          session={activeBlock}
+          applied={statusQ.data?.applied === true}
+        />
+      )}
 
       <Tabs tab={tab} onChange={setTab} />
 
@@ -182,18 +204,23 @@ export default function ParentalControlClient({
         </p>
       )}
 
-      {range && <SummaryCard range={range} tab={tab} />}
-      {range && <Chart range={range} tab={tab} />}
-      {range && <CategoryChips byCategory={range.byCategory} />}
+      {range && statusQ.data?.usageReportedAt && <SummaryCard range={range} tab={tab} />}
+      {range && statusQ.data?.usageReportedAt && <Chart range={range} tab={tab} />}
+      {range && statusQ.data?.usageReportedAt && <CategoryChips byCategory={range.byCategory} />}
 
       {/* v0.39: рабочая кнопка «Заблокировать». Если блок уже активен —
           скрываем (управление сверху на ActiveBlockCard). */}
       {!activeBlock && (
-        <BlockButton disabled={appsQ.isPending} onClick={() => setBlockDialogOpen(true)} />
+        <BlockButton
+          disabled={
+            appsQ.isPending || !statusQ.data?.reportedAt || statusQ.data.accessibility !== true
+          }
+          onClick={() => setBlockDialogOpen(true)}
+        />
       )}
 
       {/* v0.48: расписания автоблокировки (по дням и времени). */}
-      <SchedulesSection childId={childId} />
+      <SchedulesSection childId={childId} timezone={statusQ.data?.timezone ?? null} />
 
       {/* v0.39.2: убрали отдельный AppsList — статистика и список приложений
           теперь в AppRulesSection (одна секция). */}
@@ -252,9 +279,7 @@ function SummaryCard({ range, tab }: { range: UsageRangeDto; tab: RangeTab }): R
     <div className="mt-6 rounded-2xl border border-border bg-card p-5">
       <p className="text-sm text-muted-foreground">Время в приложениях</p>
       <div className="mt-1 flex items-baseline gap-3">
-        <p className="text-4xl font-semibold text-foreground">
-          {range.totalSeconds === 0 ? '—' : fmtMinutes(range.totalSeconds)}
-        </p>
+        <p className="text-4xl font-semibold text-foreground">{fmtMinutes(range.totalSeconds)}</p>
         {showVs && (
           <span
             className={
@@ -390,9 +415,11 @@ function BlockButton({
 function ActiveBlockCard({
   childId,
   session,
+  applied,
 }: {
   childId: string;
   session: BlockSessionDto;
+  applied: boolean;
 }): ReactElement {
   const [remainingMs, setRemainingMs] = useState<number>(
     Math.max(0, new Date(session.endsAt).getTime() - Date.now()),
@@ -427,7 +454,7 @@ function ActiveBlockCard({
     if (stopBlock.isPending) return;
     stopBlock.mutate(session.sessionId, {
       onSuccess: () => {
-        toast.success('Блокировка снята');
+        toast.success('Команда снять блокировку отправлена на телефон');
       },
       onError: (err: unknown) => {
         if (err instanceof ApiError && err.code === 'session_not_found') {
@@ -449,7 +476,7 @@ function ActiveBlockCard({
         </div>
         <div className="min-w-0 flex-1">
           <p className="font-semibold text-amber-900 dark:text-amber-200">
-            Приложения заблокированы
+            {applied ? 'Приложения заблокированы' : 'Блокировка ожидает подтверждения'}
           </p>
           <p className="mt-0.5 text-sm text-amber-800 dark:text-amber-300">
             Осталось {remainingMs > 0 ? countdown : 'почти 0'} · до {endsAtLocal}
@@ -957,7 +984,13 @@ function ModeSegmented({
  * со своей TZ. Если родитель в другом TZ, бейдж может «опаздывать», но фактическая
  * блокировка корректна.
  */
-function SchedulesSection({ childId }: { childId: string }): ReactElement {
+function SchedulesSection({
+  childId,
+  timezone,
+}: {
+  childId: string;
+  timezone: string | null;
+}): ReactElement {
   const q = useSchedules(childId);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<AppBlockScheduleDto | undefined>(undefined);
@@ -1014,7 +1047,13 @@ function SchedulesSection({ childId }: { childId: string }): ReactElement {
       {schedules.length > 0 && (
         <ul className="space-y-2">
           {schedules.map((s) => (
-            <ScheduleRow key={s.id} childId={childId} schedule={s} onEdit={() => openEdit(s)} />
+            <ScheduleRow
+              key={s.id}
+              childId={childId}
+              timezone={timezone}
+              schedule={s}
+              onEdit={() => openEdit(s)}
+            />
           ))}
         </ul>
       )}
@@ -1033,7 +1072,9 @@ function ScheduleRow({
   childId,
   schedule,
   onEdit,
+  timezone,
 }: {
+  timezone: string | null;
   childId: string;
   schedule: AppBlockScheduleDto;
   onEdit: () => void;
@@ -1042,14 +1083,13 @@ function ScheduleRow({
   const del = useDeleteSchedule(childId);
 
   // Локальное «сейчас активно» — пересчитываем каждые 30 сек, плюс при mount.
-  // TZ браузера родителя (см. комментарий выше).
-  const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  // Часовой пояс получен от телефона ребёнка; при неизвестном TZ активность не угадываем.
   const [now, setNow] = useState<Date>(() => new Date());
   useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 30_000);
     return () => window.clearInterval(id);
   }, []);
-  const activeNow = isScheduleActiveAt(schedule, now, browserTz);
+  const activeNow = timezone !== null && isScheduleActiveAt(schedule, now, timezone);
 
   function toggle(): void {
     if (update.isPending) return;

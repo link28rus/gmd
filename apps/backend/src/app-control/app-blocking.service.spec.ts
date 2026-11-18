@@ -62,6 +62,9 @@ async function buildService(prisma: PrismaMock, fcm: FcmMock): Promise<AppBlocki
 }
 
 describe('AppBlockingService', () => {
+  it('никогда не блокирует актуальное приложение ребёнка после переименования', () => {
+    expect([...AppBlockingService.HARDCODED_ALLOWED]).toContain('pro.periscop.child');
+  });
   describe('createSession', () => {
     it('создаёт ACTIVE сессию + шлёт FCM BLOCK_APPS', async () => {
       const prisma = makePrisma();
@@ -319,7 +322,7 @@ describe('AppBlockingService', () => {
 
       // hardcoded в начале
       expect(rules[0]).toEqual({
-        packageName: 'ru.link28rus.gmd.child',
+        packageName: 'pro.periscop.child',
         mode: 'ALWAYS_ALLOWED',
         source: 'HARDCODED',
       });

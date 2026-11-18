@@ -430,6 +430,10 @@ model ChildDevice {
   // показывает «нет данных».
   timezone           String?
 
+  // Подтверждение применённого снимка (изолировано хешем привязки).
+  appControlStatus   Json?
+  usageReportedAt    DateTime?
+
   // v0.60: настройки журнала приложения (DiagConfig — состав отправляемого
   // журнала, подробный режим, logcat/снимок, автоотправка). null = значения
   // по умолчанию; нормализация — diag/diag-config.ts. Телефон получает их
@@ -955,7 +959,8 @@ model AppIcon {
 }
 
 // Часовой bucket использования приложения. Ровно один rec на каждую
-// (child, local-date, hour, package). UPSERT при POST /child/usage-reports.
+// (child, sourceId, local-date, hour, package). Накопительный вклад привязки/периода;
+// итог по приложению = сумма вкладов. POST /child/usage-reports сохраняет максимум.
 // Retention 30 дней — pg_cron job (см. infra/postgres/init/).
 //
 // `seconds` агрегируется на child'е: child queryEvents UsageStats, считает
@@ -967,11 +972,12 @@ model UsageBucket {
   date          DateTime @db.Date  // local-date в TZ ребёнка (см. ChildDevice.timezone)
   hour          Int                // 0..23
   packageName   String
+  sourceId      String @default("legacy") // Вклад привязки и непрерывного периода часового пояса.
   seconds       Int                // суммарно в этом часе
 
   childDevice ChildDevice @relation(fields: [childDeviceId], references: [id], onDelete: Cascade)
 
-  @@unique([childDeviceId, date, hour, packageName])
+  @@unique([childDeviceId, sourceId, date, hour, packageName], map: "usage_buckets_device_source_date_hour_package_key")
   @@index([childDeviceId, date])
   @@map("usage_buckets")
 }

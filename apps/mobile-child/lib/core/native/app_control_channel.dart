@@ -2,16 +2,29 @@ import 'package:flutter/services.dart';
 
 /// Bridge к native-каналу `pro.periscop.child/app_control` (MainActivity.kt).
 ///
-/// Имя канала историческое (v0.38 screen-time). Блокировка приложений и
-/// экранное время временно отключены в v0.58.0 — в канале остался только
-/// флаг «первый запуск после обновления APK». При возврате функций методы
-/// восстановить из git.
+/// Разрешения статистики/блокировки, запуск фоновой синхронизации и флаг обновления.
 ///
 /// Только UI-isolate. Методы могут throw PlatformException — caller обязан
 /// обработать.
 class AppControlChannel {
-  static const MethodChannel _ch =
-      MethodChannel('pro.periscop.child/app_control');
+  static const MethodChannel _ch = MethodChannel(
+    'pro.periscop.child/app_control',
+  );
+
+  static Future<bool> hasUsageStatsPermission() async =>
+      await _ch.invokeMethod<bool>('hasUsageStatsPermission') ?? false;
+  static Future<bool> isAccessibilityServiceEnabled() async =>
+      await _ch.invokeMethod<bool>('isAccessibilityServiceEnabled') ?? false;
+  static Future<void> openUsageStatsSettings() =>
+      _ch.invokeMethod<void>('openUsageStatsSettings');
+  static Future<void> openAccessibilitySettings() =>
+      _ch.invokeMethod<void>('openAccessibilitySettings');
+  static Future<void> openAppDetailsSettings() =>
+      _ch.invokeMethod<void>('openAppDetailsSettings');
+  static Future<void> scheduleAll() => _ch.invokeMethod<void>('scheduleAll');
+  static Future<void> runUsageNow() => _ch.invokeMethod<void>('runUsageNow');
+  static Future<void> runInstalledAppsNow() =>
+      _ch.invokeMethod<void>('runInstalledAppsNow');
 
   /// Задача #61: one-shot consume флага «первый запуск после обновления APK».
   /// Native [PostUpdateGuard] детектит смену versionCode в `MainActivity.onCreate`
@@ -23,8 +36,9 @@ class AppControlChannel {
   /// (известный bug OS). Caller использует этот флаг как trigger для
   /// активного rescue-flow вместо пассивного баннера.
   static Future<PostUpdateInfo?> consumePostUpdateFlag() async {
-    final raw =
-        await _ch.invokeMethod<Map<dynamic, dynamic>>('consumePostUpdateFlag');
+    final raw = await _ch.invokeMethod<Map<dynamic, dynamic>>(
+      'consumePostUpdateFlag',
+    );
     if (raw == null) return null;
     return PostUpdateInfo(
       fromVersionName: raw['fromVersionName'] as String? ?? '',

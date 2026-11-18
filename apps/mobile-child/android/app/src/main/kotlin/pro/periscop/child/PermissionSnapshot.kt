@@ -4,14 +4,14 @@ package pro.periscop.child
 object PermissionSnapshot {
     fun normalize(sdk: Int, values: Map<String, Boolean?>): Map<String, Boolean?> {
         val state = linkedMapOf<String, Boolean?>(
-            "accessibility" to null, // Функция временно отключена, не ошибка.
+            "accessibility" to values["accessibility"],
             "deviceAdmin" to values["deviceAdmin"],
             "overlay" to values["overlay"],
             "notifications" to values["notifications"],
             "locationForeground" to values["locationForeground"],
             "locationBackground" to values["locationBackground"],
             "batteryUnrestricted" to values["batteryUnrestricted"],
-            "usageStats" to null,
+            "usageStats" to values["usageStats"],
             "microphone" to values["microphone"],
             "activityRecognition" to values["activityRecognition"],
             "installPackages" to values["installPackages"],

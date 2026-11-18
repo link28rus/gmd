@@ -4,10 +4,20 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   appControlApi,
   type AppRuleMode,
+  type AppControlStatus,
   type BlockSessionDto,
   type CreateScheduleBody,
   type UpdateScheduleBody,
 } from '../api/app-control';
+
+export function useAppControlStatus(childId: string | null) {
+  return useQuery({
+    queryKey: ['app-control', 'status', childId],
+    queryFn: () => appControlApi.status(childId!),
+    enabled: childId !== null,
+    refetchInterval: 15_000,
+  });
+}
 
 export function useInstalledApps(childId: string | null) {
   return useQuery({
@@ -67,6 +77,10 @@ export function useCreateBlock(childId: string) {
   return useMutation({
     mutationFn: (durationMin: number) => appControlApi.createBlockSession(childId, durationMin),
     onSuccess: (data: BlockSessionDto) => {
+      qc.setQueryData<AppControlStatus>(['app-control', 'status', childId], (old) =>
+        old ? { ...old, applied: false } : old,
+      );
+      void qc.invalidateQueries({ queryKey: ['app-control', 'status', childId] });
       qc.setQueryData(['app-control', 'active-block', childId], data);
     },
   });
@@ -81,6 +95,10 @@ export function useStopBlock(childId: string) {
   return useMutation({
     mutationFn: (sessionId: string) => appControlApi.stopBlockSession(childId, sessionId),
     onSuccess: () => {
+      qc.setQueryData<AppControlStatus>(['app-control', 'status', childId], (old) =>
+        old ? { ...old, applied: false } : old,
+      );
+      void qc.invalidateQueries({ queryKey: ['app-control', 'status', childId] });
       qc.setQueryData(['app-control', 'active-block', childId], null);
     },
   });
@@ -96,6 +114,10 @@ export function useUpsertAppRule(childId: string) {
     mutationFn: (params: { packageName: string; mode: AppRuleMode }) =>
       appControlApi.putAppRule(childId, params.packageName, params.mode),
     onSuccess: () => {
+      qc.setQueryData<AppControlStatus>(['app-control', 'status', childId], (old) =>
+        old ? { ...old, applied: false } : old,
+      );
+      void qc.invalidateQueries({ queryKey: ['app-control', 'status', childId] });
       void qc.invalidateQueries({ queryKey: ['app-control', 'app-rules', childId] });
     },
   });
@@ -121,6 +143,10 @@ export function useCreateSchedule(childId: string) {
   return useMutation({
     mutationFn: (body: CreateScheduleBody) => appControlApi.createSchedule(childId, body),
     onSuccess: () => {
+      qc.setQueryData<AppControlStatus>(['app-control', 'status', childId], (old) =>
+        old ? { ...old, applied: false } : old,
+      );
+      void qc.invalidateQueries({ queryKey: ['app-control', 'status', childId] });
       void qc.invalidateQueries({ queryKey: schedulesKey(childId) });
     },
   });
@@ -132,6 +158,10 @@ export function useUpdateSchedule(childId: string) {
     mutationFn: (params: { scheduleId: string; body: UpdateScheduleBody }) =>
       appControlApi.updateSchedule(childId, params.scheduleId, params.body),
     onSuccess: () => {
+      qc.setQueryData<AppControlStatus>(['app-control', 'status', childId], (old) =>
+        old ? { ...old, applied: false } : old,
+      );
+      void qc.invalidateQueries({ queryKey: ['app-control', 'status', childId] });
       void qc.invalidateQueries({ queryKey: schedulesKey(childId) });
     },
   });
@@ -142,6 +172,10 @@ export function useDeleteSchedule(childId: string) {
   return useMutation({
     mutationFn: (scheduleId: string) => appControlApi.deleteSchedule(childId, scheduleId),
     onSuccess: () => {
+      qc.setQueryData<AppControlStatus>(['app-control', 'status', childId], (old) =>
+        old ? { ...old, applied: false } : old,
+      );
+      void qc.invalidateQueries({ queryKey: ['app-control', 'status', childId] });
       void qc.invalidateQueries({ queryKey: schedulesKey(childId) });
     },
   });

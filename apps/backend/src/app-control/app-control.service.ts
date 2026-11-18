@@ -1,5 +1,13 @@
-import { BadRequestException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { createHash } from 'node:crypto';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { createHash, randomUUID } from 'node:crypto';
+import { hashDeviceToken } from '../child-device/child-device.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CategoryResolver, type AppCategory } from './category-resolver.service';
 import type { InstalledAppsBody } from './dto/installed-apps.dto';
@@ -51,59 +59,71 @@ export class AppControlService {
   async upsertInstalledApps(
     childDeviceId: string,
     body: InstalledAppsBody,
+    token: string,
   ): Promise<{ missingIconSha256: string[] }> {
-    // Update timezone (всегда, даже если payload пустой)
-    await this.prisma.childDevice.update({
-      where: { id: childDeviceId },
-      data: { timezone: body.timezone, lastSeenAt: new Date() },
-    });
+    return this.prisma.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`SELECT id FROM child_devices WHERE id = ${childDeviceId} FOR UPDATE`;
+        const device = await tx.childDevice.findFirst({
+          where: { id: childDeviceId, tokenHash: hashDeviceToken(token), revokedAt: null },
+          select: { id: true },
+        });
+        if (!device) throw new UnauthorizedException({ code: 'unauthorized' });
+        // Update timezone (всегда, даже если payload пустой)
+        await tx.childDevice.update({
+          where: { id: childDeviceId },
+          data: { timezone: body.timezone, lastSeenAt: new Date() },
+        });
 
-    // UPSERT каждого app. Делаем последовательно для простоты — payload max 1000,
-    // upsert ~5ms, итого <5sec в худшем случае. Параллелизация через Promise.all
-    // создаст шторм коннектов, не нужно.
-    const now = new Date();
-    for (const app of body.apps) {
-      const category = this.categories.resolve(app.packageName);
-      await this.prisma.installedApp.upsert({
-        where: {
-          childDeviceId_packageName: {
-            childDeviceId,
-            packageName: app.packageName,
-          },
-        },
-        create: {
-          childDeviceId,
-          packageName: app.packageName,
-          appLabel: app.appLabel,
-          iconSha256: app.iconSha256 ?? null,
-          isSystem: app.isSystem,
-          category,
-          firstSeenAt: now,
-          lastSeenAt: now,
-        },
-        update: {
-          appLabel: app.appLabel,
-          iconSha256: app.iconSha256 ?? null,
-          isSystem: app.isSystem,
-          category,
-          lastSeenAt: now,
-        },
-      });
-    }
+        // UPSERT каждого app. Делаем последовательно для простоты — payload max 1000,
+        // upsert ~5ms, итого <5sec в худшем случае. Параллелизация через Promise.all
+        // создаст шторм коннектов, не нужно.
+        const now = new Date();
+        for (const app of body.apps) {
+          const category = this.categories.resolve(app.packageName);
+          await tx.installedApp.upsert({
+            where: {
+              childDeviceId_packageName: {
+                childDeviceId,
+                packageName: app.packageName,
+              },
+            },
+            create: {
+              childDeviceId,
+              packageName: app.packageName,
+              appLabel: app.appLabel,
+              iconSha256: app.iconSha256 ?? null,
+              isSystem: app.isSystem,
+              category,
+              firstSeenAt: now,
+              lastSeenAt: now,
+            },
+            update: {
+              appLabel: app.appLabel,
+              iconSha256: app.iconSha256 ?? null,
+              isSystem: app.isSystem,
+              category,
+              lastSeenAt: now,
+            },
+          });
+        }
 
-    // Какие sha256 backend ещё не имеет?
-    const referencedShas = body.apps
-      .map((a) => a.iconSha256)
-      .filter((s): s is string => typeof s === 'string');
-    if (referencedShas.length === 0) return { missingIconSha256: [] };
+        // Какие sha256 backend ещё не имеет?
+        const referencedShas = body.apps
+          .map((a) => a.iconSha256)
+          .filter((s): s is string => typeof s === 'string');
+        if (referencedShas.length === 0) return { missingIconSha256: [] };
 
-    const existing = await this.prisma.appIcon.findMany({
-      where: { sha256: { in: referencedShas } },
-      select: { sha256: true },
-    });
-    const existingSet = new Set(existing.map((e) => e.sha256));
-    const missing = referencedShas.filter((s) => !existingSet.has(s));
-    return { missingIconSha256: missing };
+        const existing = await tx.appIcon.findMany({
+          where: { sha256: { in: referencedShas } },
+          select: { sha256: true },
+        });
+        const existingSet = new Set(existing.map((e) => e.sha256));
+        const missing = referencedShas.filter((s) => !existingSet.has(s));
+        return { missingIconSha256: missing };
+      },
+      { timeout: 120_000 },
+    );
   }
 
   /** Загрузка иконок батчем. Проверяет sha256 на соответствие байтам. */
@@ -170,43 +190,49 @@ export class AppControlService {
   async upsertUsageBuckets(
     childDeviceId: string,
     body: UsageReportBody,
+    token: string,
   ): Promise<{ accepted: number }> {
-    // Update timezone (если изменилась)
-    await this.prisma.childDevice.update({
-      where: { id: childDeviceId },
-      data: { timezone: body.timezone, lastSeenAt: new Date() },
-    });
+    return this.prisma.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`SELECT id FROM child_devices WHERE id = ${childDeviceId} FOR UPDATE`;
+        const device = await tx.childDevice.findFirst({
+          where: { id: childDeviceId, tokenHash: hashDeviceToken(token), revokedAt: null },
+          select: { id: true },
+        });
+        if (!device) throw new UnauthorizedException({ code: 'unauthorized' });
+        // Update timezone (если изменилась)
+        await tx.childDevice.update({
+          where: { id: childDeviceId },
+          data: { timezone: body.timezone, lastSeenAt: new Date() },
+        });
 
-    // Лимит: не принимаем bucket'ы с date в будущем (clock skew защита)
-    const today = new Date();
-    today.setUTCHours(23, 59, 59, 999);
-    let accepted = 0;
-    for (const b of body.buckets) {
-      const date = new Date(b.date + 'T00:00:00.000Z');
-      if (date.getTime() > today.getTime() + 24 * 3600_000) {
-        continue; // skip — в будущем больше чем на день, явная ошибка
-      }
-      await this.prisma.usageBucket.upsert({
-        where: {
-          childDeviceId_date_hour_packageName: {
-            childDeviceId,
-            date,
-            hour: b.hour,
-            packageName: b.packageName,
-          },
-        },
-        create: {
-          childDeviceId,
-          date,
-          hour: b.hour,
-          packageName: b.packageName,
-          seconds: b.seconds,
-        },
-        update: { seconds: b.seconds }, // replace, не add — см. семантику в DTO
-      });
-      accepted++;
-    }
-    return { accepted };
+        // Лимит: не принимаем bucket'ы с date в будущем (clock skew защита)
+        const today = new Date();
+        today.setUTCHours(23, 59, 59, 999);
+        let accepted = 0;
+        for (const b of body.buckets) {
+          const sourceId = `${hashDeviceToken(token)}:${b.epoch ?? 'legacy'}`;
+          const date = new Date(b.date + 'T00:00:00.000Z');
+          if (date.getTime() > today.getTime() + 24 * 3600_000) {
+            continue; // skip — в будущем больше чем на день, явная ошибка
+          }
+          // Накопительный вклад только растёт: поздний меньший отчёт не откатывает итог.
+          await tx.$executeRaw`
+            INSERT INTO usage_buckets (id, "childDeviceId", "sourceId", "date", hour, "packageName", seconds)
+            VALUES (${randomUUID()}, ${childDeviceId}, ${sourceId}, CAST(${b.date} AS DATE), ${b.hour}, ${b.packageName}, ${b.seconds})
+            ON CONFLICT ("childDeviceId", "sourceId", "date", hour, "packageName")
+            DO UPDATE SET seconds = GREATEST(usage_buckets.seconds, EXCLUDED.seconds)
+          `;
+          accepted++;
+        }
+        await tx.childDevice.update({
+          where: { id: childDeviceId },
+          data: { usageReportedAt: new Date() },
+        });
+        return { accepted };
+      },
+      { timeout: 120_000 },
+    );
   }
 
   // ─── Parent-side ────────────────────────────────────────────────────────
@@ -270,9 +296,11 @@ export class AppControlService {
       throw new NotFoundException({ code: 'child_device_not_found', message: 'No active device' });
     }
 
-    const targetDate = dateStr
-      ? this.parseDateOrToday(dateStr, device.timezone)
-      : this.localToday(device.timezone);
+    const targetDate =
+      dateStr && dateStr !== 'yesterday'
+        ? this.parseDateOrToday(dateStr, device.timezone)
+        : this.localToday(device.timezone);
+    if (dateStr === 'yesterday') targetDate.setUTCDate(targetDate.getUTCDate() - 1);
 
     if (range === 'day') {
       return this.aggregateDay(device.id, targetDate);

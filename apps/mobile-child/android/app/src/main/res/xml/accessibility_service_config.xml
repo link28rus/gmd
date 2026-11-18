@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+v0.39 Phase 6.2: AccessibilityService config для детекта foreground app.
+
+- typeWindowStateChanged: основной event который ловим (открытие новой Activity)
+- packageNames НЕ указан → ловим все packages (нужно для blacklist-логики)
+- canRetrieveWindowContent=false: не лазим в DOM, только смотрим packageName
+- description: видно пользователю в Settings → Accessibility
+- notificationTimeout=100: коалесцируем шторм событий внутри 100мс
+-->
+<accessibility-service
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagDefault"
+    android:canRetrieveWindowContent="false"
+    android:notificationTimeout="100"
+    android:description="@string/accessibility_service_description"/>

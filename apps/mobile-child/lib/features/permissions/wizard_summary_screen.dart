@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../core/native/device_admin_channel.dart';
+import '../../core/native/app_control_channel.dart';
 import '../../core/updates/app_update_channel.dart';
 import '../../core/version/app_version.dart';
 import 'wizard_steps.dart';
@@ -67,8 +68,23 @@ class _WizardSummaryScreenState extends State<WizardSummaryScreen>
     final activity = await Permission.activityRecognition.status;
     final admin = await _admin.isActive();
     final updates = await AppUpdateChannel.canRequestInstall();
+    final accessibility =
+        await AppControlChannel.isAccessibilityServiceEnabled();
+    final usageStats = await AppControlChannel.hasUsageStatsPermission();
 
     final items = <_SummaryItem>[
+      _SummaryItem(
+        title: 'Блокировка приложений',
+        importance: StepImportance.recommended,
+        route: '/permissions/accessibility',
+        granted: accessibility,
+      ),
+      _SummaryItem(
+        title: 'Статистика приложений',
+        importance: StepImportance.recommended,
+        route: '/permissions/usage-stats',
+        granted: usageStats,
+      ),
       _SummaryItem(
         title: 'Уведомления',
         importance: StepImportance.mandatory,
@@ -128,8 +144,8 @@ class _WizardSummaryScreenState extends State<WizardSummaryScreen>
     final allMandatoryOk = items == null
         ? true
         : items
-            .where((i) => i.importance == StepImportance.mandatory)
-            .every((i) => i.granted);
+              .where((i) => i.importance == StepImportance.mandatory)
+              .every((i) => i.granted);
 
     return Scaffold(
       appBar: AppBar(
@@ -151,9 +167,13 @@ class _WizardSummaryScreenState extends State<WizardSummaryScreen>
                 children: [
                   _Header(allMandatoryOk: allMandatoryOk),
                   const SizedBox(height: 20),
-                  for (final item in items) _ItemRow(item: item, onTap: () {
-                    if (!item.granted) context.go(item.route);
-                  }),
+                  for (final item in items)
+                    _ItemRow(
+                      item: item,
+                      onTap: () {
+                        if (!item.granted) context.go(item.route);
+                      },
+                    ),
                   const SizedBox(height: 24),
                   FilledButton(
                     onPressed: () => context.go('/home'),
@@ -208,7 +228,7 @@ class _Header extends StatelessWidget {
               allMandatoryOk
                   ? 'Главное настроено. Приложение готово к работе.'
                   : 'Не хватает обязательных разрешений — без них родитель '
-                      'может не увидеть ребёнка. Нажмите на них, чтобы исправить.',
+                        'может не увидеть ребёнка. Нажмите на них, чтобы исправить.',
               style: TextStyle(
                 fontSize: 15,
                 height: 1.35,
@@ -247,10 +267,7 @@ class _ItemRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    item.title,
-                    style: const TextStyle(fontSize: 15),
-                  ),
+                  Text(item.title, style: const TextStyle(fontSize: 15)),
                   Text(
                     item.granted ? 'Включено' : item.importance.label,
                     style: TextStyle(

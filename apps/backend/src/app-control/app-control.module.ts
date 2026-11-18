@@ -10,6 +10,7 @@ import { AppControlService } from './app-control.service';
 import { AppBlockingService } from './app-blocking.service';
 import { ScheduleService } from './schedule.service';
 import { CategoryResolver } from './category-resolver.service';
+import { AppControlSyncService } from './app-control-sync.service';
 
 /**
  * Phase 6 — Родительский контроль.
@@ -43,7 +44,13 @@ import { CategoryResolver } from './category-resolver.service';
 @Module({
   imports: [PrismaModule, AuthModule, ChildDeviceModule, FcmModule],
   controllers: [AppControlChildController, AppControlParentController, AppIconsPublicController],
-  providers: [AppControlService, AppBlockingService, ScheduleService, CategoryResolver],
+  providers: [
+    AppControlService,
+    AppBlockingService,
+    ScheduleService,
+    CategoryResolver,
+    AppControlSyncService,
+  ],
   exports: [AppControlService, AppBlockingService, ScheduleService, CategoryResolver],
 })
 export class AppControlModule {}

@@ -5,6 +5,8 @@ import '../features/debug/debug_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
 import '../features/permissions/activity_recognition_step.dart';
+import '../features/permissions/accessibility_step.dart';
+import '../features/permissions/usage_stats_step.dart';
 import '../features/permissions/battery_step.dart';
 import '../features/permissions/devadmin_step.dart';
 import '../features/permissions/location_step.dart';
@@ -26,14 +28,10 @@ class AppRouter {
   static final List<RouteBase> _routes = [
     GoRoute(
       path: '/onboarding',
-      builder: (context, _) => OnboardingScreen(
-        onConnect: () => context.go('/claim'),
-      ),
+      builder: (context, _) =>
+          OnboardingScreen(onConnect: () => context.go('/claim')),
     ),
-    GoRoute(
-      path: '/claim',
-      builder: (_, _) => const ClaimScreen(),
-    ),
+    GoRoute(path: '/claim', builder: (_, _) => const ClaimScreen()),
     GoRoute(
       path: '/claim/manual',
       builder: (_, _) => const ClaimManualScreen(),
@@ -49,8 +47,7 @@ class AppRouter {
     // и нумерация вычисляются оттуда — сами GoRoute порядково-независимы.
     // Логический поток: обязательное (notif/location/battery) → защита
     // (devadmin) → функции (microphone, updates) → опциональное (activity) →
-    // summary. Блокировка приложений и экранное время (accessibility/overlay/
-    // usage-stats) временно отключены в v0.58.0.
+    // summary. Блокировка и статистика имеют отдельные рекомендуемые шаги.
     GoRoute(
       path: '/permissions/notifications',
       builder: (_, _) => const NotificationsPermissionsStep(),
@@ -73,6 +70,14 @@ class AppRouter {
       path: '/permissions/microphone',
       builder: (_, _) => const MicrophoneStep(),
     ),
+    GoRoute(
+      path: '/permissions/accessibility',
+      builder: (_, _) => const AccessibilityStep(),
+    ),
+    GoRoute(
+      path: '/permissions/usage-stats',
+      builder: (_, _) => const UsageStatsStep(),
+    ),
     // v0.68.0: «Поверх других приложений» — чтобы «Звук вокруг» поднимался сам
     // после перезагрузки телефона (SYSTEM_ALERT_WINDOW → авто-запуск MicWakeActivity).
     GoRoute(
@@ -93,18 +98,9 @@ class AppRouter {
       path: '/permissions/summary',
       builder: (_, _) => const WizardSummaryScreen(),
     ),
-    GoRoute(
-      path: '/home',
-      builder: (_, _) => const HomeScreen(),
-    ),
-    GoRoute(
-      path: '/debug',
-      builder: (_, _) => const DebugScreen(),
-    ),
+    GoRoute(path: '/home', builder: (_, _) => const HomeScreen()),
+    GoRoute(path: '/debug', builder: (_, _) => const DebugScreen()),
     // v0.38 escape hatch: показывается когда родитель удалил ребёнка.
-    GoRoute(
-      path: '/escape',
-      builder: (_, _) => const EscapeScreen(),
-    ),
+    GoRoute(path: '/escape', builder: (_, _) => const EscapeScreen()),
   ];
 }

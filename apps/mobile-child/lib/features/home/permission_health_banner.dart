@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../core/native/location_service_channel.dart';
+import '../../core/native/app_control_channel.dart';
 
 /// Красный баннер сверху на home, если критические permissions для фонового
 /// трекинга не даны. Показывается и при первом запуске, и после обновлений
@@ -73,8 +74,15 @@ class _PermissionHealthBannerState extends State<PermissionHealthBanner>
       missing.add('Звук вокруг после перезагрузки');
       if (missing.length == 1) route = '/permissions/overlay';
     }
-    // v0.81.0: MIUI «Автозапуск». Выключен — после перезагрузки или убийства
-    // процесса геолокация стоит до открытия приложения (у Степана — сутками).
+    if (!await AppControlChannel.isAccessibilityServiceEnabled()) {
+      missing.add('Блокировка приложений');
+      if (missing.length == 1) route = '/permissions/accessibility';
+    }
+    if (!await AppControlChannel.hasUsageStatsPermission()) {
+      missing.add('Статистика приложений');
+      if (missing.length == 1) route = '/permissions/usage-stats';
+    }
+    // MIUI «Автозапуск»: без него после перезагрузки геолокация может стоять до открытия приложения.
     // Состояние «неизвестно» (прошивка не дала прочитать) плашку не включает.
     var openAutostart = false;
     final autostart = await LocationServiceChannel().autostartState();
@@ -123,7 +131,10 @@ class _PermissionHealthBannerState extends State<PermissionHealthBanner>
                     const SizedBox(height: 2),
                     Text(
                       'Не хватает: ${_missing.join(', ')}. Нажми, чтобы исправить.',
-                      style: TextStyle(color: Colors.red.shade800, fontSize: 13),
+                      style: TextStyle(
+                        color: Colors.red.shade800,
+                        fontSize: 13,
+                      ),
                     ),
                   ],
                 ),

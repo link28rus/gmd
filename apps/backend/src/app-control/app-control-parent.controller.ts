@@ -34,6 +34,7 @@ import {
   type UpdateScheduleBody,
 } from './dto/schedule.dto';
 import type { AppBlockSchedule } from '@prisma/client';
+import { AppControlSyncService } from './app-control-sync.service';
 
 interface AuthedRequest extends Request {
   user: { userId: string; familyId: string; role: 'owner' | 'parent' | 'admin' };
@@ -52,7 +53,14 @@ export class AppControlParentController {
     @Inject(AppBlockingService) private readonly blocking: AppBlockingService,
     @Inject(ScheduleService) private readonly schedules: ScheduleService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(AppControlSyncService) private readonly sync: AppControlSyncService,
   ) {}
+
+  @Get('status')
+  async status(@Req() req: AuthedRequest, @Param('childId') childId: string) {
+    await this.assertChildInFamily(req.user.familyId, childId);
+    return this.sync.status(childId);
+  }
 
   @Get('installed-apps')
   async installedApps(

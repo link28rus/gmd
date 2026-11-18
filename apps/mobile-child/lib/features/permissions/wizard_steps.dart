@@ -17,16 +17,16 @@ enum StepImportance {
 
 extension StepImportanceUi on StepImportance {
   String get label => switch (this) {
-        StepImportance.mandatory => 'Обязательно',
-        StepImportance.recommended => 'Рекомендуется',
-        StepImportance.optional => 'По желанию',
-      };
+    StepImportance.mandatory => 'Обязательно',
+    StepImportance.recommended => 'Рекомендуется',
+    StepImportance.optional => 'По желанию',
+  };
 
   Color get color => switch (this) {
-        StepImportance.mandatory => const Color(0xFFD32F2F), // red 700
-        StepImportance.recommended => const Color(0xFF1976D2), // blue 700
-        StepImportance.optional => const Color(0xFF757575), // grey 600
-      };
+    StepImportance.mandatory => const Color(0xFFD32F2F), // red 700
+    StepImportance.recommended => const Color(0xFF1976D2), // blue 700
+    StepImportance.optional => const Color(0xFF757575), // grey 600
+  };
 }
 
 /// Один шаг мастера выдачи разрешений. Порядок в [kWizardSteps] = порядок
@@ -67,6 +67,16 @@ const List<WizardStep> kWizardSteps = [
   WizardStep(
     route: '/permissions/devadmin',
     title: 'Защита от удаления',
+    importance: StepImportance.recommended,
+  ),
+  WizardStep(
+    route: '/permissions/accessibility',
+    title: 'Блокировка приложений',
+    importance: StepImportance.recommended,
+  ),
+  WizardStep(
+    route: '/permissions/usage-stats',
+    title: 'Статистика приложений',
     importance: StepImportance.recommended,
   ),
   WizardStep(

@@ -19,6 +19,8 @@ object PermissionStateCollector {
             null
         }
         return PermissionSnapshot.normalize(Build.VERSION.SDK_INT, mapOf(
+            "accessibility" to check { AppControlNative.isAccessibilityServiceEnabled(ctx) && PeriscopAccessibilityService.isConnected() },
+            "usageStats" to check { AppControlNative.hasUsageStatsPermission(ctx) },
             "deviceAdmin" to check { (ctx.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager)
                 .isAdminActive(ChildDeviceAdminReceiver.componentName(ctx)) },
             "overlay" to check { Settings.canDrawOverlays(ctx) },
