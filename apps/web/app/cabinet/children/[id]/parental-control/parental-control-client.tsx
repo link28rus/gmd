@@ -49,6 +49,12 @@ import { useChildren } from '@/lib/hooks/use-children';
 
 type RangeTab = 'today' | 'yesterday' | 'week';
 
+const RANGE_LABELS: Record<RangeTab, string> = {
+  yesterday: 'Вчера',
+  today: 'Сегодня',
+  week: 'Неделя',
+};
+
 const CATEGORY_LABELS: Record<AppCategory, string> = {
   social: 'Соцсети',
   messengers: 'Мессенджеры',
@@ -228,7 +234,8 @@ export default function ParentalControlClient({
         childId={childId}
         apps={apps}
         rules={rules}
-        usage={range ?? null}
+        usage={range?.byPackage}
+        tab={tab}
         loading={appsQ.isPending || rulesQ.isPending}
       />
 
@@ -245,26 +252,22 @@ export default function ParentalControlClient({
 // ─── Tabs ───────────────────────────────────────────────────────────────
 
 function Tabs({ tab, onChange }: { tab: RangeTab; onChange: (t: RangeTab) => void }): ReactElement {
-  const items: Array<{ key: RangeTab; label: string }> = [
-    { key: 'yesterday', label: 'Вчера' },
-    { key: 'today', label: 'Сегодня' },
-    { key: 'week', label: 'Неделя' },
-  ];
+  const items: RangeTab[] = ['yesterday', 'today', 'week'];
   return (
     <div className="inline-flex rounded-lg border border-border bg-card p-1">
       {items.map((it) => (
         <button
-          key={it.key}
+          key={it}
           type="button"
-          onClick={() => onChange(it.key)}
+          onClick={() => onChange(it)}
           className={
             'rounded-md px-4 py-1.5 text-sm font-medium transition-colors ' +
-            (tab === it.key
+            (tab === it
               ? 'bg-foreground text-background'
               : 'text-muted-foreground hover:text-foreground')
           }
         >
-          {it.label}
+          {RANGE_LABELS[it]}
         </button>
       ))}
     </div>
@@ -561,12 +564,14 @@ function AppRulesSection({
   apps,
   rules,
   usage,
+  tab,
   loading,
 }: {
   childId: string;
   apps: InstalledAppDto[];
   rules: { packageName: string; mode: string; source: string }[];
-  usage: UsageRangeDto | null;
+  usage: UsageRangeDto['byPackage'] | undefined;
+  tab: RangeTab;
   loading: boolean;
 }): ReactElement {
   const upsert = useUpsertAppRule(childId);
@@ -585,17 +590,11 @@ function AppRulesSection({
     return map;
   }, [rules]);
 
-  // Время за выбранный диапазон (today/yesterday/week) — приходит в
-  // usage.byPackage. Map pkg → seconds используется и в карточке app, и в
-  // сортировке. Если usage ещё не загрузился — fallback на todaySeconds
-  // (актуально только для today; для yesterday/week — 0 пока ждём ответ).
-  const secondsByPkg = useMemo(() => {
-    const map = new Map<string, number>();
-    if (usage) {
-      for (const p of usage.byPackage) map.set(p.packageName, p.seconds);
-    }
-    return map;
-  }, [usage]);
+  const secondsByPkg = useMemo(
+    () => new Map(usage?.map(({ packageName, seconds }) => [packageName, seconds])),
+    [usage],
+  );
+  const useTodayFallback = tab === 'today' && !usage;
 
   // Собираем единый список: HARDCODED + все apps + любые rules без installed-app
   // (на случай если правило сохранено для удалённого app — пусть родитель
@@ -624,10 +623,7 @@ function AppRulesSection({
         mode = 'DEFAULT';
       }
 
-      // Активность за выбранный диапазон. Для today fallback на
-      // todaySeconds (если range ещё не пришёл). Для yesterday/week без
-      // ответа usage — 0.
-      const seconds = secondsByPkg.get(pkg) ?? (usage ? 0 : (a?.todaySeconds ?? 0));
+      const seconds = secondsByPkg.get(pkg) ?? (useTodayFallback ? (a?.todaySeconds ?? 0) : 0);
 
       out.push({
         packageName: pkg,
@@ -649,18 +645,16 @@ function AppRulesSection({
     for (const r of rules) push(r.packageName);
 
     return out;
-  }, [apps, appByPkg, rules, ruleByPkg, secondsByPkg, usage]);
+  }, [apps, appByPkg, rules, ruleByPkg, secondsByPkg, useTodayFallback]);
 
-  // Сортировка: hardcoded (системные неблокируемые) сверху → дальше по
-  // активности за выбранный диапазон (самые «горячие» первыми) → алфавитно
-  // среди приложений с одинаковыми (или нулевыми) секундами.
   const sortedItems = useMemo(() => {
     return [...items].sort((a, b) => {
-      if (a.hardcoded !== b.hardcoded) return a.hardcoded ? -1 : 1;
       if (b.seconds !== a.seconds) return b.seconds - a.seconds;
+      if (a.hardcoded !== b.hardcoded) return a.hardcoded ? -1 : 1;
       return a.appLabel.localeCompare(b.appLabel, 'ru');
     });
   }, [items]);
+  const maxSeconds = sortedItems[0]?.seconds ?? 0;
 
   // Применяем фильтры (search + tab)
   const filteredItems = useMemo(() => {
@@ -763,16 +757,24 @@ function AppRulesSection({
           {search ? 'Нет приложений по запросу.' : 'Список приложений пуст.'}
         </p>
       ) : (
-        <ul className="mt-3 space-y-2">
-          {filteredItems.map((it) => (
-            <AppRuleRow
-              key={it.packageName}
-              item={it}
-              onChangeMode={(m) => onChangeMode(it, m)}
-              busy={upsert.isPending}
-            />
-          ))}
-        </ul>
+        <div className="mt-3">
+          {maxSeconds > 0 && (
+            <p className="mb-2 text-xs text-muted-foreground">
+              Время использования · {RANGE_LABELS[tab]}
+            </p>
+          )}
+          <ul className="space-y-2">
+            {filteredItems.map((it) => (
+              <AppRuleRow
+                key={it.packageName}
+                item={it}
+                maxSeconds={maxSeconds}
+                onChangeMode={(m) => onChangeMode(it, m)}
+                busy={upsert.isPending}
+              />
+            ))}
+          </ul>
+        </div>
       )}
     </div>
   );
@@ -826,22 +828,24 @@ function RulesFilterTabs({
 
 function AppRuleRow({
   item,
+  maxSeconds,
   onChangeMode,
   busy,
 }: {
   item: RuleViewModel;
+  maxSeconds: number;
   onChangeMode: (mode: AppRuleMode) => void;
   busy: boolean;
 }): ReactElement {
   const proxiedIcon = rewriteIconUrl(item.iconUrl);
-  const timePart = item.seconds > 0 ? ` · ${fmtMinutes(item.seconds)}` : '';
+  const duration = item.seconds > 0 ? fmtMinutes(item.seconds) : null;
   const subtitle = item.hardcoded
-    ? 'Системное · нельзя заблокировать' + timePart
+    ? 'Системное · нельзя заблокировать'
     : item.systemDefault
-      ? 'По умолчанию разрешено системой' + timePart
+      ? 'По умолчанию разрешено системой'
       : item.category !== null
-        ? CATEGORY_LABELS[item.category] + (item.isSystem ? ' · системное' : '') + timePart
-        : item.packageName + timePart;
+        ? CATEGORY_LABELS[item.category] + (item.isSystem ? ' · системное' : '')
+        : item.packageName;
 
   return (
     <li className="flex items-center gap-3 rounded-xl border border-border bg-card p-3">
@@ -863,7 +867,30 @@ function AppRuleRow({
       </div>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-foreground">{item.appLabel}</p>
-        <p className="truncate text-xs text-muted-foreground">{subtitle}</p>
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="truncate text-xs text-muted-foreground">{subtitle}</p>
+          {duration && (
+            <span aria-hidden className="shrink-0 text-xs tabular-nums text-foreground">
+              {duration}
+            </span>
+          )}
+        </div>
+        {duration && (
+          <div
+            role="meter"
+            aria-label={`Время использования — ${item.appLabel}`}
+            aria-valuemin={0}
+            aria-valuemax={maxSeconds}
+            aria-valuenow={item.seconds}
+            aria-valuetext={duration}
+            className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted"
+          >
+            <div
+              className="h-full rounded-full bg-blue-500"
+              style={{ width: `${(item.seconds / maxSeconds) * 100}%` }}
+            />
+          </div>
+        )}
       </div>
       <ModeSegmented
         value={item.mode}
