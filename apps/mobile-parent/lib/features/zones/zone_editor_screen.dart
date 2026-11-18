@@ -5,6 +5,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../core/features.dart';
 import '../../core/providers.dart';
 import '../children/child_models.dart';
 import '../children/children_providers.dart';
@@ -182,6 +183,7 @@ class _ZoneEditorFormState extends ConsumerState<_ZoneEditorForm> {
   // Новая зона — по умолчанию для всех детей, включая будущих; подсказка
   // места только для части детей — сразу для них.
   late bool _allChildren = widget.zone?.allChildren ?? _suggestedChildIds() == null;
+  late bool _blockApps = widget.zone?.blockApps ?? false;
   late List<String> _childIds = _initialChildIds();
   late ScheduleDraft _schedule = ScheduleDraft.initial(widget.zone?.schedule);
   late ArrivalDraft _arrival = ArrivalDraft.initial(widget.zone?.arrival);
@@ -294,6 +296,9 @@ class _ZoneEditorFormState extends ConsumerState<_ZoneEditorForm> {
       centerLon: _center.longitude,
       radius: _radius,
       allChildren: _allChildren,
+      blockApps: kAppControlEnabled && _blockApps != (widget.zone?.blockApps ?? false)
+          ? _blockApps
+          : null,
       childIds: _childIds,
       // Пояс уходит при каждом сохранении (спека 2.1).
       timezone: widget.deviceTimeZone,
@@ -427,6 +432,17 @@ class _ZoneEditorFormState extends ConsumerState<_ZoneEditorForm> {
                   child: _buildMainFields(theme, scheme),
                 ),
                 ..._buildChildrenFields(scheme),
+                if (kAppControlEnabled)
+                  SwitchListTile(
+                    title: const Text('Блокировать приложения в зоне'),
+                    subtitle: const Text(
+                      'Для детей этой зоны. Звонки и приложения из списка '
+                      '«Всегда разрешены» останутся доступны. После выхода '
+                      'ограничение зоны снимется.',
+                    ),
+                    value: _blockApps,
+                    onChanged: (value) => setState(() => _blockApps = value),
+                  ),
                 const SizedBox(height: 8),
                 _buildScheduleSection(),
                 _buildArrivalSection(),

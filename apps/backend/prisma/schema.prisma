@@ -754,6 +754,7 @@ model Zone {
   // v0.64.0: зона для всех детей семьи, включая будущих. Явные назначения
   // (assignments) при этом пустые.
   allChildren Boolean @default(false)
+  blockApps   Boolean @default(false)
   // v0.65.0: IANA-пояс зоны (из браузера родителя при сохранении) — для
   // расписания и срока «не пришёл». Обязателен, если задано одно из них.
   timezone           String?

@@ -112,6 +112,61 @@ describe('Контроль приложений: API, миграция и Postgr
       .auth(other.accessToken, { type: 'bearer' })
       .expect(404);
   });
+  it('снимок включает активные зоны этого ребёнка и очищается после выключения и удаления', async () => {
+    const app = h.app.getHttpServer();
+    const zone = {
+      name: 'Школа',
+      color: '#22c55e',
+      icon: 'school',
+      centerLat: 48.48,
+      centerLon: 135.08,
+      radius: 150,
+    };
+    const parent = (method: 'post' | 'patch' | 'delete', path: string) =>
+      request(app)[method](path).auth(owner.accessToken, { type: 'bearer' });
+    const childState = async () =>
+      (await request(app).get('/child/app-control-state').set('X-Child-Token', token).expect(200))
+        .body;
+
+    const other = await registerVerifiedUser(h, 'other-zone-family@example.com');
+    await h.prisma.zone.create({
+      data: {
+        ...zone,
+        familyId: other.familyId,
+        createdBy: other.userId,
+        allChildren: true,
+        blockApps: true,
+      },
+    });
+    const sibling = await h.prisma.child.create({
+      data: { familyId: owner.familyId, name: 'Сестра' },
+    });
+    await parent('post', '/zones')
+      .send({ ...zone, blockApps: true, childIds: [sibling.id] })
+      .expect(201);
+    const original = await childState();
+    expect(original.blockingZones).toEqual([]);
+
+    const created = await parent('post', '/zones')
+      .send({ ...zone, childIds: [childId] })
+      .expect(201);
+    const { id } = created.body;
+    expect(created.body.blockApps).toBe(false);
+    await parent('patch', `/zones/${id}`).send({ blockApps: true }).expect(200);
+    const active = await childState();
+    expect(active.blockingZones).toEqual([
+      { id, name: zone.name, centerLat: zone.centerLat, centerLon: zone.centerLon, radius: 150 },
+    ]);
+    expect(active.revision).not.toBe(original.revision);
+
+    await parent('patch', `/zones/${id}`).send({ radius: 200 }).expect(200);
+    expect((await childState()).blockingZones[0].radius).toBe(200);
+    await parent('patch', `/zones/${id}`).send({ blockApps: false }).expect(200);
+    expect((await childState()).blockingZones).toEqual([]);
+    await parent('patch', `/zones/${id}`).send({ blockApps: true }).expect(200);
+    await parent('delete', `/zones/${id}`).expect(204);
+    expect((await childState()).blockingZones).toEqual([]);
+  });
   it('пустой отчёт имеет свежесть; отозванный токен не меняет новую привязку', async () => {
     await request(h.app.getHttpServer())
       .post('/child/usage-reports')

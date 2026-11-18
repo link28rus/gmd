@@ -188,6 +188,7 @@ class Zone {
     required this.centerLon,
     required this.radius,
     this.allChildren = false,
+    this.blockApps = false,
     this.childIds = const [],
     this.states = const [],
     this.timezone,
@@ -206,6 +207,7 @@ class Zone {
 
   /// Зона для всех детей семьи, включая будущих.
   final bool allChildren;
+  final bool blockApps;
 
   /// Явные назначения; пусто при [allChildren].
   final List<String> childIds;
@@ -232,6 +234,7 @@ class Zone {
         centerLon: _double(json['centerLon']),
         radius: _int(json['radius'], kZoneRadiusDefault),
         allChildren: (json['allChildren'] as bool?) ?? false,
+        blockApps: (json['blockApps'] as bool?) ?? false,
         childIds: (json['childIds'] as List? ?? const []).whereType<String>().toList(),
         states: _maps(json['states'])
             .map((s) => ZoneChildState(
@@ -266,6 +269,7 @@ class ZoneInput {
     required this.centerLon,
     required this.radius,
     required this.allChildren,
+    this.blockApps,
     required this.childIds,
     this.timezone,
     this.schedule,
@@ -279,6 +283,7 @@ class ZoneInput {
   final double centerLon;
   final int radius;
   final bool allChildren;
+  final bool? blockApps;
   final List<String> childIds;
   final String? timezone;
   final ZoneSchedule? schedule;
@@ -292,6 +297,7 @@ class ZoneInput {
         'centerLon': centerLon,
         'radius': radius,
         'allChildren': allChildren,
+        if (blockApps != null) 'blockApps': blockApps,
         // При allChildren=true backend их игнорирует — не шлём лишнего.
         'childIds': allChildren ? const <String>[] : childIds,
         'timezone': ?timezone,

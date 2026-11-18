@@ -28,7 +28,8 @@ object ChildPushDispatcher {
     fun dispatch(ctx: Context, data: Map<String, String>, source: String) {
         val type = data["type"]
         when (type) {
-            "BLOCK_APPS", "UNBLOCK_APPS", "SYNC_RULES", "SYNC_SCHEDULES" -> AppControlScheduler.syncNow(ctx)
+            "BLOCK_APPS", "UNBLOCK_APPS", "SYNC_RULES", "SYNC_SCHEDULES", "SYNC_ZONE_BLOCKING" ->
+                AppControlScheduler.syncNow(ctx)
             "REPORT_PERMISSION_STATE" -> AppControlScheduler.reportPermissionsNow(ctx)
             "START_AUDIO" -> handleStartAudio(ctx, data, source)
             "STOP_AUDIO" -> handleStopAudio(ctx, data, source)

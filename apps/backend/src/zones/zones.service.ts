@@ -3,10 +3,12 @@ import {
   ConflictException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { FcmService } from '../fcm/fcm.service';
 import type { CreateZoneDto } from './dto/create-zone.schema';
 import type { UpdateZoneDto } from './dto/update-zone.schema';
 import type { ZoneDto, ZoneNotificationPrefDto } from './dto/zone.dto';
@@ -28,6 +30,7 @@ interface ZoneRow {
   centerLon: number;
   radius: number;
   allChildren: boolean;
+  blockApps: boolean;
   timezone: string | null;
   scheduleDaysMask: number | null;
   scheduleStartMin: number | null;
@@ -132,6 +135,7 @@ function toDto(row: ZoneRow, childIds: string[], states?: ZoneStateLite[]): Zone
     centerLon: row.centerLon,
     radius: row.radius,
     allChildren: row.allChildren,
+    blockApps: row.blockApps,
     timezone: row.timezone,
     schedule: scheduleOf(row),
     arrival: arrivalOf(row),
@@ -169,7 +173,12 @@ export function decodeEventsCursor(cursor: string): { recordedAt: Date; id: stri
 
 @Injectable()
 export class ZonesService {
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(ZonesService.name);
+
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(FcmService) private readonly fcm: FcmService,
+  ) {}
 
   async create(familyId: string, userId: string, dto: CreateZoneDto): Promise<ZoneDto> {
     const count = await this.prisma.zone.count({ where: { familyId, deletedAt: null } });
@@ -195,6 +204,7 @@ export class ZonesService {
           centerLon: dto.centerLon,
           radius: dto.radius,
           allChildren: dto.allChildren,
+          blockApps: dto.blockApps ?? false,
           ...rules,
           createdBy: userId,
         },
@@ -226,6 +236,7 @@ export class ZonesService {
         targetIds.map((childId) => ({ childId, isInside: inside.get(childId) ?? false })),
       );
     });
+    this.refreshAppControl(familyId, created);
     return (await this.withMyPrefs(familyId, userId, [created]))[0];
   }
 
@@ -313,6 +324,7 @@ export class ZonesService {
       if (dto.centerLon !== undefined) scalarPatch.centerLon = dto.centerLon;
       if (dto.radius !== undefined) scalarPatch.radius = dto.radius;
       if (dto.allChildren !== undefined) scalarPatch.allChildren = dto.allChildren;
+      if (dto.blockApps !== undefined) scalarPatch.blockApps = dto.blockApps;
       Object.assign(scalarPatch, rules);
       await tx.zone.update({ where: { id: zoneId }, data: scalarPatch });
 
@@ -351,6 +363,7 @@ export class ZonesService {
         updated.states,
       );
     });
+    this.refreshAppControl(familyId, { ...existing, childIds: currentIds }, updatedDto);
     return userId ? (await this.withMyPrefs(familyId, userId, [updatedDto]))[0] : updatedDto;
   }
 
@@ -485,7 +498,11 @@ export class ZonesService {
   async softDelete(familyId: string, zoneId: string): Promise<void> {
     const existing = await this.prisma.zone.findFirst({
       where: { id: zoneId, familyId, deletedAt: null },
-      select: { id: true },
+      select: {
+        blockApps: true,
+        allChildren: true,
+        assignments: { select: { childId: true } },
+      },
     });
     if (!existing) {
       throw new NotFoundException({ code: 'zone_not_found', message: 'Zone not found' });
@@ -494,6 +511,43 @@ export class ZonesService {
       where: { id: zoneId },
       data: { deletedAt: new Date() },
     });
+    this.refreshAppControl(familyId, {
+      ...existing,
+      childIds: existing.assignments.map((assignment) => assignment.childId),
+    });
+  }
+
+  private refreshAppControl(
+    familyId: string,
+    ...zones: Pick<ZoneDto, 'blockApps' | 'allChildren' | 'childIds'>[]
+  ): void {
+    const blocking = zones.filter((zone) => zone.blockApps);
+    if (!blocking.length) return;
+    const allChildren = blocking.some((zone) => zone.allChildren);
+    const childIds = [...new Set(blocking.flatMap((zone) => zone.childIds))];
+    // Push только ускоряет загрузку снимка; при сбое остаётся периодическая синхронизация.
+    void this.prisma.childDevice
+      .findMany({
+        where: {
+          revokedAt: null,
+          child: { familyId, deletedAt: null, ...(allChildren ? {} : { id: { in: childIds } }) },
+        },
+        select: { id: true, fcmToken: true, rustorePushToken: true },
+      })
+      .then((devices) =>
+        Promise.all(
+          devices.map(({ id, fcmToken, rustorePushToken }) =>
+            this.fcm.sendHybridDataMessage(
+              id,
+              { fcmToken, rustorePushToken },
+              { type: 'SYNC_ZONE_BLOCKING' },
+              // На детском устройстве RuStore SDK только логирует такие команды.
+              { rustore: false },
+            ),
+          ),
+        ),
+      )
+      .catch((error) => this.logger.warn(`Could not refresh zone app control: ${String(error)}`));
   }
 
   private async assertChildrenInFamily(familyId: string, childIds: string[]): Promise<void> {

@@ -1,6 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { FcmService } from '../fcm/fcm.service';
 import { ZonesService, decodeEventsCursor, encodeEventsCursor } from './zones.service';
 import { MAX_ZONES_PER_FAMILY } from './dto/constants';
 
@@ -29,10 +30,12 @@ const prismaMock: any = {
     findMany: jest.fn(),
   },
   child: { findMany: jest.fn() },
+  childDevice: { findMany: jest.fn() },
   zoneNotificationPref: { findMany: jest.fn(), upsert: jest.fn() },
   // Последние хорошие точки детей с расстоянием до центра зоны.
   $queryRaw: jest.fn(),
 };
+const fcmMock = { sendHybridDataMessage: jest.fn() };
 prismaMock.$transaction = jest.fn(async (fn: unknown) =>
   typeof fn === 'function' ? (fn as (tx: unknown) => unknown)(prismaMock) : fn,
 );
@@ -48,6 +51,7 @@ function zoneRow(over: Record<string, unknown> = {}) {
     centerLon: 0,
     radius: 100,
     allChildren: false,
+    blockApps: false,
     timezone: null,
     scheduleDaysMask: null,
     scheduleStartMin: null,
@@ -66,8 +70,13 @@ async function makeService(): Promise<ZonesService> {
   jest.clearAllMocks();
   prismaMock.$queryRaw.mockResolvedValue([]);
   prismaMock.zoneNotificationPref.findMany.mockResolvedValue([]);
+  prismaMock.childDevice.findMany.mockResolvedValue([]);
   const module = await Test.createTestingModule({
-    providers: [ZonesService, { provide: PrismaService, useValue: prismaMock }],
+    providers: [
+      ZonesService,
+      { provide: PrismaService, useValue: prismaMock },
+      { provide: FcmService, useValue: fcmMock },
+    ],
   }).compile();
   return module.get(ZonesService);
 }
@@ -293,7 +302,7 @@ describe('ZonesService.softDelete', () => {
   });
 
   it('устанавливает deletedAt и не трогает события/состояния', async () => {
-    prismaMock.zone.findFirst.mockResolvedValue({ id: 'z1', familyId: 'f1', deletedAt: null });
+    prismaMock.zone.findFirst.mockResolvedValue({ ...zoneRow(), assignments: [] });
     prismaMock.zone.update.mockResolvedValue({ id: 'z1', deletedAt: new Date() });
 
     await svc.softDelete('f1', 'z1');
@@ -303,6 +312,34 @@ describe('ZonesService.softDelete', () => {
       data: { deletedAt: expect.any(Date) },
     });
     expect(prismaMock.zoneState.deleteMany).not.toHaveBeenCalled();
+    expect(prismaMock.childDevice.findMany).not.toHaveBeenCalled();
+  });
+
+  it('после удаления блокирующей зоны просит обновить политику только назначенных детей', async () => {
+    prismaMock.zone.findFirst.mockResolvedValue({
+      ...zoneRow({ blockApps: true }),
+      assignments: [{ childId: 'c1' }],
+    });
+    prismaMock.childDevice.findMany.mockResolvedValue([
+      { id: 'd1', fcmToken: 'fcm', rustorePushToken: null },
+    ]);
+
+    await svc.softDelete('f1', 'z1');
+
+    expect(prismaMock.childDevice.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { revokedAt: null, child: { familyId: 'f1', deletedAt: null, id: { in: ['c1'] } } },
+      }),
+    );
+    expect(prismaMock.zone.update.mock.invocationCallOrder[0]).toBeLessThan(
+      prismaMock.childDevice.findMany.mock.invocationCallOrder[0],
+    );
+    expect(fcmMock.sendHybridDataMessage).toHaveBeenCalledWith(
+      'd1',
+      { fcmToken: 'fcm', rustorePushToken: null },
+      { type: 'SYNC_ZONE_BLOCKING' },
+      { rustore: false },
+    );
   });
 });
 

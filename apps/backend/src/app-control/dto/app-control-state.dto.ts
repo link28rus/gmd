@@ -19,6 +19,7 @@ export const AppControlAckSchema = z
     accessibility: z.boolean(),
     usageStats: z.boolean(),
     timezone: TimezoneSchema,
+    zoneBlockingSupported: z.literal(true).optional(),
   })
   .strict();
 export type AppControlAck = z.infer<typeof AppControlAckSchema>;

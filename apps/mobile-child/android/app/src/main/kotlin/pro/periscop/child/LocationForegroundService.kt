@@ -4,6 +4,7 @@ import android.app.*
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.location.Location
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -319,7 +320,8 @@ class LocationForegroundService : Service() {
                     // v0.59.0: без сети в движении FLP сам копит точки каждые
                     // 5 с — heartbeat лишь будил бы Dart-изолят, а realtime-
                     // каналу всё равно некуда подключаться.
-                    log("heartbeat tick: offline, FLP batching — skip")
+                    log("heartbeat tick: offline, FLP batching — skip Dart heartbeat")
+                    refreshZoneFixIfNeeded()
                 } else {
                     handleHeartbeat()
                     // v0.57: страховка realtime-канала — поднять упавший / порвать «тихий».
@@ -409,11 +411,42 @@ class LocationForegroundService : Service() {
                     } else {
                         log("heartbeat: lastLocation is null — provider has no cached fix yet")
                     }
+                    refreshZoneFixIfNeeded()
                 }
                 .addOnFailureListener { e -> logErr("heartbeat lastLocation failed", e) }
         } catch (e: SecurityException) {
             logErr("heartbeat lastLocation SecurityException", e)
         }
+    }
+
+    private fun refreshZoneFixIfNeeded() {
+        // При стоянке FLP отсекает близкие точки; старая lastLocation не подтверждает зону.
+        if (!BlockManager.needsZoneFix(this) || !hasLocationPermission()) return
+        try {
+            val request = CurrentLocationRequest.Builder()
+                .setPriority(Priority.PRIORITY_BALANCED_POWER_ACCURACY)
+                .setMaxUpdateAgeMillis(0)
+                .setDurationMillis(10_000)
+                .build()
+            fused.getCurrentLocation(request, null)
+                .addOnSuccessListener { loc -> if (loc != null) observeZoneFix(loc) }
+                .addOnFailureListener { e -> logErr("zone fix failed", e) }
+        } catch (e: SecurityException) {
+            logErr("zone fix permission unavailable", e)
+        }
+    }
+
+    private fun observeZoneFix(loc: Location) {
+        if (!loc.hasAccuracy() || isMockLocation(loc)) return
+        BlockManager.observeZoneFix(
+            this,
+            ZoneBlockEvaluator.Fix(
+                loc.latitude,
+                loc.longitude,
+                loc.accuracy.toDouble(),
+                loc.elapsedRealtimeNanos / 1_000_000,
+            ),
+        )
     }
 
     private fun scheduleHeartbeatAlarm() {
@@ -1105,6 +1138,8 @@ class LocationForegroundService : Service() {
     }
 
     private fun sendToDart(loc: android.location.Location, heartbeat: Boolean) {
+        // Блокировка работает независимо от Dart, отправки трека и наличия сети.
+        observeZoneFix(loc)
         val channel = bgChannel
         if (channel == null) {
             log("sendToDart: bgChannel is null — engine not ready, point DROPPED")
@@ -1326,17 +1361,4 @@ class LocationForegroundService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
-
-    // Haversine (метры). Используется в stationary-dedup для сравнения
-    // расстояния между соседними точками. Точность ±0.5% на дистанциях
-    // до 100м — нам сверх достаточно.
-    private fun haversineMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
-        val r = 6_371_000.0
-        val dLat = Math.toRadians(lat2 - lat1)
-        val dLon = Math.toRadians(lon2 - lon1)
-        val a = Math.sin(dLat / 2).let { it * it } +
-            Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) *
-            Math.sin(dLon / 2).let { it * it }
-        return r * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-    }
 }

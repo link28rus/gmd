@@ -14,6 +14,7 @@ export interface ZoneDto {
   allChildren: boolean;
   /** Явные назначения (пусто при allChildren). */
   childIds: string[];
+  blockApps: boolean;
   states?: Array<{ childId: string; isInside: boolean }>;
   /** v0.65.0: IANA-пояс зоны для расписания и срока. */
   timezone: string | null;

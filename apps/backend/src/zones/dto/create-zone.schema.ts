@@ -18,6 +18,7 @@ export const CreateZoneSchema = z
     // Зона для всех детей семьи, включая будущих; childIds тогда игнорируются.
     allChildren: z.boolean().default(false),
     childIds: childIdsSchema.default([]),
+    blockApps: z.boolean().optional(),
     // v0.65.0: пояс обязателен, если задано расписание или срок.
     timezone: timezoneSchema.nullable().optional(),
     schedule: ZoneScheduleSchema.nullable().optional(),

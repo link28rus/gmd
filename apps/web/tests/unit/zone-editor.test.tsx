@@ -93,6 +93,23 @@ describe('ZoneEditorDialog', () => {
     expect(screen.getByText('Новая зона')).toBeInTheDocument();
   });
 
+  it('автоблокировка выключена по умолчанию и сохраняется после включения', async () => {
+    const { zonesApi } = await import('@/lib/api/zones');
+    render(<ZoneEditorDialog open onOpenChange={() => {}} kids={KIDS} onSaved={() => {}} />, {
+      wrapper: makeWrapper(),
+    });
+    const toggle = screen.getByRole('switch', { name: 'Блокировать приложения в зоне' });
+    expect(toggle).not.toBeChecked();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Название' }), {
+      target: { value: 'Школа' },
+    });
+    fireEvent.click(toggle);
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+    await waitFor(() =>
+      expect(jest.mocked(zonesApi.create).mock.calls[0]?.[0]).toMatchObject({ blockApps: true }),
+    );
+  });
+
   it('показывает заголовок «Изменить зону» когда initial передан', () => {
     const initial = {
       id: 'z1',

@@ -13,6 +13,13 @@ export function configRevision(binding: string, state: unknown): string {
     .digest('hex');
 }
 
+const policyDeviceSelect = {
+  id: true,
+  childId: true,
+  child: { select: { familyId: true } },
+} as const;
+type PolicyDevice = { id: string; childId: string; child: { familyId: string } };
+
 @Injectable()
 export class AppControlSyncService {
   constructor(
@@ -21,11 +28,21 @@ export class AppControlSyncService {
     @Inject(ScheduleService) private readonly schedules: ScheduleService,
   ) {}
 
-  private async snapshot(deviceId: string) {
-    const [session, rules, schedules] = await Promise.all([
+  private async snapshot({ id: deviceId, childId, child }: PolicyDevice) {
+    const [session, rules, schedules, blockingZones] = await Promise.all([
       this.blocking.getActiveSessionByDevice(deviceId),
       this.blocking.listEffectiveRules(deviceId),
       this.schedules.listForDevice(deviceId),
+      this.prisma.zone.findMany({
+        where: {
+          familyId: child.familyId,
+          deletedAt: null,
+          blockApps: true,
+          OR: [{ allChildren: true }, { assignments: { some: { childId } } }],
+        },
+        select: { id: true, name: true, centerLat: true, centerLon: true, radius: true },
+        orderBy: { id: 'asc' },
+      }),
     ]);
     return {
       session: session ? { sessionId: session.id, endsAt: session.endsAt.toISOString() } : null,
@@ -41,6 +58,8 @@ export class AppControlSyncService {
           mode: s.mode,
         }))
         .sort((a, b) => a.id.localeCompare(b.id)),
+      // Пустой список сохраняет revision существующей конфигурации.
+      ...(blockingZones.length ? { blockingZones } : {}),
     };
   }
 
@@ -48,12 +67,13 @@ export class AppControlSyncService {
     const bindingHash = hashDeviceToken(token);
     const device = await this.prisma.childDevice.findFirst({
       where: { id: deviceId, tokenHash: bindingHash, revokedAt: null },
-      select: { id: true },
+      select: policyDeviceSelect,
     });
     if (!device) throw new UnauthorizedException({ code: 'unauthorized' });
-    const state = await this.snapshot(deviceId);
+    const state = await this.snapshot(device);
     return {
       ...state,
+      blockingZones: state.blockingZones ?? [],
       revision: configRevision(bindingHash, state),
       serverNow: new Date().toISOString(),
     };
@@ -76,7 +96,7 @@ export class AppControlSyncService {
     const device = await this.prisma.childDevice.findFirst({
       where: { childId, revokedAt: null },
       select: {
-        id: true,
+        ...policyDeviceSelect,
         tokenHash: true,
         timezone: true,
         appControlStatus: true,
@@ -85,7 +105,7 @@ export class AppControlSyncService {
       },
     });
     if (!device) throw new NotFoundException({ code: 'no_active_device' });
-    const state = await this.snapshot(device.id);
+    const state = await this.snapshot(device);
     const raw = device.appControlStatus;
     const ack =
       raw && typeof raw === 'object' && !Array.isArray(raw) && raw.bindingHash === device.tokenHash
@@ -115,6 +135,7 @@ export class AppControlSyncService {
       applied: Boolean(
         fresh &&
         accessibility === true &&
+        (!state.blockingZones || ack?.zoneBlockingSupported === true) &&
         ack?.revision === configRevision(device.tokenHash, state),
       ),
     };

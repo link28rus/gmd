@@ -21,9 +21,12 @@ describe('Синхронизация контроля приложений', () 
   });
   function setup(ack: unknown = null) {
     const db = {
+      zone: { findMany: jest.fn().mockResolvedValue([]) },
       childDevice: {
         findFirst: jest.fn().mockResolvedValue({
           id: 'dev',
+          childId: 'child',
+          child: { familyId: 'family' },
           tokenHash: 'binding',
           timezone: 'Asia/Vladivostok',
           appControlStatus: ack,
@@ -95,5 +98,40 @@ describe('Синхронизация контроля приложений', () 
         timezone: 'UTC',
       }),
     ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('отдаёт только геометрию действующих зон семьи, назначенных этому ребёнку', async () => {
+    const { db, service } = setup();
+    const zone = { id: 'school', name: 'Школа', centerLat: 48, centerLon: 135, radius: 150 };
+    db.zone.findMany.mockResolvedValue([zone]);
+
+    expect(await service.get('dev', 'token')).toMatchObject({ blockingZones: [zone] });
+    expect(db.zone.findMany).toHaveBeenCalledWith({
+      where: {
+        familyId: 'family',
+        deletedAt: null,
+        blockApps: true,
+        OR: [{ allChildren: true }, { assignments: { some: { childId: 'child' } } }],
+      },
+      select: { id: true, name: true, centerLat: true, centerLon: true, radius: true },
+      orderBy: { id: 'asc' },
+    });
+  });
+
+  it('подтверждение старого APK не подтверждает правила блокировки по зонам', async () => {
+    const blockingZones = [
+      { id: 'school', name: 'Школа', centerLat: 48, centerLon: 135, radius: 150 },
+    ];
+    const ack = {
+      revision: configRevision('binding', { ...state, blockingZones }),
+      bindingHash: 'binding',
+      receivedAt: new Date().toISOString(),
+      accessibility: true,
+    };
+    const { db, service } = setup(ack);
+    db.zone.findMany.mockResolvedValue(blockingZones);
+    expect(await service.status('child')).toMatchObject({ applied: false });
+    Object.assign(ack, { zoneBlockingSupported: true });
+    expect(await service.status('child')).toMatchObject({ applied: true });
   });
 });

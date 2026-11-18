@@ -17,6 +17,7 @@ export const UpdateZoneSchema = z
     radius: z.number().int().gte(MIN_RADIUS_M).lte(MAX_RADIUS_M).optional(),
     allChildren: z.boolean().optional(),
     childIds: childIdsSchema.optional(),
+    blockApps: z.boolean().optional(),
     // v0.65.0: null — снять расписание / срок.
     timezone: timezoneSchema.nullable().optional(),
     schedule: ZoneScheduleSchema.nullable().optional(),

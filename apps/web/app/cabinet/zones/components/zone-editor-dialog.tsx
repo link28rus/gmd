@@ -15,6 +15,8 @@ import { ColorPicker } from './color-picker';
 import { IconPicker } from './icon-picker';
 import { AddressSearch } from './address-search';
 import { ZoneEditorMap } from './zone-editor-map';
+import { ToggleSwitch } from './toggle-switch';
+import { APP_CONTROL_ENABLED } from '@/lib/features';
 import { useCreateZone, useUpdateZone } from '@/lib/hooks/use-zones';
 import {
   ZONE_RADIUS_DEFAULT,
@@ -177,9 +179,11 @@ function ZoneEditorForm({
   const [recenterSeq, setRecenterSeq] = useState(0);
   const [schedule, setSchedule] = useState(() => initialScheduleDraft(initial));
   const [arrival, setArrival] = useState(() => initialArrivalDraft(initial));
+  const [blockApps, setBlockApps] = useState(initial?.blockApps ?? false);
   // Пояс берётся из браузера молча и уходит при каждом сохранении (спека 2.1).
   const [browserTz] = useState(browserTimeZone);
   const allChildrenId = useId();
+  const blockAppsId = useId();
 
   const create = useCreateZone();
   const update = useUpdateZone();
@@ -224,6 +228,7 @@ function ZoneEditorForm({
       radius,
       allChildren,
       childIds: allChildren ? [] : childIds,
+      ...(APP_CONTROL_ENABLED && blockApps !== (initial?.blockApps ?? false) ? { blockApps } : {}),
       ...(browserTz ? { timezone: browserTz } : {}),
       schedule: schedulePayload(schedule),
       arrival: arrivalPayload(arrival),
@@ -357,6 +362,24 @@ function ZoneEditorForm({
             </div>
           )}
         </fieldset>
+
+        {APP_CONTROL_ENABLED && (
+          <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
+            <div>
+              <Label htmlFor={blockAppsId}>Блокировать приложения в зоне</Label>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Для детей этой зоны. Звонки и приложения из списка «Всегда разрешены» останутся
+                доступны. После выхода ограничение зоны снимется.
+              </p>
+            </div>
+            <ToggleSwitch
+              id={blockAppsId}
+              checked={blockApps}
+              onChange={setBlockApps}
+              disabled={saving}
+            />
+          </div>
+        )}
 
         <div className="space-y-3">
           <ScheduleFields value={schedule} onChange={setSchedule} />

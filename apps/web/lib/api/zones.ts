@@ -69,6 +69,7 @@ export interface Zone {
   radius: number;
   /** Зона для всех детей семьи, включая будущих. */
   allChildren: boolean;
+  blockApps?: boolean;
   /** Явные назначения; пусто при allChildren. */
   childIds: string[];
   states: ZoneState[];
@@ -118,6 +119,7 @@ export interface CreateZoneInput {
   centerLon: number;
   radius: number;
   allChildren: boolean;
+  blockApps?: boolean;
   /** При allChildren=true backend их игнорирует. */
   childIds: string[];
   /** IANA-пояс браузера; обязателен, если задано расписание или срок. */

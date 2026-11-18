@@ -2,7 +2,9 @@ package pro.periscop.child
 
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
+import android.os.SystemClock
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -36,6 +38,13 @@ object BlockManager {
     private const val KEY_RULES_JSON = "rules_json"
     // v0.49 Phase 6.x — расписание автоблокировки (FCM SYNC_SCHEDULES).
     private const val KEY_SCHEDULES_JSON = "schedules_json"
+    private const val KEY_BLOCKING_ZONES_JSON = "blocking_zones_json"
+    private const val KEY_ZONE_PRESENCE_JSON = "zone_presence_json"
+    private const val KEY_ZONE_PRESENCE_BOOT = "zone_presence_boot"
+    private const val ZONE_PRESENCE_SAVE_INTERVAL_MS = 60_000L
+    private var zoneEvaluator: ZoneBlockEvaluator? = null
+    private var savedZonePresence = emptyMap<String, Long>()
+    private var zoneBootCount: Int? = null
 
     /** Зашиты намертво, не переопределяются ни PARENT, ни SYSTEM_DEFAULT правилами. */
     private val HARDCODED_ALLOWED = setOf(
@@ -235,7 +244,7 @@ object BlockManager {
      *   1) HARDCODED / SAFETY_ALLOWED → false (никогда не блокируем)
      *   2) Mode.ALWAYS_ALLOWED → false (явный whitelist)
      *   3) Mode.ALWAYS_BLOCKED → true (постоянно заблокировано, v0.40)
-     *   4) Mode.DEFAULT → true если активна BlockSession ИЛИ активно расписание (v0.49)
+     *   4) Mode.DEFAULT → true при блок-сессии, расписании или активной блокировке по зоне.
      */
     @Synchronized
     fun isBlocked(ctx: Context, packageName: String): Boolean {
@@ -243,9 +252,74 @@ object BlockManager {
         return when (mode) {
             Mode.ALWAYS_ALLOWED -> false
             Mode.ALWAYS_BLOCKED -> true
-            Mode.DEFAULT -> getActiveBlock(ctx) != null || getActiveSchedule(ctx) != null
+            Mode.DEFAULT -> getActiveBlock(ctx) != null || getActiveSchedule(ctx) != null ||
+                zoneBlocks(ctx).activeZone(SystemClock.elapsedRealtime()) != null
         }
     }
+
+    @Synchronized
+    fun getBlockingZoneName(ctx: Context, packageName: String): String? =
+        if (getEffectiveMode(ctx, packageName) == Mode.DEFAULT) {
+            zoneBlocks(ctx).activeZone(SystemClock.elapsedRealtime())?.name
+        } else null
+
+    @Synchronized
+    internal fun observeZoneFix(ctx: Context, fix: ZoneBlockEvaluator.Fix) {
+        val now = SystemClock.elapsedRealtime()
+        val evaluator = zoneBlocks(ctx)
+        evaluator.observe(fix, now)
+        val presence = evaluator.confirmedPresence(now)
+        if (presence.keys == savedZonePresence.keys && presence.none { (id, elapsed) ->
+                elapsed - savedZonePresence.getValue(id) >= ZONE_PRESENCE_SAVE_INTERVAL_MS
+            }
+        ) return
+        val boot = currentZoneBootCount(ctx)
+        if (boot < 0) return
+        prefs(ctx).edit().putZonePresence(boot, presence).apply()
+        savedZonePresence = presence
+    }
+
+    @Synchronized
+    internal fun needsZoneFix(ctx: Context) = zoneBlocks(ctx).needsFix(SystemClock.elapsedRealtime())
+
+    private fun zoneBlocks(ctx: Context): ZoneBlockEvaluator =
+        zoneEvaluator ?: ZoneBlockEvaluator().also { evaluator ->
+            val p = prefs(ctx)
+            val raw = p.getString(KEY_BLOCKING_ZONES_JSON, null)
+            val saved = runCatching { raw?.let { parseBlockingZones(JSONArray(it)) } }.getOrNull()
+            evaluator.replaceZones(saved.orEmpty())
+            val boot = currentZoneBootCount(ctx)
+            if (boot >= 0 && boot == p.getInt(KEY_ZONE_PRESENCE_BOOT, -1)) {
+                val presence = runCatching {
+                    val json = JSONObject(p.getString(KEY_ZONE_PRESENCE_JSON, "{}") ?: "{}")
+                    json.keys().asSequence().associateWith { json.getLong(it) }
+                }.getOrDefault(emptyMap())
+                val now = SystemClock.elapsedRealtime()
+                evaluator.restorePresence(presence, now)
+                savedZonePresence = evaluator.confirmedPresence(now)
+            }
+            zoneEvaluator = evaluator
+        }
+
+    private fun currentZoneBootCount(ctx: Context): Int =
+        zoneBootCount ?: android.provider.Settings.Global.getInt(ctx.contentResolver, "boot_count", -1)
+            .also { zoneBootCount = it }
+
+    private fun SharedPreferences.Editor.putZonePresence(boot: Int, presence: Map<String, Long>) =
+        putInt(KEY_ZONE_PRESENCE_BOOT, boot)
+            .putString(KEY_ZONE_PRESENCE_JSON, JSONObject(presence).toString())
+
+    private fun parseBlockingZones(zones: JSONArray): List<ZoneBlockEvaluator.Zone> =
+        (0 until zones.length()).map { i ->
+            val zone = zones.getJSONObject(i)
+            ZoneBlockEvaluator.Zone(
+                zone.getString("id"),
+                zone.getString("name"),
+                zone.getDouble("centerLat"),
+                zone.getDouble("centerLon"),
+                zone.getInt("radius"),
+            )
+        }
 
     @Synchronized
     fun applyRulesFromJsonObject(ctx: Context, body: JSONObject) {
@@ -338,22 +412,32 @@ object BlockManager {
         val serverNow = java.time.Instant.parse(body.getString("serverNow")).toEpochMilli()
         val rules = body.getJSONArray("rules")
         val schedules = body.getJSONArray("schedules")
+        val blockingZones = if (body.has("blockingZones")) body.getJSONArray("blockingZones") else JSONArray()
+        val parsedZones = parseBlockingZones(blockingZones)
+        val evaluator = zoneBlocks(ctx)
+        val presence = evaluator.confirmedPresence(SystemClock.elapsedRealtime(), parsedZones)
         val session = body.optJSONObject("session")
         val id = session?.getString("sessionId")
         val end = session?.let { java.time.Instant.parse(it.getString("endsAt")).toEpochMilli() }
         val editor = prefs(ctx).edit().putString(KEY_RULES_JSON,rules.toString()).putString(KEY_SCHEDULES_JSON,schedules.toString())
+            .putString(KEY_BLOCKING_ZONES_JSON, blockingZones.toString())
+            .putZonePresence(currentZoneBootCount(ctx), presence)
             .putLong("sync_server",serverNow).putLong("sync_elapsed",android.os.SystemClock.elapsedRealtime())
             .putLong("server_delta",serverNow-System.currentTimeMillis())
             .putInt("sync_boot",android.provider.Settings.Global.getInt(ctx.contentResolver,"boot_count",-1))
         if(id == null) editor.remove(KEY_ACTIVE_SESSION_ID).remove(KEY_ACTIVE_ENDS_AT_MS)
         else editor.putString(KEY_ACTIVE_SESSION_ID,id).putLong(KEY_ACTIVE_ENDS_AT_MS,end!!)
         check(editor.commit()) { "could not persist app-control state" }
+        evaluator.replaceZones(parsedZones)
+        savedZonePresence = presence
         refreshSystemSafety()
     }
 
     @Synchronized
     fun clearAll(ctx: Context) {
         prefs(ctx).edit().clear().commit()
+        zoneEvaluator = null
+        savedZonePresence = emptyMap()
         ctx.getSharedPreferences(UsageStatsReportWorker.PREFS,Context.MODE_PRIVATE).edit().clear().commit()
         OverlayManager.hide(ctx,"binding-changed")
         refreshSystemSafety()

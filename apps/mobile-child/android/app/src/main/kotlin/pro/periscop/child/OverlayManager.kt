@@ -19,7 +19,12 @@ object OverlayManager {
     fun show(service: PeriscopAccessibilityService, pkg: String): Boolean {
         val until = BlockManager.getCurrentBlockEndsAtMs(service)
         val remaining = ((until-BlockManager.now(service)).coerceAtLeast(0)+59_999)/60_000
-        val text = if(until > 0) "Сейчас время отдыха\nОсталось $remaining мин" else "Это приложение ограничено родителем"
+        val zone = BlockManager.getBlockingZoneName(service, pkg)
+        val text = when {
+            zone != null -> "Приложение ограничено в зоне «$zone»"
+            until > 0 -> "Сейчас время отдыха\nОсталось $remaining мин"
+            else -> "Это приложение ограничено родителем"
+        }
         label?.text = text
         if(view != null) return true
         return try {

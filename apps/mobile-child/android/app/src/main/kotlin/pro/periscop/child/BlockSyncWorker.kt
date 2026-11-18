@@ -26,6 +26,7 @@ class BlockSyncWorker(ctx: Context,params: WorkerParameters): CoroutineWorker(ct
                 .put("accessibility",PeriscopAccessibilityService.isConnected())
                 .put("usageStats",AppControlNative.hasUsageStatsPermission(ctx))
                 .put("timezone",AppControlNative.deviceTimezone())
+            if (state.has("blockingZones")) ack.put("zoneBlockingSupported", true)
             val result = AppControlHttp.postAppControlAck(ctx,ack,token)
             AppControlScheduler.reportPermissionsNow(ctx)
             if(result.ok) Result.success() else Result.retry()
