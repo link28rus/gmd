@@ -489,9 +489,9 @@ function ActiveBlockCard({
           type="button"
           onClick={onStop}
           disabled={stopBlock.isPending}
-          className="inline-flex items-center gap-1.5 rounded-md border border-amber-400 bg-card px-3 py-1.5 text-sm font-medium text-amber-900 transition-colors hover:bg-amber-100 disabled:cursor-wait disabled:opacity-60 dark:border-amber-600 dark:text-amber-200 dark:hover:bg-amber-900/40"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-amber-500 bg-amber-100 px-3 py-1.5 text-sm font-medium text-amber-950 transition-colors hover:bg-amber-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-700 disabled:cursor-wait disabled:opacity-60 dark:bg-amber-900 dark:text-amber-50 dark:hover:bg-amber-800 dark:focus-visible:outline-amber-300"
         >
-          <Unlock className="h-3.5 w-3.5" />
+          <Unlock className="h-3.5 w-3.5" aria-hidden />
           {stopBlock.isPending ? 'Снимаем…' : 'Снять блок'}
         </button>
       </div>

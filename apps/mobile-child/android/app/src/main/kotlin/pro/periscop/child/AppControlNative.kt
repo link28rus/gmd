@@ -298,6 +298,21 @@ object AppControlNative {
 
   // ─── Usage buckets ───────────────────────────────────────────────────────
 
+  /** Локальная проверка Activity, открытой до получения правил, без чтения содержимого окна. */
+  fun currentUsageActivity(ctx: Context, sampledAt: Long): ForegroundTracker.ActiveApp? {
+    if (!hasUsageStatsPermission(ctx)) return null
+    val power = ctx.getSystemService(android.os.PowerManager::class.java)
+    if (!power.isInteractive) return null
+    val manager = ctx.getSystemService(UsageStatsManager::class.java)
+    val events = manager.queryEvents(sampledAt - 24 * 60 * 60 * 1000L, sampledAt) ?: return null
+    val event = UsageEvents.Event()
+    val activity = ForegroundTracker.UsageActivity()
+    while (events.getNextEvent(event)) {
+      activity.record(event.eventType, event.packageName, event.className, event.timeStamp)
+    }
+    return activity.current
+  }
+
   data class UsageBucketPayload(
     val date: String, // YYYY-MM-DD в local-TZ
     val hour: Int,    // 0..23 в local-TZ

@@ -17,7 +17,11 @@ class BlockSyncWorker(ctx: Context,params: WorkerParameters): CoroutineWorker(ct
         val state = res.bodyJson
         try {
             if (!NativeCreds.withCurrent(ctx,token) { BlockManager.applySnapshot(ctx,state) }) return@withContext Result.success()
-            PeriscopAccessibilityService.refresh()
+            val sampledAt = System.currentTimeMillis()
+            val activity = if (PeriscopAccessibilityService.isConnected()) {
+                runCatching { AppControlNative.currentUsageActivity(ctx, sampledAt) }.getOrNull()
+            } else null
+            PeriscopAccessibilityService.refresh(activity, sampledAt)
             val ack = JSONObject().put("revision",state.getString("revision"))
                 .put("accessibility",PeriscopAccessibilityService.isConnected())
                 .put("usageStats",AppControlNative.hasUsageStatsPermission(ctx))

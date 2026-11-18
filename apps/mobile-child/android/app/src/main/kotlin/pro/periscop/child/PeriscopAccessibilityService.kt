@@ -46,7 +46,7 @@ class PeriscopAccessibilityService: AccessibilityService() {
         if(event?.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = event.packageName?.toString() ?: return
         val home = packageManager.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME),0).any { it.activityInfo.packageName == pkg }
-        foreground.observe(pkg,event.className?.toString(),OverlayManager.isShowing(),home)
+        foreground.observe(pkg, event.className?.toString(), OverlayManager.isShowing(), home, System.currentTimeMillis())
         refresh()
     }
     private fun checkForeground() {
@@ -59,7 +59,7 @@ class PeriscopAccessibilityService: AccessibilityService() {
         }
         if(!OverlayManager.show(this,pkg)) performGlobalAction(GLOBAL_ACTION_HOME)
     }
-    fun dismissBlock() { foreground.clear(); OverlayManager.hide(this) }
+    fun dismissBlock() { foreground.clear(System.currentTimeMillis()); OverlayManager.hide(this) }
     fun dismissToHome() { dismissBlock(); performGlobalAction(GLOBAL_ACTION_HOME) }
     override fun onInterrupt() { OverlayManager.hide(this) }
     override fun onDestroy() {
@@ -74,6 +74,17 @@ class PeriscopAccessibilityService: AccessibilityService() {
     companion object {
         @Volatile private var current: PeriscopAccessibilityService? = null
         fun isConnected() = current != null
-        fun refresh() { current?.let { service -> service.handler.removeCallbacks(service.tick); service.handler.post(service.tick) } }
+        fun refresh(activity: ForegroundTracker.ActiveApp? = null, sampledAt: Long = 0) {
+            val service = current ?: return
+            if (activity != null) {
+                service.handler.post {
+                    if (current === service && !OverlayManager.isShowing()) {
+                        service.foreground.reconcile(activity, sampledAt)
+                    }
+                }
+            }
+            service.handler.removeCallbacks(service.tick)
+            service.handler.post(service.tick)
+        }
     }
 }
