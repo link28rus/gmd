@@ -97,12 +97,12 @@ class ZonesRepository {
     );
   }
 
-  /// `GET /zones/:id/stats?tz=` — визиты за 30 дней по детям зоны.
+  /// `GET /zones/:id/stats` — визиты и приложения по детям зоны.
   /// 404 `zone_not_found`.
-  Future<ZoneStats> stats(String zoneId, {String? tz}) async {
+  Future<ZoneStats> stats(String zoneId, {String? tz, required ZoneStatsPeriod period}) async {
     final res = await _dio.get<dynamic>(
       '/zones/${Uri.encodeComponent(zoneId)}/stats',
-      queryParameters: <String, dynamic>{'tz': ?tz},
+      queryParameters: <String, dynamic>{'tz': ?tz, 'period': period.name},
     );
     return ZoneStats.fromJson(res.data as Map<String, dynamic>);
   }

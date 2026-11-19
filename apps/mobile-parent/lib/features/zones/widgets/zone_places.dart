@@ -166,19 +166,31 @@ class _SuggestionCardState extends ConsumerState<_SuggestionCard> {
   }
 }
 
-/// «Статистика за 30 дней» в раскрытой карточке зоны.
-class ZoneStatsSection extends ConsumerWidget {
+/// Статистика в раскрытой карточке зоны.
+class ZoneStatsSection extends ConsumerStatefulWidget {
   const ZoneStatsSection({super.key, required this.zoneId, required this.kidNames});
 
   final String zoneId;
   final Map<String, String> kidNames;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ZoneStatsSection> createState() => _ZoneStatsSectionState();
+}
+
+class _ZoneStatsSectionState extends ConsumerState<ZoneStatsSection> {
+  static const _labels = {
+    ZoneStatsPeriod.today: 'Сегодня',
+    ZoneStatsPeriod.week: '7 дней',
+    ZoneStatsPeriod.month: '30 дней',
+  };
+  var _period = ZoneStatsPeriod.week;
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final muted = theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant);
-    final async = ref.watch(zoneStatsProvider(zoneId));
+    final async = ref.watch(zoneStatsProvider((zoneId: widget.zoneId, period: _period)));
 
     final Widget body;
     if (async.hasValue) {
@@ -186,16 +198,17 @@ class ZoneStatsSection extends ConsumerWidget {
       final withNames = stats.children.length > 1;
       final now = DateTime.now();
       body = stats.children.isEmpty
-          ? Text('Детей в зоне нет', style: muted)
+          ? Text('К зоне пока не привязаны дети.', style: muted)
           : Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 for (final c in stats.children)
                   Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
+                    padding: const EdgeInsets.only(bottom: 10),
                     child: _ChildStats(
-                      name: withNames ? (kidNames[c.childId] ?? 'Ребёнок') : null,
-                      lines: zoneStatsLines(c, now),
+                      name: withNames ? (widget.kidNames[c.childId] ?? 'Ребёнок') : null,
+                      stats: c,
+                      now: now,
                     ),
                   ),
               ],
@@ -213,10 +226,21 @@ class ZoneStatsSection extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Статистика за 30 дней',
+          'Статистика зоны',
           style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
         ),
-        const SizedBox(height: 4),
+        Wrap(
+          spacing: 6,
+          children: [
+            for (final period in _labels.entries)
+              ChoiceChip(
+                label: Text(period.value),
+                selected: _period == period.key,
+                onSelected: (_) => setState(() => _period = period.key),
+              ),
+          ],
+        ),
+        const SizedBox(height: 6),
         body,
       ],
     );
@@ -224,11 +248,12 @@ class ZoneStatsSection extends ConsumerWidget {
 }
 
 class _ChildStats extends StatelessWidget {
-  const _ChildStats({required this.name, required this.lines});
+  const _ChildStats({required this.name, required this.stats, required this.now});
 
   /// null — в зоне один ребёнок, имя не пишем.
   final String? name;
-  final List<String> lines;
+  final ZoneChildStats stats;
+  final DateTime now;
 
   @override
   Widget build(BuildContext context) {
@@ -237,20 +262,52 @@ class _ChildStats extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (var i = 0; i < lines.length; i++)
-          Text.rich(
-            TextSpan(
-              children: [
-                if (i == 0 && name != null)
-                  TextSpan(
-                    text: '$name: ',
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                TextSpan(text: lines[i]),
-              ],
-            ),
-            style: i == 0 ? theme.textTheme.bodySmall : muted,
+        if (name case final childName?) Text(childName, style: theme.textTheme.labelLarge),
+        if (stats.visits == 0)
+          Text('Нет подтверждённых визитов за этот период.', style: muted)
+        else ...[
+          Text('В зоне · ${formatDuration(stats.totalSec)}', style: theme.textTheme.titleSmall),
+          Text(
+            '${visitsCount(stats.visits)} · в среднем ${formatDuration(stats.avgSec)}',
+            style: muted,
           ),
+          for (final line in zoneStatsLines(stats, now).skip(1)) Text(line, style: muted),
+          const SizedBox(height: 6),
+          _ZoneAppUsage(usage: stats.usage),
+        ],
+      ],
+    );
+  }
+}
+
+class _ZoneAppUsage extends StatelessWidget {
+  const _ZoneAppUsage({required this.usage});
+
+  final ZoneUsage? usage;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant);
+    final data = usage;
+    if (data == null || data.coverage == ZoneUsageCoverage.none) {
+      return Text('Нет данных об использовании приложений в зоне.', style: muted);
+    }
+    final total = data.totalSec > 0 ? formatDuration(data.totalSec) : '0 мин';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Экранное время · $total', style: theme.textTheme.labelLarge),
+        for (final app in data.apps)
+          Row(
+            children: [
+              Expanded(child: Text(app.appLabel?.isNotEmpty == true ? app.appLabel! : app.packageName)),
+              const SizedBox(width: 8),
+              Text(formatDuration(app.seconds)),
+            ],
+          ),
+        if (data.coverage == ZoneUsageCoverage.partial)
+          Text('Данные об активности есть за часть времени в зоне.', style: muted),
       ],
     );
   }

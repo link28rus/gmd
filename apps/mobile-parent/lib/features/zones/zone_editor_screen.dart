@@ -318,7 +318,7 @@ class _ZoneEditorFormState extends ConsumerState<_ZoneEditorForm> {
       ref.invalidate(zonesListProvider);
       // Новая зона закрывает подсказку места; правка меняет статистику.
       ref.invalidate(zoneSuggestionsProvider);
-      if (!_isNew) ref.invalidate(zoneStatsProvider(widget.zone!.id));
+      if (!_isNew) ref.invalidate(zoneStatsProvider);
       messenger
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(content: Text(_isNew ? 'Зона создана' : 'Зона обновлена')));

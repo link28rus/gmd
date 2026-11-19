@@ -29,10 +29,30 @@ export const UsageReportBucketSchema = z
   })
   .strict();
 
+export const USAGE_WINDOW_MS = 15 * 60_000;
+export const USAGE_WINDOW_RETENTION_MS = 30 * 86_400_000;
+const offset = z.number().int().min(0).max(USAGE_WINDOW_MS);
+export const UsageSegmentsSchema = z
+  .array(z.tuple([z.string().min(1).max(255), offset, offset]))
+  .max(128)
+  .refine(
+    (segments) =>
+      segments.every(([, from, to], i) => from < to && (i === 0 || from >= segments[i - 1][2])),
+    'Usage segments must be ordered and non-overlapping',
+  );
+
+const UsageWindowSchema = z
+  .object({
+    startMs: z.number().int().safe().nonnegative().multipleOf(USAGE_WINDOW_MS),
+    segments: UsageSegmentsSchema,
+  })
+  .strict();
+
 export const UsageReportBodySchema = z
   .object({
     timezone: TimezoneSchema,
     buckets: z.array(UsageReportBucketSchema).max(24_000),
+    windows: z.array(UsageWindowSchema).max(32).optional(),
   })
   .strict();
 

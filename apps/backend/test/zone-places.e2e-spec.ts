@@ -2,6 +2,7 @@ import request from 'supertest';
 import { bootTestApp, truncateAll } from './helpers/test-app';
 import type { TestAppHandle } from './helpers/test-app';
 import { signUpParent } from './fixtures/seed';
+import { hashDeviceToken } from '../src/child-device/child-device.service';
 
 // v0.67.0 (геозоны v2, этап 4): подсказки мест и статистика визитов.
 
@@ -212,5 +213,125 @@ describe('GET /zones/suggestions, /zones/:id/stats (e2e)', () => {
 
     const other = await signUpParent(h, 'other@example.com');
     await get(`/zones/${zone.body.id}/stats`, other.accessToken).expect(404);
+  });
+
+  it('принимает UTC-окно один раз и показывает только активность внутри визита семьи', async () => {
+    const { accessToken, familyId } = await signUpParent(h);
+    const child = await h.prisma.child.create({ data: { familyId, name: 'Аня' } });
+    const token = 'zone-usage-test-device-token';
+    const device = await h.prisma.childDevice.create({
+      data: { childId: child.id, tokenHash: hashDeviceToken(token) },
+    });
+    const start = localMidnight(1) + 8 * HOUR;
+    await h.prisma.location.createMany({
+      data: [5, 10, 150, 155].map((minute) => ({
+        childId: child.id,
+        childDeviceId: device.id,
+        ...HOME,
+        accuracy: 20,
+        recordedAt: new Date(start + minute * 60_000),
+      })),
+    });
+    await h.prisma.installedApp.create({
+      data: { childDeviceId: device.id, packageName: 'example.video', appLabel: 'Видео' },
+    });
+
+    const server = h.app.getHttpServer();
+    const post = () => request(server).post('/child/usage-reports');
+    const report = (segments: unknown) => ({
+      timezone: TZ,
+      buckets: [],
+      windows: [{ startMs: start, segments }],
+    });
+    await post().send(report([])).expect(401);
+    await post()
+      .set('X-Child-Token', token)
+      .send(report([['example.video', 0, 900_000]]))
+      .expect(204);
+    await post().set('X-Child-Token', token).send(report([])).expect(204);
+    expect(await h.prisma.usageWindow.count()).toBe(1);
+
+    const zone = await request(server)
+      .post('/zones')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        name: 'Дом',
+        color: '#22c55e',
+        icon: 'home',
+        centerLat: HOME.lat,
+        centerLon: HOME.lon,
+        radius: 150,
+        childIds: [child.id],
+      })
+      .expect(201);
+    const path = `/zones/${zone.body.id}/stats?tz=${TZ}`;
+    const week = await get(`${path}&period=week`, accessToken).expect(200);
+    expect(week.body.periodDays).toBe(7);
+    expect(week.body.children).toMatchObject([
+      {
+        childId: child.id,
+        visits: 2,
+        totalSec: 600,
+        usage: {
+          coverage: 'partial',
+          totalSec: 300,
+          apps: [{ packageName: 'example.video', appLabel: 'Видео', seconds: 300 }],
+        },
+      },
+    ]);
+    const today = await get(`${path}&period=today`, accessToken).expect(200);
+    expect(today.body.children[0]).toMatchObject({
+      visits: 0,
+      totalSec: 0,
+      usage: { coverage: 'none' },
+    });
+    const legacy = await get(path, accessToken).expect(200);
+    expect(legacy.body.children[0]).not.toHaveProperty('usage');
+    const other = await signUpParent(h, 'other@example.com');
+    await get(`${path}&period=week`, other.accessToken).expect(404);
+  });
+
+  it('учитывает короткий остаток визита, начатого до границы периода', async () => {
+    const { accessToken, familyId } = await signUpParent(h);
+    const child = await h.prisma.child.create({ data: { familyId, name: 'Аня' } });
+    const device = await h.prisma.childDevice.create({
+      data: { childId: child.id, tokenHash: 'zone-stats-boundary-device' },
+    });
+    const boundary = localMidnight(6);
+    const firstPoint = new Date(boundary - 121 * 60_000);
+    await h.prisma.location.createMany({
+      data: [firstPoint, new Date(boundary - 60_000), new Date(boundary + 3 * 60_000)].map(
+        (recordedAt) => ({
+          childId: child.id,
+          childDeviceId: device.id,
+          ...HOME,
+          accuracy: 20,
+          recordedAt,
+        }),
+      ),
+    });
+
+    const zone = await request(h.app.getHttpServer())
+      .post('/zones')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        name: 'Дом',
+        color: '#22c55e',
+        icon: 'home',
+        centerLat: HOME.lat,
+        centerLon: HOME.lon,
+        radius: 150,
+        childIds: [child.id],
+      })
+      .expect(201);
+    const week = await get(`/zones/${zone.body.id}/stats?tz=${TZ}&period=week`, accessToken).expect(
+      200,
+    );
+    expect(week.body.children[0]).toMatchObject({
+      visits: 1,
+      totalSec: 180,
+      lastVisitFrom: firstPoint.toISOString(),
+      typicalArrivalMin: null,
+    });
   });
 });

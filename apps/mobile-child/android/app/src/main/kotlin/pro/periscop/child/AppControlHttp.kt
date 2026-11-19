@@ -138,6 +138,7 @@ object AppControlHttp {
     timezone: String,
     buckets: List<AppControlNative.UsageBucketPayload>,
     token: String? = null,
+    windows: List<JSONObject> = emptyList(),
   ): Result {
     val payload = JSONObject().apply {
       put("timezone", timezone)
@@ -153,6 +154,7 @@ object AppControlHttp {
         arr.put(obj)
       }
       put("buckets", arr)
+      if (windows.isNotEmpty()) put("windows", JSONArray(windows))
     }
     return doPost(ctx, "/child/usage-reports", payload, token)
   }

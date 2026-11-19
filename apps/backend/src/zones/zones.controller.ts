@@ -29,8 +29,12 @@ import type { ZonesEventsQuery } from './dto/zones-events-query.schema';
 import { ZoneMyNotificationsSchema } from './dto/zone-notifications.schema';
 import type { ZoneMyNotificationsDto } from './dto/zone-notifications.schema';
 import { ZonePlacesService } from './zone-places.service';
-import { DismissPlaceSchema, ZonePlacesQuerySchema } from './dto/zone-places.schema';
-import type { DismissPlaceDto, ZonePlacesQuery } from './dto/zone-places.schema';
+import {
+  DismissPlaceSchema,
+  ZonePlacesQuerySchema,
+  ZoneStatsQuerySchema,
+} from './dto/zone-places.schema';
+import type { DismissPlaceDto, ZonePlacesQuery, ZoneStatsQuery } from './dto/zone-places.schema';
 
 interface AuthedRequest extends Request {
   user: { userId: string; familyId?: string | null };
@@ -109,9 +113,9 @@ export class ZonesController {
   async stats(
     @Req() req: AuthedRequest,
     @Param('id') id: string,
-    @Query(new ZodValidationPipe(ZonePlacesQuerySchema)) q: ZonePlacesQuery,
+    @Query(new ZodValidationPipe(ZoneStatsQuerySchema)) q: ZoneStatsQuery,
   ) {
-    return this.places.zoneStats(this.familyId(req), id, q.tz);
+    return this.places.zoneStats(this.familyId(req), id, q.tz, new Date(), q.period);
   }
 
   @Get(':id')

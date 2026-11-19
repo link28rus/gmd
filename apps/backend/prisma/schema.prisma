@@ -453,6 +453,7 @@ model ChildDevice {
   audioSessions AudioSession[]
   installedApps InstalledApp[]
   usageBuckets  UsageBucket[]
+  usageWindows  UsageWindow[]
   appRules      AppRule[]
   blockSessions BlockSession[]
   appBlockSchedules AppBlockSchedule[]
@@ -981,6 +982,20 @@ model UsageBucket {
   @@unique([childDeviceId, sourceId, date, hour, packageName], map: "usage_buckets_device_source_date_hour_package_key")
   @@index([childDeviceId, date])
   @@map("usage_buckets")
+}
+
+// Завершённое 15-минутное окно UTC. Пустой массив означает, что сбор работал,
+// но приложений на экране не было. Отрезки: [packageName, fromMs, toMs] от startAt.
+model UsageWindow {
+  childDeviceId String
+  startAt       DateTime
+  segments      Json
+
+  childDevice ChildDevice @relation(fields: [childDeviceId], references: [id], onDelete: Cascade)
+
+  @@id([childDeviceId, startAt])
+  @@index([startAt])
+  @@map("usage_windows")
 }
 
 // ─── Phase 6.2 (v0.39): App Blocking Core ──────────────────────────────────

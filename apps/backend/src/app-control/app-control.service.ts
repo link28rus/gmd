@@ -11,7 +11,11 @@ import { hashDeviceToken } from '../child-device/child-device.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CategoryResolver, type AppCategory } from './category-resolver.service';
 import type { InstalledAppsBody } from './dto/installed-apps.dto';
-import type { UsageReportBody } from './dto/usage-report.dto';
+import {
+  USAGE_WINDOW_MS,
+  USAGE_WINDOW_RETENTION_MS,
+  type UsageReportBody,
+} from './dto/usage-report.dto';
 import type { AppIconsBody } from './dto/app-icons.dto';
 
 const MAX_ICON_BYTES = 100 * 1024; // 100KB raw PNG
@@ -224,6 +228,21 @@ export class AppControlService {
             DO UPDATE SET seconds = GREATEST(usage_buckets.seconds, EXCLUDED.seconds)
           `;
           accepted++;
+        }
+        const now = Date.now();
+        const windows = body.windows?.filter(
+          ({ startMs }) =>
+            startMs >= now - USAGE_WINDOW_RETENTION_MS && startMs + USAGE_WINDOW_MS <= now,
+        );
+        if (windows?.length) {
+          await tx.usageWindow.createMany({
+            data: windows.map(({ startMs, segments }) => ({
+              childDeviceId,
+              startAt: new Date(startMs),
+              segments,
+            })),
+            skipDuplicates: true,
+          });
         }
         await tx.childDevice.update({
           where: { id: childDeviceId },

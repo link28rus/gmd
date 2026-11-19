@@ -452,9 +452,9 @@ class _ZoneCard extends StatelessWidget {
                 ),
               if (selected) ...[
                 const Divider(height: 20),
-                MyZoneNotifications(zone: zone, kidNames: kidNames),
-                const SizedBox(height: 8),
                 ZoneStatsSection(zoneId: zone.id, kidNames: kidNames),
+                const SizedBox(height: 8),
+                MyZoneNotifications(zone: zone, kidNames: kidNames),
                 const SizedBox(height: 4),
                 Wrap(
                   alignment: WrapAlignment.end,

@@ -605,6 +605,44 @@ class PlaceSuggestion {
       );
 }
 
+enum ZoneStatsPeriod { today, week, month }
+
+enum ZoneUsageCoverage { none, partial, complete }
+
+@immutable
+class ZoneUsageApp {
+  const ZoneUsageApp({required this.packageName, this.appLabel, required this.seconds});
+
+  final String packageName;
+  final String? appLabel;
+  final int seconds;
+
+  factory ZoneUsageApp.fromJson(Map<String, dynamic> json) => ZoneUsageApp(
+        packageName: json['packageName'] as String,
+        appLabel: json['appLabel'] as String?,
+        seconds: _int(json['seconds']),
+      );
+}
+
+@immutable
+class ZoneUsage {
+  const ZoneUsage({required this.coverage, required this.totalSec, required this.apps});
+
+  final ZoneUsageCoverage coverage;
+  final int totalSec;
+  final List<ZoneUsageApp> apps;
+
+  factory ZoneUsage.fromJson(Map<String, dynamic> json) => ZoneUsage(
+        coverage: switch (json['coverage']) {
+          'complete' => ZoneUsageCoverage.complete,
+          'partial' => ZoneUsageCoverage.partial,
+          _ => ZoneUsageCoverage.none,
+        },
+        totalSec: _int(json['totalSec']),
+        apps: _maps(json['apps']).map(ZoneUsageApp.fromJson).toList(),
+      );
+}
+
 /// Статистика визитов одного ребёнка в зону (`GET /zones/:id/stats`).
 @immutable
 class ZoneChildStats {
@@ -619,6 +657,7 @@ class ZoneChildStats {
     this.ongoing = false,
     this.typicalArrivalMin,
     this.typicalDepartureMin,
+    this.usage,
   });
 
   final String childId;
@@ -637,6 +676,7 @@ class ZoneChildStats {
   /// Минута дня в поясе зоны.
   final int? typicalArrivalMin;
   final int? typicalDepartureMin;
+  final ZoneUsage? usage;
 
   factory ZoneChildStats.fromJson(Map<String, dynamic> json) => ZoneChildStats(
         childId: (json['childId'] as String?) ?? '',
@@ -649,6 +689,10 @@ class ZoneChildStats {
         ongoing: (json['ongoing'] as bool?) ?? false,
         typicalArrivalMin: _intOrNull(json['typicalArrivalMin']),
         typicalDepartureMin: _intOrNull(json['typicalDepartureMin']),
+        usage: switch (json['usage']) {
+          final Map<String, dynamic> usage => ZoneUsage.fromJson(usage),
+          _ => null,
+        },
       );
 }
 

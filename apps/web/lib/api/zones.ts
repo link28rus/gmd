@@ -174,7 +174,15 @@ export interface PlaceSuggestion {
   children: PlaceSuggestionChild[];
 }
 
-/** v0.67.0: статистика визитов ребёнка в зону за период. */
+export type ZoneStatsPeriod = 'today' | 'week' | 'month';
+
+export interface ZoneChildUsage {
+  coverage: 'none' | 'partial' | 'complete';
+  totalSec: number;
+  apps: Array<{ packageName: string; appLabel: string | null; seconds: number }>;
+}
+
+/** Статистика визитов ребёнка в зону за период. */
 export interface ZoneChildStats {
   childId: string;
   visits: number;
@@ -188,6 +196,7 @@ export interface ZoneChildStats {
   /** Минуты дня в поясе `ZoneStats.timezone`. */
   typicalArrivalMin: number | null;
   typicalDepartureMin: number | null;
+  usage?: ZoneChildUsage;
 }
 
 export interface ZoneStats {
@@ -237,8 +246,11 @@ export const zonesApi = {
       body: JSON.stringify({ kind: s.kind, centerLat: s.centerLat, centerLon: s.centerLon }),
     }),
 
-  stats: (id: string, tz: string | null) =>
-    apiFetch<ZoneStats>(`/api/zones/${encodeURIComponent(id)}/stats${tzQuery(tz)}`),
+  stats: (id: string, tz: string | null, period: ZoneStatsPeriod) => {
+    const params = new URLSearchParams({ period });
+    if (tz) params.set('tz', tz);
+    return apiFetch<ZoneStats>(`/api/zones/${encodeURIComponent(id)}/stats?${params}`);
+  },
 
   listEvents: (q: ListEventsQuery = {}) => {
     const params = new URLSearchParams();

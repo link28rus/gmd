@@ -355,6 +355,7 @@ const VISIT_MAX_GAP_MS = 12 * 60 * MIN_MS;
 export function zoneVisits(
   points: TrackInputPoint[],
   zone: { lat: number; lon: number; radius: number },
+  maxGapMs = VISIT_MAX_GAP_MS,
 ): ZoneVisit[] {
   const B = Math.max(30, 0.15 * zone.radius);
   const d = points.map((p) => distanceMeters(zone.lat, zone.lon, p.lat, p.lon));
@@ -377,7 +378,7 @@ export function zoneVisits(
       }
       continue;
     }
-    if (t - lastIn > VISIT_MAX_GAP_MS) {
+    if (t - lastIn > maxGapMs) {
       close(false);
       if (d[i] <= zone.radius) {
         start = t;

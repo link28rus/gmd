@@ -9,6 +9,7 @@ import {
   type UpdateZoneInput,
   type ZoneChildPrefs,
   type PlaceSuggestion,
+  type ZoneStatsPeriod,
 } from '@/lib/api/zones';
 import {
   locationsApi,
@@ -192,11 +193,12 @@ export function useDismissSuggestion() {
   });
 }
 
-/** v0.67.0: статистика визитов в зону за 30 дней — грузится при раскрытии карточки. */
-export function useZoneStats(zoneId: string) {
+/** Статистика грузится при раскрытии карточки. */
+export function useZoneStats(zoneId: string, period: ZoneStatsPeriod) {
+  const tz = browserTz();
   return useQuery({
-    queryKey: ['zone-stats', zoneId],
-    queryFn: () => zonesApi.stats(zoneId, browserTz()),
+    queryKey: ['zone-stats', zoneId, period, tz],
+    queryFn: () => zonesApi.stats(zoneId, tz, period),
     staleTime: 5 * 60_000,
     retry: 1,
   });

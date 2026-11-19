@@ -35,12 +35,14 @@ final zoneSuggestionsProvider =
   return ref.watch(zonesRepositoryProvider).suggestions(tz: tz);
 });
 
-/// Статистика визитов в зону за 30 дней. После правки зоны —
+typedef ZoneStatsFilter = ({String zoneId, ZoneStatsPeriod period});
+
+/// Статистика визитов и использования приложений в зоне. После правки зоны —
 /// `ref.invalidate(zoneStatsProvider)`.
 final zoneStatsProvider =
-    FutureProvider.autoDispose.family<ZoneStats, String>((ref, zoneId) async {
+    FutureProvider.autoDispose.family<ZoneStats, ZoneStatsFilter>((ref, filter) async {
   final tz = await ref.watch(deviceTimeZoneProvider.future);
-  return ref.watch(zonesRepositoryProvider).stats(zoneId, tz: tz);
+  return ref.watch(zonesRepositoryProvider).stats(filter.zoneId, tz: tz, period: filter.period);
 });
 
 /// Фильтр ленты. Record — equatable по значению, годится ключом family.

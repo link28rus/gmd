@@ -41,4 +41,24 @@ class UsageTimelineTest {
         val events = listOf(UsageTimeline.Event(start,1,"app","A"), UsageTimeline.Event(start+600,2,"app","A"), UsageTimeline.Event(start+700,1,"app","A"), UsageTimeline.Event(start+1300,2,"app","A"))
         assertEquals(1, seconds(events))
     }
+
+    @Test fun `UTC окна режут активность на границе и сохраняют пустое окно`() {
+        val events = listOf(e(890, 1), e(910, 2))
+        val intervals = UsageTimeline.intervals(events, start, start + 3_000_000, "own")
+        val windows = UsageTimeline.usageWindows(intervals, start, start + 3_000_000)
+        assertEquals(listOf(start, start + 900_000, start + 1_800_000), windows.map { it.start })
+        assertEquals(listOf(UsageTimeline.Interval("app", 890_000, 900_000)), windows[0].segments)
+        assertEquals(listOf(UsageTimeline.Interval("app", 0, 10_000)), windows[1].segments)
+        assertTrue(windows[2].segments.isEmpty())
+    }
+
+    @Test fun `неполные окна и время заблокированного экрана пропускаются`() {
+        val from = start + 600_000
+        val to = start + 1_900_000
+        val intervals = UsageTimeline.intervals(listOf(e(0, 1), e(800, 16), e(1_700, 15)), from, to, "own")
+        val windows = UsageTimeline.usageWindows(intervals, from, to)
+        assertEquals(listOf(UsageTimeline.Window(start + 900_000, listOf(
+            UsageTimeline.Interval("app", 800_000, 900_000),
+        ))), windows)
+    }
 }

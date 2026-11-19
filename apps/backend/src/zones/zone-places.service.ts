@@ -5,7 +5,16 @@ import type { TrackInputPoint } from '../locations/track-builder';
 import { childPlaces, visitStats, zoneVisits } from './place-insights';
 import type { ChildPlace, PlaceKind } from './place-insights';
 import { isValidTimeZone } from './zone-time';
-import type { DismissPlaceDto, PlaceSuggestionDto, ZoneStatsDto } from './dto/zone-places.schema';
+import { clipVisits, summarizeZoneUsage, zonePeriodStart } from './zone-usage';
+import { USAGE_WINDOW_MS } from '../app-control/dto/usage-report.dto';
+import type { ZoneVisit } from './place-insights';
+import type {
+  DismissPlaceDto,
+  PlaceSuggestionDto,
+  ZoneChildStatsDto,
+  ZoneStatsDto,
+  ZoneStatsQuery,
+} from './dto/zone-places.schema';
 
 // v0.67.0 (геозоны v2, этап 4): подсказки мест по частым стоянкам и
 // статистика визитов в зону. Считается на лету по хорошим точкам за 30 дней
@@ -21,6 +30,9 @@ const DISMISS_RADIUS_M = 200;
 const COVERED_MARGIN_M = 50;
 // Незакрытый визит считаем текущим, пока последняя точка внутри не старше.
 const ONGOING_FRESH_MS = 2 * 3_600_000;
+// При длительной паузе GPS не относим приложения и время к зоне.
+const REPORT_MAX_GAP_MS = 2 * 3_600_000;
+const PERIOD_DAYS = { today: 1, week: 7, month: PLACES_PERIOD_DAYS } as const;
 
 const PRESET: Record<PlaceKind, { name: string; icon: string; color: string }> = {
   home: { name: 'Дом', icon: 'home', color: '#22c55e' },
@@ -59,7 +71,7 @@ export class ZonePlacesService {
       where: {
         childId,
         trackFlag: null,
-        recordedAt: { gte: new Date(now.getTime() - PLACES_PERIOD_DAYS * 86_400_000) },
+        recordedAt: { gte: new Date(now.getTime() - PLACES_PERIOD_DAYS * 86_400_000), lte: now },
       },
       select: { lat: true, lon: true, recordedAt: true, accuracy: true },
       orderBy: { recordedAt: 'asc' },
@@ -197,6 +209,7 @@ export class ZonePlacesService {
     zoneId: string,
     tzParam: string | undefined,
     now = new Date(),
+    period?: ZoneStatsQuery['period'],
   ): Promise<ZoneStatsDto> {
     const zone = await this.prisma.zone.findFirst({
       where: { id: zoneId, familyId, deletedAt: null },
@@ -214,39 +227,98 @@ export class ZonePlacesService {
     }
     // Пояс зоны главнее пояса клиента: в нём же считаются расписание и срок.
     const tz = zone.timezone ?? this.tz(tzParam);
-    const childIds = zone.allChildren
-      ? (
-          await this.prisma.child.findMany({
-            where: { familyId, deletedAt: null },
-            select: { id: true },
-            orderBy: { createdAt: 'asc' },
-          })
-        ).map((c) => c.id)
-      : zone.assignments.map((a) => a.childId);
+    const kids = await this.prisma.child.findMany({
+      where: {
+        familyId,
+        deletedAt: null,
+        ...(zone.allChildren ? {} : { id: { in: zone.assignments.map((a) => a.childId) } }),
+      },
+      select: { id: true, device: { select: { id: true, revokedAt: true } } },
+      orderBy: { createdAt: 'asc' },
+    });
+    const nowMs = now.getTime();
+    const oldest = nowMs - PLACES_PERIOD_DAYS * 86_400_000;
+    const periodDays = period ? PERIOD_DAYS[period] : PLACES_PERIOD_DAYS;
+    const from = period ? zonePeriodStart(nowMs, tz, periodDays) : oldest;
 
     const children: ZoneStatsDto['children'] = [];
-    for (const childId of childIds) {
-      const visits = zoneVisits(await this.goodPoints(childId, now), {
-        lat: zone.centerLat,
-        lon: zone.centerLon,
-        radius: zone.radius,
-      });
+    for (const kid of kids) {
+      const detected = zoneVisits(
+        // Восстанавливаем весь визит до обрезки, даже когда его начало до выбранного периода.
+        await this.goodPoints(kid.id, now),
+        {
+          lat: zone.centerLat,
+          lon: zone.centerLon,
+          radius: zone.radius,
+        },
+        period ? REPORT_MAX_GAP_MS : undefined,
+      );
+      const visible = period ? detected.filter((visit) => visit.to > from) : detected;
+      const visits = period ? clipVisits(visible, from, nowMs) : visible;
       const s = visitStats(visits, tz);
+      const lastVisit = visible.at(-1);
+      const typicalArrivalMin =
+        period && visible[0]?.from < from
+          ? visitStats(visible.slice(1), tz).typicalArrivalMin
+          : s.typicalArrivalMin;
       children.push({
-        childId,
+        childId: kid.id,
         visits: s.visits,
         totalSec: s.totalSec,
         avgSec: s.avgSec,
         daysCount: s.daysCount,
-        lastVisitFrom: s.lastVisitFrom !== null ? new Date(s.lastVisitFrom).toISOString() : null,
+        lastVisitFrom: lastVisit ? new Date(lastVisit.from).toISOString() : null,
         lastVisitTo: s.lastVisitTo !== null ? new Date(s.lastVisitTo).toISOString() : null,
         // «Сейчас в зоне» — только если последняя точка внутри свежая.
         ongoing:
           s.ongoing && s.lastVisitTo !== null && now.getTime() - s.lastVisitTo < ONGOING_FRESH_MS,
-        typicalArrivalMin: s.typicalArrivalMin,
+        typicalArrivalMin,
         typicalDepartureMin: s.typicalDepartureMin,
+        ...(period
+          ? {
+              usage: await this.usageInVisits(
+                kid.device?.revokedAt ? undefined : kid.device?.id,
+                visits,
+              ),
+            }
+          : {}),
       });
     }
-    return { zoneId, periodDays: PLACES_PERIOD_DAYS, timezone: tz, children };
+    return { zoneId, periodDays, timezone: tz, children };
+  }
+
+  private async usageInVisits(
+    deviceId: string | undefined,
+    visits: ZoneVisit[],
+  ): Promise<ZoneChildStatsDto['usage']> {
+    if (!deviceId || visits.length === 0) return { coverage: 'none', totalSec: 0, apps: [] };
+    const rows = await this.prisma.usageWindow.findMany({
+      where: {
+        childDeviceId: deviceId,
+        startAt: {
+          gt: new Date(visits[0].from - USAGE_WINDOW_MS),
+          lt: new Date(visits[visits.length - 1].to),
+        },
+      },
+      select: { startAt: true, segments: true },
+      orderBy: { startAt: 'asc' },
+    });
+    const usage = summarizeZoneUsage(
+      visits,
+      rows.map((row) => ({ startMs: row.startAt.getTime(), segments: row.segments })),
+    );
+    if (usage.apps.length === 0) return { ...usage, apps: [] };
+    const installed = await this.prisma.installedApp.findMany({
+      where: {
+        childDeviceId: deviceId,
+        packageName: { in: usage.apps.map((app) => app.packageName) },
+      },
+      select: { packageName: true, appLabel: true },
+    });
+    const labels = new Map(installed.map((app) => [app.packageName, app.appLabel]));
+    return {
+      ...usage,
+      apps: usage.apps.map((app) => ({ ...app, appLabel: labels.get(app.packageName) ?? null })),
+    };
   }
 }

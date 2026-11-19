@@ -7,6 +7,11 @@ import { timezoneSchema } from './zone-rules.schema';
 export const ZonePlacesQuerySchema = z.object({ tz: timezoneSchema.optional() }).strict();
 export type ZonePlacesQuery = z.infer<typeof ZonePlacesQuerySchema>;
 
+export const ZoneStatsQuerySchema = ZonePlacesQuerySchema.extend({
+  period: z.enum(['today', 'week', 'month']).optional(),
+});
+export type ZoneStatsQuery = z.infer<typeof ZoneStatsQuerySchema>;
+
 export const PLACE_KINDS = ['home', 'school', 'frequent'] as const;
 
 export const DismissPlaceSchema = z
@@ -56,6 +61,11 @@ export interface ZoneChildStatsDto {
   ongoing: boolean;
   typicalArrivalMin: number | null;
   typicalDepartureMin: number | null;
+  usage?: {
+    coverage: 'none' | 'partial' | 'complete';
+    totalSec: number;
+    apps: Array<{ packageName: string; appLabel: string | null; seconds: number }>;
+  };
 }
 
 export interface ZoneStatsDto {

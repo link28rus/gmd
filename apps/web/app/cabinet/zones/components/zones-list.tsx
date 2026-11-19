@@ -151,8 +151,8 @@ export function ZonesList({
                 </button>
                 {isSelected && (
                   <div className="space-y-4 px-4 pb-3">
-                    <MyNotifications zone={zone} kidNames={kidNames} />
                     <ZoneStats zoneId={zone.id} kidNames={kidNames} />
+                    <MyNotifications zone={zone} kidNames={kidNames} />
                   </div>
                 )}
                 {isSelected && (onEdit || onDelete) && (

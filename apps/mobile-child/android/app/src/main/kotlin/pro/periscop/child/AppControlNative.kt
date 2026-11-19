@@ -321,13 +321,15 @@ object AppControlNative {
     val epoch: String = "legacy",
   )
 
-  fun collectUsageBuckets(ctx: Context, daysBack: Int, periodStart: Long, until: Long, timezone: String, epoch: String): List<UsageBucketPayload> {
+  data class UsageCollection(val buckets: List<UsageBucketPayload>, val windows: List<UsageTimeline.Window>)
+
+  fun collectUsage(ctx: Context, daysBack: Int, periodStart: Long, until: Long, timezone: String, epoch: String, detailsFrom: Long): UsageCollection {
     require(daysBack in 1..30)
-    if (!hasUsageStatsPermission(ctx)) return emptyList()
+    check(hasUsageStatsPermission(ctx)) { "usage permission unavailable" }
     val zone = ZoneId.of(timezone)
     val windowStart = Instant.ofEpochMilli(until).atZone(zone).toLocalDate().minusDays((daysBack-1).toLong()).atStartOfDay(zone).toInstant().toEpochMilli()
     val from = maxOf(windowStart,periodStart,NativeCreds.bindingStartedAt(ctx))
-    if(from >= until) return emptyList()
+    if (from >= until) return UsageCollection(emptyList(), emptyList())
     val manager = ctx.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
     // События до начала диапазона восстанавливают открытый интервал на границе дня.
     val stream = manager.queryEvents(from-86400_000L,until) ?: throw IllegalStateException("usage unavailable before unlock")
@@ -338,7 +340,10 @@ object AppControlNative {
       events.add(UsageTimeline.Event(event.timeStamp,event.eventType,event.packageName,event.className))
     }
     val homes = ctx.packageManager.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME),0).map { it.activityInfo.packageName }.toSet()
-    return UsageTimeline.calculate(events,from,until,zone,ctx.packageName,homes + setOf("com.android.systemui","android"))
-      .map { UsageBucketPayload(it.date,it.hour,it.packageName,it.seconds,epoch) }
+    val intervals = UsageTimeline.intervals(events, from, until, ctx.packageName, homes + setOf("com.android.systemui", "android"))
+    return UsageCollection(
+      UsageTimeline.buckets(intervals, zone).map { UsageBucketPayload(it.date, it.hour, it.packageName, it.seconds, epoch) },
+      UsageTimeline.usageWindows(intervals, maxOf(from, detailsFrom), until),
+    )
   }
 }
