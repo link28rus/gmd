@@ -45,7 +45,13 @@ export class AppControlSyncService {
       }),
     ]);
     return {
-      session: session ? { sessionId: session.id, endsAt: session.endsAt.toISOString() } : null,
+      session: session
+        ? {
+            sessionId: session.id,
+            endsAt: session.endsAt.toISOString(),
+            ...(session.reason ? { reason: session.reason } : {}),
+          }
+        : null,
       rules: [...rules].sort((a, b) => a.packageName.localeCompare(b.packageName)),
       schedules: schedules
         .map((s) => ({

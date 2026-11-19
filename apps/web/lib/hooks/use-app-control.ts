@@ -6,6 +6,7 @@ import {
   type AppRuleMode,
   type AppControlStatus,
   type BlockSessionDto,
+  type CreateBlockSessionBody,
   type CreateScheduleBody,
   type UpdateScheduleBody,
 } from '../api/app-control';
@@ -75,7 +76,7 @@ export function useAppRules(childId: string | null) {
 export function useCreateBlock(childId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (durationMin: number) => appControlApi.createBlockSession(childId, durationMin),
+    mutationFn: (body: CreateBlockSessionBody) => appControlApi.createBlockSession(childId, body),
     onSuccess: (data: BlockSessionDto) => {
       qc.setQueryData<AppControlStatus>(['app-control', 'status', childId], (old) =>
         old ? { ...old, applied: false } : old,

@@ -53,11 +53,16 @@ class PeriscopAccessibilityService: AccessibilityService() {
         val pkg = foreground.packageName
         if (pkg == null || NativeCreds.getToken(this).isNullOrEmpty() || NativeCreds.isUnlinked(this) ||
             !(getSystemService(POWER_SERVICE) as PowerManager).isInteractive ||
-            (getSystemService(KEYGUARD_SERVICE) as android.app.KeyguardManager).isKeyguardLocked || !BlockManager.isBlocked(this,pkg)) {
+            (getSystemService(KEYGUARD_SERVICE) as android.app.KeyguardManager).isKeyguardLocked) {
             OverlayManager.hide(this)
             return
         }
-        if(!OverlayManager.show(this,pkg)) performGlobalAction(GLOBAL_ACTION_HOME)
+        val screen = BlockManager.blockScreen(this, pkg)
+        if (screen == null) {
+            OverlayManager.hide(this)
+            return
+        }
+        if (!OverlayManager.show(this, screen)) performGlobalAction(GLOBAL_ACTION_HOME)
     }
     fun dismissBlock() { foreground.clear(System.currentTimeMillis()); OverlayManager.hide(this) }
     fun dismissToHome() { dismissBlock(); performGlobalAction(GLOBAL_ACTION_HOME) }

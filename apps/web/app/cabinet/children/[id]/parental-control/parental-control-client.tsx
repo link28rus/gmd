@@ -452,6 +452,7 @@ function ActiveBlockCard({
     hour: '2-digit',
     minute: '2-digit',
   });
+  const status = applied ? 'Приложения заблокированы' : 'Блокировка ожидает подтверждения';
 
   function onStop(): void {
     if (stopBlock.isPending) return;
@@ -473,17 +474,22 @@ function ActiveBlockCard({
 
   return (
     <div className="mb-6 overflow-hidden rounded-2xl border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/30">
-      <div className="flex items-start gap-3 p-4">
-        <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">
-          <Lock className="h-5 w-5" aria-hidden />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="font-semibold text-amber-900 dark:text-amber-200">
-            {applied ? 'Приложения заблокированы' : 'Блокировка ожидает подтверждения'}
-          </p>
-          <p className="mt-0.5 text-sm text-amber-800 dark:text-amber-300">
-            Осталось {remainingMs > 0 ? countdown : 'почти 0'} · до {endsAtLocal}
-          </p>
+      <div className="flex flex-wrap items-start gap-3 p-4">
+        <div className="flex min-w-0 flex-1 basis-52 items-start gap-3">
+          <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">
+            <Lock className="h-5 w-5" aria-hidden />
+          </div>
+          <div className="min-w-0">
+            <p className="break-words font-semibold text-amber-900 dark:text-amber-200">
+              {session.reason || status}
+            </p>
+            {session.reason && (
+              <p className="text-sm text-amber-800 dark:text-amber-300">{status}</p>
+            )}
+            <p className="mt-0.5 text-sm text-amber-800 dark:text-amber-300">
+              Осталось {remainingMs > 0 ? countdown : 'почти 0'} · до {endsAtLocal}
+            </p>
+          </div>
         </div>
         <button
           type="button"

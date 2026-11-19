@@ -23,7 +23,11 @@ import { ZodValidationPipe } from '../common/zod/zod-validation.pipe';
 import { AppControlService } from './app-control.service';
 import { AppBlockingService } from './app-blocking.service';
 import { ScheduleService } from './schedule.service';
-import { CreateBlockSessionSchema, type CreateBlockSessionBody } from './dto/block-session.dto';
+import {
+  CreateBlockSessionSchema,
+  type BlockSessionDto,
+  type CreateBlockSessionBody,
+} from './dto/block-session.dto';
 import { PutAppRuleSchema, type PutAppRuleBody } from './dto/app-rule.dto';
 import {
   CreateScheduleSchema,
@@ -103,17 +107,19 @@ export class AppControlParentController {
     @Req() req: AuthedRequest,
     @Param('childId') childId: string,
     @Body(new ZodValidationPipe(CreateBlockSessionSchema)) dto: CreateBlockSessionBody,
-  ): Promise<{ sessionId: string; startedAt: string; endsAt: string }> {
+  ): Promise<BlockSessionDto> {
     await this.assertChildInFamily(req.user.familyId, childId);
     const result = await this.blocking.createSession({
       childId,
       createdByUserId: req.user.userId,
       durationMin: dto.durationMin,
+      reason: dto.reason,
     });
     return {
       sessionId: result.sessionId,
       startedAt: result.startedAt.toISOString(),
       endsAt: result.endsAt.toISOString(),
+      ...(result.reason ? { reason: result.reason } : {}),
     };
   }
 
@@ -124,7 +130,7 @@ export class AppControlParentController {
   async activeBlockSession(
     @Req() req: AuthedRequest,
     @Param('childId') childId: string,
-  ): Promise<{ sessionId: string; startedAt: string; endsAt: string } | null> {
+  ): Promise<BlockSessionDto | null> {
     await this.assertChildInFamily(req.user.familyId, childId);
     const session = await this.blocking.getActiveSession(childId);
     if (!session) return null;
@@ -132,6 +138,7 @@ export class AppControlParentController {
       sessionId: session.id,
       startedAt: session.startedAt.toISOString(),
       endsAt: session.endsAt.toISOString(),
+      ...(session.reason ? { reason: session.reason } : {}),
     };
   }
 

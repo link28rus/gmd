@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { useCreateBlock } from '@/lib/hooks/use-app-control';
 import { ApiError } from '@/lib/api/client';
 
@@ -45,32 +46,40 @@ function fmtDuration(min: number): string {
 
 export function BlockDialog({ childId, childName, open, onOpenChange }: Props): ReactElement {
   const [durationMin, setDurationMin] = useState<number>(60);
+  const [reason, setReason] = useState('');
   const createBlock = useCreateBlock(childId);
 
   function handleClose(v: boolean): void {
-    if (!v) setDurationMin(60); // reset на закрытии
+    if (!v) {
+      setDurationMin(60);
+      setReason('');
+    }
     onOpenChange(v);
   }
 
   function onConfirm(): void {
     if (createBlock.isPending) return;
-    createBlock.mutate(durationMin, {
-      onSuccess: () => {
-        toast.success(`Блокировка на ${fmtDuration(durationMin)} отправлена на телефон`);
-        onOpenChange(false);
+    const message = reason.trim();
+    createBlock.mutate(
+      { durationMin, ...(message ? { reason: message } : {}) },
+      {
+        onSuccess: () => {
+          toast.success(`Блокировка на ${fmtDuration(durationMin)} отправлена на телефон`);
+          handleClose(false);
+        },
+        onError: (err: unknown) => {
+          // 409 session_already_active — частный кейс: парент уже жал «заблокировать»
+          // в другой вкладке/устройстве. Показываем понятный текст.
+          if (err instanceof ApiError && err.code === 'session_already_active') {
+            toast.error('Блокировка уже включена. Обновите страницу.');
+          } else if (err instanceof ApiError && err.code === 'no_active_device') {
+            toast.error('У ребёнка нет привязанного устройства');
+          } else {
+            toast.error(err instanceof Error ? err.message : 'Не удалось включить блокировку');
+          }
+        },
       },
-      onError: (err: unknown) => {
-        // 409 session_already_active — частный кейс: парент уже жал «заблокировать»
-        // в другой вкладке/устройстве. Показываем понятный текст.
-        if (err instanceof ApiError && err.code === 'session_already_active') {
-          toast.error('Блокировка уже включена. Обновите страницу.');
-        } else if (err instanceof ApiError && err.code === 'no_active_device') {
-          toast.error('У ребёнка нет привязанного устройства');
-        } else {
-          toast.error(err instanceof Error ? err.message : 'Не удалось включить блокировку');
-        }
-      },
-    });
+    );
   }
 
   return (
@@ -105,6 +114,23 @@ export function BlockDialog({ childId, childName, open, onOpenChange }: Props): 
               </button>
             ))}
           </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <label htmlFor="block-reason" className="text-sm font-medium text-foreground">
+            Причина <span className="font-normal text-muted-foreground">(необязательно)</span>
+          </label>
+          <Input
+            id="block-reason"
+            placeholder="Например, Делаем уроки"
+            value={reason}
+            maxLength={80}
+            disabled={createBlock.isPending}
+            onChange={(event) => setReason(event.target.value)}
+          />
+          <p className="text-xs text-muted-foreground">
+            Ребёнок увидит эту причину на экране паузы.
+          </p>
         </div>
 
         <DialogFooter>

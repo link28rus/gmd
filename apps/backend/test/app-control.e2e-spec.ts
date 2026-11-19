@@ -52,6 +52,50 @@ describe('Контроль приложений: API, миграция и Postgr
       .get(`/family/children/${childId}/app-control/usage?date=${date}`)
       .auth(owner.accessToken, { type: 'bearer' });
 
+  it('передаёт причину ручной паузы родителю и привязанному Android до снятия блока', async () => {
+    const app = h.app.getHttpServer();
+    const path = `/family/children/${childId}/app-control/block-sessions`;
+    const auth = { type: 'bearer' } as const;
+    const create = (reason?: string) =>
+      request(app).post(path).auth(owner.accessToken, auth).send({ durationMin: 30, reason });
+    const snapshot = () => request(app).get('/child/app-control-state').set('X-Child-Token', token);
+
+    await create('x'.repeat(81)).expect(400);
+    await create('Делаем\nуроки').expect(400);
+    const { body: session } = await create('  Делаем уроки  ').expect(201);
+    expect(session.reason).toBe('Делаем уроки');
+    expect(Date.parse(session.endsAt) - Date.parse(session.startedAt)).toBe(30 * 60_000);
+    expect(
+      (await request(app).get(`${path}/active`).auth(owner.accessToken, auth).expect(200)).body,
+    ).toEqual(session);
+    const { body: state } = await snapshot().expect(200);
+    expect(state.session).toEqual({
+      sessionId: session.sessionId,
+      reason: session.reason,
+      endsAt: session.endsAt,
+    });
+    expect(h.app.get(FcmService).sendHybridDataMessage).toHaveBeenCalledWith(
+      deviceId,
+      expect.anything(),
+      expect.not.objectContaining({ reason: session.reason }),
+    );
+    const other = await registerVerifiedUser(h, 'other-block-family@example.com');
+    await request(app).get(`${path}/active`).auth(other.accessToken, auth).expect(404);
+    await request(app)
+      .delete(`${path}/${session.sessionId}`)
+      .auth(owner.accessToken, auth)
+      .expect(204);
+    expect((await snapshot().expect(200)).body.session).toBeNull();
+    const { body: next } = await create().expect(201);
+    expect(next.reason).toBeUndefined();
+    expect((await snapshot().expect(200)).body.session.reason).toBeUndefined();
+    await h.prisma.blockSession.update({
+      where: { id: next.sessionId },
+      data: { endsAt: new Date(Date.now() - 1000) },
+    });
+    expect((await snapshot().expect(200)).body.session).toBeNull();
+  });
+
   it('сохраняет исторический вклад и идемпотентно добавляет новые привязки и периоды', async () => {
     await h.prisma.usageBucket.create({
       data: {

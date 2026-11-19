@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import ParentalControlClient from '@/app/cabinet/children/[id]/parental-control/parental-control-client';
+import { BlockDialog } from '@/components/children/block-dialog';
 import type { InstalledAppDto, UsageRangeDto } from '@/lib/api/app-control';
 import * as hooks from '@/lib/hooks/use-app-control';
 
@@ -13,7 +14,7 @@ jest.mock('@/lib/hooks/use-app-control', () => ({
   useSchedules: () => ({ data: { schedules: [] } }),
   useUpsertAppRule: () => ({}),
   useStopBlock: () => ({}),
-  useCreateBlock: () => ({}),
+  useCreateBlock: jest.fn(),
   useCreateSchedule: () => ({}),
   useUpdateSchedule: () => ({}),
   useDeleteSchedule: () => ({}),
@@ -21,6 +22,7 @@ jest.mock('@/lib/hooks/use-app-control', () => ({
 
 describe('Возвращение контроля приложений', () => {
   beforeEach(() => {
+    (hooks.useCreateBlock as jest.Mock).mockReturnValue({});
     (hooks.useInstalledApps as jest.Mock).mockReturnValue({ data: { apps: [] } });
     (hooks.useUsage as jest.Mock).mockReturnValue({});
     (hooks.useActiveBlock as jest.Mock).mockReturnValue({ data: null });
@@ -51,6 +53,35 @@ describe('Возвращение контроля приложений', () => {
     });
     render(<ParentalControlClient childId="child" />);
     expect(screen.getByText('Блокировка ожидает подтверждения')).toBeInTheDocument();
+  });
+  it('передаёт причину из диалога вместе с выбранной длительностью', () => {
+    const mutate = jest.fn();
+    (hooks.useCreateBlock as jest.Mock).mockReturnValue({ mutate });
+    render(<BlockDialog open onOpenChange={jest.fn()} childId="child" childName="Саша" />);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Причина (необязательно)' }), {
+      target: { value: '  Делаем уроки  ' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '30 мин' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Заблокировать на 30 мин' }));
+    expect(mutate).toHaveBeenLastCalledWith(
+      { durationMin: 30, reason: 'Делаем уроки' },
+      expect.any(Object),
+    );
+  });
+  it('показывает причину на активной карточке, сохраняя статус и оставшееся время', () => {
+    (hooks.useActiveBlock as jest.Mock).mockReturnValue({
+      data: {
+        sessionId: 'session',
+        reason: 'Делаем уроки',
+        startedAt: new Date().toISOString(),
+        endsAt: new Date(Date.now() + 600_000).toISOString(),
+      },
+    });
+    render(<ParentalControlClient childId="child" />);
+    expect(screen.getByText('Делаем уроки')).toBeInTheDocument();
+    expect(screen.getByText('Блокировка ожидает подтверждения')).toBeInTheDocument();
+    expect(screen.getByText(/Осталось/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Снять блок' })).toBeEnabled();
   });
   it('вчера запрашивается относительно дня ребёнка на сервере', () => {
     render(<ParentalControlClient childId="child" />);

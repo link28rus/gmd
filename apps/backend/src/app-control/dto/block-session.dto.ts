@@ -21,7 +21,21 @@ export const CreateBlockSessionSchema = z
       .int()
       .min(5)
       .max(24 * 60), // 5..1440
+    reason: z
+      .string()
+      .trim()
+      .max(80)
+      .refine((text) => !/[\p{Cc}\p{Zl}\p{Zp}]/u.test(text), 'reason must be one line')
+      .transform((text) => text || undefined)
+      .optional(),
   })
   .strict();
 
 export type CreateBlockSessionBody = z.infer<typeof CreateBlockSessionSchema>;
+
+export interface BlockSessionDto {
+  sessionId: string;
+  startedAt: string;
+  endsAt: string;
+  reason?: string;
+}

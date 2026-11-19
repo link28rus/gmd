@@ -16,8 +16,7 @@ import org.json.JSONObject
  * правил ≤500 packages).
  *
  * **Read API:**
- *   - [isBlocked] — единственная функция, нужная AccessibilityService.
- *     Дёргается синхронно при каждом TYPE_WINDOW_STATE_CHANGED.
+ *   - [blockScreen] синхронно возвращает экран для заблокированного приложения.
  *
  * **Write API (вызывают из FCM handler / poll worker):**
  *   - [setActiveBlock] / [clearActiveBlock] — синхронизация BlockSession
@@ -35,6 +34,7 @@ object BlockManager {
     private const val PREFS = "periscop_block_state"
     private const val KEY_ACTIVE_SESSION_ID = "active_session_id"
     private const val KEY_ACTIVE_ENDS_AT_MS = "active_ends_at_ms"
+    private const val KEY_ACTIVE_REASON = "active_reason"
     private const val KEY_RULES_JSON = "rules_json"
     // v0.49 Phase 6.x — расписание автоблокировки (FCM SYNC_SCHEDULES).
     private const val KEY_SCHEDULES_JSON = "schedules_json"
@@ -111,11 +111,11 @@ object BlockManager {
 
     enum class Mode { DEFAULT, ALWAYS_ALLOWED, ALWAYS_BLOCKED }
 
-    data class ActiveBlock(val sessionId: String, val endsAtMs: Long)
+    data class ActiveBlock(val sessionId: String, val endsAtMs: Long, val reason: String? = null)
 
     /**
      * Активное расписание + момент окончания текущего временного окна.
-     * Используется AccessibilityService чтобы показать overlay с countdown'ом
+     * Используется, чтобы показать таймер
      * до конца окна, а не до конца «всего расписания» (расписание повторяется).
      */
     data class ActiveSchedule(
@@ -125,20 +125,18 @@ object BlockManager {
     )
 
     @Synchronized
-    fun setActiveBlock(ctx: Context, sessionId: String, endsAtMs: Long) {
+    fun setActiveBlock(ctx: Context, sessionId: String, endsAtMs: Long, reason: String? = null) {
         prefs(ctx).edit()
             .putString(KEY_ACTIVE_SESSION_ID, sessionId)
             .putLong(KEY_ACTIVE_ENDS_AT_MS, endsAtMs)
+            .putString(KEY_ACTIVE_REASON, reason)
             .apply()
         DiagLog.write(ctx, TAG, "setActiveBlock id=${sessionId.take(8)}… endsAt=${java.util.Date(endsAtMs)}")
     }
 
     @Synchronized
     fun clearActiveBlock(ctx: Context, reason: String = "manual") {
-        prefs(ctx).edit()
-            .remove(KEY_ACTIVE_SESSION_ID)
-            .remove(KEY_ACTIVE_ENDS_AT_MS)
-            .apply()
+        prefs(ctx).edit().removeActiveBlock().apply()
         DiagLog.write(ctx, TAG, "clearActiveBlock reason=$reason")
         // v0.39.5: если overlay сейчас показан (например по UNBLOCK_APPS FCM или
         // expire) — убираем. Если активная сессия снята, но open app всё ещё
@@ -156,12 +154,15 @@ object BlockManager {
             // Истекла локально — чистим и возвращаем null. AccessibilityService
             // больше overlay не покажет; backend через cron тоже зачистит сессию
             // (ACTIVE → EXPIRED), parent UI обновится при следующем GET active.
-            p.edit().remove(KEY_ACTIVE_SESSION_ID).remove(KEY_ACTIVE_ENDS_AT_MS).apply()
+            p.edit().removeActiveBlock().apply()
             DiagLog.write(ctx, TAG, "active block expired locally (id=${id.take(8)}…)")
             return null
         }
-        return ActiveBlock(sessionId = id, endsAtMs = endsAt)
+        return ActiveBlock(id, endsAt, p.getString(KEY_ACTIVE_REASON, null))
     }
+
+    private fun SharedPreferences.Editor.removeActiveBlock() =
+        remove(KEY_ACTIVE_SESSION_ID).remove(KEY_ACTIVE_ENDS_AT_MS).remove(KEY_ACTIVE_REASON)
 
     /**
      * Заменяет локальную таблицу правил целиком (FULL replace, не merge).
@@ -247,21 +248,16 @@ object BlockManager {
      *   4) Mode.DEFAULT → true при блок-сессии, расписании или активной блокировке по зоне.
      */
     @Synchronized
-    fun isBlocked(ctx: Context, packageName: String): Boolean {
+    internal fun blockScreen(ctx: Context, packageName: String): BlockScreen? {
         val mode = getEffectiveMode(ctx, packageName)
-        return when (mode) {
-            Mode.ALWAYS_ALLOWED -> false
-            Mode.ALWAYS_BLOCKED -> true
-            Mode.DEFAULT -> getActiveBlock(ctx) != null || getActiveSchedule(ctx) != null ||
-                zoneBlocks(ctx).activeZone(SystemClock.elapsedRealtime()) != null
+        if (mode == Mode.ALWAYS_ALLOWED) return null
+        getActiveBlock(ctx)?.let { return BlockScreen.pause(it.reason, it.endsAtMs) }
+        if (mode == Mode.ALWAYS_BLOCKED) return BlockScreen("Приложение ограничено родителем")
+        zoneBlocks(ctx).activeZone(SystemClock.elapsedRealtime())?.let {
+            return BlockScreen("Приложение ограничено в зоне «${it.name}»")
         }
+        return getActiveSchedule(ctx)?.let { BlockScreen.pause(it.name, it.endsAtMs) }
     }
-
-    @Synchronized
-    fun getBlockingZoneName(ctx: Context, packageName: String): String? =
-        if (getEffectiveMode(ctx, packageName) == Mode.DEFAULT) {
-            zoneBlocks(ctx).activeZone(SystemClock.elapsedRealtime())?.name
-        } else null
 
     @Synchronized
     internal fun observeZoneFix(ctx: Context, fix: ZoneBlockEvaluator.Fix) {
@@ -382,19 +378,6 @@ object BlockManager {
         return ActiveSchedule(scheduleId = active.id, name = active.name, endsAtMs = endMs)
     }
 
-    /**
-     * Combined «когда закончится текущая блокировка» — максимум из
-     * (BlockSession.endsAtMs, активное расписание endsAtMs) или 0 если оба null.
-     *
-     * Используется AccessibilityService и OverlayManager для countdown'а.
-     */
-    @Synchronized
-    fun getCurrentBlockEndsAtMs(ctx: Context): Long {
-        val active = getActiveBlock(ctx)?.endsAtMs ?: 0L
-        val schedule = getActiveSchedule(ctx)?.endsAtMs ?: 0L
-        return maxOf(active, schedule)
-    }
-
     /** Серверное время идёт по monotonic clock в пределах одной загрузки. */
     fun now(ctx: Context): Long {
         val p = prefs(ctx)
@@ -419,14 +402,16 @@ object BlockManager {
         val session = body.optJSONObject("session")
         val id = session?.getString("sessionId")
         val end = session?.let { java.time.Instant.parse(it.getString("endsAt")).toEpochMilli() }
+        val reason = (session?.opt("reason") as? String)?.takeIf { it.isNotBlank() && it.length <= 80 }
         val editor = prefs(ctx).edit().putString(KEY_RULES_JSON,rules.toString()).putString(KEY_SCHEDULES_JSON,schedules.toString())
             .putString(KEY_BLOCKING_ZONES_JSON, blockingZones.toString())
             .putZonePresence(currentZoneBootCount(ctx), presence)
             .putLong("sync_server",serverNow).putLong("sync_elapsed",android.os.SystemClock.elapsedRealtime())
             .putLong("server_delta",serverNow-System.currentTimeMillis())
             .putInt("sync_boot",android.provider.Settings.Global.getInt(ctx.contentResolver,"boot_count",-1))
-        if(id == null) editor.remove(KEY_ACTIVE_SESSION_ID).remove(KEY_ACTIVE_ENDS_AT_MS)
-        else editor.putString(KEY_ACTIVE_SESSION_ID,id).putLong(KEY_ACTIVE_ENDS_AT_MS,end!!)
+        if (id == null || end == null) editor.removeActiveBlock()
+        else editor.putString(KEY_ACTIVE_SESSION_ID, id).putLong(KEY_ACTIVE_ENDS_AT_MS, end)
+            .putString(KEY_ACTIVE_REASON, reason)
         check(editor.commit()) { "could not persist app-control state" }
         evaluator.replaceZones(parsedZones)
         savedZonePresence = presence

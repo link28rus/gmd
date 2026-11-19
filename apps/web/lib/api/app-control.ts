@@ -77,6 +77,12 @@ export interface BlockSessionDto {
   sessionId: string;
   startedAt: string; // ISO
   endsAt: string; // ISO
+  reason?: string;
+}
+
+export interface CreateBlockSessionBody {
+  durationMin: number;
+  reason?: string;
 }
 
 // ─── Phase 6.x (v0.48): App Block Schedules ─────────────────────────────
@@ -137,10 +143,10 @@ export const appControlApi = {
   },
 
   // ─── Block sessions ────────────────────────────────────────────────────
-  createBlockSession: (childId: string, durationMin: number) =>
+  createBlockSession: (childId: string, body: CreateBlockSessionBody) =>
     apiFetch<BlockSessionDto>(`/api/children/${childId}/app-control/block-sessions`, {
       method: 'POST',
-      body: JSON.stringify({ durationMin }),
+      body: JSON.stringify(body),
     }),
   /**
    * Активная сессия. Возвращает null если у ребёнка нет ACTIVE сессии (backend

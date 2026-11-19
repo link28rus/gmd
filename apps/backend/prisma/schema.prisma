@@ -1076,6 +1076,7 @@ model BlockSession {
   endsAt            DateTime          // = startedAt + durationMin
   endedAt           DateTime?         // фактическое окончание (early stop / expired)
   endReason         BlockEndReason?
+  reason            String?          @db.VarChar(80) // Сообщение родителя на экране паузы.
 
   childDevice ChildDevice @relation(fields: [childDeviceId], references: [id], onDelete: Cascade)
   createdByUser User      @relation(fields: [createdByUserId], references: [id])

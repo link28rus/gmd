@@ -91,7 +91,8 @@ export class AppBlockingService implements OnModuleInit {
     childId: string;
     createdByUserId: string;
     durationMin: number;
-  }): Promise<{ sessionId: string; startedAt: Date; endsAt: Date }> {
+    reason?: string;
+  }): Promise<{ sessionId: string; startedAt: Date; endsAt: Date; reason: string | null }> {
     const device = await this.prisma.childDevice.findFirst({
       where: { childId: params.childId, revokedAt: null },
       select: { id: true, fcmToken: true, rustorePushToken: true },
@@ -126,6 +127,7 @@ export class AppBlockingService implements OnModuleInit {
         state: 'ACTIVE',
         startedAt,
         endsAt,
+        reason: params.reason,
       },
     });
 
@@ -146,7 +148,7 @@ export class AppBlockingService implements OnModuleInit {
     this.logger.log(
       `block-session created id=${session.id} child=${params.childId} duration=${params.durationMin}min`,
     );
-    return { sessionId: session.id, startedAt, endsAt };
+    return { sessionId: session.id, startedAt, endsAt, reason: session.reason };
   }
 
   /**
