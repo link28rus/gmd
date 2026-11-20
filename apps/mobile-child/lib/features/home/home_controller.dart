@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/api/child_api.dart';
 import '../../core/native/location_service_channel.dart';
 import '../claim/claim_controller.dart';
 
@@ -9,38 +10,37 @@ import '../claim/claim_controller.dart';
 // локации, батарея и связь уходили на сервер даже когда UI закрыт / процесс
 // убит системой / после ребута. UI-изолят только запускает service и не
 // держит ссылок на БД.
-final serviceChannelProvider =
-    Provider<LocationServiceChannel>((_) => LocationServiceChannel());
+final serviceChannelProvider = Provider<LocationServiceChannel>(
+  (_) => LocationServiceChannel(),
+);
 
-// Инициализация home-экрана: стартуем foreground-сервис + проверяем, что
-// deviceToken не отозван на сервере (родитель удалил ребёнка / сделал reset).
-// Если токен отозван — возвращаем false, home перенаправит на /onboarding.
-final homeInitProvider = FutureProvider<HomeInitResult>((ref) async {
-  // Параллельно — старт сервиса и проверка токена. Если токен отозван,
-  // сервис всё равно запустится (it's ok), но ingest будет безнадёжным.
-  // Home сделает redirect, после reclaim всё заведётся.
+// Старт при открытии экрана. Повтор /child/me не перезапускает сервис.
+final _homeServiceStartProvider = Provider.autoDispose<void>((ref) {
   unawaited(ref.watch(serviceChannelProvider).startService());
+});
 
+// При подтверждённой отвязке home перенаправит на /onboarding.
+final homeInitProvider = FutureProvider.autoDispose<ChildMeResult>((ref) async {
+  ref.watch(_homeServiceStartProvider);
+  final service = ref.watch(serviceChannelProvider);
   final storage = ref.watch(secureStorageProvider);
+  final api = ref.watch(childApiProvider);
+  var disposed = false;
+  ref.onDispose(() => disposed = true);
+
   final token = await storage.readDeviceToken();
   if (token == null || token.isEmpty) {
-    return const HomeInitResult(tokenValid: false);
+    return const ChildMeResult(tokenValid: false, serverVerified: false);
   }
 
-  final api = ref.watch(childApiProvider);
   final me = await api.fetchMe(token);
-  if (!me.tokenValid) {
+  // Поздний ответ со старого экрана не должен отвязать текущую сессию.
+  if (!disposed && !me.tokenValid) {
     // Токен отозван сервером — чистим secure storage, чтобы на следующем
     // старте hasToken=false и main.dart повёл на /onboarding.
     await storage.clearAll();
     // Стопаем foreground сервис и запрещаем автозапуск — без токена он бесполезен.
-    unawaited(ref.watch(serviceChannelProvider).deviceUnlinked());
+    unawaited(service.deviceUnlinked());
   }
-  return HomeInitResult(tokenValid: me.tokenValid, familyName: me.familyName);
+  return me;
 });
-
-class HomeInitResult {
-  const HomeInitResult({required this.tokenValid, this.familyName});
-  final bool tokenValid;
-  final String? familyName;
-}

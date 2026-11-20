@@ -2,10 +2,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
-import '../../core/native/location_service_channel.dart';
 import '../../core/native/app_control_channel.dart';
+import '../../core/native/location_service_channel.dart';
+import 'home_status_row.dart';
 
-/// Красный баннер сверху на home, если критические permissions для фонового
+/// Предупреждение на home, если критические permissions для фонового
 /// трекинга не даны. Показывается и при первом запуске, и после обновлений
 /// приложения (когда онбординг уже пройден, но требования могли поменяться —
 /// как v0.15.2 с MIUI-инструкцией и WAKE_LOCK).
@@ -101,49 +102,18 @@ class _PermissionHealthBannerState extends State<PermissionHealthBanner>
   @override
   Widget build(BuildContext context) {
     if (_missing.isEmpty) return const SizedBox.shrink();
-    return Material(
-      color: Colors.red.shade50,
-      child: InkWell(
-        onTap: () {
-          if (_openAutostart) {
-            LocationServiceChannel().openAutostartSettings();
-          } else {
-            context.go(_route);
-          }
-        },
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            children: [
-              Icon(Icons.warning_amber, color: Colors.red.shade700),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Не все разрешения настроены',
-                      style: TextStyle(
-                        color: Colors.red.shade900,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Не хватает: ${_missing.join(', ')}. Нажми, чтобы исправить.',
-                      style: TextStyle(
-                        color: Colors.red.shade800,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(Icons.chevron_right, color: Colors.red.shade700),
-            ],
-          ),
-        ),
-      ),
+    return HomeStatusRow(
+      icon: Icons.warning_amber_rounded,
+      color: HomeColors.warning,
+      title: 'Не все разрешения настроены',
+      subtitle: 'Не хватает: ${_missing.join(', ')}. Нажми, чтобы исправить.',
+      onTap: () {
+        if (_openAutostart) {
+          LocationServiceChannel().openAutostartSettings();
+        } else {
+          context.go(_route);
+        }
+      },
     );
   }
 }

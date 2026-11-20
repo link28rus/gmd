@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../core/diag/diag_channel.dart';
 import '../../core/native/location_service_channel.dart';
+import 'home_status_row.dart';
 
 /// v0.31.1 — info-баннер для включения разрешения «Физическая активность»
 /// у пользователей, которые обновились с 0.30.x/0.31.0 и не проходили
@@ -12,7 +13,7 @@ import '../../core/native/location_service_channel.dart';
 /// ребёнок неподвижен. Экономит 30-40% батареи.
 ///
 /// Без разрешения приложение работает — просто интервал GPS постоянный.
-/// Поэтому баннер НЕ критический (амбер, не красный), кликабельный; при тапе
+/// Поэтому баннер информационный, кликабельный; при тапе
 /// запрашивает permission и перезапускает сервис, чтобы тот перерегистрировал
 /// подписку на transitions.
 ///
@@ -22,7 +23,8 @@ class ActivityRecognitionBanner extends StatefulWidget {
   const ActivityRecognitionBanner({super.key});
 
   @override
-  State<ActivityRecognitionBanner> createState() => _ActivityRecognitionBannerState();
+  State<ActivityRecognitionBanner> createState() =>
+      _ActivityRecognitionBannerState();
 }
 
 class _ActivityRecognitionBannerState extends State<ActivityRecognitionBanner>
@@ -85,41 +87,12 @@ class _ActivityRecognitionBannerState extends State<ActivityRecognitionBanner>
   @override
   Widget build(BuildContext context) {
     if (!_show) return const SizedBox.shrink();
-    return Material(
-      color: Colors.amber.shade50,
-      child: InkWell(
-        onTap: _request,
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            children: [
-              Icon(Icons.battery_saver, color: Colors.amber.shade800),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Включи экономию батареи',
-                      style: TextStyle(
-                        color: Colors.amber.shade900,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Разреши «Физическую активность» — батарея будет дольше держать, '
-                      'когда ты не двигаешься.',
-                      style: TextStyle(color: Colors.amber.shade900, fontSize: 13),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(Icons.chevron_right, color: Colors.amber.shade800),
-            ],
-          ),
-        ),
-      ),
+    return HomeStatusRow(
+      icon: Icons.battery_saver_outlined,
+      title: 'Включи экономию батареи',
+      subtitle:
+          'Разреши «Физическую активность» — батарея будет дольше держать, когда ты не двигаешься.',
+      onTap: _request,
     );
   }
 }

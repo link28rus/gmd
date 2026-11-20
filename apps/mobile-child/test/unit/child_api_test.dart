@@ -17,6 +17,36 @@ void main() {
     api = ChildApi(dio);
   });
 
+  test('fetchMe verifies a successful response without a family name', () async {
+    when(() => dio.get('/child/me', options: any(named: 'options')))
+        .thenAnswer((_) async => Response(
+              requestOptions: RequestOptions(path: '/child/me'),
+              statusCode: 200,
+              data: <String, dynamic>{},
+            ));
+
+    final result = await api.fetchMe('test-token');
+    expect(result.tokenValid, isTrue);
+    expect(result.serverVerified, isTrue);
+    expect(result.familyName, isNull);
+  });
+
+  for (final status in [401, 403, 503]) {
+    test('fetchMe distinguishes token validity from verification on $status',
+        () async {
+      final request = RequestOptions(path: '/child/me');
+      when(() => dio.get('/child/me', options: any(named: 'options')))
+          .thenThrow(DioException(
+        requestOptions: request,
+        response: Response(requestOptions: request, statusCode: status),
+      ));
+
+      final result = await api.fetchMe('test-token');
+      expect(result.tokenValid, status == 503);
+      expect(result.serverVerified, isFalse);
+    });
+  }
+
   test('claim returns ClaimResponse on 200', () async {
     when(() => dio.post('/child/claim', data: any(named: 'data'))).thenAnswer(
       (_) async => Response(

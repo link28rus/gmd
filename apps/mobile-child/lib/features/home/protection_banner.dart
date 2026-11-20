@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/config/env.dart';
 import '../../core/native/device_admin_channel.dart';
 import '../claim/claim_controller.dart';
+import 'home_status_row.dart';
 
 // Состояние защиты = (enabled с backend) × (admin активен).
 // В v0.29.2 L2 PIN-lock полностью убран — защита держится только на
@@ -13,10 +14,7 @@ import '../claim/claim_controller.dart';
 // видимый тумблер ON в кабинете при НЕ активном admin на устройстве,
 // т.е. защиты фактически нет (launcher → long-press → trash проходит).
 class ProtectionState {
-  const ProtectionState({
-    required this.enabled,
-    required this.adminActive,
-  });
+  const ProtectionState({required this.enabled, required this.adminActive});
   final bool enabled;
   final bool adminActive;
 
@@ -24,8 +22,9 @@ class ProtectionState {
   bool get allGood => enabled && adminActive;
 }
 
-final deviceAdminChannelProvider =
-    Provider<DeviceAdminChannel>((_) => DeviceAdminChannel());
+final deviceAdminChannelProvider = Provider<DeviceAdminChannel>(
+  (_) => DeviceAdminChannel(),
+);
 
 final protectionStateProvider = FutureProvider<ProtectionState?>((ref) async {
   final storage = ref.watch(secureStorageProvider);
@@ -104,35 +103,30 @@ class _ProtectionBannerState extends ConsumerState<ProtectionBanner>
           if (mounted) _showAdminWizard(context);
         });
       }
-      return _Banner(
-        // Красная (вместо жёлтой в v0.29.2) — защита ФАКТИЧЕСКИ не работает,
-        // приложение можно удалить launcher'ом. Чтоб ребёнок/родитель
-        // точно обратил внимание.
-        color: Colors.red,
+      return HomeStatusRow(
+        color: HomeColors.warning,
         icon: Icons.lock_open,
-        title: 'Защита НЕ активна',
-        subtitle:
-            'Устройство можно удалить. Нажми чтобы включить Device Admin.',
-        buttonLabel: 'Включить',
+        title: 'Защита от удаления не активна',
+        subtitle: 'Приложение можно удалить. Нажми, чтобы включить защиту.',
         onTap: () => _showAdminWizard(context),
       );
     }
 
-    // Persistent status indicator (v0.29.4): всегда видимый замок + подпись,
-    // чтобы ребёнок/родитель понимали текущее состояние защиты без
-    // копания в логах. Закрытый зелёный замок = защита работает;
-    // открытый серый = выключена в кабинете.
-    return _StatusTile(
-      enabled: state.enabled,
-      adminActive: state.adminActive,
+    return HomeStatusRow(
+      icon: state.allGood ? Icons.lock_outline : Icons.lock_open,
+      title: 'Защита от удаления',
+      subtitle: state.allGood ? 'Включена' : 'Выключена в кабинете родителя',
     );
   }
 
   Future<void> _showAdminWizard(BuildContext context) async {
     final admin = ref.read(deviceAdminChannelProvider);
     final manufacturer = await admin.deviceManufacturer();
-    final needsRestrictedUnlock =
-        const ['xiaomi', 'redmi', 'poco'].contains(manufacturer);
+    final needsRestrictedUnlock = const [
+      'xiaomi',
+      'redmi',
+      'poco',
+    ].contains(manufacturer);
 
     if (!context.mounted) return;
     await showModalBottomSheet<void>(
@@ -215,10 +209,12 @@ class _AdminWizardState extends ConsumerState<_AdminWizard>
 
     final needsRestricted = widget.needsRestrictedUnlock;
     final step2Done = adminActive;
-    final step1Done = needsRestricted ? (_step1Visited || step2Done) : step2Done;
+    final step1Done = needsRestricted
+        ? (_step1Visited || step2Done)
+        : step2Done;
 
     return SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -374,112 +370,6 @@ class _Step extends StatelessWidget {
           ),
         ],
       ],
-    );
-  }
-}
-
-class _Banner extends StatelessWidget {
-  const _Banner({
-    required this.color,
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.buttonLabel,
-    required this.onTap,
-  });
-  final MaterialColor color;
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final String buttonLabel;
-  final Future<void> Function() onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: color.shade100,
-      child: InkWell(
-        onTap: () => onTap(),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Row(
-            children: [
-              Icon(icon, color: color.shade900),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title,
-                        style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            color: color.shade900)),
-                    const SizedBox(height: 2),
-                    Text(subtitle, style: const TextStyle(fontSize: 12)),
-                  ],
-                ),
-              ),
-              FilledButton(
-                style: FilledButton.styleFrom(backgroundColor: color.shade700),
-                onPressed: () => onTap(),
-                child: Text(buttonLabel),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// Компактный always-visible статус-индикатор для home-экрана.
-// Показывается когда защита «в консистентном» состоянии (нет red alert).
-//   enabled=true  & adminActive=true  → зелёный 🔒 «Защита от удаления активна»
-//   enabled=false & adminActive=*     → серый 🔓 «Защита от удаления выключена»
-// Случай enabled=true & adminActive=false уже обрабатывается красной
-// плашкой в ProtectionBanner.build выше (needAdmin flow).
-class _StatusTile extends StatelessWidget {
-  const _StatusTile({required this.enabled, required this.adminActive});
-  final bool enabled;
-  final bool adminActive;
-
-  @override
-  Widget build(BuildContext context) {
-    final active = enabled && adminActive;
-    final color = active ? Colors.green : Colors.grey;
-    final icon = active ? Icons.lock : Icons.lock_open;
-    final subtitle =
-        active ? 'Включена' : 'Выключена в кабинете родителя';
-
-    return Container(
-      color: color.shade50,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      child: Row(
-        children: [
-          Icon(icon, color: color.shade700, size: 22),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Защита от удаления',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: color.shade900,
-                  ),
-                ),
-                const SizedBox(height: 1),
-                Text(
-                  subtitle,
-                  style: TextStyle(fontSize: 12, color: color.shade700),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

@@ -31,9 +31,15 @@ class ClaimResponse {
 }
 
 class ChildMeResult {
-  const ChildMeResult({required this.tokenValid, this.familyName});
+  const ChildMeResult({
+    required this.tokenValid,
+    required this.serverVerified,
+    this.familyName,
+  });
 
+  // При сетевой ошибке сохраняем привязку, но связь не подтверждена.
   final bool tokenValid;
+  final bool serverVerified;
   final String? familyName;
 }
 
@@ -221,14 +227,15 @@ class ChildApi {
       final family = data?['family'] as Map<String, dynamic>?;
       return ChildMeResult(
         tokenValid: true,
+        serverVerified: true,
         familyName: family?['name'] as String?,
       );
     } on DioException catch (e) {
       final status = e.response?.statusCode;
       if (status == 401 || status == 403) {
-        return const ChildMeResult(tokenValid: false);
+        return const ChildMeResult(tokenValid: false, serverVerified: false);
       }
-      return const ChildMeResult(tokenValid: true);
+      return const ChildMeResult(tokenValid: true, serverVerified: false);
     }
   }
 

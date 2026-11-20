@@ -1,6 +1,7 @@
 package pro.periscop.child
 
 import android.app.admin.DevicePolicyManager
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -14,6 +15,7 @@ import io.flutter.plugin.common.MethodChannel
 // `periscop_bg_location_engine`), чтобы локации продолжали приходить после закрытия
 // UI, убийства процесса системой и ребута (см. BootReceiver).
 private const val UI_METHOD_CHANNEL = "pro.periscop.child/location"
+private const val DIALER_METHOD_CHANNEL = "pro.periscop.child/dialer"
 private const val PROTECTION_METHOD_CHANNEL = "pro.periscop.child/protection"
 // Задача #61: флаг «первый запуск после обновления APK». Имя канала историческое
 // (v0.38 screen-time) — блокировка и экранное время временно отключены в v0.58.0.
@@ -117,6 +119,24 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
 
         AppUpdater.registerChannel(this, flutterEngine.dartExecutor.binaryMessenger)
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, DIALER_METHOD_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "openDialer" -> {
+                        val opened = try {
+                            startActivity(Intent(Intent.ACTION_DIAL))
+                            true
+                        } catch (_: ActivityNotFoundException) {
+                            false
+                        } catch (_: SecurityException) {
+                            false
+                        }
+                        result.success(opened)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, UI_METHOD_CHANNEL)
             .setMethodCallHandler { call, result ->
