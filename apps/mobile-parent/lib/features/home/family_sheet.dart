@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/features.dart';
 import '../../core/theme/app_theme.dart';
 import '../children/child_models.dart';
 import '../children/widgets/child_avatar.dart';
@@ -341,6 +342,12 @@ class MemberCard extends StatelessWidget {
                   icon: const Icon(Icons.person_outline),
                   label: const Text('Открыть'),
                 ),
+                if (kAppControlEnabled)
+                  OutlinedButton.icon(
+                    onPressed: () => openChild(context, kid, 'parental-control'),
+                    icon: const Icon(Icons.shield_outlined),
+                    label: const Text('Родительский контроль'),
+                  ),
                 OutlinedButton.icon(
                   onPressed: () => openChild(context, kid, 'history'),
                   icon: const Icon(Icons.timeline),
